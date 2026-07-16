@@ -108,6 +108,18 @@ body {
   box-shadow: none !important;
 }
 
+.account-preference-back,
+.account-preference-back:hover,
+.account-preference-option,
+.account-preference-option:hover,
+.account-theme-option,
+.account-theme-option:hover,
+.account-system-settings,
+.account-system-settings:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 .login-showcase::after {
   content: "";
   position: absolute;

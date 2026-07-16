@@ -29,6 +29,7 @@ import { inferPaymentGateway, normalizeInvoicePaymentData } from './utils/invoic
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import LoginPage from './components/LoginPage';
+import type { InterfaceLanguage } from './components/AccountPreferences';
 
 const Overview = lazy(() => import('./components/Overview'));
 const TenantManagement = lazy(() => import('./components/TenantManagement'));
@@ -37,6 +38,7 @@ const SubscriptionPackages = lazy(() => import('./components/SubscriptionPackage
 const BillingAndInvoices = lazy(() => import('./components/BillingAndInvoices'));
 const SystemReports = lazy(() => import('./components/SystemReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
+const AccountPreferences = lazy(() => import('./components/AccountPreferences'));
 const SecurityAndLogs = lazy(() => import('./components/SecurityAndLogs'));
 const HelpAndSupport = lazy(() => import('./components/HelpAndSupport'));
 const DataBackup = lazy(() => import('./components/DataBackup'));
@@ -154,6 +156,10 @@ export default function App() {
     if (typeof window === 'undefined') return 'light';
     return localStorage.getItem('salonsys_theme') === 'dark' ? 'dark' : 'light';
   });
+  const [interfaceLanguage, setInterfaceLanguage] = useState<InterfaceLanguage>(() => {
+    if (typeof window === 'undefined') return 'vi';
+    return localStorage.getItem('salonsys_interface_language') === 'en' ? 'en' : 'vi';
+  });
   const [systemSettings, setSystemSettings] = useState<SystemSettingsModel>(loadSystemSettings);
   
   // Navigation active tab state
@@ -218,6 +224,12 @@ export default function App() {
   }, [themeMode]);
 
   useEffect(() => {
+    document.documentElement.lang = interfaceLanguage;
+    document.documentElement.dataset.language = interfaceLanguage;
+    localStorage.setItem('salonsys_interface_language', interfaceLanguage);
+  }, [interfaceLanguage]);
+
+  useEffect(() => {
     const handleSettingsUpdated = (event: Event) => {
       const updatedSettings = (event as CustomEvent<SystemSettingsModel>).detail;
       setSystemSettings(updatedSettings || loadSystemSettings());
@@ -238,9 +250,8 @@ export default function App() {
     document.title = isAuthenticated
       ? `${systemSettings.general.systemName} — Không gian làm việc`
       : `Đăng nhập — ${systemSettings.general.systemName}`;
-    document.documentElement.lang = systemSettings.general.defaultLanguage;
     document.documentElement.dataset.timezone = systemSettings.general.timezone;
-  }, [isAuthenticated, systemSettings.general.defaultLanguage, systemSettings.general.systemName, systemSettings.general.timezone]);
+  }, [isAuthenticated, systemSettings.general.systemName, systemSettings.general.timezone]);
 
   const handleLogin = (remember: boolean) => {
     const storage = remember ? localStorage : sessionStorage;
@@ -1165,6 +1176,17 @@ export default function App() {
         return <SystemReports tenants={tenants} invoices={invoices} packages={packages} />;
       case 'settings':
         return <SystemSettings />;
+      case 'account-preferences':
+        return (
+          <AccountPreferences
+            themeMode={themeMode}
+            language={interfaceLanguage}
+            onThemeChange={setThemeMode}
+            onLanguageChange={setInterfaceLanguage}
+            onBack={() => setActiveTab('overview')}
+            onOpenSystemSettings={() => setActiveTab('settings')}
+          />
+        );
       case 'security':
         return <SecurityAndLogs showConfirm={triggerConfirm} onOpenSecuritySettings={() => setActiveTab('settings')} />;
       case 'support':
@@ -1369,7 +1391,7 @@ export default function App() {
           themeMode={themeMode}
           onToggleTheme={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
           onLogout={handleLogout}
-          onOpenAccountSettings={() => setActiveTab('settings')}
+          onOpenAccountSettings={() => setActiveTab('account-preferences')}
           onOpenSecurity={() => setActiveTab('security')}
         />
 
