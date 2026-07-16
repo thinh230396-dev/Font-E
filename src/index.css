@@ -447,6 +447,7 @@ button[class*="amber-"]:not(:disabled):hover {
 @layer components {
   .form-control {
     @apply w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
   }
 
   .field-hint {
@@ -464,6 +465,66 @@ button[class*="amber-"]:not(:disabled):hover {
   .btn-danger {
     @apply bg-brand-error hover:bg-brand-error/90 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer;
   }
+}
+
+/* Unified dropdown styling across the admin portal. */
+select:not([multiple]) {
+  min-height: 2.5rem;
+  padding-right: 2.5rem !important;
+  border-radius: 0.625rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-brand-text-muted) 50%),
+    linear-gradient(135deg, var(--color-brand-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 1rem) calc(50% - 0.125rem),
+    calc(100% - 0.7rem) calc(50% - 0.125rem);
+  background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+  background-repeat: no-repeat;
+  color: var(--color-brand-text);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  line-height: 1.25rem;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+select:not([multiple]):not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 45%, var(--color-brand-outline));
+  background-color: color-mix(in srgb, var(--color-brand-primary) 4%, var(--color-brand-surface-lowest));
+}
+
+select:not([multiple]):focus,
+select:not([multiple]):focus-visible {
+  border-color: var(--color-brand-primary) !important;
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-primary) 16%, transparent);
+}
+
+select:not([multiple]):disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  background-color: var(--color-brand-surface-high);
+}
+
+select option,
+select optgroup {
+  background-color: var(--color-brand-surface);
+  color: var(--color-brand-text);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+select option:checked {
+  background-color: color-mix(in srgb, var(--color-brand-primary) 18%, var(--color-brand-surface));
+  color: var(--color-brand-text);
+}
+
+html[data-theme="dark"] select:not([multiple]) {
+  color-scheme: dark;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .subscription-menu-item {
