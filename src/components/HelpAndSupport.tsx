@@ -546,47 +546,75 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
 
       {selectedTicket && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center overscroll-contain bg-brand-bg/70 p-2 backdrop-blur-sm sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTicketId(null); }}>
-          <aside role="dialog" aria-modal="true" aria-labelledby="ticket-detail-title" className="flex h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl sm:h-[min(92dvh,900px)]">
-            <div className="flex items-start justify-between gap-4 border-b border-brand-outline/40 px-5 py-4">
+          <aside role="dialog" aria-modal="true" aria-labelledby="ticket-detail-title" className="flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl sm:h-[min(94dvh,940px)]">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-brand-outline/40 px-5 py-4 sm:px-6">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] font-bold text-brand-primary">{selectedTicket.id}</span><Badge className={PRIORITY_CONFIG[selectedTicket.priority].className}>{PRIORITY_CONFIG[selectedTicket.priority].label}</Badge><Badge className={STATUS_CONFIG[selectedTicket.status].className}>{STATUS_CONFIG[selectedTicket.status].label}</Badge></div>
                 <h2 id="ticket-detail-title" className="mt-2 text-base font-extrabold leading-snug text-brand-text">{selectedTicket.subject}</h2>
-                <p className="mt-1 text-[10px] text-brand-text-muted">Tạo {formatDateTime(selectedTicket.createdAt)} · Cập nhật {formatRelativeTime(selectedTicket.updatedAt)}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-brand-text-muted">
+                  <span className="font-semibold text-brand-text">{selectedTicket.tenantName}</span>
+                  <span aria-hidden="true">•</span>
+                  <span>{selectedTicket.requesterName}</span>
+                  <span aria-hidden="true">•</span>
+                  <span>Tạo {formatDateTime(selectedTicket.createdAt)}</span>
+                  <span aria-hidden="true">•</span>
+                  <span>Cập nhật {formatRelativeTime(selectedTicket.updatedAt)}</span>
+                </div>
               </div>
-              <button onClick={() => setSelectedTicketId(null)} aria-label="Đóng chi tiết"><X className="h-5 w-5" /></button>
+              <button onClick={() => setSelectedTicketId(null)} aria-label="Đóng chi tiết" title="Đóng" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface-high text-brand-text-muted transition-colors hover:text-brand-text"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 border-b border-brand-outline/35 bg-brand-surface-lowest/40 p-4 sm:grid-cols-3">
-              <div><label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Người xử lý</label><select value={selectedTicket.assignedTo?.id || ''} onChange={(event) => handleAssignment(selectedTicket, event.target.value)} className="form-control"><option value="">Chưa phân công</option>{SUPPORT_AGENTS.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>
-              <div><label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Độ ưu tiên</label><select value={selectedTicket.priority} onChange={(event) => handlePriorityChange(selectedTicket, event.target.value as Ticket['priority'])} className="form-control">{Object.entries(PRIORITY_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
-              <div><label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Trạng thái</label><select value={selectedTicket.status} onChange={(event) => handleStatusChange(selectedTicket, event.target.value as Ticket['status'])} className="form-control">{Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
+            <div className="grid shrink-0 border-b border-brand-outline/35 bg-brand-surface-lowest/35 lg:grid-cols-[1.2fr_0.8fr]">
+              <section className="border-b border-brand-outline/35 p-4 sm:px-6 lg:border-b-0 lg:border-r">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-xs font-extrabold text-brand-text"><UserCheck className="h-4 w-4 text-brand-primary" /> Thiết lập xử lý</h3>
+                    <p className="mt-1 text-[9px] text-brand-text-muted">Phân công người phụ trách, độ ưu tiên và bước xử lý hiện tại.</p>
+                  </div>
+                  {isActive(selectedTicket) && (
+                    <button type="button" onClick={() => handleResolve(selectedTicket)} className="inline-flex min-h-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Đánh dấu đã giải quyết
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Người xử lý</label><select value={selectedTicket.assignedTo?.id || ''} onChange={(event) => handleAssignment(selectedTicket, event.target.value)} className="form-control h-10"><option value="">Chưa phân công</option>{SUPPORT_AGENTS.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>
+                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Độ ưu tiên</label><select value={selectedTicket.priority} onChange={(event) => handlePriorityChange(selectedTicket, event.target.value as Ticket['priority'])} className="form-control h-10">{Object.entries(PRIORITY_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
+                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Trạng thái</label><select value={selectedTicket.status} onChange={(event) => handleStatusChange(selectedTicket, event.target.value as Ticket['status'])} className="form-control h-10">{Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
+                </div>
+              </section>
+              <section className="p-4 sm:px-6">
+                <div className="mb-3">
+                  <h3 className="flex items-center gap-2 text-xs font-extrabold text-brand-text"><Timer className="h-4 w-4 text-brand-primary" /> Theo dõi SLA</h3>
+                  <p className="mt-1 text-[9px] text-brand-text-muted">Ưu tiên xử lý theo mốc thời gian gần nhất.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {(() => {
+                    const responseDiff = (new Date(selectedTicket.firstResponseDueAt).getTime() - Date.now()) / 60000;
+                    const resolutionDiff = (new Date(selectedTicket.resolutionDueAt).getTime() - Date.now()) / 60000;
+                    return <>
+                      <div className="rounded-lg border border-brand-outline/35 bg-brand-surface p-3"><div className="flex items-center gap-1.5 text-[9px] font-bold uppercase text-brand-text-muted"><Clock3 className="h-3.5 w-3.5" /> Phản hồi đầu tiên</div><p className={`mt-1.5 text-[11px] font-extrabold ${selectedTicket.firstRespondedAt ? 'text-emerald-600 dark:text-emerald-400' : responseDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-brand-text'}`}>{selectedTicket.firstRespondedAt ? 'Đã phản hồi' : responseDiff < 0 ? `Quá ${formatDuration(responseDiff)}` : `Còn ${formatDuration(responseDiff)}`}</p><p className="mt-1 text-[9px] text-brand-text-muted">{selectedTicket.firstRespondedAt ? formatDateTime(selectedTicket.firstRespondedAt) : `Hạn ${formatDateTime(selectedTicket.firstResponseDueAt)}`}</p></div>
+                      <div className="rounded-lg border border-brand-outline/35 bg-brand-surface p-3"><div className="flex items-center gap-1.5 text-[9px] font-bold uppercase text-brand-text-muted"><Timer className="h-3.5 w-3.5" /> Hoàn tất xử lý</div><p className={`mt-1.5 text-[11px] font-extrabold ${selectedTicket.resolvedAt ? 'text-emerald-600 dark:text-emerald-400' : resolutionDiff < 0 ? 'text-red-600 dark:text-red-400' : resolutionDiff <= 120 ? 'text-amber-600 dark:text-amber-400' : 'text-brand-text'}`}>{selectedTicket.resolvedAt ? 'Đã hoàn tất' : resolutionDiff < 0 ? `Quá ${formatDuration(resolutionDiff)}` : `Còn ${formatDuration(resolutionDiff)}`}</p><p className="mt-1 text-[9px] text-brand-text-muted">{selectedTicket.resolvedAt ? formatDateTime(selectedTicket.resolvedAt) : `Hạn ${formatDateTime(selectedTicket.resolutionDueAt)}`}</p></div>
+                    </>;
+                  })()}
+                </div>
+              </section>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 border-b border-brand-outline/35 p-4">
-              {(() => {
-                const responseDiff = (new Date(selectedTicket.firstResponseDueAt).getTime() - Date.now()) / 60000;
-                const resolutionDiff = (new Date(selectedTicket.resolutionDueAt).getTime() - Date.now()) / 60000;
-                return <>
-                  <div className="rounded-lg border border-brand-outline/35 bg-brand-surface-high/35 p-3"><div className="flex items-center gap-2 text-[10px] font-bold uppercase text-brand-text-muted"><Clock3 className="h-3.5 w-3.5" /> Phản hồi đầu tiên</div><p className={`mt-2 text-xs font-extrabold ${selectedTicket.firstRespondedAt ? 'text-emerald-600 dark:text-emerald-400' : responseDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-brand-text'}`}>{selectedTicket.firstRespondedAt ? `Đã phản hồi ${formatDateTime(selectedTicket.firstRespondedAt)}` : responseDiff < 0 ? `Quá ${formatDuration(responseDiff)}` : `Còn ${formatDuration(responseDiff)}`}</p><p className="mt-1 text-[9px] text-brand-text-muted">Hạn: {formatDateTime(selectedTicket.firstResponseDueAt)}</p></div>
-                  <div className="rounded-lg border border-brand-outline/35 bg-brand-surface-high/35 p-3"><div className="flex items-center gap-2 text-[10px] font-bold uppercase text-brand-text-muted"><Timer className="h-3.5 w-3.5" /> Thời hạn xử lý</div><p className={`mt-2 text-xs font-extrabold ${selectedTicket.resolvedAt ? 'text-emerald-600 dark:text-emerald-400' : resolutionDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-brand-text'}`}>{selectedTicket.resolvedAt ? `Hoàn tất ${formatDateTime(selectedTicket.resolvedAt)}` : resolutionDiff < 0 ? `Quá ${formatDuration(resolutionDiff)}` : `Còn ${formatDuration(resolutionDiff)}`}</p><p className="mt-1 text-[9px] text-brand-text-muted">Hạn: {formatDateTime(selectedTicket.resolutionDueAt)}</p></div>
-                </>;
-              })()}
-            </div>
-
-            <div className="flex gap-1 border-b border-brand-outline/35 px-4 pt-2">
+            <div className="flex shrink-0 items-end justify-between gap-3 border-b border-brand-outline/35 px-4 pt-2 sm:px-5">
               {([
                 ['conversation', 'Trao đổi', MessageSquare],
                 ['history', 'Lịch sử', Clock3],
                 ['details', 'Thông tin', FileText]
-              ] as const).map(([tab, label, Icon]) => <button key={tab} onClick={() => setDetailTab(tab)} className={`flex items-center gap-1.5 rounded-b-none border-0 bg-transparent px-3 py-2 text-xs font-bold shadow-none ${detailTab === tab ? 'border-b-2 border-brand-primary text-brand-primary' : 'text-brand-text-muted'}`}><Icon className="h-3.5 w-3.5" /><span>{label}</span></button>)}
+              ] as const).map(([tab, label, Icon]) => <button key={tab} onClick={() => setDetailTab(tab)} className={`flex items-center gap-1.5 rounded-b-none border-0 bg-transparent px-3 py-2.5 text-xs font-bold shadow-none transition-colors ${detailTab === tab ? 'border-b-2 border-brand-primary text-brand-primary' : 'text-brand-text-muted hover:text-brand-text'}`}><Icon className="h-3.5 w-3.5" /><span>{label}</span></button>)}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
               {detailTab === 'conversation' && (
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-brand-outline/35 bg-brand-surface-high/35 p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Nội dung yêu cầu ban đầu</p><p className="mt-2 text-xs leading-relaxed text-brand-text">{selectedTicket.description}</p></div>
+                  <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-4"><p className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-brand-primary"><TicketIcon className="h-3.5 w-3.5" /> Yêu cầu ban đầu</p><p className="mt-2 text-xs leading-relaxed text-brand-text">{selectedTicket.description}</p></div>
                   {(selectedTicket.messages || []).map((message) => (
-                    <div key={message.id} className={`rounded-xl border p-4 ${message.type === 'INTERNAL_NOTE' ? 'border-amber-500/25 bg-amber-500/5' : message.type === 'SYSTEM_EVENT' ? 'border-brand-outline/35 bg-brand-surface-high/35' : 'border-brand-outline/35 bg-brand-surface'}`}>
+                    <div key={message.id} className={`rounded-xl border border-l-4 p-4 ${message.type === 'INTERNAL_NOTE' ? 'border-amber-500/25 border-l-amber-500 bg-amber-500/5' : message.type === 'SYSTEM_EVENT' ? 'border-brand-outline/35 border-l-brand-text-muted bg-brand-surface-high/35' : message.authorRole === 'TENANT_ADMIN' ? 'border-brand-outline/35 border-l-sky-500 bg-brand-surface' : 'border-brand-outline/35 border-l-brand-primary bg-brand-primary/[0.03]'}`}>
                       <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-extrabold text-brand-text">{message.authorName}</p><p className="mt-0.5 text-[9px] text-brand-text-muted">{message.authorEmail} · {message.authorRole === 'TENANT_ADMIN' ? 'Tenant Admin' : message.authorRole === 'SYSTEM' ? 'Hệ thống' : message.authorRole === 'SUPERADMIN' ? 'Superadmin' : 'Nhân viên hỗ trợ'}</p></div><div className="text-right">{message.type === 'INTERNAL_NOTE' && <Badge className="border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400">Nội bộ</Badge>}<p className="mt-1 text-[9px] text-brand-text-muted">{formatDateTime(message.createdAt)}</p></div></div>
                       <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-brand-text">{message.body}</p>
                       {message.attachments?.map((attachment) => <div key={attachment.id} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-brand-outline/40 bg-brand-surface-high px-3 py-2 text-[10px] text-brand-text"><Paperclip className="h-3.5 w-3.5 text-brand-primary" /><span className="font-bold">{attachment.name}</span><span className="text-brand-text-muted">{attachment.size}</span></div>)}
@@ -613,19 +641,19 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
             <div className="shrink-0 border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-3 sm:p-4">
               {detailTab === 'conversation' && isActive(selectedTicket) ? (
                 <form onSubmit={handleSendReply}>
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setReplyType('PUBLIC_REPLY')} className={`min-h-0 px-3 py-1.5 text-[10px] font-bold ${replyType === 'PUBLIC_REPLY' ? 'bg-brand-primary text-white' : 'border border-brand-outline bg-brand-surface text-brand-text-muted'}`}>Phản hồi khách hàng</button>
-                      <button type="button" onClick={() => setReplyType('INTERNAL_NOTE')} className={`min-h-0 px-3 py-1.5 text-[10px] font-bold ${replyType === 'INTERNAL_NOTE' ? 'bg-amber-500 text-white' : 'border border-brand-outline bg-brand-surface text-brand-text-muted'}`}>Ghi chú nội bộ</button>
+                  <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-extrabold text-brand-text">{replyType === 'PUBLIC_REPLY' ? 'Soạn phản hồi khách hàng' : 'Thêm ghi chú nội bộ'}</p>
+                      <p className="mt-1 text-[9px] text-brand-text-muted">{replyType === 'PUBLIC_REPLY' ? `Nội dung sẽ được gửi qua ${CHANNEL_CONFIG[selectedTicket.channel].label}` : 'Nội dung chỉ hiển thị cho đội ngũ vận hành'}</p>
                     </div>
-                    <p className="text-[9px] text-brand-text-muted">{replyType === 'PUBLIC_REPLY' ? `Gửi qua ${CHANNEL_CONFIG[selectedTicket.channel].label}` : 'Chỉ đội ngũ nội bộ nhìn thấy'}</p>
+                    <div className="flex rounded-xl border border-brand-outline bg-brand-surface p-1">
+                      <button type="button" onClick={() => setReplyType('PUBLIC_REPLY')} className={`min-h-0 rounded-lg border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${replyType === 'PUBLIC_REPLY' ? 'bg-brand-primary text-white' : 'bg-transparent text-brand-text-muted'}`}>Phản hồi</button>
+                      <button type="button" onClick={() => setReplyType('INTERNAL_NOTE')} className={`min-h-0 rounded-lg border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${replyType === 'INTERNAL_NOTE' ? 'bg-amber-500 text-white' : 'bg-transparent text-brand-text-muted'}`}>Ghi chú nội bộ</button>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                    <textarea rows={2} value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder={replyType === 'PUBLIC_REPLY' ? `Trả lời ${selectedTicket.requesterName}...` : 'Chỉ đội ngũ nội bộ nhìn thấy ghi chú này...'} className={`min-h-16 min-w-0 flex-1 resize-none rounded-xl border px-3 py-2 text-xs leading-relaxed text-brand-text outline-none placeholder:text-brand-text-muted/60 ${replyType === 'INTERNAL_NOTE' ? 'border-amber-500/35 bg-amber-500/5' : 'border-brand-outline/50 bg-brand-surface'}`} />
-                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-stretch">
-                      <button type="button" onClick={() => handleResolve(selectedTicket)} className="inline-flex items-center justify-center gap-2 whitespace-nowrap border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-4 w-4" /><span>Đánh dấu đã giải quyết</span></button>
-                      <button type="submit" disabled={!replyText.trim()} className="inline-flex items-center justify-center gap-2 whitespace-nowrap bg-brand-primary px-4 py-2 text-xs font-bold text-white"><Send className="h-3.5 w-3.5" /><span>{replyType === 'PUBLIC_REPLY' ? 'Gửi phản hồi' : 'Lưu ghi chú'}</span></button>
-                    </div>
+                    <textarea rows={2} value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder={replyType === 'PUBLIC_REPLY' ? `Nhập nội dung trả lời ${selectedTicket.requesterName}...` : 'Nhập ghi chú dành cho đội ngũ nội bộ...'} className={`min-h-16 min-w-0 flex-1 resize-none rounded-xl border px-3 py-2.5 text-xs leading-relaxed text-brand-text outline-none placeholder:text-brand-text-muted/60 ${replyType === 'INTERNAL_NOTE' ? 'border-amber-500/35 bg-amber-500/5' : 'border-brand-outline/50 bg-brand-surface'}`} />
+                    <button type="submit" disabled={!replyText.trim()} className={`inline-flex min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-2 text-xs font-bold text-white ${replyType === 'PUBLIC_REPLY' ? 'bg-brand-primary' : 'bg-amber-500'}`}><Send className="h-3.5 w-3.5" /><span>{replyType === 'PUBLIC_REPLY' ? 'Gửi phản hồi' : 'Lưu ghi chú'}</span></button>
                   </div>
                 </form>
               ) : (
