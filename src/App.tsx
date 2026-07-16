@@ -30,7 +30,7 @@ import { SUPPORT_MOCK_TICKETS } from './mockData/supportTickets';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import LoginPage from './components/LoginPage';
-import TenantAdminPortal from './components/TenantAdminPortal';
+import TenantAdminPortal from './components/NailTenantAdminPortal';
 import type { InterfaceLanguage } from './components/AccountPreferences';
 import { authenticateDemoAccount, getDemoAccountByRole, type PortalRole } from './auth/demoAccounts';
 

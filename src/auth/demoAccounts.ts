@@ -20,7 +20,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     password: 'Lumiere@2026',
     role: 'TENANT_ADMIN',
     displayName: 'Lê Hoàng Nam',
-    tenantName: 'Lumière Hair Studio'
+    tenantName: 'Nailé Studio'
   }
 ];
 
