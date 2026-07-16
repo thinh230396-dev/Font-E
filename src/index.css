@@ -77,6 +77,37 @@ body {
   animation: login-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes profile-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-profile-menu {
+  transform-origin: top right;
+  animation: profile-menu-enter 160ms ease-out both;
+}
+
+.header-profile-trigger,
+.header-theme-toggle,
+.profile-menu-action,
+.profile-menu-logout {
+  transform: none !important;
+}
+
+.profile-menu-action,
+.profile-menu-action:hover,
+.profile-menu-logout,
+.profile-menu-logout:hover {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 .login-showcase::after {
   content: "";
   position: absolute;
@@ -171,6 +202,10 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-login-enter {
+    animation: none;
+  }
+
+  .animate-profile-menu {
     animation: none;
   }
 }

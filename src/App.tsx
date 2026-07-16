@@ -1369,6 +1369,8 @@ export default function App() {
           themeMode={themeMode}
           onToggleTheme={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
           onLogout={handleLogout}
+          onOpenAccountSettings={() => setActiveTab('settings')}
+          onOpenSecurity={() => setActiveTab('security')}
         />
 
         {systemSettings.general.maintenanceMode && (

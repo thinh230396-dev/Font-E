@@ -4,14 +4,17 @@ import {
   Bell, 
   Menu, 
   LogOut, 
-  User, 
   Shield, 
   AlertTriangle, 
   XCircle, 
   Info,
   HelpCircle,
   Moon,
-  Sun
+  Sun,
+  ChevronDown,
+  Settings2,
+  LockKeyhole,
+  CheckCircle2
 } from 'lucide-react';
 import { SystemAlert } from '../types';
 
@@ -26,6 +29,8 @@ interface HeaderProps {
   themeMode: 'light' | 'dark';
   onToggleTheme: () => void;
   onLogout: () => void;
+  onOpenAccountSettings: () => void;
+  onOpenSecurity: () => void;
 }
 
 export default function Header({ 
@@ -38,7 +43,9 @@ export default function Header({
   setSearchQuery,
   themeMode,
   onToggleTheme,
-  onLogout
+  onLogout,
+  onOpenAccountSettings,
+  onOpenSecurity
 }: HeaderProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
@@ -186,17 +193,17 @@ export default function Header({
           onClick={onToggleTheme}
           title={themeMode === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
           aria-label={themeMode === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-          className="h-9 min-w-[88px] px-2.5 rounded-full border border-brand-outline/60 bg-brand-surface-high hover:bg-brand-surface-highest text-brand-text shadow-sm flex items-center gap-2 cursor-pointer"
+          className="header-theme-toggle h-10 px-2 rounded-xl border border-brand-outline/60 bg-brand-surface-high hover:bg-brand-surface-highest text-brand-text shadow-sm flex items-center gap-2 cursor-pointer"
         >
-          <span className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+          <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
             themeMode === 'dark'
-              ? 'bg-brand-primary text-brand-on-primary'
+              ? 'bg-violet-500 text-white shadow-sm'
               : 'bg-amber-100 text-amber-600 border border-amber-200'
           }`}>
             {themeMode === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </span>
-          <span className="text-xs font-bold hidden sm:inline">
-            {themeMode === 'dark' ? 'Tối' : 'Sáng'}
+          <span className="pr-1 text-[11px] font-bold hidden sm:inline">
+            {themeMode === 'dark' ? 'Giao diện tối' : 'Giao diện sáng'}
           </span>
         </button>
 
@@ -205,47 +212,116 @@ export default function Header({
 
         {/* User Profile */}
         <div className="relative" ref={profileRef}>
-          <button 
+          <button
+            type="button"
             onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="flex items-center gap-2 text-left hover:opacity-90 transition-opacity cursor-pointer focus:outline-none"
+            aria-haspopup="menu"
+            aria-expanded={showProfileMenu}
+            className={`header-profile-trigger flex items-center gap-2.5 rounded-xl border px-2 py-1.5 text-left transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary/20 ${
+              showProfileMenu
+                ? 'border-brand-primary/30 bg-brand-primary/5 shadow-sm'
+                : 'border-transparent hover:border-brand-outline/60 hover:bg-brand-surface-high'
+            }`}
           >
-            <div className="w-8 h-8 rounded-full bg-brand-surface-highest border border-brand-outline/40 overflow-hidden flex-shrink-0 shadow-inner">
+            <div className="relative w-8 h-8 rounded-xl bg-brand-surface-highest border border-brand-outline/40 overflow-hidden flex-shrink-0 shadow-inner">
               <img 
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHEacud0tQ8HtS17f0spPnyOekngb2QobaJ8igUCndQJn8kZ61Q4WzGVbd7mT0KUNIKKHOvBj7EjAXWYPvVmqlbAKajxEvmXL18spcUSw6T7hfSUwFvSHE6RMO8gNVMGN4HJrnb9kiCmiNhrg6yCtqT3hkAAARHawmrFL4u_h1AQnguMZGUSPncRN1HPDNvbgsUVotvTGmyTN4bTZ2wTkT1-qEFLUNb4aYPrsG0_0anZ-o5i4TnX4O" 
                 alt="letruongthinhcr145@gmail.com" 
                 className="w-full h-full object-cover" 
                 referrerPolicy="no-referrer"
               />
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-brand-surface bg-emerald-500" />
             </div>
-            <div className="hidden lg:block leading-none">
+            <div className="hidden xl:block leading-none min-w-[94px]">
               <p className="text-[12px] font-bold text-brand-text">Superadmin</p>
-              <p className="text-[10px] text-brand-text-muted mt-1">Quản trị hệ thống</p>
+              <p className="text-[9px] text-brand-text-muted mt-1">Đang hoạt động</p>
             </div>
+            <ChevronDown className={`hidden xl:block h-3.5 w-3.5 text-brand-text-muted transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
           </button>
 
           {showProfileMenu && (
-            <div className="absolute right-0 mt-2 w-56 bg-brand-surface border border-brand-outline/50 rounded-xl shadow-xl z-50 overflow-hidden">
-              <div className="p-4 border-b border-brand-outline/40 bg-brand-surface-high/50">
-                <p className="text-xs font-bold text-brand-text">Superadmin</p>
-                <p className="text-[10px] text-brand-text-muted truncate mt-0.5">superadmin@salonsys.vn</p>
-              </div>
-              <div className="p-1">
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-brand-text hover:bg-brand-surface-highest rounded-lg cursor-default">
-                  <Shield className="w-3.5 h-3.5 text-brand-primary" />
-                  <span>Quyền Superadmin</span>
+            <div role="menu" className="header-profile-menu absolute right-0 mt-2.5 w-[304px] bg-brand-surface border border-brand-outline/60 rounded-2xl shadow-[0_20px_55px_rgba(15,23,42,0.18)] z-50 overflow-hidden animate-profile-menu">
+              <div className="p-4 border-b border-brand-outline/40 bg-gradient-to-br from-brand-primary/[0.08] to-transparent">
+                <div className="flex items-center gap-3">
+                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-brand-outline/50 bg-brand-surface-highest shadow-sm">
+                    <img
+                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHEacud0tQ8HtS17f0spPnyOekngb2QobaJ8igUCndQJn8kZ61Q4WzGVbd7mT0KUNIKKHOvBj7EjAXWYPvVmqlbAKajxEvmXL18spcUSw6T7hfSUwFvSHE6RMO8gNVMGN4HJrnb9kiCmiNhrg6yCtqT3hkAAARHawmrFL4u_h1AQnguMZGUSPncRN1HPDNvbgsUVotvTGmyTN4bTZ2wTkT1-qEFLUNb4aYPrsG0_0anZ-o5i4TnX4O"
+                      alt="Ảnh đại diện Superadmin"
+                      className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    <CheckCircle2 className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full bg-brand-surface text-emerald-500" fill="currentColor" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-[13px] font-extrabold text-brand-text">Superadmin</p>
+                      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Online</span>
+                    </div>
+                    <p className="mt-1 truncate text-[10px] text-brand-text-muted">superadmin@salonsys.vn</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-brand-text hover:bg-brand-surface-highest rounded-lg cursor-default">
-                  <User className="w-3.5 h-3.5 text-brand-secondary" />
-                  <span>Cài đặt cá nhân</span>
+              </div>
+
+              <div className="px-3 pt-3">
+                <div className="flex items-start gap-3 rounded-xl border border-brand-primary/15 bg-brand-primary/[0.06] p-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
+                    <Shield className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-extrabold text-brand-text">Vai trò Superadmin</p>
+                    <p className="mt-1 text-[9px] leading-4 text-brand-text-muted">Toàn quyền quản trị nền tảng SalonSys</p>
+                  </div>
                 </div>
               </div>
-              <div className="p-1 border-t border-brand-outline/30 bg-brand-surface-lowest/40">
-                <button 
-                  onClick={onLogout}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-error hover:bg-brand-error/10 rounded-lg cursor-pointer text-left"
+
+              <div className="p-2.5">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onOpenAccountSettings();
+                    setShowProfileMenu(false);
+                  }}
+                  className="profile-menu-action w-full flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left hover:bg-brand-surface-high cursor-pointer"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Đăng xuất</span>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-surface-highest text-brand-text-muted"><Settings2 className="h-4 w-4" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold text-brand-text">Cài đặt tài khoản</span>
+                    <span className="mt-0.5 block text-[9px] text-brand-text-muted">Hồ sơ và tùy chọn cá nhân</span>
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-brand-text-muted/60" />
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onOpenSecurity();
+                    setShowProfileMenu(false);
+                  }}
+                  className="profile-menu-action w-full flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left hover:bg-brand-surface-high cursor-pointer"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-surface-highest text-brand-text-muted"><LockKeyhole className="h-4 w-4" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold text-brand-text">Bảo mật đăng nhập</span>
+                    <span className="mt-0.5 block text-[9px] text-brand-text-muted">Mật khẩu và lịch sử truy cập</span>
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-brand-text-muted/60" />
+                </button>
+              </div>
+
+              <div className="p-2.5 border-t border-brand-outline/40 bg-brand-surface-lowest/50">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onLogout();
+                  }}
+                  className="profile-menu-logout w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[11px] font-bold text-brand-error hover:bg-brand-error/10 rounded-xl cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Đăng xuất khỏi tài khoản
                 </button>
               </div>
             </div>
