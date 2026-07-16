@@ -24,6 +24,7 @@ import {
 } from './utils/systemSettings';
 import { recordAuditLog } from './utils/auditLogs';
 import { inferPaymentGateway, normalizeInvoicePaymentData } from './utils/invoicePayments';
+import { SUPPORT_MOCK_TICKETS } from './mockData/supportTickets';
 
 // Import subcomponents
 import Sidebar from './components/Sidebar';
@@ -185,10 +186,15 @@ export default function App() {
   const [tenantAdmins, setTenantAdmins] = useState<TenantAdminAccount[]>(() =>
     loadLocalStorageData<TenantAdminAccount[]>('tenant_admins', [])
   );
-  const [tickets, setTickets] = useState<Ticket[]>(() => (
-    loadLocalStorageData<Ticket[]>('support_tickets', [])
-      .filter((ticket) => !LEGACY_MOCK_SUPPORT_TICKET_IDS.has(ticket.id))
-  ));
+  const [tickets, setTickets] = useState<Ticket[]>(() => {
+    const storedTickets = loadLocalStorageData<Ticket[]>('support_tickets', [])
+      .filter((ticket) => !LEGACY_MOCK_SUPPORT_TICKET_IDS.has(ticket.id));
+    const storedIds = new Set(storedTickets.map((ticket) => ticket.id));
+    return [
+      ...SUPPORT_MOCK_TICKETS.filter((ticket) => !storedIds.has(ticket.id)),
+      ...storedTickets
+    ];
+  });
 
   // Global search state in Header
   const [searchQuery, setSearchQuery] = useState('');
