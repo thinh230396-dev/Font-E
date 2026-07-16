@@ -438,7 +438,7 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
               className={`relative inline-flex items-center gap-2 border-0 bg-transparent px-4 py-3 text-xs font-bold cursor-pointer ${activeTab === tab.id ? 'text-brand-primary' : 'text-brand-text-muted hover:text-brand-text'}`}
             >
               {tab.icon}
-              {tab.label}
+              <span className="whitespace-nowrap">{tab.label}</span>
               {tab.count !== undefined && <span className="rounded-full bg-brand-surface-highest px-1.5 py-0.5 text-[9px] text-brand-text-muted">{tab.count}</span>}
               {activeTab === tab.id && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand-primary" />}
             </button>
@@ -496,7 +496,7 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
               <div className="flex flex-col gap-3 border-t border-brand-outline/35 bg-brand-surface-high/35 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[10px] text-brand-text-muted">Mọi thay đổi chính sách đều được ghi vào nhật ký kiểm toán.</p>
                 <button type="button" onClick={onOpenSecuritySettings} disabled={!onOpenSecuritySettings} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-outline/50 bg-brand-surface px-3 py-2 text-xs font-bold text-brand-text cursor-pointer disabled:cursor-not-allowed">
-                  <Settings2 className="h-3.5 w-3.5" /> Cấu hình chính sách
+                  <Settings2 className="h-3.5 w-3.5" /> <span className="whitespace-nowrap">Cấu hình chính sách</span>
                 </button>
               </div>
             </section>
@@ -522,7 +522,7 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
                 ))}
               </div>
               <button type="button" onClick={() => setActiveTab('audit')} className="flex w-full items-center justify-center gap-1 rounded-none border-0 border-t border-brand-outline/35 bg-brand-surface-high/30 px-4 py-3 text-xs font-bold text-brand-primary shadow-none cursor-pointer">
-                Xem toàn bộ nhật ký <ChevronRight className="h-3.5 w-3.5" />
+                <span>Xem toàn bộ nhật ký</span> <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </section>
           </div>
