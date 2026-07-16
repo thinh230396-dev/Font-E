@@ -9,6 +9,9 @@ import {
   XCircle, 
   Info,
   HelpCircle,
+  LifeBuoy,
+  BookOpen,
+  ArrowRight,
   ChevronDown,
   Settings2,
   LockKeyhole,
@@ -27,6 +30,8 @@ interface HeaderProps {
   onLogout: () => void;
   onOpenAccountSettings: () => void;
   onOpenSecurity: () => void;
+  onOpenNotifications: () => void;
+  onOpenSupport: () => void;
   interfaceLanguage: 'vi' | 'en';
 }
 
@@ -41,12 +46,16 @@ export default function Header({
   onLogout,
   onOpenAccountSettings,
   onOpenSecurity,
+  onOpenNotifications,
+  onOpenSupport,
   interfaceLanguage
 }: HeaderProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
+  const [showHelpMenu, setShowHelpMenu] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const alertRef = useRef<HTMLDivElement>(null);
+  const helpRef = useRef<HTMLDivElement>(null);
 
   const unreadAlerts = alerts.filter(a => !a.isRead);
   const isEnglish = interfaceLanguage === 'en';
@@ -59,6 +68,9 @@ export default function Header({
       }
       if (alertRef.current && !alertRef.current.contains(event.target as Node)) {
         setShowAlertMenu(false);
+      }
+      if (helpRef.current && !helpRef.current.contains(event.target as Node)) {
+        setShowHelpMenu(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -112,8 +124,17 @@ export default function Header({
         {/* System Notification Bell */}
         <div className="relative" ref={alertRef}>
           <button 
-            onClick={() => setShowAlertMenu(!showAlertMenu)}
-            className="p-2 text-brand-text-muted hover:text-brand-text rounded-lg hover:bg-brand-surface-high transition-colors relative cursor-pointer"
+            type="button"
+            onClick={() => {
+              setShowAlertMenu(!showAlertMenu);
+              setShowHelpMenu(false);
+              setShowProfileMenu(false);
+            }}
+            title={isEnglish ? 'Notifications' : 'Thông báo'}
+            aria-label={isEnglish ? `Notifications, ${unreadAlerts.length} unread` : `Thông báo, ${unreadAlerts.length} chưa đọc`}
+            aria-haspopup="menu"
+            aria-expanded={showAlertMenu}
+            className={`relative flex h-10 w-10 items-center justify-center rounded-xl border p-0 transition-colors cursor-pointer ${showAlertMenu ? 'border-brand-primary/35 bg-brand-primary/10 text-brand-primary' : 'border-transparent text-brand-text-muted hover:border-brand-outline/60 hover:bg-brand-surface-high hover:text-brand-text'}`}
           >
             <Bell className="w-5 h-5" />
             {unreadAlerts.length > 0 && (
@@ -124,33 +145,34 @@ export default function Header({
           </button>
 
           {showAlertMenu && (
-            <div className="absolute right-0 mt-2 w-80 bg-brand-surface border border-brand-outline/50 rounded-xl shadow-xl z-50 overflow-hidden">
-              <div className="px-4 py-3 bg-brand-surface-high/80 border-b border-brand-outline/40 flex justify-between items-center">
-                <span className="text-xs font-semibold text-brand-text">Cảnh báo hệ thống</span>
+            <div role="menu" className="animate-profile-menu absolute right-0 z-50 mt-2.5 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-brand-outline/60 bg-brand-surface shadow-[0_20px_55px_rgba(15,23,42,0.18)]">
+              <div className="flex items-center justify-between border-b border-brand-outline/40 bg-gradient-to-br from-brand-primary/[0.08] to-transparent px-4 py-3.5">
+                <div><p className="text-xs font-extrabold text-brand-text">{isEnglish ? 'Notifications' : 'Thông báo hệ thống'}</p><p className="mt-0.5 text-[9px] text-brand-text-muted">{unreadAlerts.length ? `${unreadAlerts.length} ${isEnglish ? 'unread notifications' : 'thông báo chưa đọc'}` : (isEnglish ? 'You are all caught up' : 'Bạn đã xem tất cả thông báo')}</p></div>
                 {unreadAlerts.length > 0 && (
                   <button 
                     onClick={() => {
                       onMarkAllAlertsAsRead();
-                      setShowAlertMenu(false);
                     }}
-                    className="text-[10px] text-brand-primary hover:underline cursor-pointer"
+                    className="min-h-0 border-0 bg-transparent px-2 py-1 text-[10px] font-bold text-brand-primary shadow-none cursor-pointer"
                   >
-                    Đánh dấu đã đọc
+                    {isEnglish ? 'Mark all read' : 'Đánh dấu đã đọc'}
                   </button>
                 )}
               </div>
               <div className="max-h-72 overflow-y-auto divide-y divide-brand-outline/30">
                 {alerts.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-brand-text-muted">Không có cảnh báo nào</div>
+                  <div className="px-6 py-10 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-brand-surface-high text-brand-text-muted"><Bell className="h-5 w-5" /></span><p className="mt-3 text-xs font-bold text-brand-text">{isEnglish ? 'No notifications' : 'Chưa có thông báo'}</p><p className="mt-1 text-[10px] text-brand-text-muted">{isEnglish ? 'New system events will appear here.' : 'Sự kiện mới của hệ thống sẽ xuất hiện tại đây.'}</p></div>
                 ) : (
                   alerts.map((alert) => (
-                    <div 
+                    <button
+                      type="button"
+                      role="menuitem"
                       key={alert.id} 
                       onClick={() => {
                         onAlertClick(alert.id);
                         setShowAlertMenu(false);
                       }}
-                      className={`p-3 text-left transition-colors cursor-pointer hover:bg-brand-surface-high/50 ${!alert.isRead ? 'bg-brand-primary/5' : ''}`}
+                      className={`h-auto w-full rounded-none border-0 p-3.5 text-left shadow-none transition-colors cursor-pointer hover:bg-brand-surface-high/50 ${!alert.isRead ? 'bg-brand-primary/5' : 'bg-transparent'}`}
                     >
                       <div className="flex gap-2.5 items-start">
                         {getAlertIcon(alert.type)}
@@ -169,21 +191,44 @@ export default function Header({
                           <span className="w-1.5 h-1.5 bg-brand-primary rounded-full shrink-0 mt-1.5" />
                         )}
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
               </div>
+              <div className="border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-2.5"><button type="button" onClick={() => { onOpenNotifications(); setShowAlertMenu(false); }} className="flex h-auto w-full items-center justify-center gap-2 border-0 bg-transparent px-3 py-2 text-[10px] font-bold text-brand-primary shadow-none"><span>{isEnglish ? 'Open notification center' : 'Mở trung tâm thông báo'}</span><ArrowRight className="h-3.5 w-3.5" /></button></div>
             </div>
           )}
         </div>
 
         {/* Help Center */}
-        <button 
-          className="p-2 text-brand-text-muted hover:text-brand-text rounded-lg hover:bg-brand-surface-high transition-colors cursor-pointer"
-          title="Trợ giúp"
-        >
-          <HelpCircle className="w-5 h-5" />
-        </button>
+        <div className="relative" ref={helpRef}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowHelpMenu(!showHelpMenu);
+              setShowAlertMenu(false);
+              setShowProfileMenu(false);
+            }}
+            title={isEnglish ? 'Help' : 'Trợ giúp'}
+            aria-label={isEnglish ? 'Open help menu' : 'Mở menu trợ giúp'}
+            aria-haspopup="menu"
+            aria-expanded={showHelpMenu}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl border p-0 transition-colors cursor-pointer ${showHelpMenu ? 'border-brand-primary/35 bg-brand-primary/10 text-brand-primary' : 'border-transparent text-brand-text-muted hover:border-brand-outline/60 hover:bg-brand-surface-high hover:text-brand-text'}`}
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
+
+          {showHelpMenu && (
+            <div role="menu" className="animate-profile-menu absolute right-0 z-50 mt-2.5 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-brand-outline/60 bg-brand-surface shadow-[0_20px_55px_rgba(15,23,42,0.18)]">
+              <div className="border-b border-brand-outline/40 bg-gradient-to-br from-brand-primary/[0.08] to-transparent px-4 py-3.5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary"><LifeBuoy className="h-4.5 w-4.5" /></span><div><p className="text-xs font-extrabold text-brand-text">{isEnglish ? 'How can we help?' : 'Bạn cần hỗ trợ?'}</p><p className="mt-0.5 text-[9px] text-brand-text-muted">{isEnglish ? 'Quick access to support tools' : 'Truy cập nhanh các công cụ hỗ trợ'}</p></div></div></div>
+              <div className="p-2.5">
+                <button type="button" role="menuitem" onClick={() => { onOpenSupport(); setShowHelpMenu(false); }} className="profile-menu-action flex h-auto w-full items-center gap-3 rounded-xl border-0 bg-transparent px-2.5 py-2.5 text-left shadow-none hover:bg-brand-surface-high"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary"><BookOpen className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-[11px] font-bold text-brand-text">{isEnglish ? 'Support center' : 'Trung tâm hỗ trợ'}</span><span className="mt-0.5 block text-[9px] text-brand-text-muted">{isEnglish ? 'Manage tickets and monitor SLA' : 'Quản lý ticket và theo dõi SLA'}</span></span><ArrowRight className="h-3.5 w-3.5 text-brand-text-muted" /></button>
+                <button type="button" role="menuitem" onClick={() => { onOpenSecurity(); setShowHelpMenu(false); }} className="profile-menu-action flex h-auto w-full items-center gap-3 rounded-xl border-0 bg-transparent px-2.5 py-2.5 text-left shadow-none hover:bg-brand-surface-high"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400"><Shield className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-[11px] font-bold text-brand-text">{isEnglish ? 'Report a security issue' : 'Kiểm tra sự cố bảo mật'}</span><span className="mt-0.5 block text-[9px] text-brand-text-muted">{isEnglish ? 'Review alerts and access logs' : 'Xem cảnh báo và nhật ký truy cập'}</span></span><ArrowRight className="h-3.5 w-3.5 text-brand-text-muted" /></button>
+              </div>
+              <div className="border-t border-brand-outline/40 bg-brand-surface-lowest/60 px-4 py-3"><p className="text-[9px] text-brand-text-muted">{isEnglish ? 'Support email' : 'Email hỗ trợ'}</p><a href="mailto:support@salonsys.vn" className="mt-1 block text-[10px] font-bold text-brand-primary hover:underline">support@salonsys.vn</a></div>
+            </div>
+          )}
+        </div>
 
         {/* Divider */}
         <div className="w-[1px] h-6 bg-brand-outline/30" />
