@@ -229,6 +229,23 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
 
   useEffect(() => setPage(1), [searchQuery, categoryFilter, statusFilter, severityFilter, dateRange]);
 
+  useEffect(() => {
+    if (!selectedLog) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedLog(null);
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedLog]);
+
   const activeSessions = sessions.filter((session) => session.status === 'active');
   const now = Date.now();
   const riskyLogs24h = logs.filter((log) => (
@@ -729,18 +746,18 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
       )}
 
       {selectedLog && (
-        <div className="fixed inset-0 z-[80] flex justify-end">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden p-0 sm:p-4">
           <button type="button" aria-label="Đóng chi tiết nhật ký" onClick={() => setSelectedLog(null)} className="absolute inset-0 h-full w-full rounded-none border-0 bg-slate-950/60 shadow-none cursor-default" />
-          <aside role="dialog" aria-modal="true" aria-labelledby="audit-detail-title" className="relative flex h-full w-full max-w-xl flex-col border-l border-brand-outline/45 bg-brand-surface shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-brand-outline/40 px-5 py-4 sm:px-6">
+          <aside role="dialog" aria-modal="true" aria-labelledby="audit-detail-title" className="relative flex h-[100dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden border border-brand-outline/45 bg-brand-surface shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-brand-outline/40 bg-brand-surface px-5 py-4 sm:px-6 sm:py-5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2"><SeverityBadge severity={selectedLog.severity} /><StatusBadge status={selectedLog.status} /></div>
                 <h2 id="audit-detail-title" className="mt-3 text-base font-bold text-brand-text">{selectedLog.event}</h2>
                 <p className="mt-1 text-[10px] font-mono text-brand-text-muted">{selectedLog.eventCode} · {selectedLog.id}</p>
               </div>
-              <button type="button" onClick={() => setSelectedLog(null)} aria-label="Đóng" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-brand-outline/45 bg-brand-surface-high text-brand-text-muted cursor-pointer"><X className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setSelectedLog(null)} aria-label="Đóng" title="Đóng" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-outline/45 bg-brand-surface-high text-brand-text-muted transition-colors hover:border-brand-primary/40 hover:text-brand-text cursor-pointer"><X className="h-4 w-4" /></button>
             </div>
-            <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
               <div className="rounded-lg border border-brand-outline/35 bg-brand-surface-high/30 p-4">
                 <p className="text-[9px] font-extrabold uppercase tracking-wider text-brand-text-muted">Mô tả sự kiện</p>
                 <p className="mt-2 text-xs leading-relaxed text-brand-text">{selectedLog.description}</p>
@@ -794,8 +811,8 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
                 </section>
               )}
             </div>
-            <div className="border-t border-brand-outline/40 bg-brand-surface-high/30 px-5 py-4 sm:px-6">
-              <button type="button" onClick={() => setSelectedLog(null)} className="w-full rounded-lg bg-brand-primary px-4 py-2.5 text-xs font-bold text-brand-on-primary cursor-pointer">Đóng chi tiết</button>
+            <div className="flex shrink-0 justify-end border-t border-brand-outline/40 bg-brand-surface px-5 py-3 sm:px-6 sm:py-4">
+              <button type="button" onClick={() => setSelectedLog(null)} className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-brand-primary px-5 py-2.5 text-xs font-bold text-brand-on-primary shadow-sm transition-colors hover:bg-brand-primary/90 cursor-pointer sm:w-auto sm:min-w-36">Đóng chi tiết</button>
             </div>
           </aside>
         </div>
