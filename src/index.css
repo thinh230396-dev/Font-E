@@ -100,7 +100,7 @@ body {
   height: 32rem;
   right: -14rem;
   top: -10rem;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.56), rgba(109, 40, 217, 0));
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.5), rgba(109, 40, 217, 0));
 }
 
 .login-orb-two {
@@ -108,7 +108,48 @@ body {
   height: 28rem;
   left: -15rem;
   bottom: -13rem;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.23), rgba(16, 185, 129, 0));
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.2), rgba(6, 182, 212, 0));
+}
+
+.login-showcase-glow {
+  position: absolute;
+  right: -12%;
+  bottom: 7%;
+  width: 62%;
+  height: 26%;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.22);
+  filter: blur(70px);
+  transform: rotate(-12deg);
+  pointer-events: none;
+}
+
+.login-role-card {
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.login-role-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.login-role--violet .login-role-icon {
+  background: rgba(167, 139, 250, 0.14);
+  color: #c4b5fd;
+  border: 1px solid rgba(196, 181, 253, 0.16);
+}
+
+.login-role--cyan .login-role-icon {
+  background: rgba(34, 211, 238, 0.12);
+  color: #67e8f9;
+  border: 1px solid rgba(103, 232, 249, 0.15);
+}
+
+.login-role--emerald .login-role-icon {
+  background: rgba(52, 211, 153, 0.12);
+  color: #6ee7b7;
+  border: 1px solid rgba(110, 231, 183, 0.15);
 }
 
 .login-text-button,
@@ -315,7 +356,8 @@ button[class*="amber-"]:not(:disabled):hover {
 
   .login-left-description,
   .login-showcase-footer,
-  .login-trust-note {
+  .login-trust-note,
+  .login-role-strip {
     display: none;
   }
 

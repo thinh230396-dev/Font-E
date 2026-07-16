@@ -236,7 +236,7 @@ export default function App() {
 
   useEffect(() => {
     document.title = isAuthenticated
-      ? `${systemSettings.general.systemName} — Superadmin`
+      ? `${systemSettings.general.systemName} — Không gian làm việc`
       : `Đăng nhập — ${systemSettings.general.systemName}`;
     document.documentElement.lang = systemSettings.general.defaultLanguage;
     document.documentElement.dataset.timezone = systemSettings.general.timezone;
