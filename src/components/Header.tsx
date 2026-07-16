@@ -203,7 +203,35 @@ export default function Header({
                   ))
                 )}
               </div>
-              {remainingAlertCount > 0 && <div className="border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-2.5"><button type="button" onClick={() => setVisibleAlertCount((count) => count + 6)} className="flex h-auto w-full items-center justify-center border-0 bg-transparent px-3 py-2 text-[10px] font-bold text-brand-primary shadow-none">{isEnglish ? `Show ${Math.min(6, remainingAlertCount)} more` : `Xem thêm ${Math.min(6, remainingAlertCount)} thông báo`}</button></div>}
+              {filteredAlerts.length > 0 && (
+                <div className="border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-2.5">
+                  <button
+                    type="button"
+                    disabled={remainingAlertCount === 0}
+                    onClick={() => {
+                      if (remainingAlertCount > 0) {
+                        setVisibleAlertCount((count) => count + 12);
+                      }
+                    }}
+                    className={`flex h-auto w-full items-center justify-center gap-1.5 rounded-lg border-0 bg-transparent px-3 py-2 text-[10px] font-bold shadow-none transition-colors ${
+                      remainingAlertCount > 0
+                        ? 'text-brand-primary hover:bg-brand-primary/5'
+                        : 'cursor-default text-brand-text-muted opacity-80'
+                    }`}
+                  >
+                    {remainingAlertCount > 0 ? (
+                      isEnglish
+                        ? `Show ${Math.min(12, remainingAlertCount)} more notifications`
+                        : `Hiện thêm ${Math.min(12, remainingAlertCount)} thông báo`
+                    ) : (
+                      <>
+                        <CheckCircle2 size={13} />
+                        {isEnglish ? 'All notifications shown' : 'Đã hiển thị tất cả'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
