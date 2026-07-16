@@ -51,11 +51,16 @@ export default function Header({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
+  const [alertFilter, setAlertFilter] = useState<'ALL' | 'UNREAD'>('ALL');
+  const [visibleAlertCount, setVisibleAlertCount] = useState(6);
   const profileRef = useRef<HTMLDivElement>(null);
   const alertRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
 
   const unreadAlerts = alerts.filter(a => !a.isRead);
+  const filteredAlerts = alertFilter === 'UNREAD' ? unreadAlerts : alerts;
+  const visibleAlerts = filteredAlerts.slice(0, visibleAlertCount);
+  const remainingAlertCount = Math.max(0, filteredAlerts.length - visibleAlerts.length);
   const isEnglish = interfaceLanguage === 'en';
 
   // Close menus when clicking outside
@@ -124,6 +129,7 @@ export default function Header({
           <button 
             type="button"
             onClick={() => {
+              if (!showAlertMenu) setVisibleAlertCount(6);
               setShowAlertMenu(!showAlertMenu);
               setShowHelpMenu(false);
               setShowProfileMenu(false);
@@ -136,8 +142,8 @@ export default function Header({
           >
             <Bell className="w-5 h-5" />
             {unreadAlerts.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-brand-error text-[9px] font-bold text-white rounded-full flex items-center justify-center border border-white shrink-0">
-                {unreadAlerts.length}
+              <span className="absolute -right-1.5 -top-1 flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full border border-white bg-brand-error px-1 text-[8px] font-bold text-white">
+                 {unreadAlerts.length > 99 ? '99+' : unreadAlerts.length}
               </span>
             )}
           </button>
@@ -157,11 +163,15 @@ export default function Header({
                   </button>
                 )}
               </div>
-              <div className="max-h-72 overflow-y-auto divide-y divide-brand-outline/30">
-                {alerts.length === 0 ? (
-                  <div className="px-6 py-10 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-brand-surface-high text-brand-text-muted"><Bell className="h-5 w-5" /></span><p className="mt-3 text-xs font-bold text-brand-text">{isEnglish ? 'No notifications' : 'Chưa có thông báo'}</p><p className="mt-1 text-[10px] text-brand-text-muted">{isEnglish ? 'New system events will appear here.' : 'Sự kiện mới của hệ thống sẽ xuất hiện tại đây.'}</p></div>
+              <div className="flex gap-1 border-b border-brand-outline/40 bg-brand-surface px-3 py-2">
+                <button type="button" onClick={() => { setAlertFilter('ALL'); setVisibleAlertCount(6); }} className={`min-h-8 flex-1 border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${alertFilter === 'ALL' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'}`}>{isEnglish ? 'All' : 'Tất cả'} <span className="ml-1 opacity-70">{alerts.length}</span></button>
+                <button type="button" onClick={() => { setAlertFilter('UNREAD'); setVisibleAlertCount(6); }} className={`min-h-8 flex-1 border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${alertFilter === 'UNREAD' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'}`}>{isEnglish ? 'Unread' : 'Chưa đọc'} <span className="ml-1 opacity-70">{unreadAlerts.length}</span></button>
+              </div>
+              <div className="max-h-80 overflow-y-auto divide-y divide-brand-outline/30">
+                {filteredAlerts.length === 0 ? (
+                  <div className="px-6 py-10 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-brand-surface-high text-brand-text-muted"><Bell className="h-5 w-5" /></span><p className="mt-3 text-xs font-bold text-brand-text">{alertFilter === 'UNREAD' ? (isEnglish ? 'No unread notifications' : 'Không có thông báo chưa đọc') : (isEnglish ? 'No notifications' : 'Chưa có thông báo')}</p><p className="mt-1 text-[10px] text-brand-text-muted">{alertFilter === 'UNREAD' ? (isEnglish ? 'All notifications have been read.' : 'Bạn đã đọc tất cả thông báo.') : (isEnglish ? 'New system events will appear here.' : 'Sự kiện mới của hệ thống sẽ xuất hiện tại đây.')}</p></div>
                 ) : (
-                  alerts.map((alert) => (
+                  visibleAlerts.map((alert) => (
                     <button
                       type="button"
                       role="menuitem"
@@ -193,6 +203,7 @@ export default function Header({
                   ))
                 )}
               </div>
+              {remainingAlertCount > 0 && <div className="border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-2.5"><button type="button" onClick={() => setVisibleAlertCount((count) => count + 6)} className="flex h-auto w-full items-center justify-center border-0 bg-transparent px-3 py-2 text-[10px] font-bold text-brand-primary shadow-none">{isEnglish ? `Show ${Math.min(6, remainingAlertCount)} more` : `Xem thêm ${Math.min(6, remainingAlertCount)} thông báo`}</button></div>}
             </div>
           )}
         </div>
