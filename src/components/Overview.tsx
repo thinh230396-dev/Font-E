@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { Invoice, Tenant, SystemAlert, TenantStatus } from '../types';
+import { formatAlertTimestamp } from '../utils/alerts';
 import { convertMoney, formatMoney } from '../utils/money';
 
 interface OverviewProps {
@@ -525,7 +526,7 @@ export default function Overview({
                           {alert.description}
                         </p>
                         <span className="text-[8px] text-brand-text-muted/60 mt-1.5 block font-mono">
-                          {alert.createdAt}
+                          {formatAlertTimestamp(alert.createdAt)}
                         </span>
                       </div>
                     </div>

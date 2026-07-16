@@ -32,7 +32,7 @@ import Header from './components/Header';
 import LoginPage from './components/LoginPage';
 import type { InterfaceLanguage } from './components/AccountPreferences';
 
-const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v1';
+const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v2';
 
 const loadAlertsWithOneTimeMocks = (): SystemAlert[] => {
   const savedAlerts = loadLocalStorageData<SystemAlert[]>('alerts', []);

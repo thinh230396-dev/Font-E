@@ -15,9 +15,12 @@ import {
   ChevronDown,
   Settings2,
   LockKeyhole,
-  CheckCircle2
+  CheckCircle2,
+  CalendarDays,
+  X
 } from 'lucide-react';
 import { SystemAlert } from '../types';
+import { formatAlertFilterDate, formatAlertTimestamp, getAlertDateKey } from '../utils/alerts';
 
 interface HeaderProps {
   sidebarOpen: boolean;
@@ -52,16 +55,22 @@ export default function Header({
   const [showAlertMenu, setShowAlertMenu] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const [alertFilter, setAlertFilter] = useState<'ALL' | 'UNREAD'>('ALL');
+  const [alertDate, setAlertDate] = useState('');
   const [visibleAlertCount, setVisibleAlertCount] = useState(6);
   const profileRef = useRef<HTMLDivElement>(null);
   const alertRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
 
   const unreadAlerts = alerts.filter(a => !a.isRead);
-  const filteredAlerts = alertFilter === 'UNREAD' ? unreadAlerts : alerts;
+  const dateFilteredAlerts = alertDate
+    ? alerts.filter((alert) => getAlertDateKey(alert.createdAt) === alertDate)
+    : alerts;
+  const dateFilteredUnreadAlerts = dateFilteredAlerts.filter((alert) => !alert.isRead);
+  const filteredAlerts = alertFilter === 'UNREAD' ? dateFilteredUnreadAlerts : dateFilteredAlerts;
   const visibleAlerts = filteredAlerts.slice(0, visibleAlertCount);
   const remainingAlertCount = Math.max(0, filteredAlerts.length - visibleAlerts.length);
   const isEnglish = interfaceLanguage === 'en';
+  const todayDateKey = getAlertDateKey(new Date().toISOString());
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -163,13 +172,44 @@ export default function Header({
                   </button>
                 )}
               </div>
+              <div className="border-b border-brand-outline/40 bg-brand-surface px-3 py-2.5">
+                <div className="flex items-center gap-2 rounded-xl border border-brand-outline/50 bg-brand-surface-lowest px-2.5 py-2">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-brand-primary" />
+                  <label htmlFor="notification-date-filter" className="sr-only">{isEnglish ? 'Filter notifications by date' : 'Lọc thông báo theo ngày'}</label>
+                  <input
+                    id="notification-date-filter"
+                    type="date"
+                    max={todayDateKey}
+                    value={alertDate}
+                    onChange={(event) => {
+                      setAlertDate(event.target.value);
+                      setVisibleAlertCount(6);
+                    }}
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[10px] font-semibold text-brand-text outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                  />
+                  {alertDate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAlertDate('');
+                        setVisibleAlertCount(6);
+                      }}
+                      aria-label={isEnglish ? 'Clear date filter' : 'Xóa lọc theo ngày'}
+                      title={isEnglish ? 'Clear date filter' : 'Xóa lọc theo ngày'}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-0 bg-brand-surface-high p-0 text-brand-text-muted shadow-none hover:text-brand-text"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="flex gap-1 border-b border-brand-outline/40 bg-brand-surface px-3 py-2">
-                <button type="button" onClick={() => { setAlertFilter('ALL'); setVisibleAlertCount(6); }} className={`min-h-8 flex-1 border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${alertFilter === 'ALL' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'}`}>{isEnglish ? 'All' : 'Tất cả'} <span className="ml-1 opacity-70">{alerts.length}</span></button>
-                <button type="button" onClick={() => { setAlertFilter('UNREAD'); setVisibleAlertCount(6); }} className={`min-h-8 flex-1 border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${alertFilter === 'UNREAD' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'}`}>{isEnglish ? 'Unread' : 'Chưa đọc'} <span className="ml-1 opacity-70">{unreadAlerts.length}</span></button>
+                <button type="button" onClick={() => { setAlertFilter('ALL'); setVisibleAlertCount(6); }} className={`min-h-8 flex-1 border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${alertFilter === 'ALL' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'}`}>{isEnglish ? 'All' : 'Tất cả'} <span className="ml-1 opacity-70">{dateFilteredAlerts.length}</span></button>
+                <button type="button" onClick={() => { setAlertFilter('UNREAD'); setVisibleAlertCount(6); }} className={`min-h-8 flex-1 border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${alertFilter === 'UNREAD' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'}`}>{isEnglish ? 'Unread' : 'Chưa đọc'} <span className="ml-1 opacity-70">{dateFilteredUnreadAlerts.length}</span></button>
               </div>
               <div className="max-h-80 overflow-y-auto divide-y divide-brand-outline/30">
                 {filteredAlerts.length === 0 ? (
-                  <div className="px-6 py-10 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-brand-surface-high text-brand-text-muted"><Bell className="h-5 w-5" /></span><p className="mt-3 text-xs font-bold text-brand-text">{alertFilter === 'UNREAD' ? (isEnglish ? 'No unread notifications' : 'Không có thông báo chưa đọc') : (isEnglish ? 'No notifications' : 'Chưa có thông báo')}</p><p className="mt-1 text-[10px] text-brand-text-muted">{alertFilter === 'UNREAD' ? (isEnglish ? 'All notifications have been read.' : 'Bạn đã đọc tất cả thông báo.') : (isEnglish ? 'New system events will appear here.' : 'Sự kiện mới của hệ thống sẽ xuất hiện tại đây.')}</p></div>
+                  <div className="px-6 py-10 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-brand-surface-high text-brand-text-muted"><Bell className="h-5 w-5" /></span><p className="mt-3 text-xs font-bold text-brand-text">{alertDate ? (isEnglish ? 'No notifications found' : 'Không tìm thấy thông báo') : alertFilter === 'UNREAD' ? (isEnglish ? 'No unread notifications' : 'Không có thông báo chưa đọc') : (isEnglish ? 'No notifications' : 'Chưa có thông báo')}</p><p className="mt-1 text-[10px] text-brand-text-muted">{alertDate ? (isEnglish ? `No matching notifications on ${formatAlertFilterDate(alertDate, 'en')}.` : `Không có thông báo phù hợp trong ngày ${formatAlertFilterDate(alertDate, 'vi')}.`) : alertFilter === 'UNREAD' ? (isEnglish ? 'All notifications have been read.' : 'Bạn đã đọc tất cả thông báo.') : (isEnglish ? 'New system events will appear here.' : 'Sự kiện mới của hệ thống sẽ xuất hiện tại đây.')}</p></div>
                 ) : (
                   visibleAlerts.map((alert) => (
                     <button
@@ -192,7 +232,7 @@ export default function Header({
                             {alert.description}
                           </p>
                           <span className="text-[8px] text-brand-text-muted/60 mt-1 block">
-                            {alert.createdAt}
+                            {formatAlertTimestamp(alert.createdAt, interfaceLanguage)}
                           </span>
                         </div>
                         {!alert.isRead && (
