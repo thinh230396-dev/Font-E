@@ -301,6 +301,22 @@ html[data-theme="dark"] button[class*="bg-brand-surface-highest"]:not(:disabled)
   border-color: #64748b;
 }
 
+.support-resolve-button {
+  color: #047857 !important;
+}
+
+.support-resolve-button:not(:disabled):hover {
+  color: #065f46 !important;
+}
+
+html[data-theme="dark"] .support-resolve-button {
+  color: #6ee7b7 !important;
+}
+
+html[data-theme="dark"] .support-resolve-button:not(:disabled):hover {
+  color: #a7f3d0 !important;
+}
+
 button.account-system-settings,
 button.account-system-settings:hover {
   width: 100% !important;

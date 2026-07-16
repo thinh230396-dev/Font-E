@@ -660,7 +660,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
                     <p className="mt-1 text-[9px] text-brand-text-muted">Phân công người phụ trách, độ ưu tiên và bước xử lý hiện tại.</p>
                   </div>
                   {isActive(selectedTicket) && (
-                    <button type="button" onClick={() => handleResolve(selectedTicket)} className="inline-flex min-h-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                    <button type="button" onClick={() => handleResolve(selectedTicket)} className="support-resolve-button inline-flex min-h-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[10px] font-bold">
                       <CheckCircle2 className="h-3.5 w-3.5" /> Đánh dấu đã giải quyết
                     </button>
                   )}
@@ -800,7 +800,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
                 </form>
               ) : (
                 <div className="flex flex-wrap justify-end gap-2">
-                  {isActive(selectedTicket) ? <button onClick={() => handleResolve(selectedTicket)} className="inline-flex items-center gap-2 whitespace-nowrap border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-4 w-4" /><span>Đánh dấu đã giải quyết</span></button> : <button onClick={() => handleStatusChange(selectedTicket, 'OPEN')} className="inline-flex items-center gap-2 whitespace-nowrap border border-brand-outline bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text"><TicketIcon className="h-4 w-4" /><span>Mở lại ticket</span></button>}
+                  {isActive(selectedTicket) ? <button onClick={() => handleResolve(selectedTicket)} className="support-resolve-button inline-flex items-center gap-2 whitespace-nowrap border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-bold"><CheckCircle2 className="h-4 w-4" /><span>Đánh dấu đã giải quyết</span></button> : <button onClick={() => handleStatusChange(selectedTicket, 'OPEN')} className="inline-flex items-center gap-2 whitespace-nowrap border border-brand-outline bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text"><TicketIcon className="h-4 w-4" /><span>Mở lại ticket</span></button>}
                 </div>
               )}
             </div>
