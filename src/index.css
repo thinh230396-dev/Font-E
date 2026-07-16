@@ -597,3 +597,38 @@ html[data-theme="dark"] .beautiful-select-menu {
   box-shadow: none !important;
   transform: none !important;
 }
+
+/* Tenant Admin Nail: tăng khả năng đọc trên màn hình desktop độ phân giải cao. */
+.nail-admin .text-\[7px\] {
+  font-size: 0.75rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin .text-\[8px\] {
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin .text-\[9px\] {
+  font-size: 0.875rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin .text-\[10px\] {
+  font-size: 0.9375rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin .text-\[11px\] {
+  font-size: 1rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin h1 {
+  font-size: 2.25rem;
+  line-height: 1.15;
+}
+
+.nail-admin aside nav > button {
+  min-height: 2.75rem;
+}
