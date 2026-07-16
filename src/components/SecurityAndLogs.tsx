@@ -30,7 +30,6 @@ import {
   X,
   XCircle
 } from 'lucide-react';
-import { INITIAL_ADMIN_SESSIONS } from '../data';
 import type { AdminSession, SystemLog } from '../types';
 import {
   AUDIT_LOGS_STORAGE_KEY,
@@ -59,6 +58,7 @@ type SeverityFilter = 'ALL' | SystemLog['severity'];
 
 const SESSIONS_STORAGE_KEY = 'salonsys_admin_sessions';
 const PAGE_SIZE = 8;
+const LEGACY_MOCK_SESSION_IDS = new Set(['SES-CURRENT-001', 'SES-REMOTE-002', 'SES-REMOTE-003']);
 
 const CATEGORY_LABELS: Record<SystemLog['category'], string> = {
   AUTH: 'Xác thực',
@@ -132,11 +132,17 @@ const formatRelativeTime = (value: string) => {
 const loadSessions = (): AdminSession[] => {
   try {
     const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
-    if (!raw) return INITIAL_ADMIN_SESSIONS;
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as AdminSession[];
-    return Array.isArray(parsed) ? parsed : INITIAL_ADMIN_SESSIONS;
+    if (!Array.isArray(parsed)) return [];
+
+    const sessions = parsed.filter((session) => !LEGACY_MOCK_SESSION_IDS.has(session.id));
+    if (sessions.length !== parsed.length) {
+      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+    }
+    return sessions;
   } catch {
-    return INITIAL_ADMIN_SESSIONS;
+    return [];
   }
 };
 
@@ -527,7 +533,13 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
                 <Activity className="h-4 w-4 text-brand-primary" />
               </div>
               <div className="divide-y divide-brand-outline/25">
-                {logs.slice(0, 5).map((log) => (
+                {logs.length === 0 ? (
+                  <div className="px-5 py-10 text-center">
+                    <FileClock className="mx-auto h-7 w-7 text-brand-text-muted/45" />
+                    <p className="mt-3 text-xs font-semibold text-brand-text">Chưa có hoạt động thực tế</p>
+                    <p className="mt-1 text-[10px] text-brand-text-muted">Các sự kiện mới của hệ thống sẽ xuất hiện tại đây.</p>
+                  </div>
+                ) : logs.slice(0, 5).map((log) => (
                   <button key={log.id} type="button" onClick={() => setSelectedLog(log)} className="flex w-full items-start gap-3 rounded-none border-0 bg-transparent px-5 py-3.5 text-left shadow-none cursor-pointer hover:bg-brand-surface-high/40">
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${SEVERITY_CONFIG[log.severity].dot}`} />
                     <span className="min-w-0 flex-1">
@@ -656,7 +668,7 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
                 </thead>
                 <tbody className="divide-y divide-brand-outline/25">
                   {paginatedLogs.length === 0 ? (
-                    <tr><td colSpan={8} className="px-5 py-16 text-center"><FileClock className="mx-auto h-8 w-8 text-brand-text-muted/50" /><p className="mt-3 text-xs font-semibold text-brand-text">Không tìm thấy bản ghi phù hợp</p><p className="mt-1 text-[10px] text-brand-text-muted">Thử thay đổi từ khóa, khoảng thời gian hoặc bộ lọc.</p></td></tr>
+                    <tr><td colSpan={8} className="px-5 py-16 text-center"><FileClock className="mx-auto h-8 w-8 text-brand-text-muted/50" /><p className="mt-3 text-xs font-semibold text-brand-text">{logs.length === 0 ? 'Chưa có nhật ký kiểm toán' : 'Không tìm thấy bản ghi phù hợp'}</p><p className="mt-1 text-[10px] text-brand-text-muted">{logs.length === 0 ? 'Các hoạt động thực tế của hệ thống sẽ được ghi nhận tại đây.' : 'Thử thay đổi từ khóa, khoảng thời gian hoặc bộ lọc.'}</p></td></tr>
                   ) : paginatedLogs.map((log) => (
                     <tr key={log.id} className="group hover:bg-brand-surface-high/30">
                       <td className="whitespace-nowrap px-5 py-3.5"><p className="text-[11px] font-semibold text-brand-text">{formatDate(log.timestamp)}</p><p className="mt-0.5 text-[10px] font-mono text-brand-text-muted">{formatTime(log.timestamp)}</p></td>
@@ -703,7 +715,13 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {sessions.map((session) => {
+            {sessions.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-brand-outline/50 bg-brand-surface px-5 py-14 text-center shadow-sm">
+                <MonitorSmartphone className="mx-auto h-8 w-8 text-brand-text-muted/45" />
+                <p className="mt-3 text-sm font-bold text-brand-text">Chưa có dữ liệu phiên đăng nhập</p>
+                <p className="mx-auto mt-1 max-w-md text-[10px] leading-relaxed text-brand-text-muted">Phiên đăng nhập thực tế sẽ xuất hiện tại đây khi hệ thống xác thực được kết nối.</p>
+              </div>
+            ) : sessions.map((session) => {
               const isMobile = session.os.toLowerCase().includes('android') || session.os.toLowerCase().includes('ios');
               return (
                 <article key={session.id} className={`rounded-xl border bg-brand-surface p-5 shadow-sm ${session.suspicious && session.status === 'active' ? 'border-amber-500/35' : 'border-brand-outline/40'} ${session.status === 'revoked' ? 'opacity-60' : ''}`}>

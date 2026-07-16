@@ -1,20 +1,35 @@
-import { INITIAL_LOGS } from '../data';
 import type { SystemLog } from '../types';
 
 export const AUDIT_LOGS_STORAGE_KEY = 'salonsys_audit_logs';
 export const AUDIT_LOGS_UPDATED_EVENT = 'salonsys:audit-logs-updated';
 
-const cloneInitialLogs = () => JSON.parse(JSON.stringify(INITIAL_LOGS)) as SystemLog[];
+const LEGACY_MOCK_LOG_IDS = new Set([
+  'AUD-20260715-001',
+  'AUD-20260715-002',
+  'AUD-20260715-003',
+  'AUD-20260715-004',
+  'AUD-20260715-005',
+  'AUD-20260715-006',
+  'AUD-20260715-007',
+  'AUD-20260715-008',
+  'AUD-20260715-009'
+]);
 
 export const loadAuditLogs = (): SystemLog[] => {
-  if (typeof window === 'undefined') return cloneInitialLogs();
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(AUDIT_LOGS_STORAGE_KEY);
-    if (!raw) return cloneInitialLogs();
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as SystemLog[];
-    return Array.isArray(parsed) ? parsed : cloneInitialLogs();
+    if (!Array.isArray(parsed)) return [];
+
+    const logs = parsed.filter((log) => !LEGACY_MOCK_LOG_IDS.has(log.id));
+    if (logs.length !== parsed.length) {
+      localStorage.setItem(AUDIT_LOGS_STORAGE_KEY, JSON.stringify(logs));
+    }
+    return logs;
   } catch {
-    return cloneInitialLogs();
+    return [];
   }
 };
 
