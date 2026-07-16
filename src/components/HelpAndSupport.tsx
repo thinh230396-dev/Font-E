@@ -211,8 +211,11 @@ function ConversationMessage({ message, requesterName, tenantName }: {
       <div className={`w-fit max-w-[86%] rounded-2xl border p-4 sm:max-w-[78%] ${isSupport ? 'rounded-br-md border-brand-primary/25 bg-brand-primary/[0.07]' : 'rounded-bl-md border-sky-500/25 bg-sky-500/[0.05]'}`}>
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
           <div>
-            <p className="text-xs font-extrabold text-brand-text">{message.authorName}</p>
-            <p className="mt-0.5 text-[9px] font-semibold text-brand-text-muted">{isCustomer ? `Khách hàng · ${tenantName}` : 'Phản hồi công khai · Superadmin'}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-extrabold text-brand-text">{message.authorName}</p>
+              <Badge className={isCustomer ? 'border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400' : 'border-brand-primary/25 bg-brand-primary/10 text-brand-primary'}>{isCustomer ? 'Tin nhắn khách hàng' : 'Phản hồi công khai'}</Badge>
+            </div>
+            <p className="mt-1 text-[9px] font-semibold text-brand-text-muted">{isCustomer ? tenantName : 'Đội ngũ hỗ trợ · Superadmin'}</p>
           </div>
           <time className="text-[9px] text-brand-text-muted">{formatDateTime(message.createdAt)}</time>
         </div>
@@ -230,7 +233,7 @@ function ConversationMessage({ message, requesterName, tenantName }: {
         )}
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-brand-outline/25 pt-2 text-[9px] text-brand-text-muted">
           <span>{message.authorEmail}</span>
-          <span>{isCustomer ? requesterName : 'Đã gửi tới khách hàng'}</span>
+          <span className="inline-flex items-center gap-1.5">{isCustomer ? <><Inbox className="h-3 w-3" /> Tin nhắn đến từ {requesterName}</> : <><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Đã gửi tới khách hàng</>}</span>
         </div>
       </div>
       {isSupport && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-[11px] font-extrabold text-brand-primary">{initials || 'SA'}</div>}
@@ -697,12 +700,41 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
             <div className="min-h-80 flex-none overflow-y-auto overscroll-contain p-4 sm:p-5 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:flex-1">
               {detailTab === 'conversation' && (
                 <div className="space-y-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-extrabold text-brand-text">Luồng trao đổi</h3>
-                      <p className="mt-1 text-[9px] text-brand-text-muted">{(selectedTicket.messages || []).length} nội dung trao đổi · Sắp xếp từ cũ đến mới</p>
+                  <section className="rounded-2xl border border-brand-outline/40 bg-brand-surface-high/25 p-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-outline/30 pb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="h-4 w-4 text-brand-primary" />
+                          <h3 className="text-sm font-extrabold text-brand-text">Phiên trò chuyện hỗ trợ</h3>
+                        </div>
+                        <p className="mt-1 text-[9px] text-brand-text-muted">Mã phiên {selectedTicket.id} · Hiển thị theo thứ tự từ cũ đến mới</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={STATUS_CONFIG[selectedTicket.status].className}>{STATUS_CONFIG[selectedTicket.status].label}</Badge>
+                        <Badge className="gap-1.5 border-brand-outline bg-brand-surface text-brand-text-muted">{CHANNEL_CONFIG[selectedTicket.channel].icon}{CHANNEL_CONFIG[selectedTicket.channel].label}</Badge>
+                        <Badge className="border-brand-outline bg-brand-surface text-brand-text-muted">{(selectedTicket.messages || []).length} tin nhắn</Badge>
+                      </div>
                     </div>
-                    <Badge className="gap-1.5 border-brand-outline bg-brand-surface-high text-brand-text-muted">{CHANNEL_CONFIG[selectedTicket.channel].icon}{CHANNEL_CONFIG[selectedTicket.channel].label}</Badge>
+                    <div className="grid grid-cols-1 gap-2 pt-3 sm:grid-cols-3">
+                      <div className="flex items-center gap-2.5 rounded-xl bg-brand-surface px-3 py-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-[10px] font-extrabold text-sky-600 dark:text-sky-400">{selectedTicket.requesterName.split(' ').slice(-2).map((part) => part[0]).join('').toUpperCase()}</div>
+                        <div className="min-w-0"><p className="text-[9px] font-bold uppercase tracking-wide text-brand-text-muted">Khách hàng</p><p className="mt-0.5 truncate text-[11px] font-extrabold text-brand-text">{selectedTicket.requesterName}</p><p className="truncate text-[9px] text-brand-text-muted">{selectedTicket.tenantName}</p></div>
+                      </div>
+                      <div className="flex items-center gap-2.5 rounded-xl bg-brand-surface px-3 py-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-brand-primary"><Headphones className="h-3.5 w-3.5" /></div>
+                        <div className="min-w-0"><p className="text-[9px] font-bold uppercase tracking-wide text-brand-text-muted">Người xử lý</p><p className="mt-0.5 truncate text-[11px] font-extrabold text-brand-text">{selectedTicket.assignedTo?.name || 'Chưa phân công'}</p><p className="truncate text-[9px] text-brand-text-muted">{TEAM_LABELS[selectedTicket.team]}</p></div>
+                      </div>
+                      <div className="flex items-center gap-2.5 rounded-xl bg-brand-surface px-3 py-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">{CHANNEL_CONFIG[selectedTicket.channel].icon}</div>
+                        <div className="min-w-0"><p className="text-[9px] font-bold uppercase tracking-wide text-brand-text-muted">Kênh trao đổi</p><p className="mt-0.5 truncate text-[11px] font-extrabold text-brand-text">{CHANNEL_CONFIG[selectedTicket.channel].label}</p><p className="truncate text-[9px] text-brand-text-muted">Cập nhật {formatRelativeTime(selectedTicket.updatedAt)}</p></div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <div className="flex items-center gap-3">
+                    <span className="h-px flex-1 bg-brand-outline/30" />
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Bắt đầu phiên · {formatDateTime(selectedTicket.createdAt)}</span>
+                    <span className="h-px flex-1 bg-brand-outline/30" />
                   </div>
 
                   <article className="rounded-2xl border border-brand-primary/25 bg-brand-primary/[0.06] p-4">
