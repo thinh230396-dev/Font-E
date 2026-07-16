@@ -63,7 +63,28 @@ export const INITIAL_PACKAGES: SubscriptionPackage[] = [
   }
 ];
 
-export const INITIAL_ALERTS: SystemAlert[] = [];
+export const INITIAL_ALERTS: SystemAlert[] = [
+  { id: 'DEMO-ALT-020', title: 'Thanh toán cần đối soát', description: 'Giao dịch MoMo của Lumière Hair Studio đã thành công nhưng hóa đơn chưa cập nhật.', type: 'error', createdAt: '2 phút trước', isRead: false, targetTenantId: 'TEN-LUMIERE' },
+  { id: 'DEMO-ALT-019', title: 'Phát hiện đăng nhập bất thường', description: 'Có phiên đăng nhập Superadmin từ thiết bị mới tại Hà Nội.', type: 'warning', createdAt: '8 phút trước', isRead: false },
+  { id: 'DEMO-ALT-018', title: 'Sao lưu dữ liệu hoàn tất', description: 'Bản sao lưu toàn hệ thống lúc 03:00 đã hoàn tất và được xác minh.', type: 'info', createdAt: '18 phút trước', isRead: false },
+  { id: 'DEMO-ALT-017', title: 'Hóa đơn đã quá hạn', description: 'Aurora Beauty & Spa có một hóa đơn quá hạn 3 ngày cần xử lý.', type: 'error', createdAt: '27 phút trước', isRead: false, targetTenantId: 'TEN-AURORA' },
+  { id: 'DEMO-ALT-016', title: 'Gói dịch vụ sắp hết hạn', description: 'Gói Premium của Mint Nail Studio sẽ hết hạn sau 7 ngày.', type: 'warning', createdAt: '42 phút trước', isRead: false, targetTenantId: 'TEN-MINT' },
+  { id: 'DEMO-ALT-015', title: 'Cập nhật hệ thống thành công', description: 'SalonSys Admin đã được cập nhật lên phiên bản mới nhất.', type: 'info', createdAt: '1 giờ trước', isRead: false },
+  { id: 'DEMO-ALT-014', title: 'Không thể gửi email', description: 'Máy chủ SMTP từ chối 3 email nhắc thanh toán gần nhất.', type: 'error', createdAt: '1 giờ 16 phút trước', isRead: false },
+  { id: 'DEMO-ALT-013', title: 'Dung lượng lưu trữ đạt 80%', description: 'Kho tài sản của Rose Beauty đang gần đạt giới hạn gói hiện tại.', type: 'warning', createdAt: '2 giờ trước', isRead: false, targetTenantId: 'TEN-ROSE' },
+  { id: 'DEMO-ALT-012', title: 'Tenant mới đã kích hoạt', description: 'Nắng Spa đã hoàn tất xác minh và bắt đầu thời gian dùng thử.', type: 'info', createdAt: '3 giờ trước', isRead: false, targetTenantId: 'TEN-NANG' },
+  { id: 'DEMO-ALT-011', title: 'Webhook thanh toán bị trễ', description: 'Thời gian phản hồi từ cổng VNPay vượt quá ngưỡng 10 giây.', type: 'warning', createdAt: '4 giờ trước', isRead: false },
+  { id: 'DEMO-ALT-010', title: 'Khôi phục dữ liệu thất bại', description: 'Tác vụ khôi phục môi trường DR dừng ở bước xác minh quyền truy cập.', type: 'error', createdAt: '5 giờ trước', isRead: false },
+  { id: 'DEMO-ALT-009', title: 'Đã tạo báo cáo doanh thu', description: 'Báo cáo doanh thu toàn hệ thống tháng 07/2026 đã sẵn sàng.', type: 'info', createdAt: '6 giờ trước', isRead: false },
+  { id: 'DEMO-ALT-008', title: 'Yêu cầu hỗ trợ ưu tiên cao', description: 'Ticket DEMO-SPT-002 còn 57 phút trước khi vi phạm SLA.', type: 'warning', createdAt: '7 giờ trước', isRead: false },
+  { id: 'DEMO-ALT-007', title: 'Đổi mật khẩu thành công', description: 'Mật khẩu Superadmin đã được thay đổi và các phiên cũ đã đăng xuất.', type: 'info', createdAt: 'Hôm qua, 22:14', isRead: true },
+  { id: 'DEMO-ALT-006', title: 'Đồng bộ hóa đơn hoàn tất', description: '12 hóa đơn từ cổng thanh toán đã được đối soát thành công.', type: 'info', createdAt: 'Hôm qua, 20:45', isRead: true },
+  { id: 'DEMO-ALT-005', title: 'Tài khoản Tenant Admin bị khóa', description: 'Tài khoản bị khóa tạm thời sau 5 lần đăng nhập không thành công.', type: 'warning', createdAt: 'Hôm qua, 18:32', isRead: true, targetTenantId: 'TEN-MINT' },
+  { id: 'DEMO-ALT-004', title: 'Chính sách bảo mật đã cập nhật', description: 'Thời gian hết hạn phiên đăng nhập được thay đổi thành 30 phút.', type: 'info', createdAt: 'Hôm qua, 15:10', isRead: true },
+  { id: 'DEMO-ALT-003', title: 'Kiểm tra SMTP thành công', description: 'Kết nối máy chủ email và thông tin xác thực đang hoạt động bình thường.', type: 'info', createdAt: '15/07/2026, 11:26', isRead: true },
+  { id: 'DEMO-ALT-002', title: 'Tác vụ sao lưu được lên lịch', description: 'Bản sao lưu toàn hệ thống tiếp theo sẽ chạy lúc 03:00.', type: 'info', createdAt: '15/07/2026, 09:00', isRead: true },
+  { id: 'DEMO-ALT-001', title: 'Đã giải quyết cảnh báo SLA', description: 'Yêu cầu hỗ trợ DEMO-SPT-001 đã được phản hồi trong thời hạn.', type: 'info', createdAt: '14/07/2026, 16:40', isRead: true }
+];
 const invoiceDateFromNow = (days: number, hours = 0) => new Date(Date.now() + (days * 24 + hours) * 60 * 60 * 1000).toISOString();
 
 export const INITIAL_INVOICES: Invoice[] = [

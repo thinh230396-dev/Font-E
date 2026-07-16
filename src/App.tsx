@@ -32,6 +32,19 @@ import Header from './components/Header';
 import LoginPage from './components/LoginPage';
 import type { InterfaceLanguage } from './components/AccountPreferences';
 
+const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v1';
+
+const loadAlertsWithOneTimeMocks = (): SystemAlert[] => {
+  const savedAlerts = loadLocalStorageData<SystemAlert[]>('alerts', []);
+  const mocksWereSeeded = loadLocalStorageData<boolean>(ALERTS_MOCK_SEED_KEY, false);
+
+  if (mocksWereSeeded) return savedAlerts;
+
+  saveLocalStorageData(ALERTS_MOCK_SEED_KEY, true);
+  const mockIds = new Set(INITIAL_ALERTS.map((alert) => alert.id));
+  return [...INITIAL_ALERTS, ...savedAlerts.filter((alert) => !mockIds.has(alert.id))];
+};
+
 const Overview = lazy(() => import('./components/Overview'));
 const TenantManagement = lazy(() => import('./components/TenantManagement'));
 const TenantAdminManagement = lazy(() => import('./components/TenantAdminManagement'));
@@ -173,9 +186,7 @@ export default function App() {
   const [packages, setPackages] = useState<SubscriptionPackage[]>(() => 
     loadLocalStorageData<SubscriptionPackage[]>('packages', INITIAL_PACKAGES).map(normalizeSubscriptionPackage)
   );
-  const [alerts, setAlerts] = useState<SystemAlert[]>(() => 
-    loadLocalStorageData<SystemAlert[]>('alerts', INITIAL_ALERTS)
-  );
+  const [alerts, setAlerts] = useState<SystemAlert[]>(loadAlertsWithOneTimeMocks);
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     const existingInvoices = loadLocalStorageData<Invoice[]>('invoices', []);
     const sourceInvoices = existingInvoices.length > 0
