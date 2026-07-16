@@ -15,7 +15,7 @@ import {
 
 interface LoginPageProps {
   systemName: string;
-  onLogin: (remember: boolean) => void;
+  onLogin: (identifier: string, password: string, remember: boolean) => boolean;
 }
 
 const roles = [
@@ -75,7 +75,13 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
     }
 
     setIsSubmitting(true);
-    window.setTimeout(() => onLogin(remember), 650);
+    window.setTimeout(() => {
+      const authenticated = onLogin(normalizedIdentifier, password, remember);
+      if (!authenticated) {
+        setError('Tài khoản hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.');
+        setIsSubmitting(false);
+      }
+    }, 650);
   };
 
   return (

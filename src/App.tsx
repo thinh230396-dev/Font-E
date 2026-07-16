@@ -30,7 +30,9 @@ import { SUPPORT_MOCK_TICKETS } from './mockData/supportTickets';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import LoginPage from './components/LoginPage';
+import TenantAdminPortal from './components/TenantAdminPortal';
 import type { InterfaceLanguage } from './components/AccountPreferences';
+import { authenticateDemoAccount, getDemoAccountByRole, type PortalRole } from './auth/demoAccounts';
 
 const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v2';
 
@@ -164,6 +166,11 @@ export default function App() {
     return localStorage.getItem('salonsys_authenticated') === 'true'
       || sessionStorage.getItem('salonsys_authenticated') === 'true';
   });
+  const [portalRole, setPortalRole] = useState<PortalRole>(() => {
+    if (typeof window === 'undefined') return 'SUPERADMIN';
+    const savedRole = localStorage.getItem('salonsys_role') || sessionStorage.getItem('salonsys_role');
+    return savedRole === 'TENANT_ADMIN' ? 'TENANT_ADMIN' : 'SUPERADMIN';
+  });
   // Mobile sidebar visibility state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
@@ -270,17 +277,26 @@ export default function App() {
     document.documentElement.dataset.timezone = systemSettings.general.timezone;
   }, [interfaceLanguage, isAuthenticated, systemSettings.general.systemName, systemSettings.general.timezone]);
 
-  const handleLogin = (remember: boolean) => {
+  const handleLogin = (identifier: string, password: string, remember: boolean): boolean => {
+    const account = authenticateDemoAccount(identifier, password);
+    if (!account) return false;
+
     const storage = remember ? localStorage : sessionStorage;
     const otherStorage = remember ? sessionStorage : localStorage;
     storage.setItem('salonsys_authenticated', 'true');
+    storage.setItem('salonsys_role', account.role);
     otherStorage.removeItem('salonsys_authenticated');
+    otherStorage.removeItem('salonsys_role');
+    setPortalRole(account.role);
     setIsAuthenticated(true);
+    return true;
   };
 
   const handleLogout = () => {
     localStorage.removeItem('salonsys_authenticated');
     sessionStorage.removeItem('salonsys_authenticated');
+    localStorage.removeItem('salonsys_role');
+    sessionStorage.removeItem('salonsys_role');
     setIsAuthenticated(false);
   };
 
@@ -1375,6 +1391,10 @@ export default function App() {
 
   if (!isAuthenticated) {
     return <LoginPage systemName={systemSettings.general.systemName} onLogin={handleLogin} />;
+  }
+
+  if (portalRole === 'TENANT_ADMIN') {
+    return <TenantAdminPortal account={getDemoAccountByRole('TENANT_ADMIN')} onLogout={handleLogout} />;
   }
 
   return (
