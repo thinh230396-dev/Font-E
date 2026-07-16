@@ -233,6 +233,42 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
   const totalStorageBytes = successfulBackups.reduce((total, snapshot) => total + snapshot.sizeBytes, 0);
   const storageUsedGb = totalStorageBytes / (1024 ** 3);
   const verifiedRate = successfulBackups.length ? Math.round(successfulBackups.filter((snapshot) => snapshot.integrityStatus === 'VERIFIED').length / successfulBackups.length * 100) : 0;
+  const rpoTargetHours = policy.frequency === 'EVERY_6_HOURS' ? 6 : policy.frequency === 'DAILY' ? 24 : 168;
+  const latestBackupAgeHours = latestSuccessful
+    ? Math.max(0, (Date.now() - new Date(latestSuccessful.completedAt || latestSuccessful.createdAt).getTime()) / 3600000)
+    : Number.POSITIVE_INFINITY;
+  const readinessChecks = [
+    {
+      label: 'Lịch sao lưu tự động',
+      detail: policy.enabled ? `${FREQUENCY_LABELS[policy.frequency]} · lần tới ${nextRun ? formatDateTime(nextRun.toISOString()) : '—'}` : 'Đang tạm dừng',
+      passed: policy.enabled,
+      action: () => setActiveTab('policy'),
+      actionLabel: 'Mở chính sách'
+    },
+    {
+      label: `Điểm khôi phục trong RPO ${rpoTargetHours} giờ`,
+      detail: latestSuccessful ? `${latestSuccessful.id} · ${formatRelativeTime(latestSuccessful.completedAt || latestSuccessful.createdAt)}` : 'Chưa có bản sao lưu thành công',
+      passed: latestBackupAgeHours <= rpoTargetHours,
+      action: () => setActiveTab('snapshots'),
+      actionLabel: 'Xem snapshot'
+    },
+    {
+      label: 'Xác minh tính toàn vẹn',
+      detail: successfulBackups.length ? `${verifiedRate}% snapshot thành công đã xác minh checksum` : 'Chưa có dữ liệu để xác minh',
+      passed: successfulBackups.length > 0 && verifiedRate === 100,
+      action: () => { setIntegrityFilter('PENDING'); setActiveTab('snapshots'); },
+      actionLabel: 'Kiểm tra'
+    },
+    {
+      label: 'Bản sao dự phòng liên vùng',
+      detail: policy.crossRegionReplication ? `${policy.primaryRegion} → ${policy.replicaRegion}` : 'Chưa bật sao chép sang vùng dự phòng',
+      passed: policy.crossRegionReplication,
+      action: () => setActiveTab('policy'),
+      actionLabel: 'Cấu hình'
+    }
+  ];
+  const readinessScore = Math.round(readinessChecks.filter((check) => check.passed).length / readinessChecks.length * 100);
+  const readinessLabel = readinessScore === 100 ? 'Sẵn sàng phục hồi' : readinessScore >= 75 ? 'Cần theo dõi' : 'Cần xử lý';
 
   const filteredBackups = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -433,7 +469,7 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary"><Database className="h-5 w-5" /></div>
-          <div><h1 className="text-xl font-extrabold tracking-tight text-brand-text sm:text-2xl">Sao lưu & phục hồi dữ liệu</h1><p className="mt-1 text-xs text-brand-text-muted">Quản lý điểm khôi phục, chính sách lưu giữ và khả năng phục hồi thảm họa toàn hệ thống.</p></div>
+          <div><h1 className="text-xl font-extrabold tracking-tight text-brand-text sm:text-2xl">Sao lưu & phục hồi dữ liệu</h1><p className="mt-1 max-w-3xl text-xs leading-relaxed text-brand-text-muted">Bảo vệ cơ sở dữ liệu, tệp tenant, cấu hình và nhật ký bằng các điểm khôi phục có mã hóa. Đây là khu vực phục hồi hệ thống khi có sự cố, không phải chức năng xuất báo cáo Excel/CSV.</p></div>
         </div>
         <button onClick={() => setShowBackupModal(true)} disabled={Boolean(runningBackupId)} className="inline-flex items-center justify-center gap-2 whitespace-nowrap bg-brand-primary px-4 py-2 text-xs font-bold text-white"><Play className="h-4 w-4" /><span>{runningBackupId ? `Đang sao lưu ${backupProgress}%` : 'Tạo bản sao lưu'}</span></button>
       </div>
@@ -456,6 +492,46 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
             <MetricCard icon={<HardDrive className="h-4 w-4" />} label="Dung lượng lưu trữ" value={`${storageUsedGb.toFixed(1)} GB`} detail="Hạn mức 50 GB · bao gồm bản sao chính" tone={storageUsedGb < 40 ? 'primary' : 'warning'} />
           </div>
 
+          <section className="overflow-hidden rounded-xl border border-brand-outline/40 bg-brand-surface shadow-sm">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+              <div className="border-b border-brand-outline/35 p-5 xl:border-b-0 xl:border-r">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${readinessScore === 100 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : readinessScore >= 75 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}><ShieldCheck className="h-5 w-5" /></div>
+                    <div><p className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Mức độ sẵn sàng</p><h2 className="mt-1 text-base font-extrabold text-brand-text">{readinessLabel}</h2></div>
+                  </div>
+                  <div className="sm:text-right"><p className={`text-3xl font-black tracking-tight ${readinessScore === 100 ? 'text-emerald-600 dark:text-emerald-400' : readinessScore >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>{readinessScore}%</p><p className="text-[10px] text-brand-text-muted">{readinessChecks.filter((check) => check.passed).length}/{readinessChecks.length} điều kiện đạt</p></div>
+                </div>
+                <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {readinessChecks.map((check) => (
+                    <button key={check.label} onClick={check.action} className="flex h-auto items-start gap-3 border border-brand-outline/35 bg-brand-surface-high/45 p-3 text-left shadow-none">
+                      {check.passed ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />}
+                      <span className="min-w-0 flex-1"><span className="block text-[11px] font-extrabold text-brand-text">{check.label}</span><span className="mt-1 block text-[9px] leading-relaxed text-brand-text-muted">{check.detail}</span></span>
+                      <span className="shrink-0 text-[9px] font-bold text-brand-primary">{check.actionLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-5">
+                <div><h2 className="text-sm font-extrabold text-brand-text">Quy trình bảo vệ dữ liệu</h2><p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">Bốn lớp kiểm soát giúp bản sao có thể dùng được khi sự cố thực sự xảy ra.</p></div>
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {[
+                    { step: '01', title: 'Sao lưu', detail: 'Tạo snapshot tự động hoặc thủ công.', icon: <Database className="h-4 w-4" />, action: () => setShowBackupModal(true) },
+                    { step: '02', title: 'Xác minh', detail: 'Đối chiếu checksum và manifest dữ liệu.', icon: <FileCheck2 className="h-4 w-4" />, action: () => setActiveTab('snapshots') },
+                    { step: '03', title: 'Lưu giữ an toàn', detail: 'Mã hóa, WORM và sao chép liên vùng.', icon: <LockKeyhole className="h-4 w-4" />, action: () => setActiveTab('policy') },
+                    { step: '04', title: 'Phục hồi & diễn tập', detail: 'Khôi phục Sandbox trước khi Production.', icon: <RotateCcw className="h-4 w-4" />, action: () => setActiveTab('restores') }
+                  ].map((item) => (
+                    <button key={item.step} onClick={item.action} className="group flex h-auto items-start gap-3 border border-brand-outline/35 bg-transparent p-3 text-left shadow-none hover:bg-brand-surface-high/50">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">{item.icon}</span>
+                      <span><span className="block text-[9px] font-bold uppercase tracking-wider text-brand-primary">Bước {item.step}</span><span className="mt-0.5 block text-[11px] font-extrabold text-brand-text">{item.title}</span><span className="mt-1 block text-[9px] leading-relaxed text-brand-text-muted">{item.detail}</span></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
           {latestFailure && new Date(latestFailure.createdAt).getTime() > Date.now() - 7 * 86400000 && (
             <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400"><AlertTriangle className="h-4 w-4" /></div><div><p className="text-xs font-extrabold text-brand-text">Có lần sao lưu thất bại trong 7 ngày qua</p><p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">{latestFailure.id}: {latestFailure.failureReason}</p></div></div>
@@ -477,7 +553,7 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
             </section>
 
             <section className="space-y-4">
-              <div className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-brand-primary" /><h2 className="text-sm font-extrabold text-brand-text">Tư thế phục hồi DR</h2></div><div className="mt-4 space-y-3 text-[10px]"><div className="flex items-center justify-between"><span className="text-brand-text-muted">RPO mục tiêu</span><strong className="text-brand-text">24 giờ</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">RTO diễn tập gần nhất</span><strong className="text-brand-text">52 phút</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">Bản sao liên vùng</span><strong className={policy.crossRegionReplication ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>{policy.crossRegionReplication ? 'Hoạt động' : 'Đã tắt'}</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">Diễn tập gần nhất</span><strong className="text-brand-text">10/07/2026</strong></div></div><button onClick={() => setActiveTab('restores')} className="mt-4 w-full border border-brand-outline bg-brand-surface-high px-3 py-2 text-xs font-bold text-brand-text">Xem lịch sử diễn tập</button></div>
+              <div className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-brand-primary" /><h2 className="text-sm font-extrabold text-brand-text">Tư thế phục hồi DR</h2></div><div className="mt-4 space-y-3 text-[10px]"><div className="flex items-center justify-between"><span className="text-brand-text-muted">RPO mục tiêu</span><strong className="text-brand-text">{rpoTargetHours} giờ</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">RTO diễn tập gần nhất</span><strong className="text-brand-text">52 phút</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">Bản sao liên vùng</span><strong className={policy.crossRegionReplication ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>{policy.crossRegionReplication ? 'Hoạt động' : 'Đã tắt'}</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">Diễn tập gần nhất</span><strong className="text-brand-text">10/07/2026</strong></div></div><button onClick={() => setActiveTab('restores')} className="mt-4 w-full border border-brand-outline bg-brand-surface-high px-3 py-2 text-xs font-bold text-brand-text">Xem lịch sử diễn tập</button></div>
               <div className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><div className="flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-brand-primary" /><h2 className="text-sm font-extrabold text-brand-text">Bảo vệ dữ liệu</h2></div><div className="mt-4 space-y-3 text-[10px]"><div><p className="text-brand-text-muted">Mã hóa</p><p className="mt-1 font-bold text-brand-text">AES-256-GCM · Cloud KMS</p></div><div><p className="text-brand-text-muted">Khóa bất biến mặc định</p><p className="mt-1 font-bold text-brand-text">{policy.immutableDays} ngày (WORM)</p></div><div><p className="text-brand-text-muted">Vùng chính → dự phòng</p><p className="mt-1 font-bold text-brand-text">{policy.primaryRegion} → {policy.replicaRegion}</p></div></div></div>
             </section>
           </div>
