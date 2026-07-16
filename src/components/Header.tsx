@@ -30,7 +30,6 @@ interface HeaderProps {
   onLogout: () => void;
   onOpenAccountSettings: () => void;
   onOpenSecurity: () => void;
-  onOpenNotifications: () => void;
   onOpenSupport: () => void;
   interfaceLanguage: 'vi' | 'en';
 }
@@ -46,7 +45,6 @@ export default function Header({
   onLogout,
   onOpenAccountSettings,
   onOpenSecurity,
-  onOpenNotifications,
   onOpenSupport,
   interfaceLanguage
 }: HeaderProps) {
@@ -195,7 +193,6 @@ export default function Header({
                   ))
                 )}
               </div>
-              <div className="border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-2.5"><button type="button" onClick={() => { onOpenNotifications(); setShowAlertMenu(false); }} className="flex h-auto w-full items-center justify-center gap-2 border-0 bg-transparent px-3 py-2 text-[10px] font-bold text-brand-primary shadow-none"><span>{isEnglish ? 'Open notification center' : 'Mở trung tâm thông báo'}</span><ArrowRight className="h-3.5 w-3.5" /></button></div>
             </div>
           )}
         </div>

@@ -1397,7 +1397,6 @@ export default function App() {
           onLogout={handleLogout}
           onOpenAccountSettings={() => setActiveTab('account-preferences')}
           onOpenSecurity={() => setActiveTab('security')}
-          onOpenNotifications={() => setActiveTab('security')}
           onOpenSupport={() => setActiveTab('support')}
           interfaceLanguage={interfaceLanguage}
         />
