@@ -564,8 +564,9 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
               <button onClick={() => setSelectedTicketId(null)} aria-label="Đóng chi tiết" title="Đóng" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface-high text-brand-text-muted transition-colors hover:text-brand-text"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="grid shrink-0 border-b border-brand-outline/35 bg-brand-surface-lowest/35 lg:grid-cols-[1.2fr_0.8fr]">
-              <section className="border-b border-brand-outline/35 p-4 sm:px-6 lg:border-b-0 lg:border-r">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-[auto_minmax(0,1fr)_auto] lg:overflow-hidden">
+            <div className="order-first shrink-0 border-b border-brand-outline/35 bg-brand-surface-lowest/35 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-l">
+              <section className="border-b border-brand-outline/35 p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 className="flex items-center gap-2 text-xs font-extrabold text-brand-text"><UserCheck className="h-4 w-4 text-brand-primary" /> Thiết lập xử lý</h3>
@@ -577,18 +578,18 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3">
                   <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Người xử lý</label><select value={selectedTicket.assignedTo?.id || ''} onChange={(event) => handleAssignment(selectedTicket, event.target.value)} className="form-control h-10"><option value="">Chưa phân công</option>{SUPPORT_AGENTS.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>
                   <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Độ ưu tiên</label><select value={selectedTicket.priority} onChange={(event) => handlePriorityChange(selectedTicket, event.target.value as Ticket['priority'])} className="form-control h-10">{Object.entries(PRIORITY_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
                   <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Trạng thái</label><select value={selectedTicket.status} onChange={(event) => handleStatusChange(selectedTicket, event.target.value as Ticket['status'])} className="form-control h-10">{Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
                 </div>
               </section>
-              <section className="p-4 sm:px-6">
+              <section className="p-4">
                 <div className="mb-3">
                   <h3 className="flex items-center gap-2 text-xs font-extrabold text-brand-text"><Timer className="h-4 w-4 text-brand-primary" /> Theo dõi SLA</h3>
                   <p className="mt-1 text-[9px] text-brand-text-muted">Ưu tiên xử lý theo mốc thời gian gần nhất.</p>
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2">
                   {(() => {
                     const responseDiff = (new Date(selectedTicket.firstResponseDueAt).getTime() - Date.now()) / 60000;
                     const resolutionDiff = (new Date(selectedTicket.resolutionDueAt).getTime() - Date.now()) / 60000;
@@ -601,7 +602,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
               </section>
             </div>
 
-            <div className="flex shrink-0 items-end justify-between gap-3 border-b border-brand-outline/35 px-4 pt-2 sm:px-5">
+            <div className="flex shrink-0 items-end justify-between gap-3 border-b border-brand-outline/35 px-4 pt-2 sm:px-5 lg:col-start-1 lg:row-start-1">
               {([
                 ['conversation', 'Trao đổi', MessageSquare],
                 ['history', 'Lịch sử', Clock3],
@@ -609,7 +610,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
               ] as const).map(([tab, label, Icon]) => <button key={tab} onClick={() => setDetailTab(tab)} className={`flex items-center gap-1.5 rounded-b-none border-0 bg-transparent px-3 py-2.5 text-xs font-bold shadow-none transition-colors ${detailTab === tab ? 'border-b-2 border-brand-primary text-brand-primary' : 'text-brand-text-muted hover:text-brand-text'}`}><Icon className="h-3.5 w-3.5" /><span>{label}</span></button>)}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
+            <div className="min-h-80 flex-none overflow-y-auto overscroll-contain p-4 sm:p-5 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:flex-1">
               {detailTab === 'conversation' && (
                 <div className="space-y-4">
                   <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-4"><p className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-brand-primary"><TicketIcon className="h-3.5 w-3.5" /> Yêu cầu ban đầu</p><p className="mt-2 text-xs leading-relaxed text-brand-text">{selectedTicket.description}</p></div>
@@ -638,7 +639,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
               )}
             </div>
 
-            <div className="shrink-0 border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-3 sm:p-4">
+            <div className="shrink-0 border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-3 sm:p-4 lg:col-start-1 lg:row-start-3">
               {detailTab === 'conversation' && isActive(selectedTicket) ? (
                 <form onSubmit={handleSendReply}>
                   <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
@@ -661,6 +662,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
                   {isActive(selectedTicket) ? <button onClick={() => handleResolve(selectedTicket)} className="inline-flex items-center gap-2 whitespace-nowrap border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-4 w-4" /><span>Đánh dấu đã giải quyết</span></button> : <button onClick={() => handleStatusChange(selectedTicket, 'OPEN')} className="inline-flex items-center gap-2 whitespace-nowrap border border-brand-outline bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text"><TicketIcon className="h-4 w-4" /><span>Mở lại ticket</span></button>}
                 </div>
               )}
+            </div>
             </div>
           </aside>
         </div>
