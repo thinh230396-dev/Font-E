@@ -346,6 +346,25 @@ button.account-system-settings:hover {
   border-color: color-mix(in srgb, var(--color-brand-outline) 70%, transparent) !important;
 }
 
+button.account-preference-back,
+button.account-preference-back:hover {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 1.75rem !important;
+  padding: 0.25rem 0.5rem !important;
+  border: 0 !important;
+  border-radius: 0.5rem !important;
+  background: transparent !important;
+  color: var(--color-brand-text-muted) !important;
+  box-shadow: none !important;
+}
+
+button.account-preference-back:hover {
+  background: color-mix(in srgb, var(--color-brand-primary) 8%, transparent) !important;
+  color: var(--color-brand-primary) !important;
+}
+
 button.account-system-settings:hover {
   border-color: color-mix(in srgb, var(--color-brand-primary) 40%, transparent) !important;
   color: var(--color-brand-primary) !important;

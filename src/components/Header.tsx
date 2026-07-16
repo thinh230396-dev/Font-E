@@ -31,6 +31,7 @@ interface HeaderProps {
   onLogout: () => void;
   onOpenAccountSettings: () => void;
   onOpenSecurity: () => void;
+  interfaceLanguage: 'vi' | 'en';
 }
 
 export default function Header({ 
@@ -45,7 +46,8 @@ export default function Header({
   onToggleTheme,
   onLogout,
   onOpenAccountSettings,
-  onOpenSecurity
+  onOpenSecurity,
+  interfaceLanguage
 }: HeaderProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
@@ -53,6 +55,7 @@ export default function Header({
   const alertRef = useRef<HTMLDivElement>(null);
 
   const unreadAlerts = alerts.filter(a => !a.isRead);
+  const isEnglish = interfaceLanguage === 'en';
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -203,7 +206,9 @@ export default function Header({
             {themeMode === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </span>
           <span className="pr-1 text-[11px] font-bold hidden sm:inline">
-            {themeMode === 'dark' ? 'Giao diện tối' : 'Giao diện sáng'}
+            {themeMode === 'dark'
+              ? (isEnglish ? 'Dark mode' : 'Giao diện tối')
+              : (isEnglish ? 'Light mode' : 'Giao diện sáng')}
           </span>
         </button>
 
@@ -234,7 +239,7 @@ export default function Header({
             </div>
             <div className="hidden xl:block leading-none min-w-[94px]">
               <p className="text-[12px] font-bold text-brand-text">Superadmin</p>
-              <p className="text-[9px] text-brand-text-muted mt-1">Đang hoạt động</p>
+              <p className="text-[9px] text-brand-text-muted mt-1">{isEnglish ? 'Active now' : 'Đang hoạt động'}</p>
             </div>
             <ChevronDown className={`hidden xl:block h-3.5 w-3.5 text-brand-text-muted transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
           </button>
@@ -268,8 +273,8 @@ export default function Header({
                     <Shield className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-extrabold text-brand-text">Vai trò Superadmin</p>
-                    <p className="mt-1 text-[9px] leading-4 text-brand-text-muted">Toàn quyền quản trị nền tảng SalonSys</p>
+                    <p className="text-[11px] font-extrabold text-brand-text">{isEnglish ? 'Superadmin role' : 'Vai trò Superadmin'}</p>
+                    <p className="mt-1 text-[9px] leading-4 text-brand-text-muted">{isEnglish ? 'Full access to the SalonSys platform' : 'Toàn quyền quản trị nền tảng SalonSys'}</p>
                   </div>
                 </div>
               </div>
@@ -286,8 +291,8 @@ export default function Header({
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-surface-highest text-brand-text-muted"><Settings2 className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] font-bold text-brand-text">Tùy chọn giao diện</span>
-                    <span className="mt-0.5 block text-[9px] text-brand-text-muted">Ngôn ngữ và chế độ sáng tối</span>
+                    <span className="block text-[11px] font-bold text-brand-text">{isEnglish ? 'Interface preferences' : 'Tùy chọn giao diện'}</span>
+                    <span className="mt-0.5 block text-[9px] text-brand-text-muted">{isEnglish ? 'Language and appearance' : 'Ngôn ngữ và chế độ sáng tối'}</span>
                   </span>
                   <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-brand-text-muted/60" />
                 </button>
@@ -303,8 +308,8 @@ export default function Header({
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-surface-highest text-brand-text-muted"><LockKeyhole className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] font-bold text-brand-text">Bảo mật đăng nhập</span>
-                    <span className="mt-0.5 block text-[9px] text-brand-text-muted">Mật khẩu và lịch sử truy cập</span>
+                    <span className="block text-[11px] font-bold text-brand-text">{isEnglish ? 'Sign-in security' : 'Bảo mật đăng nhập'}</span>
+                    <span className="mt-0.5 block text-[9px] text-brand-text-muted">{isEnglish ? 'Password and access history' : 'Mật khẩu và lịch sử truy cập'}</span>
                   </span>
                   <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-brand-text-muted/60" />
                 </button>
@@ -321,7 +326,7 @@ export default function Header({
                   className="profile-menu-logout w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[11px] font-bold text-brand-error hover:bg-brand-error/10 rounded-xl cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
-                  Đăng xuất khỏi tài khoản
+                  {isEnglish ? 'Sign out of this account' : 'Đăng xuất khỏi tài khoản'}
                 </button>
               </div>
             </div>

@@ -248,10 +248,10 @@ export default function App() {
 
   useEffect(() => {
     document.title = isAuthenticated
-      ? `${systemSettings.general.systemName} — Không gian làm việc`
-      : `Đăng nhập — ${systemSettings.general.systemName}`;
+      ? `${systemSettings.general.systemName} — ${interfaceLanguage === 'en' ? 'Workspace' : 'Không gian làm việc'}`
+      : `${interfaceLanguage === 'en' ? 'Sign in' : 'Đăng nhập'} — ${systemSettings.general.systemName}`;
     document.documentElement.dataset.timezone = systemSettings.general.timezone;
-  }, [isAuthenticated, systemSettings.general.systemName, systemSettings.general.timezone]);
+  }, [interfaceLanguage, isAuthenticated, systemSettings.general.systemName, systemSettings.general.timezone]);
 
   const handleLogin = (remember: boolean) => {
     const storage = remember ? localStorage : sessionStorage;
@@ -1393,6 +1393,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenAccountSettings={() => setActiveTab('account-preferences')}
           onOpenSecurity={() => setActiveTab('security')}
+          interfaceLanguage={interfaceLanguage}
         />
 
         {systemSettings.general.maintenanceMode && (
