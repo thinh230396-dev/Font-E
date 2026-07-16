@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import type { DemoAccount } from '../auth/demoAccounts';
 import BeautifulSelect from './BeautifulSelect';
+import TenantAdminAppointments from './TenantAdminAppointments';
 
 interface TenantAdminPortalProps {
   account: DemoAccount;
@@ -51,7 +52,7 @@ const appointments = [
 ];
 
 const navItems = [
-  { label: 'Tổng quan', icon: LayoutDashboard, active: true },
+  { label: 'Tổng quan', icon: LayoutDashboard },
   { label: 'Lịch hẹn', icon: CalendarDays },
   { label: 'Khách hàng', icon: UsersRound },
   { label: 'Nhân sự', icon: UserRound },
@@ -109,6 +110,7 @@ const recentActivities = [
 const formatMillion = (value: number) => `${value.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} triệu`;
 
 export default function TenantAdminPortal({ account, onLogout }: TenantAdminPortalProps) {
+  const [activePage, setActivePage] = useState<'Tổng quan' | 'Lịch hẹn'>('Tổng quan');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -148,13 +150,17 @@ export default function TenantAdminPortal({ account, onLogout }: TenantAdminPort
         <div className="px-4 py-5">
           <p className="mb-2 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Không gian quản lý</p>
           <nav className="space-y-1">
-            {navItems.map(({ label, icon: Icon, active }) => (
-              <button key={label} type="button" className={`flex h-10 w-full items-center gap-3 border-0 px-3 text-left text-[11px] font-bold shadow-none ${active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white'}`}>
+            {navItems.map(({ label, icon: Icon }) => {
+              const active = activePage === label;
+              const available = label === 'Tổng quan' || label === 'Lịch hẹn';
+              return (
+              <button key={label} type="button" onClick={() => { if (available) { setActivePage(label as 'Tổng quan' | 'Lịch hẹn'); setSidebarOpen(false); setSearchQuery(''); } }} aria-current={active ? 'page' : undefined} className={`flex h-10 w-full items-center gap-3 border-0 px-3 text-left text-[11px] font-bold shadow-none ${active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white'} ${available ? '' : 'cursor-default'}`}>
                 <Icon className={`h-4 w-4 ${active ? 'text-violet-400' : ''}`} />
                 <span>{label}</span>
                 {label === 'Lịch hẹn' && <span className="ml-auto rounded-full bg-violet-500/20 px-2 py-0.5 text-[8px] text-violet-300">28</span>}
               </button>
-            ))}
+              );
+            })}
           </nav>
         </div>
 
@@ -170,7 +176,7 @@ export default function TenantAdminPortal({ account, onLogout }: TenantAdminPort
           <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm lg:hidden"><Menu className="h-5 w-5" /></button>
           <div className="relative max-w-md flex-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Tìm khách hàng, dịch vụ, nhân viên..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[11px] font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
+            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={activePage === 'Lịch hẹn' ? 'Tìm mã lịch, khách hàng, số điện thoại...' : 'Tìm khách hàng, dịch vụ, nhân viên...'} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[11px] font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
           </div>
           <div className="ml-auto flex items-center gap-2">
             <div className="relative">
@@ -201,6 +207,15 @@ export default function TenantAdminPortal({ account, onLogout }: TenantAdminPort
         </header>
 
         <main className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8">
+          {activePage === 'Lịch hẹn' ? (
+            <TenantAdminAppointments
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
+              selectedBranch={selectedBranch}
+              onSelectedBranchChange={setSelectedBranch}
+            />
+          ) : (
+          <>
           <section className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div><div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />{branchName} đang hoạt động</div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Chào buổi chiều, anh Nam</h1><p className="mt-2 text-[11px] text-slate-500">Thứ Năm, 16 tháng 07 · Báo cáo tổng quan {currentRange.label}</p></div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -331,6 +346,8 @@ export default function TenantAdminPortal({ account, onLogout }: TenantAdminPort
               { label: 'Mục tiêu doanh thu', detail: 'Theo dõi tiến độ', icon: Target, action: () => window.scrollTo({ top: 0, behavior: 'smooth' }), tone: 'bg-fuchsia-50 text-fuchsia-600' }
             ].map(({ label, detail, icon: Icon, action, tone }) => <button key={label} type="button" onClick={action} className="flex h-auto min-h-24 items-center gap-3 rounded-none border-0 bg-white px-5 py-4 text-left shadow-none hover:bg-slate-50"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4.5 w-4.5" /></span><span className="min-w-0"><span className="block text-[10px] font-black text-slate-800">{label}</span><span className="mt-1 block text-[8px] text-slate-400">{detail}</span></span><ArrowRight className="ml-auto h-3.5 w-3.5 text-slate-300" /></button>)}</div>
           </section>
+          </>
+          )}
         </main>
       </div>
 
