@@ -154,6 +154,90 @@ function Badge({ className, children }: { className: string; children: ReactNode
   return <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-bold ${className}`}>{children}</span>;
 }
 
+function ConversationMessage({ message, requesterName, tenantName }: {
+  message: TicketMessage;
+  requesterName: string;
+  tenantName: string;
+}) {
+  const isInternal = message.type === 'INTERNAL_NOTE';
+  const isSystem = message.type === 'SYSTEM_EVENT' || message.authorRole === 'SYSTEM';
+  const isCustomer = message.authorRole === 'TENANT_ADMIN';
+  const isSupport = message.authorRole === 'SUPERADMIN' || message.authorRole === 'SUPPORT';
+  const initials = message.authorName
+    .split(' ')
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+
+  if (isSystem) {
+    return (
+      <div className="flex items-center gap-3 py-1">
+        <span className="h-px flex-1 bg-brand-outline/35" />
+        <div className="max-w-xl rounded-full border border-brand-outline/40 bg-brand-surface-high px-4 py-2 text-center">
+          <p className="text-[10px] font-semibold text-brand-text">{message.body}</p>
+          <p className="mt-0.5 text-[9px] text-brand-text-muted">Hệ thống · {formatDateTime(message.createdAt)}</p>
+        </div>
+        <span className="h-px flex-1 bg-brand-outline/35" />
+      </div>
+    );
+  }
+
+  if (isInternal) {
+    return (
+      <article className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-[11px] font-extrabold text-amber-600 dark:text-amber-400">{initials || 'NV'}</div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-extrabold text-brand-text">{message.authorName}</p>
+                <Badge className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">Ghi chú nội bộ</Badge>
+              </div>
+              <p className="mt-0.5 text-[9px] text-brand-text-muted">{message.authorEmail} · Chỉ đội ngũ vận hành nhìn thấy</p>
+            </div>
+          </div>
+          <time className="text-[9px] text-brand-text-muted">{formatDateTime(message.createdAt)}</time>
+        </div>
+        <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-brand-text">{message.body}</p>
+      </article>
+    );
+  }
+
+  return (
+    <article className={`flex items-end gap-2.5 ${isSupport ? 'justify-end' : 'justify-start'}`}>
+      {isCustomer && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-[11px] font-extrabold text-sky-600 dark:text-sky-400">{initials || 'KH'}</div>}
+      <div className={`w-fit max-w-[86%] rounded-2xl border p-4 sm:max-w-[78%] ${isSupport ? 'rounded-br-md border-brand-primary/25 bg-brand-primary/[0.07]' : 'rounded-bl-md border-sky-500/25 bg-sky-500/[0.05]'}`}>
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+          <div>
+            <p className="text-xs font-extrabold text-brand-text">{message.authorName}</p>
+            <p className="mt-0.5 text-[9px] font-semibold text-brand-text-muted">{isCustomer ? `Khách hàng · ${tenantName}` : 'Phản hồi công khai · Superadmin'}</p>
+          </div>
+          <time className="text-[9px] text-brand-text-muted">{formatDateTime(message.createdAt)}</time>
+        </div>
+        <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-brand-text">{message.body}</p>
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {message.attachments.map((attachment) => (
+              <div key={attachment.id} className="inline-flex items-center gap-2 rounded-lg border border-brand-outline/40 bg-brand-surface px-3 py-2 text-[10px] text-brand-text">
+                <Paperclip className="h-3.5 w-3.5 text-brand-primary" />
+                <span className="font-bold">{attachment.name}</span>
+                <span className="text-brand-text-muted">{attachment.size}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-brand-outline/25 pt-2 text-[9px] text-brand-text-muted">
+          <span>{message.authorEmail}</span>
+          <span>{isCustomer ? requesterName : 'Đã gửi tới khách hàng'}</span>
+        </div>
+      </div>
+      {isSupport && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-[11px] font-extrabold text-brand-primary">{initials || 'SA'}</div>}
+    </article>
+  );
+}
+
 function MetricCard({ icon, label, value, detail, tone = 'primary' }: {
   icon: ReactNode;
   label: string;
@@ -612,14 +696,39 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
 
             <div className="min-h-80 flex-none overflow-y-auto overscroll-contain p-4 sm:p-5 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:flex-1">
               {detailTab === 'conversation' && (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-4"><p className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-brand-primary"><TicketIcon className="h-3.5 w-3.5" /> Yêu cầu ban đầu</p><p className="mt-2 text-xs leading-relaxed text-brand-text">{selectedTicket.description}</p></div>
-                  {(selectedTicket.messages || []).map((message) => (
-                    <div key={message.id} className={`rounded-xl border border-l-4 p-4 ${message.type === 'INTERNAL_NOTE' ? 'border-amber-500/25 border-l-amber-500 bg-amber-500/5' : message.type === 'SYSTEM_EVENT' ? 'border-brand-outline/35 border-l-brand-text-muted bg-brand-surface-high/35' : message.authorRole === 'TENANT_ADMIN' ? 'border-brand-outline/35 border-l-sky-500 bg-brand-surface' : 'border-brand-outline/35 border-l-brand-primary bg-brand-primary/[0.03]'}`}>
-                      <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-extrabold text-brand-text">{message.authorName}</p><p className="mt-0.5 text-[9px] text-brand-text-muted">{message.authorEmail} · {message.authorRole === 'TENANT_ADMIN' ? 'Tenant Admin' : message.authorRole === 'SYSTEM' ? 'Hệ thống' : message.authorRole === 'SUPERADMIN' ? 'Superadmin' : 'Nhân viên hỗ trợ'}</p></div><div className="text-right">{message.type === 'INTERNAL_NOTE' && <Badge className="border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400">Nội bộ</Badge>}<p className="mt-1 text-[9px] text-brand-text-muted">{formatDateTime(message.createdAt)}</p></div></div>
-                      <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-brand-text">{message.body}</p>
-                      {message.attachments?.map((attachment) => <div key={attachment.id} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-brand-outline/40 bg-brand-surface-high px-3 py-2 text-[10px] text-brand-text"><Paperclip className="h-3.5 w-3.5 text-brand-primary" /><span className="font-bold">{attachment.name}</span><span className="text-brand-text-muted">{attachment.size}</span></div>)}
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-extrabold text-brand-text">Luồng trao đổi</h3>
+                      <p className="mt-1 text-[9px] text-brand-text-muted">{(selectedTicket.messages || []).length} nội dung trao đổi · Sắp xếp từ cũ đến mới</p>
                     </div>
+                    <Badge className="gap-1.5 border-brand-outline bg-brand-surface-high text-brand-text-muted">{CHANNEL_CONFIG[selectedTicket.channel].icon}{CHANNEL_CONFIG[selectedTicket.channel].label}</Badge>
+                  </div>
+
+                  <article className="rounded-2xl border border-brand-primary/25 bg-brand-primary/[0.06] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-brand-primary"><TicketIcon className="h-4 w-4" /></div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-xs font-extrabold text-brand-text">{selectedTicket.requesterName}</p>
+                            <Badge className="border-brand-primary/25 bg-brand-primary/10 text-brand-primary">Yêu cầu ban đầu</Badge>
+                          </div>
+                          <p className="mt-0.5 text-[9px] text-brand-text-muted">{selectedTicket.requesterEmail} · {selectedTicket.tenantName}</p>
+                        </div>
+                      </div>
+                      <time className="text-[9px] text-brand-text-muted">{formatDateTime(selectedTicket.createdAt)}</time>
+                    </div>
+                    <p className="mt-3 text-xs leading-6 text-brand-text">{selectedTicket.description}</p>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-brand-primary/15 pt-2 text-[9px] text-brand-text-muted">
+                      <span>Danh mục: <strong className="text-brand-text">{selectedTicket.category}</strong></span>
+                      <span>Ưu tiên: <strong className="text-brand-text">{PRIORITY_CONFIG[selectedTicket.priority].label}</strong></span>
+                      <span>Kênh: <strong className="text-brand-text">{CHANNEL_CONFIG[selectedTicket.channel].label}</strong></span>
+                    </div>
+                  </article>
+
+                  {(selectedTicket.messages || []).map((message) => (
+                    <ConversationMessage key={message.id} message={message} requesterName={selectedTicket.requesterName} tenantName={selectedTicket.tenantName} />
                   ))}
                 </div>
               )}
