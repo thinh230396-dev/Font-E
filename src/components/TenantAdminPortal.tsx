@@ -37,6 +37,7 @@ import {
 import type { DemoAccount } from '../auth/demoAccounts';
 import BeautifulSelect from './BeautifulSelect';
 import TenantAdminAppointments from './TenantAdminAppointments';
+import TenantAdminCustomers from './TenantAdminCustomers';
 
 interface TenantAdminPortalProps {
   account: DemoAccount;
@@ -110,7 +111,7 @@ const recentActivities = [
 const formatMillion = (value: number) => `${value.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} triệu`;
 
 export default function TenantAdminPortal({ account, onLogout }: TenantAdminPortalProps) {
-  const [activePage, setActivePage] = useState<'Tổng quan' | 'Lịch hẹn'>('Tổng quan');
+  const [activePage, setActivePage] = useState<'Tổng quan' | 'Lịch hẹn' | 'Khách hàng'>('Tổng quan');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -152,9 +153,9 @@ export default function TenantAdminPortal({ account, onLogout }: TenantAdminPort
           <nav className="space-y-1">
             {navItems.map(({ label, icon: Icon }) => {
               const active = activePage === label;
-              const available = label === 'Tổng quan' || label === 'Lịch hẹn';
+              const available = label === 'Tổng quan' || label === 'Lịch hẹn' || label === 'Khách hàng';
               return (
-              <button key={label} type="button" onClick={() => { if (available) { setActivePage(label as 'Tổng quan' | 'Lịch hẹn'); setSidebarOpen(false); setSearchQuery(''); } }} aria-current={active ? 'page' : undefined} className={`flex h-10 w-full items-center gap-3 border-0 px-3 text-left text-[11px] font-bold shadow-none ${active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white'} ${available ? '' : 'cursor-default'}`}>
+              <button key={label} type="button" onClick={() => { if (available) { setActivePage(label as 'Tổng quan' | 'Lịch hẹn' | 'Khách hàng'); setSidebarOpen(false); setSearchQuery(''); } }} aria-current={active ? 'page' : undefined} className={`flex h-10 w-full items-center gap-3 border-0 px-3 text-left text-[11px] font-bold shadow-none ${active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white'} ${available ? '' : 'cursor-default'}`}>
                 <Icon className={`h-4 w-4 ${active ? 'text-violet-400' : ''}`} />
                 <span>{label}</span>
                 {label === 'Lịch hẹn' && <span className="ml-auto rounded-full bg-violet-500/20 px-2 py-0.5 text-[8px] text-violet-300">28</span>}
@@ -176,7 +177,7 @@ export default function TenantAdminPortal({ account, onLogout }: TenantAdminPort
           <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm lg:hidden"><Menu className="h-5 w-5" /></button>
           <div className="relative max-w-md flex-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={activePage === 'Lịch hẹn' ? 'Tìm mã lịch, khách hàng, số điện thoại...' : 'Tìm khách hàng, dịch vụ, nhân viên...'} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[11px] font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
+            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={activePage === 'Lịch hẹn' ? 'Tìm mã lịch, khách hàng, số điện thoại...' : activePage === 'Khách hàng' ? 'Tìm tên, mã khách, số điện thoại...' : 'Tìm khách hàng, dịch vụ, nhân viên...'} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[11px] font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
           </div>
           <div className="ml-auto flex items-center gap-2">
             <div className="relative">
@@ -209,6 +210,13 @@ export default function TenantAdminPortal({ account, onLogout }: TenantAdminPort
         <main className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8">
           {activePage === 'Lịch hẹn' ? (
             <TenantAdminAppointments
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
+              selectedBranch={selectedBranch}
+              onSelectedBranchChange={setSelectedBranch}
+            />
+          ) : activePage === 'Khách hàng' ? (
+            <TenantAdminCustomers
               searchQuery={searchQuery}
               onSearchQueryChange={setSearchQuery}
               selectedBranch={selectedBranch}
