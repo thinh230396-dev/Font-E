@@ -1394,8 +1394,6 @@ export default function App() {
           }}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
-          themeMode={themeMode}
-          onToggleTheme={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
           onLogout={handleLogout}
           onOpenAccountSettings={() => setActiveTab('account-preferences')}
           onOpenSecurity={() => setActiveTab('security')}

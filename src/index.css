@@ -94,7 +94,6 @@ body {
 }
 
 .header-profile-trigger,
-.header-theme-toggle,
 .profile-menu-action,
 .profile-menu-logout {
   transform: none !important;

@@ -9,8 +9,6 @@ import {
   XCircle, 
   Info,
   HelpCircle,
-  Moon,
-  Sun,
   ChevronDown,
   Settings2,
   LockKeyhole,
@@ -26,8 +24,6 @@ interface HeaderProps {
   onAlertClick: (id: string) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  themeMode: 'light' | 'dark';
-  onToggleTheme: () => void;
   onLogout: () => void;
   onOpenAccountSettings: () => void;
   onOpenSecurity: () => void;
@@ -42,8 +38,6 @@ export default function Header({
   onAlertClick,
   searchQuery,
   setSearchQuery,
-  themeMode,
-  onToggleTheme,
   onLogout,
   onOpenAccountSettings,
   onOpenSecurity,
@@ -189,27 +183,6 @@ export default function Header({
           title="Trợ giúp"
         >
           <HelpCircle className="w-5 h-5" />
-        </button>
-
-        <button
-          type="button"
-          onClick={onToggleTheme}
-          title={themeMode === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-          aria-label={themeMode === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-          className="header-theme-toggle h-10 px-2 rounded-xl border border-brand-outline/60 bg-brand-surface-high hover:bg-brand-surface-highest text-brand-text shadow-sm flex items-center gap-2 cursor-pointer"
-        >
-          <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-            themeMode === 'dark'
-              ? 'bg-violet-500 text-white shadow-sm'
-              : 'bg-amber-100 text-amber-600 border border-amber-200'
-          }`}>
-            {themeMode === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-          </span>
-          <span className="pr-1 text-[11px] font-bold hidden sm:inline">
-            {themeMode === 'dark'
-              ? (isEnglish ? 'Dark mode' : 'Giao diện tối')
-              : (isEnglish ? 'Light mode' : 'Giao diện sáng')}
-          </span>
         </button>
 
         {/* Divider */}
