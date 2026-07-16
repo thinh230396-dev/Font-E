@@ -334,6 +334,31 @@ html[data-theme="dark"] button:has(> svg:only-child):not(:disabled):hover {
   color: #ddd6fe;
 }
 
+button.account-system-settings,
+button.account-system-settings:hover {
+  width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 2.5rem !important;
+  padding: 0.625rem 1rem !important;
+  background-color: var(--color-brand-surface-high) !important;
+  color: var(--color-brand-text) !important;
+  border-color: color-mix(in srgb, var(--color-brand-outline) 70%, transparent) !important;
+}
+
+button.account-system-settings:hover {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 40%, transparent) !important;
+  color: var(--color-brand-primary) !important;
+}
+
+@media (min-width: 640px) {
+  button.account-system-settings,
+  button.account-system-settings:hover {
+    width: auto !important;
+    min-width: 11.75rem !important;
+  }
+}
+
 button[class*="hover:text-brand-secondary"]:has(> svg:only-child):not(:disabled):hover {
   border-color: #10b981;
   background-color: #ecfdf5;

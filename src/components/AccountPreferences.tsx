@@ -195,7 +195,7 @@ export default function AccountPreferences({
           onClick={onOpenSystemSettings}
           className="account-system-settings inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-brand-outline/50 bg-brand-surface-high px-4 py-2.5 text-[11px] font-bold text-brand-text hover:border-brand-primary/30 hover:text-brand-primary"
         >
-          Mở cấu hình hệ thống
+          <span>Mở cấu hình hệ thống</span>
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </section>
