@@ -467,64 +467,76 @@ button[class*="amber-"]:not(:disabled):hover {
   }
 }
 
-/* Unified dropdown styling across the admin portal. */
-select:not([multiple]) {
-  min-height: 2.5rem;
-  padding-right: 2.5rem !important;
-  border-radius: 0.625rem;
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--color-brand-text-muted) 50%),
-    linear-gradient(135deg, var(--color-brand-text-muted) 50%, transparent 50%);
-  background-position:
-    calc(100% - 1rem) calc(50% - 0.125rem),
-    calc(100% - 0.7rem) calc(50% - 0.125rem);
-  background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
-  background-repeat: no-repeat;
-  color: var(--color-brand-text);
-  cursor: pointer;
+@keyframes beautiful-select-enter {
+  from { opacity: 0; transform: translateY(-5px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.beautiful-select-trigger {
+  min-height: 2.625rem;
+  padding-right: 0.375rem !important;
+  border-color: color-mix(in srgb, var(--color-brand-outline) 72%, transparent) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-brand-surface) 88%, transparent), var(--color-brand-surface-lowest)) !important;
+  color: var(--color-brand-text) !important;
   font-family: var(--font-sans);
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.25rem;
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+  transform: none !important;
 }
 
-select:not([multiple]):not(:disabled):hover {
-  border-color: color-mix(in srgb, var(--color-brand-primary) 45%, var(--color-brand-outline));
-  background-color: color-mix(in srgb, var(--color-brand-primary) 4%, var(--color-brand-surface-lowest));
+.beautiful-select-trigger:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 42%, var(--color-brand-outline)) !important;
+  background: color-mix(in srgb, var(--color-brand-primary) 4%, var(--color-brand-surface)) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-brand-primary) 10%, transparent) !important;
+  transform: none !important;
 }
 
-select:not([multiple]):focus,
-select:not([multiple]):focus-visible {
+.beautiful-select-trigger:focus-visible,
+.beautiful-select-trigger[aria-expanded="true"] {
   border-color: var(--color-brand-primary) !important;
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-primary) 16%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-primary) 15%, transparent), 0 5px 16px color-mix(in srgb, var(--color-brand-primary) 10%, transparent) !important;
 }
 
-select:not([multiple]):disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-  background-color: var(--color-brand-surface-high);
+.beautiful-select-trigger:disabled {
+  background: var(--color-brand-surface-high) !important;
+  color: var(--color-brand-text-muted) !important;
 }
 
-select option,
-select optgroup {
-  background-color: var(--color-brand-surface);
-  color: var(--color-brand-text);
-  font-family: var(--font-sans);
-  font-size: 0.75rem;
-  font-weight: 500;
+.beautiful-select-menu {
+  animation: beautiful-select-enter 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--color-brand-primary) 2.5%, var(--color-brand-surface)), var(--color-brand-surface));
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.18), 0 5px 18px rgba(15, 23, 42, 0.1) !important;
+  transform-origin: top center;
 }
 
-select option:checked {
-  background-color: color-mix(in srgb, var(--color-brand-primary) 18%, var(--color-brand-surface));
-  color: var(--color-brand-text);
+.beautiful-select-option,
+.beautiful-select-option:not(:disabled):hover {
+  min-height: 2.375rem;
+  transform: none !important;
+  box-shadow: none !important;
 }
 
-html[data-theme="dark"] select:not([multiple]) {
-  color-scheme: dark;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+.beautiful-select-option:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-brand-primary) 7%, var(--color-brand-surface-high)) !important;
+}
+
+.beautiful-select-option[aria-selected="true"],
+.beautiful-select-option[aria-selected="true"]:not(:disabled):hover {
+  border-color: transparent !important;
+  background: color-mix(in srgb, var(--color-brand-primary) 12%, var(--color-brand-surface)) !important;
+  color: var(--color-brand-primary) !important;
+}
+
+html[data-theme="dark"] .beautiful-select-trigger {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-brand-surface-high) 52%, var(--color-brand-surface)), var(--color-brand-surface-lowest)) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+html[data-theme="dark"] .beautiful-select-menu {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 6px 20px rgba(0, 0, 0, 0.32) !important;
 }
 
 .subscription-menu-item {

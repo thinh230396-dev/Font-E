@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import React, { useState, useEffect } from 'react';
 import { 
   Store, 
@@ -1204,7 +1205,7 @@ export default function TenantDetailModal({
                   {/* Payment Status Option */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-brand-text-muted block">Trạng thái thanh toán của Tenant</label>
-                    <select
+                    <BeautifulSelect
                       value={paymentStatusOption}
                       onChange={(e: any) => {
                         setPaymentStatusOption(e.target.value);
@@ -1216,13 +1217,13 @@ export default function TenantDetailModal({
                       <option value="unpaid">Chưa chi trả / Ghi nợ</option>
                       <option value="auto">Trừ thẻ tự động thành công</option>
                       <option value="invoice">Đã phát hành hóa đơn chờ</option>
-                    </select>
+                    </BeautifulSelect>
                   </div>
 
                   {/* Payment Method Option */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-brand-text-muted block">Phương thức chi trả</label>
-                    <select
+                    <BeautifulSelect
                       value={paymentMethod}
                       onChange={(e: any) => setPaymentMethod(e.target.value)}
                       disabled={paymentStatusOption === 'auto'}
@@ -1232,7 +1233,7 @@ export default function TenantDetailModal({
                       <option value="cash">Tiền mặt thủ công</option>
                       <option value="card">Thẻ tín dụng / Stripe</option>
                       <option value="other">Phương thức khác</option>
-                    </select>
+                    </BeautifulSelect>
                   </div>
                 </div>
 
@@ -1426,7 +1427,7 @@ export default function TenantDetailModal({
                   {/* Payment Status Option */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-brand-text-muted block">Trạng thái thu tiền</label>
-                    <select
+                    <BeautifulSelect
                       value={renewPaymentStatus}
                       onChange={(e: any) => {
                         setRenewPaymentStatus(e.target.value);
@@ -1438,13 +1439,13 @@ export default function TenantDetailModal({
                       <option value="unpaid">Chưa thu tiền (Ghi nợ)</option>
                       <option value="auto">Thu tự động (Qua thẻ liên kết)</option>
                       <option value="invoice">Gửi invoice cho tenant thanh toán sau</option>
-                    </select>
+                    </BeautifulSelect>
                   </div>
 
                   {/* Payment Method Option */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-brand-text-muted block">Phương thức thanh toán</label>
-                    <select
+                    <BeautifulSelect
                       value={renewPaymentMethod}
                       onChange={(e: any) => setRenewPaymentMethod(e.target.value)}
                       disabled={renewPaymentStatus === 'auto'}
@@ -1454,7 +1455,7 @@ export default function TenantDetailModal({
                       <option value="cash">Tiền mặt thủ công</option>
                       <option value="card">Thẻ tín dụng / Stripe</option>
                       <option value="other">Phương thức khác</option>
-                    </select>
+                    </BeautifulSelect>
                   </div>
                 </div>
 
@@ -2297,14 +2298,14 @@ export default function TenantDetailModal({
                           <p className="font-bold text-brand-text">Đơn vị tiền tệ chính</p>
                           <p className="text-[10px] text-brand-text-muted mt-0.5">Hệ thống tính hóa đơn và thanh toán khách hàng.</p>
                         </div>
-                        <select 
+                        <BeautifulSelect
                           value={currency} 
                           onChange={(e) => setCurrency(e.target.value as 'USD' | 'VND')}
                           className="bg-brand-surface border border-brand-outline rounded-lg px-2.5 py-1.5 text-xs text-brand-text w-full cursor-pointer focus:outline-none focus:border-brand-primary"
                         >
                           <option value="VND">VND (đ) - Tiếng Việt</option>
                           <option value="USD">USD ($) - Dollar Mỹ</option>
-                        </select>
+                        </BeautifulSelect>
                       </div>
 
                       {/* Language Selection */}
@@ -2313,14 +2314,14 @@ export default function TenantDetailModal({
                           <p className="font-bold text-brand-text">Ngôn ngữ mặc định của Tenant</p>
                           <p className="text-[10px] text-brand-text-muted mt-0.5">Giao diện nội bộ & tin nhắn SMS gửi khách.</p>
                         </div>
-                        <select 
+                        <BeautifulSelect
                           value={defaultLanguage} 
                           onChange={(e) => setDefaultLanguage(e.target.value as 'Vietnamese' | 'English')}
                           className="bg-brand-surface border border-brand-outline rounded-lg px-2.5 py-1.5 text-xs text-brand-text w-full cursor-pointer focus:outline-none focus:border-brand-primary"
                         >
                           <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
                           <option value="English">English (Tiếng Anh)</option>
-                        </select>
+                        </BeautifulSelect>
                       </div>
 
                     </div>

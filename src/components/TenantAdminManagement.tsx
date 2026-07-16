@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import React, { useMemo, useState } from 'react';
 import {
   Activity,
@@ -1309,7 +1310,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
 
                   <div>
                     <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
-                    <select
+                    <BeautifulSelect
                       value={editCountry}
                       onChange={(e) => handleEditCountryChange(e.target.value)}
                       className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
@@ -1320,7 +1321,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                       <option value="Australia">Australia</option>
                       <option value="Japan">Japan</option>
                       <option value="Korea">Korea</option>
-                    </select>
+                    </BeautifulSelect>
                   </div>
 
                   <div>
@@ -1578,7 +1579,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
 
                   <div>
                     <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
-                    <select
+                    <BeautifulSelect
                       value={inviteCountry}
                       onChange={(e) => handleInviteCountryChange(e.target.value)}
                       className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
@@ -1589,7 +1590,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                       <option value="Australia">Australia</option>
                       <option value="Japan">Japan</option>
                       <option value="Korea">Korea</option>
-                    </select>
+                    </BeautifulSelect>
                   </div>
 
                   <div>

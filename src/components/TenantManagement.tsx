@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import React, { useState } from 'react';
 import { 
   Store, 
@@ -865,7 +866,7 @@ export default function TenantManagement({
           {/* Status Filter */}
           <div className="flex items-center gap-1 text-xs">
             <span className="text-brand-text-muted hidden sm:inline">Trạng thái:</span>
-            <select
+            <BeautifulSelect
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as TenantStatus | 'ALL')}
               className="bg-brand-surface-lowest border border-brand-outline/45 rounded-lg px-2.5 py-1 text-[11px] font-medium text-brand-text cursor-pointer focus:outline-none focus:border-brand-primary"
@@ -876,13 +877,13 @@ export default function TenantManagement({
               <option value="EXPIRING">Sắp hết hạn</option>
               <option value="OVERDUE">Quá hạn</option>
               <option value="SUSPENDED">Tạm ngưng</option>
-            </select>
+            </BeautifulSelect>
           </div>
 
           {/* Package Filter */}
           <div className="flex items-center gap-1 text-xs">
             <span className="text-brand-text-muted hidden sm:inline">Gói cước:</span>
-            <select
+            <BeautifulSelect
               value={packageFilter}
               onChange={(e) => setPackageFilter(e.target.value as SubscriptionPackageName | 'ALL')}
               className="bg-brand-surface-lowest border border-brand-outline/45 rounded-lg px-2.5 py-1 text-[11px] font-medium text-brand-text cursor-pointer focus:outline-none focus:border-brand-primary"
@@ -891,13 +892,13 @@ export default function TenantManagement({
               {packageFilterOptions.map((packageName) => (
                 <option key={packageName} value={packageName}>{packageName}</option>
               ))}
-            </select>
+            </BeautifulSelect>
           </div>
 
           {/* Sorting */}
           <div className="flex items-center gap-1 text-xs">
             <span className="text-brand-text-muted hidden sm:inline">Sắp xếp:</span>
-            <select
+            <BeautifulSelect
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'name' | 'revenue' | 'date')}
               className="bg-brand-surface-lowest border border-brand-outline/45 rounded-lg px-2.5 py-1 text-[11px] font-medium text-brand-text cursor-pointer focus:outline-none focus:border-brand-primary"
@@ -905,7 +906,7 @@ export default function TenantManagement({
               <option value="name">Tên tenant</option>
               <option value="revenue">Doanh thu tenant</option>
               <option value="date">Ngày tạo</option>
-            </select>
+            </BeautifulSelect>
           </div>
 
         </div>
@@ -1185,7 +1186,7 @@ export default function TenantManagement({
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Trạng Thái</label>
-                  <select 
+                  <BeautifulSelect
                     value={editingTenant.status}
                     onChange={(e) => setEditingTenant({ ...editingTenant, status: e.target.value as TenantStatus })}
                     className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer"
@@ -1195,7 +1196,7 @@ export default function TenantManagement({
                     <option value="EXPIRING">Sắp hết hạn (EXPIRING)</option>
                     <option value="OVERDUE">Quá hạn thanh toán (OVERDUE)</option>
                     <option value="SUSPENDED">Khóa / Tạm ngưng (SUSPENDED)</option>
-                  </select>
+                  </BeautifulSelect>
                 </div>
               </div>
 
@@ -1258,7 +1259,7 @@ export default function TenantManagement({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
-                  <select
+                  <BeautifulSelect
                     value={editingTenant.country || 'Vietnam'}
                     onChange={(e) => {
                       const nextCountry = e.target.value;
@@ -1276,11 +1277,11 @@ export default function TenantManagement({
                     <option value="Australia">Australia</option>
                     <option value="Japan">Japan</option>
                     <option value="Korea">Korea</option>
-                  </select>
+                  </BeautifulSelect>
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Múi giờ</label>
-                  <select
+                  <BeautifulSelect
                     value={editingTenant.timezone || getDefaultTimezoneForCountry(editingTenant.country || 'Vietnam')}
                     onChange={(e) => setEditingTenant({ ...editingTenant, timezone: e.target.value })}
                     className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer"
@@ -1293,7 +1294,7 @@ export default function TenantManagement({
                     <option value="Asia/Tokyo">Asia/Tokyo (GMT+9)</option>
                     <option value="Asia/Seoul">Asia/Seoul (GMT+9)</option>
                     <option value="Australia/Sydney">Australia/Sydney (GMT+11)</option>
-                  </select>
+                  </BeautifulSelect>
                 </div>
               </div>
 
@@ -1498,7 +1499,7 @@ export default function TenantManagement({
                     <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
                     <div className="relative">
                       <Globe className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50 pointer-events-none" />
-                      <select 
+                      <BeautifulSelect
                         value={formCountry}
                         onChange={(e) => handleCountryChange(e.target.value)}
                         className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer appearance-none"
@@ -1509,10 +1510,7 @@ export default function TenantManagement({
                         <option value="Australia">Australia</option>
                         <option value="Japan">Japan</option>
                         <option value="Korea">Korea</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-brand-text-muted/70">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      </BeautifulSelect>
                     </div>
                   </div>
 
@@ -1523,7 +1521,7 @@ export default function TenantManagement({
                     </label>
                     <div className="relative">
                       <Clock className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50 pointer-events-none" />
-                      <select 
+                      <BeautifulSelect
                         value={formTimezone}
                         onChange={(e) => setFormTimezone(e.target.value)}
                         className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer appearance-none"
@@ -1537,10 +1535,7 @@ export default function TenantManagement({
                         <option value="Asia/Tokyo">Asia/Tokyo (GMT+9)</option>
                         <option value="Asia/Seoul">Asia/Seoul (GMT+9)</option>
                         <option value="Australia/Sydney">Australia/Sydney (GMT+11)</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-brand-text-muted/70">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      </BeautifulSelect>
                     </div>
                   </div>
                 </div>
@@ -1604,7 +1599,7 @@ export default function TenantManagement({
                     <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">
                       Chọn Tenant Admin có sẵn <span className="text-brand-primary font-bold">*</span>
                     </label>
-                    <select
+                    <BeautifulSelect
                       value={selectedTenantAdminId}
                       onChange={(e) => selectExistingTenantAdmin(e.target.value)}
                       className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer"
@@ -1615,7 +1610,7 @@ export default function TenantManagement({
                           {(admin.adminCode || admin.id)} - {admin.name} - {admin.email}
                         </option>
                       ))}
-                    </select>
+                    </BeautifulSelect>
                     <p className="text-[10px] text-brand-text-muted mt-1">
                       Chỉ hiển thị Tenant Admin đã tạo trước đó và chưa quản lý tenant nào.
                     </p>
@@ -1818,7 +1813,7 @@ export default function TenantManagement({
                     </label>
                     <div className="relative">
                       <CreditCard className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50 pointer-events-none" />
-                      <select 
+                      <BeautifulSelect
                         value={formPackage}
                         onChange={(e) => {
                           const nextPackage = e.target.value as SubscriptionPackageName;
@@ -1830,10 +1825,7 @@ export default function TenantManagement({
                         {selectablePackages.map((pkg) => (
                           <option key={pkg.id} value={pkg.name}>{pkg.name}</option>
                         ))}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-brand-text-muted/70">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      </BeautifulSelect>
                     </div>
                   </div>
 
@@ -1844,7 +1836,7 @@ export default function TenantManagement({
                     </label>
                     <div className="relative">
                       <Layers className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50 pointer-events-none" />
-                      <select 
+                      <BeautifulSelect
                         value={formBillingCycle}
                         onChange={(e) => setFormBillingCycle(e.target.value as 'Monthly' | 'Yearly')}
                         className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer appearance-none"
@@ -1852,10 +1844,7 @@ export default function TenantManagement({
                       >
                         <option value="Monthly">Monthly (Từng tháng)</option>
                         <option value="Yearly">Yearly (Hằng năm - Tiết kiệm 20%)</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-brand-text-muted/70">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      </BeautifulSelect>
                     </div>
                   </div>
                 </div>
@@ -1897,7 +1886,7 @@ export default function TenantManagement({
                   </label>
                   <div className="relative">
                     <Settings className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50 pointer-events-none" />
-                    <select 
+                    <BeautifulSelect
                       value={formStatus}
                       onChange={(e) => setFormStatus(e.target.value as TenantStatus | 'TRIAL')}
                       className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer appearance-none"
@@ -1906,10 +1895,7 @@ export default function TenantManagement({
                       <option value="ACTIVE">Hoạt động (ACTIVE)</option>
                       <option value="TRIAL">Dùng thử (TRIAL)</option>
                       <option value="SUSPENDED">Khóa / Tạm ngưng (SUSPENDED)</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-brand-text-muted/70">
-                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
+                    </BeautifulSelect>
                   </div>
                 </div>
               </div>
@@ -1997,7 +1983,7 @@ export default function TenantManagement({
                     </label>
                     <div className="relative">
                       <Settings className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50 pointer-events-none" />
-                      <select 
+                      <BeautifulSelect
                         value={formCurrency}
                         onChange={(e) => setFormCurrency(e.target.value as 'USD' | 'VND')}
                         className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-8 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer appearance-none"
@@ -2005,10 +1991,7 @@ export default function TenantManagement({
                       >
                         <option value="VND">VND (Việt Nam Đồng)</option>
                         <option value="USD">USD (Đô la Mỹ)</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-brand-text-muted/70">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      </BeautifulSelect>
                     </div>
                   </div>
 
@@ -2019,7 +2002,7 @@ export default function TenantManagement({
                     </label>
                     <div className="relative">
                       <Globe className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50 pointer-events-none" />
-                      <select 
+                      <BeautifulSelect
                         value={formDefaultLanguage}
                         onChange={(e) => setFormDefaultLanguage(e.target.value as 'Vietnamese' | 'English')}
                         className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-8 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer appearance-none"
@@ -2027,10 +2010,7 @@ export default function TenantManagement({
                       >
                         <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
                         <option value="English">English (Tiếng Anh)</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-brand-text-muted/70">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.950l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      </BeautifulSelect>
                     </div>
                   </div>
                 </div>

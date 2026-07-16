@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
@@ -595,37 +596,37 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
               </label>
               <label>
                 <span className="sr-only">Khoảng thời gian</span>
-                <select value={dateRange} onChange={(event) => setDateRange(event.target.value as DateRange)} className="form-control h-10 cursor-pointer">
+                <BeautifulSelect value={dateRange} onChange={(event) => setDateRange(event.target.value as DateRange)} className="form-control h-10 cursor-pointer">
                   <option value="24h">24 giờ qua</option>
                   <option value="7d">7 ngày qua</option>
                   <option value="30d">30 ngày qua</option>
                   <option value="all">Toàn bộ</option>
-                </select>
+                </BeautifulSelect>
               </label>
               <label>
                 <span className="sr-only">Danh mục</span>
-                <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as CategoryFilter)} className="form-control h-10 cursor-pointer">
+                <BeautifulSelect value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as CategoryFilter)} className="form-control h-10 cursor-pointer">
                   <option value="ALL">Tất cả danh mục</option>
                   {Object.entries(CATEGORY_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
+                </BeautifulSelect>
               </label>
               <label>
                 <span className="sr-only">Kết quả</span>
-                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="form-control h-10 cursor-pointer">
+                <BeautifulSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="form-control h-10 cursor-pointer">
                   <option value="ALL">Tất cả kết quả</option>
                   <option value="success">Thành công</option>
                   <option value="failed">Thất bại</option>
                   <option value="blocked">Đã chặn</option>
-                </select>
+                </BeautifulSelect>
               </label>
               <label>
                 <span className="sr-only">Mức độ</span>
-                <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value as SeverityFilter)} className="form-control h-10 cursor-pointer">
+                <BeautifulSelect value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value as SeverityFilter)} className="form-control h-10 cursor-pointer">
                   <option value="ALL">Tất cả mức độ</option>
                   <option value="high">Nghiêm trọng</option>
                   <option value="medium">Cảnh báo</option>
                   <option value="low">Thông tin</option>
-                </select>
+                </BeautifulSelect>
               </label>
             </div>
             <div className="mt-3 flex flex-col gap-2 border-t border-brand-outline/25 pt-3 sm:flex-row sm:items-center sm:justify-between">

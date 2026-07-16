@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -543,35 +544,35 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" />
               <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Tìm mã ticket, tenant, người gửi, chủ đề hoặc tag..." className="form-control pl-9" />
             </div>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'ALL' | Ticket['status'])} className="form-control">
+            <BeautifulSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'ALL' | Ticket['status'])} className="form-control">
               <option value="ALL">Tất cả trạng thái</option>
               {Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}
-            </select>
-            <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as 'ALL' | Ticket['priority'])} className="form-control">
+            </BeautifulSelect>
+            <BeautifulSelect value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as 'ALL' | Ticket['priority'])} className="form-control">
               <option value="ALL">Tất cả độ ưu tiên</option>
               {Object.entries(PRIORITY_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}
-            </select>
-            <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="form-control">
+            </BeautifulSelect>
+            <BeautifulSelect value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="form-control">
               <option value="ALL">Tất cả danh mục</option>
               {categories.map((category) => <option key={category} value={category}>{category}</option>)}
-            </select>
-            <select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} className="form-control">
+            </BeautifulSelect>
+            <BeautifulSelect value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} className="form-control">
               <option value="ALL">Tất cả người xử lý</option>
               <option value="UNASSIGNED">Chưa phân công</option>
               {SUPPORT_AGENTS.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-            </select>
-            <select value={slaFilter} onChange={(event) => setSlaFilter(event.target.value as SlaFilter)} className="form-control">
+            </BeautifulSelect>
+            <BeautifulSelect value={slaFilter} onChange={(event) => setSlaFilter(event.target.value as SlaFilter)} className="form-control">
               <option value="ALL">Tất cả trạng thái SLA</option>
               <option value="BREACHED">Quá hạn SLA</option>
               <option value="DUE_SOON">Sắp đến hạn</option>
               <option value="ON_TRACK">Đúng SLA</option>
-            </select>
-            <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} className="form-control">
+            </BeautifulSelect>
+            <BeautifulSelect value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} className="form-control">
               <option value="UPDATED_DESC">Cập nhật gần nhất</option>
               <option value="CREATED_DESC">Mới tạo gần nhất</option>
               <option value="PRIORITY_DESC">Ưu tiên cao trước</option>
               <option value="SLA_ASC">SLA gần nhất</option>
-            </select>
+            </BeautifulSelect>
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-[10px] text-brand-text-muted">Hiển thị <strong className="text-brand-text">{filteredTickets.length}</strong> / {tickets.length} ticket</p>
@@ -666,9 +667,9 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
                   )}
                 </div>
                 <div className="grid grid-cols-1 gap-3">
-                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Người xử lý</label><select value={selectedTicket.assignedTo?.id || ''} onChange={(event) => handleAssignment(selectedTicket, event.target.value)} className="form-control h-10"><option value="">Chưa phân công</option>{SUPPORT_AGENTS.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>
-                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Độ ưu tiên</label><select value={selectedTicket.priority} onChange={(event) => handlePriorityChange(selectedTicket, event.target.value as Ticket['priority'])} className="form-control h-10">{Object.entries(PRIORITY_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
-                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Trạng thái</label><select value={selectedTicket.status} onChange={(event) => handleStatusChange(selectedTicket, event.target.value as Ticket['status'])} className="form-control h-10">{Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
+                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Người xử lý</label><BeautifulSelect value={selectedTicket.assignedTo?.id || ''} onChange={(event) => handleAssignment(selectedTicket, event.target.value)} className="form-control h-10"><option value="">Chưa phân công</option>{SUPPORT_AGENTS.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</BeautifulSelect></div>
+                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Độ ưu tiên</label><BeautifulSelect value={selectedTicket.priority} onChange={(event) => handlePriorityChange(selectedTicket, event.target.value as Ticket['priority'])} className="form-control h-10">{Object.entries(PRIORITY_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</BeautifulSelect></div>
+                  <div><label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Trạng thái</label><BeautifulSelect value={selectedTicket.status} onChange={(event) => handleStatusChange(selectedTicket, event.target.value as Ticket['status'])} className="form-control h-10">{Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</BeautifulSelect></div>
                 </div>
               </section>
               <section className="p-4">

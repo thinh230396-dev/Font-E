@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import { useState } from 'react';
 import { 
   CheckCircle, 
@@ -124,7 +125,7 @@ export default function Overview({
         </div>
         <div className="flex items-center gap-2 self-start sm:self-center">
           <Filter className="w-3.5 h-3.5 text-brand-text-muted" />
-          <select 
+          <BeautifulSelect
             value={timePeriod}
             onChange={(e) => setTimePeriod(e.target.value)}
             className="bg-brand-surface border border-brand-outline/40 rounded-lg px-3 py-1.5 text-xs text-brand-text font-medium focus:border-brand-primary focus:outline-none cursor-pointer"
@@ -133,7 +134,7 @@ export default function Overview({
             <option>Tháng này</option>
             <option>Quý này</option>
             <option>Năm nay</option>
-          </select>
+          </BeautifulSelect>
         </div>
       </div>
 

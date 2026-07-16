@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -392,34 +393,34 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
       <div className="bg-brand-surface border border-brand-outline/35 rounded-xl p-3.5 flex flex-col lg:flex-row lg:items-end gap-3 print:hidden">
         <label className="flex-1 min-w-[190px]">
           <span className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Phạm vi báo cáo</span>
-          <select value={reportScope} onChange={(event) => { setReportScope(event.target.value as ReportScope); setHoveredMonth(null); setInvoicePage(1); setTenantPage(1); }} className="form-control">
+          <BeautifulSelect value={reportScope} onChange={(event) => { setReportScope(event.target.value as ReportScope); setHoveredMonth(null); setInvoicePage(1); setTenantPage(1); }} className="form-control">
             <option value="ADMIN">Superadmin / Nền tảng</option>
             <option value="TENANT">Tenant / Vận hành</option>
-          </select>
+          </BeautifulSelect>
         </label>
         {reportScope === 'ADMIN' && (
         <label className="flex-1 min-w-[140px]">
           <span className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Năm báo cáo</span>
-          <select value={selectedYear} onChange={(event) => { setSelectedYear(Number(event.target.value)); setInvoicePage(1); }} className="form-control">
+          <BeautifulSelect value={selectedYear} onChange={(event) => { setSelectedYear(Number(event.target.value)); setInvoicePage(1); }} className="form-control">
             {availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
-          </select>
+          </BeautifulSelect>
         </label>
         )}
         <label className="flex-1 min-w-[170px]">
           <span className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Gói dịch vụ</span>
-          <select value={packageFilter} onChange={(event) => { setPackageFilter(event.target.value); setInvoicePage(1); setTenantPage(1); }} className="form-control">
+          <BeautifulSelect value={packageFilter} onChange={(event) => { setPackageFilter(event.target.value); setInvoicePage(1); setTenantPage(1); }} className="form-control">
             <option value={ALL}>Tất cả gói</option>
             {packages.map((pkg) => <option key={pkg.id} value={pkg.name}>{pkg.name}</option>)}
-          </select>
+          </BeautifulSelect>
         </label>
         <label className="flex-1 min-w-[180px]">
           <span className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Trạng thái tenant</span>
-          <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setInvoicePage(1); setTenantPage(1); }} className="form-control">
+          <BeautifulSelect value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setInvoicePage(1); setTenantPage(1); }} className="form-control">
             <option value={ALL}>Tất cả trạng thái</option>
             {(Object.keys(tenantStatusMeta) as TenantStatus[]).map((status) => (
               <option key={status} value={status}>{tenantStatusMeta[status].label}</option>
             ))}
-          </select>
+          </BeautifulSelect>
         </label>
         <button type="button" onClick={resetFilters} className="px-4 py-2 rounded-lg border border-brand-outline/40 text-xs font-semibold text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high cursor-pointer">
           Đặt lại bộ lọc
@@ -758,7 +759,7 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
               </label>
               <label className="sm:w-44 shrink-0">
                 <span className="sr-only">Lọc trạng thái hóa đơn</span>
-                <select
+                <BeautifulSelect
                   value={invoiceStatusFilter}
                   onChange={(event) => { setInvoiceStatusFilter(event.target.value as InvoiceStatusFilter); setInvoicePage(1); }}
                   className="form-control"
@@ -767,17 +768,17 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
                   {(Object.keys(invoiceStatusMeta) as Invoice['status'][]).map((status) => (
                     <option key={status} value={status}>{invoiceStatusMeta[status].label}</option>
                   ))}
-                </select>
+                </BeautifulSelect>
               </label>
               <label className="sm:w-32 shrink-0">
                 <span className="sr-only">Số hóa đơn mỗi trang</span>
-                <select
+                <BeautifulSelect
                   value={invoicePageSize}
                   onChange={(event) => { setInvoicePageSize(Number(event.target.value)); setInvoicePage(1); }}
                   className="form-control"
                 >
                   {[10, 25, 50].map((size) => <option key={size} value={size}>{size} / trang</option>)}
-                </select>
+                </BeautifulSelect>
               </label>
             </div>
           ) : (
@@ -795,7 +796,7 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
               </label>
               <label className="sm:w-48 shrink-0">
                 <span className="sr-only">Sắp xếp tenant</span>
-                <select
+                <BeautifulSelect
                   value={tenantSort}
                   onChange={(event) => { setTenantSort(event.target.value as TenantSort); setTenantPage(1); }}
                   className="form-control"
@@ -804,17 +805,17 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
                   <option value="REVENUE_ASC">Doanh thu: Thấp đến cao</option>
                   <option value="NAME_ASC">Tên tenant: A–Z</option>
                   <option value="STAFF_DESC">Nhân sự: Nhiều nhất</option>
-                </select>
+                </BeautifulSelect>
               </label>
               <label className="sm:w-32 shrink-0">
                 <span className="sr-only">Số tenant mỗi trang</span>
-                <select
+                <BeautifulSelect
                   value={tenantPageSize}
                   onChange={(event) => { setTenantPageSize(Number(event.target.value)); setTenantPage(1); }}
                   className="form-control"
                 >
                   {[10, 25, 50].map((size) => <option key={size} value={size}>{size} / trang</option>)}
-                </select>
+                </BeautifulSelect>
               </label>
             </div>
           )}

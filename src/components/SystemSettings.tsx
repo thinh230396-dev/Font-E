@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import { useMemo, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -204,25 +205,25 @@ export default function SystemSettings() {
                     <input className="form-control" type="email" value={draft.general.supportEmail} onChange={(event) => updateSection('general', { supportEmail: event.target.value })} placeholder="support@salonsys.com" />
                   </Field>
                   <Field label="Ngôn ngữ mặc định">
-                    <select className="form-control" value={draft.general.defaultLanguage} onChange={(event) => updateSection('general', { defaultLanguage: event.target.value as 'vi' | 'en' })}>
+                    <BeautifulSelect className="form-control" value={draft.general.defaultLanguage} onChange={(event) => updateSection('general', { defaultLanguage: event.target.value as 'vi' | 'en' })}>
                       <option value="vi">Tiếng Việt</option>
                       <option value="en">English</option>
-                    </select>
+                    </BeautifulSelect>
                   </Field>
                   <Field label="Đơn vị tiền tệ">
-                    <select className="form-control" value={draft.general.currency} onChange={(event) => updateSection('general', { currency: event.target.value as 'VND' | 'USD' })}>
+                    <BeautifulSelect className="form-control" value={draft.general.currency} onChange={(event) => updateSection('general', { currency: event.target.value as 'VND' | 'USD' })}>
                       <option value="VND">VND — Việt Nam Đồng</option>
                       <option value="USD">USD — US Dollar</option>
-                    </select>
+                    </BeautifulSelect>
                   </Field>
                   <Field label="Múi giờ" className="sm:col-span-2">
-                    <select className="form-control" value={draft.general.timezone} onChange={(event) => updateSection('general', { timezone: event.target.value })}>
+                    <BeautifulSelect className="form-control" value={draft.general.timezone} onChange={(event) => updateSection('general', { timezone: event.target.value })}>
                       <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
                       <option value="Asia/Bangkok">Asia/Bangkok (GMT+7)</option>
                       <option value="America/New_York">America/New_York (GMT-5)</option>
                       <option value="America/Los_Angeles">America/Los_Angeles (GMT-8)</option>
                       <option value="Europe/London">Europe/London (GMT+0)</option>
-                    </select>
+                    </BeautifulSelect>
                   </Field>
                 </div>
               </SettingsPanel>
@@ -293,11 +294,11 @@ export default function SystemSettings() {
                     <input className="form-control" type="number" min={1} max={65535} disabled={!draft.email.enabled} value={draft.email.smtpPort} onChange={(event) => updateSection('email', { smtpPort: Number(event.target.value) })} />
                   </Field>
                   <Field label="Mã hóa">
-                    <select className="form-control" disabled={!draft.email.enabled} value={draft.email.encryption} onChange={(event) => updateSection('email', { encryption: event.target.value as SystemSettingsModel['email']['encryption'] })}>
+                    <BeautifulSelect className="form-control" disabled={!draft.email.enabled} value={draft.email.encryption} onChange={(event) => updateSection('email', { encryption: event.target.value as SystemSettingsModel['email']['encryption'] })}>
                       <option value="STARTTLS">STARTTLS</option>
                       <option value="SSL">SSL/TLS</option>
                       <option value="NONE">Không mã hóa</option>
-                    </select>
+                    </BeautifulSelect>
                   </Field>
                   <Field label="Tên đăng nhập" className="sm:col-span-2">
                     <input className="form-control" disabled={!draft.email.enabled} value={draft.email.smtpUsername} onChange={(event) => updateSection('email', { smtpUsername: event.target.value })} placeholder="apikey hoặc email SMTP" />

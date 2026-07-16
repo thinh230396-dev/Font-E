@@ -1,3 +1,4 @@
+import BeautifulSelect from './BeautifulSelect';
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -268,13 +269,13 @@ export default function SubscriptionPackages({
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên, mô tả hoặc tính năng..." className="form-control pl-9 py-2.5" />
           </div>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="form-control sm:w-auto py-2.5">
+          <BeautifulSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="form-control sm:w-auto py-2.5">
             <option value="ALL">Tất cả trạng thái</option>
             <option value="DRAFT">Bản nháp</option>
             <option value="ACTIVE">Đang hoạt động</option>
             <option value="DEPRECATED">Ngừng đăng ký mới</option>
             <option value="ARCHIVED">Đã lưu trữ</option>
-          </select>
+          </BeautifulSelect>
           <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-outline/35 text-xs text-brand-text-muted cursor-pointer whitespace-nowrap">
             <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> Hiện gói lưu trữ
           </label>
@@ -425,10 +426,10 @@ export default function SubscriptionPackages({
                 <p>Khi hết hạn, hệ thống tự chuyển tenant sang gói thay thế và tạo hóa đơn mới.</p>
               </div>
               <Field label="Gói thay thế sau khi hết hạn">
-                <select value={replacementPackageName} onChange={(event) => setReplacementPackageName(event.target.value)} className="form-control">
+                <BeautifulSelect value={replacementPackageName} onChange={(event) => setReplacementPackageName(event.target.value)} className="form-control">
                   <option value="">Chọn gói đủ hạn mức</option>
                   {getCompatibleReplacementPackages(retirementTarget).map((pkg) => <option key={pkg.id} value={pkg.name}>{pkg.name}</option>)}
-                </select>
+                </BeautifulSelect>
               </Field>
               {getCompatibleReplacementPackages(retirementTarget).length === 0 && (
                 <p className="text-[10px] text-brand-error">Chưa có gói đang hoạt động nào đủ hạn mức cho tất cả tenant. Hãy tạo hoặc nâng hạn mức một gói thay thế trước.</p>
@@ -512,9 +513,9 @@ function PackageEditor({ editor, onClose, onSave }: { editor: EditorState; onClo
         <div className="px-5 pt-4 flex gap-2 overflow-x-auto border-b border-brand-outline/25">{([['general', 'Thông tin & giá'], ['features', 'Feature flags'], ['limits', 'Hạn mức']] as const).map(([key, label]) => <button key={key} type="button" onClick={() => setSection(key)} className={`px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap cursor-pointer ${section === key ? 'border-brand-primary text-brand-primary' : 'border-transparent text-brand-text-muted hover:text-brand-text'}`}>{label}</button>)}</div>
         <div className="p-5 sm:p-6 overflow-y-auto flex-1">
           {section === 'general' && <div className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4"><Field label="Tên gói *" className="md:col-span-2"><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="form-control" placeholder="Ví dụ: Premium Plus" /></Field><Field label="Trạng thái"><select value={getPackageStatus(draft)} onChange={(event) => setDraft({ ...draft, status: event.target.value as SubscriptionPackageStatus })} className="form-control"><option value="DRAFT">Bản nháp</option><option value="ACTIVE">Đang hoạt động</option><option value="DEPRECATED">Ngừng đăng ký mới</option><option value="ARCHIVED">Đã lưu trữ</option></select></Field><Field label="Màu nhận diện"><input type="color" value={draft.color} onChange={(event) => setDraft({ ...draft, color: event.target.value })} className="form-control h-9 p-1" /></Field></div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4"><Field label="Tên gói *" className="md:col-span-2"><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="form-control" placeholder="Ví dụ: Premium Plus" /></Field><Field label="Trạng thái"><BeautifulSelect value={getPackageStatus(draft)} onChange={(event) => setDraft({ ...draft, status: event.target.value as SubscriptionPackageStatus })} className="form-control"><option value="DRAFT">Bản nháp</option><option value="ACTIVE">Đang hoạt động</option><option value="DEPRECATED">Ngừng đăng ký mới</option><option value="ARCHIVED">Đã lưu trữ</option></BeautifulSelect></Field><Field label="Màu nhận diện"><input type="color" value={draft.color} onChange={(event) => setDraft({ ...draft, color: event.target.value })} className="form-control h-9 p-1" /></Field></div>
             <Field label="Mô tả gói"><textarea rows={3} value={draft.description || ''} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className="form-control resize-none" placeholder="Mô tả đối tượng và giá trị của gói..." /></Field>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><Field label="Giá theo tháng"><input type="number" min="0" value={draft.price} onChange={(event) => updateMonthlyPrice(Number(event.target.value))} className="form-control" /></Field><Field label="Giảm giá năm (%)"><input type="number" min="0" max="100" value={draft.yearlyDiscountPercent || 0} onChange={(event) => updateDiscount(Math.min(100, Math.max(0, Number(event.target.value))))} className="form-control" /></Field><Field label="Giá theo năm"><input type="number" min="0" value={getYearlyPackagePrice(draft)} onChange={(event) => setDraft({ ...draft, yearlyPrice: Number(event.target.value) })} className="form-control" /></Field><Field label="Đơn vị tiền"><select value={draft.currency || 'VND'} onChange={(event) => setDraft({ ...draft, currency: event.target.value as 'USD' | 'VND' })} className="form-control"><option value="VND">VND</option><option value="USD">USD</option></select></Field></div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><Field label="Giá theo tháng"><input type="number" min="0" value={draft.price} onChange={(event) => updateMonthlyPrice(Number(event.target.value))} className="form-control" /></Field><Field label="Giảm giá năm (%)"><input type="number" min="0" max="100" value={draft.yearlyDiscountPercent || 0} onChange={(event) => updateDiscount(Math.min(100, Math.max(0, Number(event.target.value))))} className="form-control" /></Field><Field label="Giá theo năm"><input type="number" min="0" value={getYearlyPackagePrice(draft)} onChange={(event) => setDraft({ ...draft, yearlyPrice: Number(event.target.value) })} className="form-control" /></Field><Field label="Đơn vị tiền"><BeautifulSelect value={draft.currency || 'VND'} onChange={(event) => setDraft({ ...draft, currency: event.target.value as 'USD' | 'VND' })} className="form-control"><option value="VND">VND</option><option value="USD">USD</option></BeautifulSelect></Field></div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><Field label="Phí khởi tạo"><input type="number" min="0" value={draft.setupFee || 0} onChange={(event) => setDraft({ ...draft, setupFee: Number(event.target.value) })} className="form-control" /></Field><Field label="Số ngày dùng thử"><input type="number" min="0" value={draft.trialDays || 0} onChange={(event) => setDraft({ ...draft, trialDays: Number(event.target.value) })} className="form-control" /></Field><Field label="Nhân sự tối đa"><input type="number" min="1" value={draft.maxStaff} onChange={(event) => setDraft({ ...draft, maxStaff: Number(event.target.value) })} className="form-control" /><p className="field-hint">Nhập 999 để không giới hạn</p></Field><Field label="Chi nhánh tối đa"><input type="number" min="1" value={draft.maxSalons} onChange={(event) => setDraft({ ...draft, maxSalons: Number(event.target.value) })} className="form-control" /><p className="field-hint">Nhập 99 để không giới hạn</p></Field></div>
             <label className="flex items-center gap-3 rounded-xl border border-brand-outline/35 bg-brand-surface-lowest p-4 cursor-pointer"><input type="checkbox" checked={draft.isPopular || false} onChange={(event) => setDraft({ ...draft, isPopular: event.target.checked })} /><div><p className="text-xs font-bold text-brand-text">Đánh dấu là gói phổ biến</p><p className="text-[10px] text-brand-text-muted">Hiển thị nhãn nổi bật trên thẻ gói.</p></div></label>
           </div>}
