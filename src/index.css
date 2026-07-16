@@ -128,10 +128,6 @@ body {
   padding: 0 !important;
 }
 
-.login-submit:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-login-enter {
     animation: none;
@@ -284,6 +280,59 @@ button[class*="amber-"]:not(:disabled):hover {
   background-color: #ffedd5;
   border-color: #fb923c;
   color: #9a3412;
+}
+
+/* Login controls are intentionally isolated from the dashboard's generic
+   button rules. An icon inside the submit button must never make it icon-sized. */
+.login-shell button.login-submit,
+.login-shell button.login-submit:has(> svg:only-child) {
+  width: 100% !important;
+  height: 3rem !important;
+  min-width: 100% !important;
+  min-height: 3rem !important;
+  padding: 0 1.25rem !important;
+  border-radius: 0.75rem !important;
+  background: #6d28d9 !important;
+  border: 1px solid #5b21b6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(109, 40, 217, 0.22) !important;
+}
+
+.login-shell button.login-submit:not(:disabled):hover {
+  width: 100% !important;
+  background: #5b21b6 !important;
+  border-color: #4c1d95 !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 14px 28px rgba(91, 33, 182, 0.26) !important;
+}
+
+@media (max-height: 760px) and (min-width: 1024px) {
+  .login-showcase {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .login-left-description,
+  .login-showcase-footer,
+  .login-trust-note {
+    display: none;
+  }
+
+  .login-benefits {
+    margin-top: 1.25rem;
+  }
+
+  .login-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-height: 640px) and (min-width: 1024px) {
+  .login-eyebrow,
+  .login-benefits {
+    display: none;
+  }
 }
 
 @layer components {

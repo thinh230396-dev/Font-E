@@ -56,9 +56,9 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
   };
 
   return (
-    <main className="login-shell min-h-screen bg-[#f7f5fb] text-slate-950">
-      <div className="grid min-h-screen lg:grid-cols-[1.04fr_0.96fr]">
-        <section className="login-showcase relative hidden overflow-hidden bg-[#24163f] px-10 py-10 text-white lg:flex lg:flex-col xl:px-16 xl:py-12">
+    <main className="login-shell h-[100dvh] overflow-hidden bg-[#f7f5fb] text-slate-950">
+      <div className="grid h-full lg:grid-cols-[1.02fr_0.98fr]">
+        <section className="login-showcase relative hidden h-full overflow-hidden bg-[#24163f] px-10 py-8 text-white lg:flex lg:flex-col xl:px-16 xl:py-10">
           <div className="login-orb login-orb-one" aria-hidden="true" />
           <div className="login-orb login-orb-two" aria-hidden="true" />
 
@@ -72,35 +72,35 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
             </div>
           </div>
 
-          <div className="relative z-10 my-auto max-w-xl py-16">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[11px] font-semibold text-violet-100 backdrop-blur-md">
+          <div className="relative z-10 my-auto max-w-[660px] py-8">
+            <div className="login-eyebrow mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[11px] font-semibold text-violet-100 backdrop-blur-md">
               <Sparkles className="h-3.5 w-3.5 text-amber-300" />
               Vận hành thông minh, tăng trưởng bền vững
             </div>
-            <h1 className="max-w-[590px] text-[clamp(2.65rem,4.6vw,4.8rem)] font-black leading-[0.98] tracking-[-0.055em]">
+            <h1 className="max-w-[620px] text-[clamp(2.65rem,3.8vw,4.15rem)] font-black leading-[1.01] tracking-[-0.05em]">
               Trung tâm điều hành cho hệ thống salon của bạn.
             </h1>
-            <p className="mt-6 max-w-lg text-[15px] leading-7 text-violet-100/68">
+            <p className="login-left-description mt-5 max-w-lg text-[14px] leading-6 text-violet-100/68">
               Quản lý tenant, gói dịch vụ và hiệu suất kinh doanh trên một nền tảng bảo mật, rõ ràng và dễ kiểm soát.
             </p>
 
-            <div className="mt-9 space-y-3.5">
+            <div className="login-benefits mt-7 grid max-w-[610px] gap-3 sm:grid-cols-3">
               {benefits.map((benefit) => (
-                <div key={benefit} className="flex items-center gap-3 text-[13px] font-medium text-violet-50/88">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />
+                <div key={benefit} className="flex min-h-[76px] flex-col items-start gap-2 rounded-2xl border border-white/10 bg-white/[0.065] p-3.5 text-[11px] font-semibold leading-4 text-violet-50/82 backdrop-blur-sm">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" strokeWidth={2.3} />
                   <span>{benefit}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="relative z-10 flex items-center justify-between border-t border-white/10 pt-6 text-[10px] text-violet-200/55">
+          <div className="login-showcase-footer relative z-10 flex items-center justify-between border-t border-white/10 pt-5 text-[10px] text-violet-200/55">
             <span>© 2026 {systemName}</span>
             <span className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Kết nối được bảo vệ</span>
           </div>
         </section>
 
-        <section className="relative flex min-h-screen items-center justify-center px-5 py-10 sm:px-10 lg:px-12 xl:px-20">
+        <section className="relative flex h-full items-center justify-center overflow-hidden px-5 py-5 sm:px-10 lg:px-12 xl:px-20">
           <div className="absolute left-5 top-5 flex items-center gap-2.5 lg:hidden">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#6d28d9] text-white shadow-lg shadow-violet-200">
               <Store className="h-4 w-4" />
@@ -108,17 +108,18 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
             <span className="text-sm font-extrabold tracking-tight text-slate-900">{systemName}</span>
           </div>
 
-          <div className="w-full max-w-[430px] animate-login-enter">
-            <div className="mb-8">
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50 text-[#6d28d9]">
+          <div className="w-full max-w-[450px] animate-login-enter">
+            <div className="login-card rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_24px_70px_rgba(42,25,76,0.10)] sm:p-8">
+            <div className="mb-6">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50 text-[#6d28d9]">
                 <LockKeyhole className="h-5 w-5" />
               </div>
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#7c3aed]">Chào mừng trở lại</p>
-              <h2 className="text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-[2.15rem]">Đăng nhập Superadmin</h2>
-              <p className="mt-3 text-sm leading-6 text-slate-500">Sử dụng tài khoản quản trị để tiếp tục vào hệ thống.</p>
+              <h2 className="text-[1.8rem] font-black tracking-[-0.035em] text-slate-950 sm:text-[2rem]">Đăng nhập Superadmin</h2>
+              <p className="mt-2 text-[13px] leading-5 text-slate-500">Sử dụng tài khoản quản trị để tiếp tục vào hệ thống.</p>
             </div>
 
-            <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div>
                 <label htmlFor="login-email" className="mb-2 block text-[13px] font-bold text-slate-700">Email quản trị</label>
                 <div className="group relative">
@@ -132,7 +133,7 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="superadmin@salonsys.vn"
                     aria-describedby={error ? 'login-error' : undefined}
-                    className="h-[52px] w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-sm font-medium text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.03)] outline-none transition placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                    className="login-control h-12 w-full rounded-xl border border-slate-200 bg-slate-50/60 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10"
                   />
                 </div>
               </div>
@@ -161,7 +162,7 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="Nhập mật khẩu của bạn"
                     aria-describedby={error ? 'login-error' : undefined}
-                    className="h-[52px] w-full rounded-xl border border-slate-200 bg-white pl-12 pr-12 text-sm font-medium text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.03)] outline-none transition placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                    className="login-control h-12 w-full rounded-xl border border-slate-200 bg-slate-50/60 pl-12 pr-12 text-sm font-medium text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10"
                   />
                   <button
                     type="button"
@@ -185,7 +186,7 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
                 Duy trì đăng nhập trên thiết bị này
               </label>
 
-              <div className="min-h-5" aria-live="polite">
+              <div className="min-h-4" aria-live="polite">
                 {error && <p id="login-error" role="alert" className="text-[12px] font-semibold text-rose-600">{error}</p>}
                 {!error && notice && <p className="text-[12px] font-medium text-slate-500">{notice}</p>}
               </div>
@@ -193,7 +194,7 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="login-submit flex h-[52px] w-full items-center justify-center gap-2 rounded-xl border border-violet-800 bg-[#6d28d9] px-5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(109,40,217,0.22)] transition hover:bg-[#5b21b6] focus:outline-none focus:ring-4 focus:ring-violet-500/20 disabled:cursor-wait"
+                className="login-submit flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-violet-800 bg-[#6d28d9] px-5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(109,40,217,0.22)] transition hover:bg-[#5b21b6] focus:outline-none focus:ring-4 focus:ring-violet-500/20 disabled:cursor-wait"
               >
                 {isSubmitting ? (
                   <>
@@ -208,10 +209,11 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
                 )}
               </button>
             </form>
+            </div>
 
-            <div className="mt-8 flex items-start gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 text-[11px] leading-5 text-slate-500">
+            <div className="login-trust-note mt-4 flex items-start justify-center gap-2.5 px-4 text-center text-[10px] leading-4 text-slate-500">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <p>Trang quản trị dành riêng cho người được ủy quyền. Mọi hoạt động đăng nhập đều được giám sát để bảo vệ dữ liệu hệ thống.</p>
+              <p>Chỉ dành cho người được ủy quyền. Mọi phiên đăng nhập đều được giám sát và bảo vệ.</p>
             </div>
           </div>
         </section>
