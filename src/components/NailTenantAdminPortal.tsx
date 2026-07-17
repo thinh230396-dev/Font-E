@@ -49,7 +49,8 @@ import {
   WalletCards,
   X
 } from 'lucide-react';
-import type { Invoice, SubscriptionPackage, Tenant } from '../types';
+import type { Branch, Invoice, SubscriptionPackage, Tenant } from '../types';
+import { BRANCH_MODEL_OPTIONS, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches } from '../utils/branches';
 import {
   formatSubscriptionLimit,
   getTenantLockedSubscriptionPrice,
@@ -69,6 +70,7 @@ import { nailModuleConfigs, type NailModuleConfig, type NailPageId, type NailRow
 interface NailTenantAdminPortalProps {
   account: DemoAccount;
   onLogout: () => void;
+  onUpdateTenant?: (id: string, updated: Partial<Tenant>) => void;
   tenant?: Tenant;
   subscriptionPackage?: SubscriptionPackage;
   availablePackages: SubscriptionPackage[];
@@ -365,6 +367,41 @@ const getBranchStaffCount = (row: NailRow) => {
   return Number(value.match(/\d+/)?.[0] || 0);
 };
 
+const formatBranchRevenue = (value?: number) => value && value > 0
+  ? `${(value / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`
+  : 'Chưa có dữ liệu';
+
+const branchToNailRow = (branch: Branch): NailRow => ({
+  id: branch.id,
+  title: branch.name,
+  subtitle: `${branch.isPrimary ? 'Chi nhánh chính' : getBranchModelLabel(branch.model)} · ${branch.address}`,
+  cells: [branch.openingHours || '08:00–21:00', branch.managerName || 'Chưa phân công', `${branch.staffUsed || 0} người`, formatBranchRevenue(branch.monthlyRevenue)],
+  badge: getBranchStatusLabel(branch.status),
+  badgeTone: branch.status === 'ACTIVE' ? 'emerald' : branch.status === 'PLANNING' ? 'blue' : 'slate',
+  branchCode: branch.code || branch.id.replace(/^BR-/, ''),
+  details: [
+    { label: 'Mã chi nhánh', value: branch.code || branch.id },
+    { label: 'Mô hình kinh doanh', value: getBranchModelLabel(branch.model) },
+    { label: 'Vai trò', value: branch.isPrimary ? 'Chi nhánh chính' : 'Chi nhánh thành viên' },
+    { label: 'Địa chỉ', value: branch.address },
+    { label: 'Tỉnh / Thành phố', value: branch.province || 'Chưa cập nhật' },
+    { label: 'Quản lý', value: branch.managerName || 'Chưa phân công' },
+    { label: 'Điện thoại', value: branch.phone || 'Chưa cập nhật' },
+    { label: 'Email', value: branch.email || 'Chưa cập nhật' },
+    { label: 'Múi giờ', value: branch.timezone || 'Asia/Ho_Chi_Minh' },
+    { label: 'Giờ hoạt động', value: branch.openingHours || '08:00–21:00' },
+    { label: 'Ngày mở cửa', value: branch.openingDate || 'Chưa cập nhật' },
+    { label: 'Số ghế', value: `${branch.stationCount || 0} vị trí` },
+    { label: 'Nhân sự', value: `${branch.staffUsed || 0} người` },
+    { label: 'Sức chứa nhân sự', value: `${branch.staffCapacity || 0} người` },
+    { label: 'Doanh thu tháng', value: formatBranchRevenue(branch.monthlyRevenue) },
+    { label: 'Công suất', value: `${branch.capacityPercent || 0}%` },
+    { label: 'Mã số thuế', value: branch.taxCode || 'Theo tenant' },
+    { label: 'Dịch vụ', value: branch.services?.join(', ') || 'Chưa cấu hình' }
+  ],
+  note: branch.note || ''
+});
+
 function BranchesPage({ rows, searchQuery, activeTab, onSearch, onTab, onSelectRow, onCreate, onExport, planName, branchLimit }: BranchesPageProps) {
   const activeCount = rows.filter((row) => row.badge === 'Đang hoạt động').length;
   const totalStaff = rows.reduce((sum, row) => sum + getBranchStaffCount(row), 0);
@@ -411,8 +448,9 @@ function BranchesPage({ rows, searchQuery, activeTab, onSearch, onTab, onSelectR
             const capacity = getBranchField(row, 'Công suất', `${Math.max(68, 86 - index * 10)}%`);
             const monthlyRevenue = row.cells[3] && !row.cells[3].includes('Chưa') ? row.cells[3] : `${Math.max(72.4, 186.4 - index * 60).toLocaleString('vi-VN')} triệu`;
             const staff = getBranchStaffCount(row);
+            const isPrimary = getBranchField(row, 'Vai trò', '') === 'Chi nhánh chính';
             return <article key={row.id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-[0_18px_45px_rgba(76,29,149,0.08)]">
-              <div className="border-b border-slate-100 p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><Store className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black uppercase tracking-wide text-violet-600">{row.id}</span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span>{index === 0 && <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold text-white">Chi nhánh chính</span>}</div><h2 className="mt-2 text-lg font-black text-slate-900">{row.title}</h2><p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p></div><button type="button" onClick={() => onSelectRow(row)} aria-label={`Mở hồ sơ ${row.title}`} className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><MoreHorizontal className="h-4 w-4" /></button></div></div>
+              <div className="border-b border-slate-100 p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><Store className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black uppercase tracking-wide text-violet-600">{row.id}</span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span>{isPrimary && <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold text-white">Chi nhánh chính</span>}<span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700">{getBranchField(row, 'Mô hình kinh doanh', 'Salon đầy đủ dịch vụ')}</span></div><h2 className="mt-2 text-lg font-black text-slate-900">{row.title}</h2><p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p></div><button type="button" onClick={() => onSelectRow(row)} aria-label={`Mở hồ sơ ${row.title}`} className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><MoreHorizontal className="h-4 w-4" /></button></div></div>
               <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4"><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Quản lý phụ trách</p><div className="mt-2 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600"><UserCheck className="h-3.5 w-3.5" /></span><p className="text-xs font-black text-slate-700">{manager}</p></div></div><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Nguồn lực</p><p className="mt-3 text-sm font-black text-slate-800">{staff} nhân sự · {stations}</p></div><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Doanh thu tháng</p><p className="mt-3 text-sm font-black text-emerald-600">{monthlyRevenue}</p></div><div className="p-4 sm:p-5"><div className="flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Công suất</p><span className="text-xs font-black text-violet-700">{capacity}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400" style={{ width: capacity }} /></div></div></div>
               <div className="flex flex-col gap-3 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center"><div className="flex flex-1 flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-slate-500"><span className="flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{hours}</span><span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{phone}</span><span className="flex items-center gap-1.5"><CalendarCheck2 className="h-3.5 w-3.5" />{Math.max(18, 32 - index * 7)} lịch hôm nay</span></div><button type="button" onClick={() => onSelectRow(row)} className="flex h-9 items-center justify-center gap-2 border border-violet-200 bg-white px-4 text-xs font-black text-violet-700 shadow-sm">Xem hồ sơ chi tiết<ArrowRight className="h-3.5 w-3.5" /></button></div>
             </article>;
@@ -442,13 +480,14 @@ function BranchDetailDrawer({ row, tenantName, onClose, onEdit, onUpdate }: Bran
   const address = getBranchField(row, 'Địa chỉ', row.subtitle.includes('·') ? row.subtitle.split('·').slice(1).join('·').trim() : row.subtitle);
   const staff = getBranchStaffCount(row);
   const phone = getBranchField(row, 'Điện thoại', '028 3930 8899');
+  const email = getBranchField(row, 'Email', 'Chưa cập nhật');
   const manager = getBranchField(row, 'Quản lý', row.cells[1] || 'Nguyễn Văn Boss');
   const hours = getBranchField(row, 'Giờ hoạt động', row.cells[0] || '08:00–21:00');
   const stations = getBranchField(row, 'Số ghế', '14 vị trí');
   const capacity = getBranchField(row, 'Công suất', '86%');
   return <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/50 backdrop-blur-[2px]"><button type="button" aria-label="Đóng hồ sơ chi nhánh" onClick={onClose} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[680px] flex-col overflow-hidden bg-[#f7f8fb] shadow-2xl"><header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-7"><div className="flex items-start gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><Store className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-violet-600">{row.id}</span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span></div><h2 className="mt-2 text-xl font-black text-slate-900">{row.title}</h2><p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p></div><button type="button" onClick={onClose} aria-label="Đóng" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div></header>
     <div className="flex-1 overflow-y-auto p-5 sm:p-7"><section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#19152f] to-[#35245e] p-6 text-white"><div className="flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-violet-300">Tổng quan vận hành hôm nay</p><p className="mt-2 text-2xl font-black">{row.title}</p><p className="mt-2 text-xs text-slate-400">Đồng bộ lúc 10:32 · {tenantName}</p></div><span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-[10px] font-black text-emerald-300 ring-1 ring-emerald-300/20">Hệ thống ổn định</span></div><div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">{[{ label: 'Lịch hôm nay', value: '32' }, { label: 'Doanh thu', value: row.cells[3] || '18,6tr' }, { label: 'Công suất', value: capacity }, { label: 'CSAT', value: '4,8/5' }].map((item) => <div key={item.label} className="rounded-2xl bg-white/[0.07] p-3"><p className="text-[10px] text-slate-400">{item.label}</p><p className="mt-1 text-base font-black">{item.value}</p></div>)}</div></section>
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2"><Store className="h-4 w-4 text-violet-600" /><h3 className="text-sm font-black text-slate-900">Thông tin chi nhánh</h3></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{[{ label: 'Quản lý phụ trách', value: manager, icon: UserCheck }, { label: 'Điện thoại', value: phone, icon: Phone }, { label: 'Email chi nhánh', value: 'branch@bossnail.vn', icon: Mail }, { label: 'Giờ hoạt động', value: hours, icon: Clock3 }, { label: 'Múi giờ', value: 'Asia/Ho_Chi_Minh (GMT+7)', icon: Globe2 }, { label: 'Ngày khai trương', value: getBranchField(row, 'Ngày mở cửa', '12/03/2024'), icon: CalendarClock }].map(({ label, value, icon: Icon }) => <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><Icon className="h-3.5 w-3.5" />{label}</div><p className="mt-2 text-xs font-black leading-5 text-slate-700">{value}</p></div>)}</div></section>
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2"><Store className="h-4 w-4 text-violet-600" /><h3 className="text-sm font-black text-slate-900">Thông tin chi nhánh</h3></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{[{ label: 'Quản lý phụ trách', value: manager, icon: UserCheck }, { label: 'Điện thoại', value: phone, icon: Phone }, { label: 'Email chi nhánh', value: email, icon: Mail }, { label: 'Giờ hoạt động', value: hours, icon: Clock3 }, { label: 'Múi giờ', value: getBranchField(row, 'Múi giờ', 'Asia/Ho_Chi_Minh'), icon: Globe2 }, { label: 'Ngày khai trương', value: getBranchField(row, 'Ngày mở cửa', 'Chưa cập nhật'), icon: CalendarClock }].map(({ label, value, icon: Icon }) => <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><Icon className="h-3.5 w-3.5" />{label}</div><p className="mt-2 text-xs font-black leading-5 text-slate-700">{value}</p></div>)}</div></section>
       <section className="mt-5 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-sm font-black text-slate-900">Nguồn lực & cơ sở vật chất</h3><div className="mt-4 space-y-3">{[{ label: 'Nhân sự đang hoạt động', value: `${staff} người` }, { label: 'Vị trí phục vụ', value: stations }, { label: 'Khu vực', value: 'Manicure · Pedicure · VIP' }, { label: 'Kho vật tư', value: 'Kho chi nhánh · Đồng bộ trung tâm' }].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"><span className="text-[11px] text-slate-500">{item.label}</span><span className="text-right text-[11px] font-black text-slate-800">{item.value}</span></div>)}</div></div><div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-sm font-black text-slate-900">Chất lượng vận hành</h3><div className="mt-4 space-y-3">{[{ label: 'Checklist mở ca', value: '12/12', color: 'text-emerald-600' }, { label: 'Vệ sinh & khử khuẩn', value: 'Đạt', color: 'text-emerald-600' }, { label: 'Thiết bị cần bảo trì', value: '1', color: 'text-amber-600' }, { label: 'Sự cố đang mở', value: '0', color: 'text-emerald-600' }].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"><span className="text-[11px] text-slate-500">{item.label}</span><span className={`text-[11px] font-black ${item.color}`}>{item.value}</span></div>)}</div></div></section>
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-900">Lịch hoạt động trong tuần</h3><p className="mt-1 text-[11px] text-slate-500">Giờ nhận lịch cuối cùng trước khi đóng cửa 60 phút</p></div><CalendarClock className="h-4 w-4 text-violet-600" /></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{['T2 · 08:00–21:00', 'T3 · 08:00–21:00', 'T4 · 08:00–21:00', 'T5 · 08:00–21:00', 'T6 · 08:00–22:00', 'T7 · 08:00–22:00', 'CN · 09:00–21:00', 'Ngày lễ · Theo lịch'].map((item) => <div key={item} className="rounded-xl bg-slate-50 px-3 py-2.5 text-[10px] font-bold text-slate-600">{item}</div>)}</div></section>
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-start gap-3"><Activity className="mt-0.5 h-4 w-4 text-slate-400" /><div><h3 className="text-sm font-black text-slate-900">Nhật ký quản trị gần nhất</h3><p className="mt-2 text-xs leading-5 text-slate-500">10:32 hôm nay · Đồng bộ lịch hẹn và công suất ghế tự động.</p><p className="mt-1 text-xs leading-5 text-slate-500">09:05 hôm nay · {manager} hoàn tất checklist mở ca.</p><p className="mt-1 text-xs leading-5 text-slate-500">16/07 · Cập nhật định mức tồn kho Gel và hóa chất.</p></div></div></section>
@@ -656,7 +695,7 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
     </div>
   );
 }
-export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, onLogout }: NailTenantAdminPortalProps) {
+export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, onUpdateTenant, onLogout }: NailTenantAdminPortalProps) {
   const currentPackage = useMemo(
     () => normalizeSubscriptionPackage(subscriptionPackage || FALLBACK_SUBSCRIPTION_PACKAGE),
     [subscriptionPackage]
@@ -677,6 +716,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [activeTab, setActiveTab] = useState('');
   const [selectedRow, setSelectedRow] = useState<NailRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [toast, setToast] = useState('');
   const [lockedPage, setLockedPage] = useState<NailPageId | null>(null);
@@ -687,20 +727,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
     ])) as Partial<Record<NailPageId, NailRow[]>>;
     if (tenant) {
-      initialRows.branches = (tenant.branches || []).map((item) => ({
-        id: item.id,
-        title: item.name,
-        subtitle: item.address,
-        cells: ['Theo cấu hình', 'Chưa phân công', (item.staffCount ?? item.staffUsed) + ' người', 'Chưa có dữ liệu'],
-        badge: item.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm ngưng',
-        badgeTone: item.status === 'ACTIVE' ? 'emerald' : 'slate',
-        branchCode: item.id.replace(/^BR-/, ''),
-        details: [
-          { label: 'Địa chỉ', value: item.address },
-          { label: 'Nhân sự', value: String(item.staffCount ?? item.staffUsed) },
-          { label: 'Trạng thái', value: item.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm ngưng' }
-        ]
-      }));
+      initialRows.branches = normalizeTenantBranches(tenant).map(branchToNailRow);
     }
     return initialRows;
   });
@@ -797,7 +824,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       return;
     }
     if (page && page !== activePage && !navigate(page)) return;
-    setFormValues({});
+    setEditingRowId(null);
+    setFormValues(targetPage === 'branches' ? { branchRole: 'Chi nhánh thành viên', branchModel: 'Salon đầy đủ dịch vụ', status: 'Đang hoạt động', openingHours: '08:00–21:00', capacityPercent: '0' } : {});
     setCreateOpen(true);
   };
 
@@ -829,7 +857,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       showPageGate(currentConfig.id);
       return;
     }
-    if (currentConfig.id === 'branches' && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
+    if (currentConfig.id === 'branches' && !editingRowId && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + branchLimit + ' chi nhánh. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
@@ -838,6 +866,71 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       return;
     }
     const fields = currentConfig.formFields;
+    if (currentConfig.id === 'branches' && tenant) {
+      const rawCode = (formValues.code || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+      const branchId = editingRowId || (rawCode.startsWith('BR-') ? rawCode : `BR-${rawCode || Date.now().toString().slice(-6)}`);
+      const currentBranches = normalizeTenantBranches(tenant);
+      if (!editingRowId && currentBranches.some((item) => item.id === branchId || item.code === branchId)) {
+        setToast('Mã chi nhánh ' + branchId + ' đã tồn tại. Vui lòng dùng mã khác.');
+        return;
+      }
+      const existingBranch = currentBranches.find((item) => item.id === editingRowId);
+      const isPrimary = formValues.branchRole === 'Chi nhánh chính';
+      if (existingBranch?.isPrimary && !isPrimary && !currentBranches.some((item) => item.id !== existingBranch.id && item.isPrimary)) {
+        setToast('Tenant phải có một chi nhánh chính. Hãy đặt chi nhánh khác làm chi nhánh chính trước.');
+        return;
+      }
+      const model = BRANCH_MODEL_OPTIONS.find((option) => option.label === formValues.branchModel)?.value || 'FULL_SERVICE';
+      const status: Branch['status'] = formValues.status === 'Chuẩn bị mở' ? 'PLANNING' : formValues.status === 'Tạm ngưng' ? 'INACTIVE' : 'ACTIVE';
+      const staffCount = Math.max(0, Number(formValues.staffCount || existingBranch?.staffUsed || 0));
+      const stationCount = Math.max(1, Number(formValues.stations || existingBranch?.stationCount || 1));
+      const nextBranch = normalizeBranch({
+        ...(existingBranch || {} as Branch),
+        id: branchId,
+        code: rawCode || existingBranch?.code || branchId,
+        name: formValues.name?.trim() || 'Chi nhánh mới',
+        address: formValues.address?.trim() || 'Chưa cập nhật',
+        model,
+        isPrimary,
+        managerName: formValues.manager?.trim() || 'Chưa phân công',
+        phone: formValues.phone?.trim() || 'Chưa cập nhật',
+        email: formValues.email?.trim() || '',
+        province: formValues.province || 'Chưa cập nhật',
+        timezone: tenant.timezone || 'Asia/Ho_Chi_Minh',
+        openingHours: formValues.openingHours?.trim() || '08:00–21:00',
+        openingDate: formValues.openingDate || undefined,
+        stationCount,
+        staffCapacity: Math.max(staffCount, Number(formValues.staffCapacity || stationCount)),
+        staffUsed: staffCount,
+        staffCount,
+        staffLimit,
+        taxCode: formValues.taxCode?.trim() || '',
+        services: formValues.services?.split(',').map((item) => item.trim()).filter(Boolean) || [],
+        monthlyRevenue: Math.max(0, Number(formValues.monthlyRevenue || 0)),
+        capacityPercent: Math.max(0, Math.min(100, Number(formValues.capacityPercent || 0))),
+        status,
+        note: formValues.note?.trim() || '',
+        updatedAt: new Date().toISOString()
+      }, tenant, existingBranch ? currentBranches.indexOf(existingBranch) : currentBranches.length);
+      const normalizedCurrent = isPrimary ? currentBranches.map((item) => ({ ...item, isPrimary: false })) : currentBranches;
+      const updatedBranches = editingRowId
+        ? normalizedCurrent.map((item) => item.id === editingRowId ? nextBranch : item)
+        : [...normalizedCurrent, nextBranch];
+      const updatedStaffCount = updatedBranches.reduce((sum, item) => sum + item.staffUsed, 0);
+      const activity = {
+        date: new Date().toISOString().replace('T', ' ').slice(0, 16),
+        user: account.displayName,
+        type: 'branch',
+        description: `${editingRowId ? 'Cập nhật' : 'Thêm'} chi nhánh "${nextBranch.name}" từ Tenant Admin.`
+      };
+      onUpdateTenant?.(tenant.id, { branches: updatedBranches, staffCount: updatedStaffCount, customActivities: [activity, ...(tenant.customActivities || [])] });
+      setRowsByPage((current) => ({ ...current, branches: updatedBranches.map(branchToNailRow) }));
+      setCreateOpen(false);
+      setEditingRowId(null);
+      setFormValues({});
+      setToast(`Đã ${existingBranch ? 'cập nhật' : 'thêm'} chi nhánh “${nextBranch.name}”. Dữ liệu đã đồng bộ với Super Admin.`);
+      return;
+    }
     const title = formValues[fields[0]?.key] || currentConfig.primaryAction + ' mới';
     const values = fields.slice(1).map((field) => formValues[field.key]).filter(Boolean);
     const cellCount = Math.max(1, currentConfig.columns.length - 2);
@@ -868,6 +961,37 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) !== 'full') {
       showPageGate(currentConfig.id);
       return;
+    }
+    if (currentConfig.id === 'branches' && tenant) {
+      const branchRecord = normalizeTenantBranches(tenant).find((item) => item.id === selectedRow.id);
+      if (branchRecord) {
+        setEditingRowId(branchRecord.id);
+        setFormValues({
+          name: branchRecord.name,
+          code: branchRecord.code || branchRecord.id,
+          branchRole: branchRecord.isPrimary ? 'Chi nhánh chính' : 'Chi nhánh thành viên',
+          branchModel: getBranchModelLabel(branchRecord.model),
+          status: getBranchStatusLabel(branchRecord.status),
+          province: branchRecord.province || '',
+          address: branchRecord.address,
+          manager: branchRecord.managerName || '',
+          phone: branchRecord.phone || '',
+          email: branchRecord.email || '',
+          openingHours: branchRecord.openingHours || '',
+          openingDate: branchRecord.openingDate || '',
+          stations: String(branchRecord.stationCount || 0),
+          staffCount: String(branchRecord.staffUsed || 0),
+          staffCapacity: String(branchRecord.staffCapacity || 0),
+          taxCode: branchRecord.taxCode || '',
+          monthlyRevenue: String(branchRecord.monthlyRevenue || 0),
+          capacityPercent: String(branchRecord.capacityPercent || 0),
+          services: branchRecord.services?.join(', ') || '',
+          note: branchRecord.note || ''
+        });
+        setSelectedRow(null);
+        setCreateOpen(true);
+        return;
+      }
     }
     const nextValues: Record<string, string> = {};
     currentConfig.formFields.forEach((field, index) => { nextValues[field.key] = index === 0 ? selectedRow.title : selectedRow.details[index]?.value || ''; });

@@ -34,7 +34,8 @@ import {
   Edit,
   Save
 } from 'lucide-react';
-import { SubscriptionPackage, Tenant, SubscriptionPackageName, TenantStatus } from '../types';
+import { Branch, SubscriptionPackage, Tenant, SubscriptionPackageName, TenantStatus } from '../types';
+import { BRANCH_MODEL_OPTIONS, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches } from '../utils/branches';
 import { convertMoney, formatMoney, normalizeCurrency } from '../utils/money';
 import { inferPaymentGateway } from '../utils/invoicePayments';
 import {
@@ -75,7 +76,7 @@ interface TenantExtraDetails {
   allowOnlineBooking: boolean;
   paymentGatewayConfigured: boolean;
   internalNotes: string;
-  branches: { id: string; name: string; address: string; staffCount: number; staffUsed: number; staffLimit: number; status: 'ACTIVE' | 'INACTIVE' }[];
+  branches: Branch[];
   staffList: { id: string; name: string; role: string; bookingsThisMonth: number; status: 'ACTIVE' | 'LEAVE' }[];
   activities: { date: string; user: string; type: string; description: string }[];
   alerts: { id: string; severity: 'info' | 'warning' | 'critical'; message: string; action?: string }[];
@@ -137,17 +138,10 @@ const getTenantExtraDetails = (tenant: Tenant, packages: SubscriptionPackage[]):
   const inferredCountry = inferCountryFromTenant(tenant);
   const defaultTimezone = inferredCountry === 'Vietnam' ? 'Asia/Ho_Chi_Minh' : 'America/New_York';
 
-  const initialBranches = tenant.branches ? tenant.branches.map(b => ({
-    id: b.id,
-    name: b.name,
-    address: b.address,
-    staffCount: b.staffUsed,
-    staffUsed: b.staffUsed,
-    staffLimit: b.staffLimit,
-    status: b.status
-  })) : [
-    { id: 'BR-1', name: `${tenant.name} - Chi nhánh chính`, address: tenant.address, staffCount: tenant.staffCount, staffUsed: tenant.staffCount, staffLimit, status: 'ACTIVE' as const }
-  ];
+  const initialBranches = normalizeTenantBranches(tenant).map((branch) => ({
+    ...branch,
+    staffLimit: branch.staffLimit || staffLimit
+  }));
   
   // Base structures based on standard cases
   const defaults: TenantExtraDetails = {
@@ -454,8 +448,17 @@ export default function TenantDetailModal({
 
   // Add branch modal states
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
+  const [newBranchCode, setNewBranchCode] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchModel, setNewBranchModel] = useState<NonNullable<Branch['model']>>('FULL_SERVICE');
+  const [newBranchIsPrimary, setNewBranchIsPrimary] = useState(false);
   const [newBranchAddress, setNewBranchAddress] = useState('');
+  const [newBranchManager, setNewBranchManager] = useState('');
+  const [newBranchPhone, setNewBranchPhone] = useState('');
+  const [newBranchEmail, setNewBranchEmail] = useState('');
+  const [newBranchOpeningHours, setNewBranchOpeningHours] = useState('08:00–21:00');
+  const [newBranchStationCount, setNewBranchStationCount] = useState(8);
+  const [newBranchStatus, setNewBranchStatus] = useState<Branch['status']>('ACTIVE');
   const [newBranchStaffCount, setNewBranchStaffCount] = useState(0);
 
   // Local configs that can be updated in real-time
@@ -506,8 +509,17 @@ export default function TenantDetailModal({
   };
 
   const resetAddBranchForm = () => {
+    setNewBranchCode('');
     setNewBranchName('');
+    setNewBranchModel('FULL_SERVICE');
+    setNewBranchIsPrimary(false);
     setNewBranchAddress('');
+    setNewBranchManager('');
+    setNewBranchPhone('');
+    setNewBranchEmail('');
+    setNewBranchOpeningHours('08:00–21:00');
+    setNewBranchStationCount(8);
+    setNewBranchStatus('ACTIVE');
     setNewBranchStaffCount(0);
   };
 
@@ -518,8 +530,17 @@ export default function TenantDetailModal({
     }
 
     const nextBranchNumber = details.branches.length + 1;
+    setNewBranchCode(`BR-${nextBranchNumber}`);
     setNewBranchName(`${tenant.name} - Chi nhánh ${nextBranchNumber}`);
+    setNewBranchModel('FULL_SERVICE');
+    setNewBranchIsPrimary(false);
     setNewBranchAddress('');
+    setNewBranchManager('');
+    setNewBranchPhone('');
+    setNewBranchEmail('');
+    setNewBranchOpeningHours('08:00–21:00');
+    setNewBranchStationCount(8);
+    setNewBranchStatus('ACTIVE');
     setNewBranchStaffCount(0);
     setShowAddBranchModal(true);
   };
@@ -532,12 +553,18 @@ export default function TenantDetailModal({
       return;
     }
 
+    const branchCode = newBranchCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
     const branchName = newBranchName.trim();
     const branchAddress = newBranchAddress.trim();
     const staffCount = Math.max(0, Number(newBranchStaffCount || 0));
 
-    if (!branchName || !branchAddress) {
-      alert('Vui lòng nhập đầy đủ tên chi nhánh và địa chỉ chi nhánh.');
+    if (!branchCode || !branchName || !branchAddress) {
+      alert('Vui lòng nhập đầy đủ mã, tên và địa chỉ chi nhánh.');
+      return;
+    }
+
+    if (details.branches.some((branch) => branch.id.toUpperCase() === branchCode || branch.code?.toUpperCase() === branchCode)) {
+      alert(`Mã chi nhánh ${branchCode} đã tồn tại trong tenant này.`);
       return;
     }
 
@@ -546,15 +573,9 @@ export default function TenantDetailModal({
       return;
     }
 
-    const existingBranches = (tenant.branches && tenant.branches.length > 0 ? tenant.branches : details.branches).map((branch) => ({
-      id: branch.id,
-      name: branch.name,
-      address: branch.address,
-      staffUsed: branch.staffUsed,
-      staffLimit: branch.staffLimit,
-      status: branch.status,
-      staffCount: branch.staffCount ?? branch.staffUsed
-    }));
+    const existingBranches = (tenant.branches && tenant.branches.length > 0 ? tenant.branches : details.branches)
+      .map((branch, index) => normalizeBranch(branch, tenant, index))
+      .map((branch) => newBranchIsPrimary ? { ...branch, isPrimary: false } : branch);
 
     const existingStaffCount = existingBranches.reduce((sum, branch) => sum + Number(branch.staffUsed || branch.staffCount || 0), 0);
     if (currentStaffLimit < 999 && existingStaffCount + staffCount > currentStaffLimit) {
@@ -562,16 +583,30 @@ export default function TenantDetailModal({
       return;
     }
 
-    const nextBranchNumber = existingBranches.length + 1;
-    const newBranch = {
-      id: `BR-${nextBranchNumber}`,
+    const newBranch = normalizeBranch({
+      id: branchCode,
+      code: branchCode,
       name: branchName,
       address: branchAddress,
+      model: newBranchModel,
+      isPrimary: newBranchIsPrimary,
+      managerName: newBranchManager.trim() || 'Chưa phân công',
+      phone: newBranchPhone.trim() || 'Chưa cập nhật',
+      email: newBranchEmail.trim(),
+      timezone: tenant.timezone || 'Asia/Ho_Chi_Minh',
+      openingHours: newBranchOpeningHours.trim() || '08:00–21:00',
+      stationCount: Math.max(1, Number(newBranchStationCount || 1)),
+      staffCapacity: Math.max(staffCount, Number(newBranchStationCount || 1)),
       staffUsed: staffCount,
       staffLimit: currentStaffLimit,
-      status: 'ACTIVE' as const,
-      staffCount
-    };
+      status: newBranchStatus,
+      staffCount,
+      monthlyRevenue: 0,
+      capacityPercent: 0,
+      services: newBranchModel === 'EXPRESS_KIOSK'
+        ? ['Sơn gel nhanh', 'Manicure cơ bản']
+        : ['Manicure', 'Pedicure', 'Sơn Gel', 'Nail Art']
+    }, tenant, existingBranches.length);
 
     const updatedBranches = [...existingBranches, newBranch];
     const updatedStaffCount = updatedBranches.reduce((sum, branch) => sum + Number(branch.staffUsed || branch.staffCount || 0), 0);
@@ -1546,7 +1581,7 @@ export default function TenantDetailModal({
 
       {showAddBranchModal && (
         <div className="fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fadeIn">
-          <form onSubmit={handleAddBranch} className="bg-brand-surface border border-brand-outline rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+          <form onSubmit={handleAddBranch} className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl">
             <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/45 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Store className="w-5 h-5 text-brand-primary" />
@@ -1564,12 +1599,38 @@ export default function TenantDetailModal({
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 overflow-y-auto p-6">
               <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/10 p-3 text-xs">
                 <p className="font-bold text-brand-text">{tenant.name}</p>
                 <p className="text-brand-text-muted mt-0.5">
                   Gói {tenant.packageName}: đang dùng {details.branches.length} chi nhánh, giới hạn {currentBranchLimitLabel}. Giới hạn nhân sự toàn tenant: {currentStaffLimitLabel}.
                 </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Mã chi nhánh <span className="font-bold text-brand-primary">*</span></label>
+                  <input type="text" value={newBranchCode} onChange={(e) => setNewBranchCode(e.target.value.toUpperCase())} placeholder="Ví dụ: BR-Q3" className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs uppercase text-brand-text focus:border-brand-primary focus:outline-none" required />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Mô hình kinh doanh <span className="font-bold text-brand-primary">*</span></label>
+                  <BeautifulSelect value={newBranchModel} onChange={(e) => setNewBranchModel(e.target.value as NonNullable<Branch['model']>)} className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none">
+                    {BRANCH_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </BeautifulSelect>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-brand-outline/35 bg-brand-surface-lowest p-3">
+                  <input type="checkbox" checked={newBranchIsPrimary} onChange={(e) => setNewBranchIsPrimary(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-primary" />
+                  <span><span className="block text-xs font-bold text-brand-text">Đặt làm chi nhánh chính</span><span className="mt-1 block text-[10px] leading-4 text-brand-text-muted">Chi nhánh chính là địa điểm đại diện tenant. Mỗi tenant chỉ có một chi nhánh chính.</span></span>
+                </label>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Trạng thái khởi tạo</label>
+                  <BeautifulSelect value={newBranchStatus} onChange={(e) => setNewBranchStatus(e.target.value as Branch['status'])} className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none">
+                    <option value="ACTIVE">Đang hoạt động</option><option value="PLANNING">Chuẩn bị mở</option><option value="INACTIVE">Tạm ngưng</option>
+                  </BeautifulSelect>
+                </div>
               </div>
 
               <div>
@@ -1588,6 +1649,18 @@ export default function TenantDetailModal({
                   />
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Quản lý phụ trách</label><input type="text" value={newBranchManager} onChange={(e) => setNewBranchManager(e.target.value)} placeholder="Họ tên quản lý chi nhánh" className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none" /></div>
+                <div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Số điện thoại chi nhánh</label><input type="text" value={newBranchPhone} onChange={(e) => setNewBranchPhone(e.target.value)} placeholder="028 xxxx xxxx" className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none" /></div>
+                <div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Email chi nhánh</label><input type="email" value={newBranchEmail} onChange={(e) => setNewBranchEmail(e.target.value)} placeholder="branch@salon.vn" className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none" /></div>
+                <div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Giờ hoạt động</label><input type="text" value={newBranchOpeningHours} onChange={(e) => setNewBranchOpeningHours(e.target.value)} placeholder="08:00–21:00" className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none" /></div>
+              </div>
+
+              <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3 text-[10px] leading-4 text-brand-text-muted"><strong className="text-brand-text">{getBranchModelLabel(newBranchModel)}:</strong> {BRANCH_MODEL_OPTIONS.find((option) => option.value === newBranchModel)?.description}</div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Số vị trí phục vụ</label><input type="number" min="1" value={newBranchStationCount} onChange={(e) => setNewBranchStationCount(Math.max(1, Number(e.target.value)))} className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none" /></div>
 
               <div>
                 <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">
@@ -1627,6 +1700,7 @@ export default function TenantDetailModal({
                 <p className="text-[10px] text-brand-text-muted/70 mt-1">
                   Có thể để 0 nếu chi nhánh mới chưa phân bổ nhân sự.
                 </p>
+              </div>
               </div>
             </div>
 
@@ -2133,11 +2207,8 @@ export default function TenantDetailModal({
                           }`}>
                             <div className="space-y-1.5">
                               <div className="flex justify-between items-start">
-                                <h5 className="font-bold text-brand-text text-sm flex items-center gap-1">
-                                  <Store className="w-4 h-4 text-brand-primary shrink-0" />
-                                  {br.name}
-                                </h5>
-                                <span className="text-[10px] text-brand-text-muted font-mono">{br.id}</span>
+                                <div><h5 className="font-bold text-brand-text text-sm flex items-center gap-1"><Store className="w-4 h-4 text-brand-primary shrink-0" />{br.name}</h5><div className="mt-1.5 flex flex-wrap gap-1.5"><span className="rounded-full border border-brand-outline/35 bg-brand-surface px-2 py-0.5 text-[9px] font-bold text-brand-text-muted">{getBranchModelLabel(br.model)}</span>{br.isPrimary && <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[9px] font-bold text-white">Chi nhánh chính</span>}</div></div>
+                                <span className="text-[10px] text-brand-text-muted font-mono">{br.code || br.id}</span>
                               </div>
                               <p className="text-xs text-brand-text-muted flex items-center gap-1">
                                 <MapPin className="w-3.5 h-3.5 text-brand-text-muted shrink-0" />
@@ -2146,6 +2217,9 @@ export default function TenantDetailModal({
                             </div>
 
                             <div className="border-t border-brand-outline/10 pt-3 space-y-1.5 text-xs">
+                              <div className="flex justify-between items-center"><span className="text-brand-text-muted">Quản lý:</span><span className="font-semibold text-brand-text">{br.managerName || 'Chưa phân công'}</span></div>
+                              <div className="flex justify-between items-center"><span className="text-brand-text-muted">Liên hệ:</span><span className="font-semibold text-brand-text">{br.phone || 'Chưa cập nhật'}</span></div>
+                              <div className="flex justify-between items-center"><span className="text-brand-text-muted">Mở cửa / Vị trí:</span><span className="font-semibold text-brand-text">{br.openingHours || '08:00–21:00'} · {br.stationCount || 0} vị trí</span></div>
                               <div className="flex justify-between items-center">
                                 <span className="text-brand-text-muted">Nhân viên / Thợ:</span>
                                 <span className={`font-bold font-mono ${hasZeroStaff ? 'text-brand-error font-extrabold' : 'text-brand-text font-semibold'}`}>
@@ -2155,7 +2229,7 @@ export default function TenantDetailModal({
                               <div className="flex justify-between items-center">
                                 <span className="text-brand-text-muted">Trạng thái chi nhánh:</span>
                                 <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${br.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-brand-outline/25 text-brand-text-muted border border-brand-outline/35'}`}>
-                                  {br.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm ngưng'}
+                                  {getBranchStatusLabel(br.status)}
                                 </span>
                               </div>
                             </div>

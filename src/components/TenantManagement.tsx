@@ -29,6 +29,7 @@ import {
   Sliders,
 } from 'lucide-react';
 import { Tenant, TenantStatus, SubscriptionPackage, SubscriptionPackageName, TenantAdminAccount } from '../types';
+import { normalizeBranch } from '../utils/branches';
 import TenantDetailModal from './TenantDetailModal';
 import { formatMoney } from '../utils/money';
 import {
@@ -401,7 +402,12 @@ export default function TenantManagement({
     mainAddress: string,
     branchCount: number,
     staffCount: number,
-    packageName: SubscriptionPackageName
+    packageName: SubscriptionPackageName,
+    managerName: string,
+    phone: string,
+    email: string,
+    timezone: string,
+    monthlyRevenue: number
   ) => {
     const safeBranchCount = Math.max(1, branchCount);
     const baseStaff = Math.floor(staffCount / safeBranchCount);
@@ -413,15 +419,27 @@ export default function TenantManagement({
         ? staffCount
         : baseStaff + (idx < extraStaff ? 1 : 0);
 
-      return {
+      return normalizeBranch({
         id: `BR-${branchNumber}`,
+        code: `BR-${branchNumber}`,
         name: `${tenantName} - Chi nhánh ${branchNumber === 1 ? 'chính' : branchNumber}`,
         address: branchNumber === 1 ? (mainAddress || 'Chưa cập nhật') : `Chưa cập nhật địa chỉ chi nhánh ${branchNumber}`,
+        model: branchNumber === 1 ? 'FULL_SERVICE' : 'NAIL_STUDIO',
+        isPrimary: branchNumber === 1,
+        managerName: branchNumber === 1 ? managerName : 'Chưa phân công',
+        phone: branchNumber === 1 ? phone : 'Chưa cập nhật',
+        email: branchNumber === 1 ? email : '',
+        timezone,
+        openingHours: '08:00–21:00',
+        stationCount: Math.max(4, staffForThisBranch + 2),
+        staffCapacity: Math.max(4, staffForThisBranch),
+        monthlyRevenue: Math.round(monthlyRevenue / safeBranchCount),
+        capacityPercent: 0,
         staffUsed: staffForThisBranch,
         staffLimit: getPackageStaffLimitPerBranch(packageName),
         status: 'ACTIVE' as const,
         staffCount: staffForThisBranch
-      };
+      }, undefined, idx);
     });
   };
 
@@ -563,7 +581,12 @@ export default function TenantManagement({
           formAddress,
           formBranchCount,
           Number(formStaff),
-          formPackage
+          formPackage,
+          finalAdminName,
+          formPhone || finalAdminPhone,
+          formSalonEmail,
+          formTimezone,
+          Number(formRevenue || 0)
         );
 
         const timestamp = new Date().toISOString().slice(0, 16).replace('T', ' ');

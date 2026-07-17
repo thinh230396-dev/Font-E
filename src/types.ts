@@ -38,12 +38,31 @@ export interface SubscriptionRetirementRequest {
 
 export interface Branch {
   id: string;
+  code?: string;
   name: string;
   address: string;
+  model?: 'FULL_SERVICE' | 'NAIL_STUDIO' | 'EXPRESS_KIOSK';
+  isPrimary?: boolean;
+  managerName?: string;
+  phone?: string;
+  email?: string;
+  province?: string;
+  timezone?: string;
+  openingHours?: string;
+  openingDate?: string;
+  stationCount?: number;
+  staffCapacity?: number;
+  taxCode?: string;
+  services?: string[];
+  monthlyRevenue?: number;
+  capacityPercent?: number;
   staffUsed: number;
   staffLimit: number;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'ACTIVE' | 'INACTIVE' | 'PLANNING';
   staffCount?: number;
+  note?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Tenant {

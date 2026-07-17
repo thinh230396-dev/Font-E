@@ -1,3 +1,5 @@
+import { BRANCH_MODEL_OPTIONS } from '../utils/branches';
+
 export type NailPageId =
   | 'overview'
   | 'subscription'
@@ -100,7 +102,9 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
     formTitle: 'Thêm chi nhánh mới', formFields: [
       { key: 'name', label: 'Tên chi nhánh', type: 'text', placeholder: 'Ví dụ: Chi nhánh Thảo Điền' },
       { key: 'code', label: 'Mã chi nhánh', type: 'text', placeholder: 'Ví dụ: TD' },
-      { key: 'branchType', label: 'Mô hình chi nhánh', type: 'select', options: ['Chi nhánh chính', 'Chi nhánh tiêu chuẩn', 'Premium Studio', 'Kiosk'] },
+      { key: 'branchRole', label: 'Vai trò trong tenant', type: 'select', options: ['Chi nhánh thành viên', 'Chi nhánh chính'] },
+      { key: 'branchModel', label: 'Mô hình kinh doanh', type: 'select', options: BRANCH_MODEL_OPTIONS.map((option) => option.label) },
+      { key: 'status', label: 'Trạng thái', type: 'select', options: ['Đang hoạt động', 'Chuẩn bị mở', 'Tạm ngưng'] },
       { key: 'province', label: 'Tỉnh / Thành phố', type: 'select', options: ['TP. Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Khánh Hòa', 'Cần Thơ', 'Bình Dương'] },
       { key: 'address', label: 'Địa chỉ đầy đủ', type: 'text', placeholder: 'Số nhà, đường, phường/xã, quận/huyện' },
       { key: 'manager', label: 'Người quản lý', type: 'text', placeholder: 'Họ và tên quản lý chi nhánh' },
@@ -110,6 +114,8 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
       { key: 'openingDate', label: 'Ngày dự kiến khai trương', type: 'date' },
       { key: 'stations', label: 'Số vị trí phục vụ', type: 'number', placeholder: 'Ví dụ: 12' },
       { key: 'staffCapacity', label: 'Sức chứa nhân sự', type: 'number', placeholder: 'Ví dụ: 20' },
+      { key: 'monthlyRevenue', label: 'Doanh thu tháng hiện tại', type: 'number', placeholder: 'Nhập số tiền VND' },
+      { key: 'capacityPercent', label: 'Công suất hiện tại (%)', type: 'number', placeholder: '0–100' },
       { key: 'taxCode', label: 'Mã số thuế / đơn vị xuất hóa đơn', type: 'text', placeholder: 'Nhập mã số thuế áp dụng' },
       { key: 'services', label: 'Nhóm dịch vụ triển khai', type: 'textarea', placeholder: 'Manicure, Pedicure, Nail Art, Acrylic, dịch vụ VIP...' },
       { key: 'note', label: 'Ghi chú triển khai', type: 'textarea', placeholder: 'Kế hoạch khai trương, thiết bị, kho, phân quyền và lưu ý vận hành...' }

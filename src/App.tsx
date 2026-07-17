@@ -1458,6 +1458,7 @@ export default function App() {
         subscriptionPackage={tenantPortalPackage}
         availablePackages={packages}
         invoices={targetTenant ? invoices.filter((invoice) => invoice.tenantId === targetTenant.id) : []}
+        onUpdateTenant={handleUpdateTenant}
         onLogout={handleLogout}
       />
     );
