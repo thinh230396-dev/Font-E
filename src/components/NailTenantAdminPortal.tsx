@@ -59,6 +59,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
     label: 'Vận hành',
     items: [
       { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
+      { id: 'branches', label: 'Chi nhánh', icon: Store, badge: '2/3' },
       { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays, badge: '32' },
       { id: 'stations', label: 'Ghế & khu vực', icon: Armchair, badge: '7/14' },
       { id: 'pos', label: 'POS & thanh toán', icon: CreditCard, badge: '5' }
@@ -139,7 +140,7 @@ function StatCard({ stat, index }: { stat: NailModuleConfig['stats'][number]; in
 }
 
 function OverviewPage({ branch, ownerName, tenantName, onNavigate, onQuickCreate }: { branch: string; ownerName: string; tenantName: string; onNavigate: (page: NailPageId) => void; onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription'>) => void }) {
-  const branchName = branch === 'ALL' ? 'Tất cả chi nhánh' : branch === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3';
+  const branchName = branch === 'ALL' ? 'Tất cả chi nhánh' : branch === 'Q1' ? 'Chi nhánh Quận 1' : branch === 'Q3' ? 'Chi nhánh Quận 3' : `Chi nhánh ${branch}`;
   const ownerShortName = ownerName.trim().split(/\s+/).pop() || ownerName;
   const overviewStats: NailModuleConfig['stats'] = [
     { label: 'Doanh thu hôm nay', value: branch === 'ALL' ? '31,8 triệu' : '18,6 triệu', detail: '+16,8% so với thứ Năm trước', tone: 'emerald' },
@@ -247,10 +248,12 @@ interface ModulePageProps {
   onSelectRow: (row: NailRow) => void;
   onCreate: () => void;
   onExport: () => void;
+  scopeLabel: string;
 }
 
-function ModulePage({ config, rows, searchQuery, activeTab, onSearch, onTab, onSelectRow, onCreate, onExport }: ModulePageProps) {
+function ModulePage({ config, rows, searchQuery, activeTab, onSearch, onTab, onSelectRow, onCreate, onExport, scopeLabel }: ModulePageProps) {
   const normalizedTab = activeTab.toLocaleLowerCase('vi');
+  const displayedStats = config.id === 'branches' ? config.stats.map((stat, index) => index === 0 ? { ...stat, value: `${rows.length} / 3`, detail: rows.length >= 3 ? 'Đã dùng hết hạn mức gói Premium' : `Còn ${3 - rows.length} chi nhánh trong gói Premium` } : index === 1 ? { ...stat, value: String(rows.filter((row) => row.badge === 'Đang hoạt động').length) } : stat) : config.stats;
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase('vi');
     const statusTabs = ['chờ xác nhận', 'đã xác nhận', 'đang phục vụ', 'hoàn thành', 'đã hủy', 'đã thanh toán', 'chờ thanh toán', 'hoàn tiền', 'đặt cọc', 'đang trong ca', 'chưa vào ca', 'nghỉ phép', 'đang kinh doanh', 'đang ẩn', 'bản nháp', 'sắp hết'];
@@ -265,11 +268,11 @@ function ModulePage({ config, rows, searchQuery, activeTab, onSearch, onTab, onS
   return (
     <div className="space-y-5">
       <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div><div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />{config.eyebrow}</div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">{config.title}</h1><p className="mt-2 max-w-2xl text-[11px] text-slate-500">{config.description}</p></div>
+        <div><div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />{config.eyebrow}<span className="rounded-full bg-violet-50 px-2.5 py-1 text-[7px] font-black text-violet-700 ring-1 ring-violet-200">{scopeLabel}</span></div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">{config.title}</h1><p className="mt-2 max-w-2xl text-[11px] text-slate-500">{config.description}</p></div>
         <div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={onExport} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"><Download className="h-4 w-4" />{config.secondaryAction}</button><button type="button" onClick={onCreate} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />{config.primaryAction}</button></div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{config.stats.map((stat, index) => <StatCard key={stat.label} stat={stat} index={index} />)}</section>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{displayedStats.map((stat, index) => <StatCard key={stat.label} stat={stat} index={index} />)}</section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
@@ -298,10 +301,10 @@ function ModulePage({ config, rows, searchQuery, activeTab, onSearch, onTab, onS
   );
 }
 
-function SubscriptionPage({ tenantName, onNotify }: { tenantName: string; onNotify: (message: string) => void }) {
+function SubscriptionPage({ tenantName, branchCount, onNotify }: { tenantName: string; branchCount: number; onNotify: (message: string) => void }) {
   const usageItems = [
     { label: 'Nhân sự đang hoạt động', value: '17 / 25', percent: 68, detail: 'Còn 8 tài khoản nhân sự', icon: UsersRound, tone: 'violet' as UiTone },
-    { label: 'Chi nhánh', value: '2 / 3', percent: 67, detail: 'Còn 1 chi nhánh trong gói', icon: Store, tone: 'blue' as UiTone },
+    { label: 'Chi nhánh', value: `${branchCount} / 3`, percent: Math.min(100, Math.round(branchCount / 3 * 100)), detail: branchCount >= 3 ? 'Đã dùng hết hạn mức gói' : `Còn ${3 - branchCount} chi nhánh trong gói`, icon: Store, tone: 'blue' as UiTone },
     { label: 'Lịch hẹn tháng này', value: '842 / 1.500', percent: 56, detail: 'Đặt online và tại quầy', icon: CalendarCheck2, tone: 'emerald' as UiTone },
     { label: 'Tin nhắn chăm sóc', value: '1.560 / 2.000', percent: 78, detail: 'Còn 440 SMS/ZNS', icon: Megaphone, tone: 'amber' as UiTone },
     { label: 'Dung lượng lưu trữ', value: '6,4 / 10 GB', percent: 64, detail: 'Ảnh mẫu Nail và hồ sơ', icon: Boxes, tone: 'cyan' as UiTone }
@@ -352,19 +355,22 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [branch, setBranch] = useState('Q3');
+  const [branch, setBranch] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('');
   const [selectedRow, setSelectedRow] = useState<NailRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [toast, setToast] = useState('');
-  const [rowsByPage, setRowsByPage] = useState<Partial<Record<NailPageId, NailRow[]>>>(() => Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [id, config.rows])) as Partial<Record<NailPageId, NailRow[]>>);
+  const [rowsByPage, setRowsByPage] = useState<Partial<Record<NailPageId, NailRow[]>>>(() => Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [id, config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))])) as Partial<Record<NailPageId, NailRow[]>>);
   const tenantName = account.tenantName || 'Nailé Studio';
   const accountInitials = account.displayName.trim().split(/\s+/).slice(-2).map((part) => part.charAt(0).toUpperCase()).join('') || 'NB';
 
   const currentConfig = activePage === 'overview' || activePage === 'subscription' ? null : nailModuleConfigs[activePage];
   const currentRows = activePage === 'overview' || activePage === 'subscription' ? [] : rowsByPage[activePage] || currentConfig?.rows || [];
+  const scopedRows = activePage === 'branches' || branch === 'ALL' ? currentRows : currentRows.filter((row) => row.branchCode === branch);
+  const branchRows = rowsByPage.branches || nailModuleConfigs.branches.rows;
+  const branchScopeLabel = activePage === 'branches' || branch === 'ALL' ? 'Toàn tenant' : branchRows.find((row) => row.branchCode === branch)?.title || `Chi nhánh ${branch}`;
 
   const navigate = (page: NailPageId) => {
     setActivePage(page);
@@ -377,7 +383,12 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
   };
 
   const openCreate = (page?: Exclude<NailPageId, 'overview' | 'subscription'>) => {
+    const targetPage = page || activePage;
     if (page && page !== activePage) navigate(page);
+    if (targetPage !== 'branches' && branch === 'ALL') {
+      setToast('Vui lòng chọn một chi nhánh cụ thể trước khi tạo dữ liệu vận hành.');
+      return;
+    }
     setFormValues({});
     setCreateOpen(true);
   };
@@ -385,7 +396,7 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
   const exportRows = () => {
     if (!currentConfig) return;
     const header = currentConfig.columns.join(',');
-    const body = currentRows.map((row) => [row.title, ...row.cells, row.badge].join(',')).join('\n');
+    const body = scopedRows.map((row) => [row.title, ...row.cells, row.badge].join(',')).join('\n');
     const blob = new Blob([`${header}\n${body}`], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -398,6 +409,10 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
   const submitCreate = (event: FormEvent) => {
     event.preventDefault();
     if (!currentConfig) return;
+    if (currentConfig.id === 'branches' && currentRows.length >= 3) {
+      setToast('Gói Premium đã đạt giới hạn 3 chi nhánh. Vui lòng nâng cấp gói để mở thêm.');
+      return;
+    }
     const fields = currentConfig.formFields;
     const title = formValues[fields[0]?.key] || `${currentConfig.primaryAction} mới`;
     const values = fields.slice(1).map((field) => formValues[field.key]).filter(Boolean);
@@ -410,7 +425,8 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
       badge: 'Mới tạo',
       badgeTone: 'blue',
       details: fields.map((field) => ({ label: field.label, value: formValues[field.key] || '—' })),
-      note: formValues.note || formValues.description || ''
+      note: formValues.note || formValues.description || '',
+      branchCode: currentConfig.id === 'branches' ? (formValues.code || 'NEW').trim().toUpperCase() : branch
     };
     setRowsByPage((current) => ({ ...current, [activePage]: [newRow, ...(current[activePage] || currentRows)] }));
     setCreateOpen(false);
@@ -440,7 +456,7 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-4">
-          {navGroups.map((group, groupIndex) => <div key={group.label} className={groupIndex ? 'mt-5' : ''}><p className="mb-2 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600">{group.label}</p><nav className="space-y-1">{group.items.map(({ id, label, icon: Icon, badge }) => { const active = activePage === id; return <button key={id} type="button" onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} className={`flex h-9 w-full items-center gap-3 border-0 px-3 text-left text-[9px] font-bold shadow-none ${active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className={`h-4 w-4 ${active ? 'text-violet-400' : ''}`} /><span className="min-w-0 flex-1 truncate">{label}</span>{badge && <span className={`rounded-full px-2 py-0.5 text-[7px] ${active ? 'bg-violet-500/20 text-violet-300' : 'bg-white/5 text-slate-500'}`}>{badge}</span>}</button>; })}</nav></div>)}
+          {navGroups.map((group, groupIndex) => <div key={group.label} className={groupIndex ? 'mt-5' : ''}><p className="mb-2 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600">{group.label}</p><nav className="space-y-1">{group.items.map(({ id, label, icon: Icon, badge }) => { const active = activePage === id; const displayBadge = id === 'branches' ? `${branchRows.length}/3` : badge; return <button key={id} type="button" onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} className={`flex h-9 w-full items-center gap-3 border-0 px-3 text-left text-[9px] font-bold shadow-none ${active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className={`h-4 w-4 ${active ? 'text-violet-400' : ''}`} /><span className="min-w-0 flex-1 truncate">{label}</span>{displayBadge && <span className={`rounded-full px-2 py-0.5 text-[7px] ${active ? 'bg-violet-500/20 text-violet-300' : 'bg-white/5 text-slate-500'}`}>{displayBadge}</span>}</button>; })}</nav></div>)}
         </div>
 
         <button type="button" onClick={() => navigate('subscription')} aria-current={activePage === 'subscription' ? 'page' : undefined} className={`m-3 shrink-0 rounded-2xl border p-4 text-left shadow-none ${activePage === 'subscription' ? 'border-violet-400/50 bg-violet-500/15 ring-1 ring-violet-400/20' : 'border-white/8 bg-white/[0.04] hover:bg-white/[0.07]'}`}><div className="mb-3 flex items-center justify-between"><span className="text-[9px] font-bold text-slate-300">Gói Premium</span><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[7px] font-bold text-emerald-300">Đang hoạt động</span></div><div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[68%] rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400" /></div><div className="mt-2 flex items-center justify-between gap-2"><p className="text-[7px] leading-4 text-slate-500">68% hạn mức · Gia hạn 01/08</p><ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-300" /></div></button>
@@ -450,7 +466,7 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
         <header className="sticky top-0 z-30 flex h-[80px] items-center gap-3 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm lg:hidden"><Menu className="h-5 w-5" /></button>
           <div className="relative max-w-md flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={`Tìm trong ${formatModuleLabel(activePage).toLocaleLowerCase('vi')}...`} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[10px] font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></div>
-          <div className="hidden sm:block"><BeautifulSelect value={branch} onChange={(event) => setBranch(event.target.value)} aria-label="Chọn chi nhánh" className="h-10 w-44 rounded-xl border border-slate-200 bg-white px-3 text-[8px] font-bold"><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option><option value="ALL">Tất cả chi nhánh</option></BeautifulSelect></div>
+          <div className="hidden sm:block"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label="Chọn phạm vi chi nhánh" className="h-10 w-52 rounded-xl border border-slate-200 bg-white px-3 text-[8px] font-bold"><option value="ALL">Tất cả chi nhánh</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
           <div className="ml-auto flex items-center gap-2">
             <div className="relative"><button type="button" onClick={() => { setShowNotifications((value) => !value); setShowProfile(false); }} aria-label="Thông báo" className="relative flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm"><Bell className="h-4 w-4" /><span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[7px] font-black text-white">6</span></button>{showNotifications && <div className="absolute right-0 mt-2 w-[min(350px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="border-b border-slate-100 px-4 py-3"><p className="text-[10px] font-black text-slate-800">Thông báo {tenantName}</p><p className="mt-1 text-[8px] text-slate-400">6 việc cần bạn xem</p></div><div className="divide-y divide-slate-100">{[
               { title: '4 lịch mới đang chờ xác nhận', detail: 'Lịch sớm nhất lúc 11:30', tone: 'bg-amber-500' },
@@ -463,7 +479,8 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
         </header>
 
         <main className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
-          {activePage === 'overview' ? <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} onNavigate={navigate} onQuickCreate={openCreate} /> : activePage === 'subscription' ? <SubscriptionPage tenantName={tenantName} onNotify={setToast} /> : currentConfig && <ModulePage config={currentConfig} rows={currentRows} searchQuery={searchQuery} activeTab={activeTab || currentConfig.tabs[0]} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate()} onExport={exportRows} />}
+          <div className="mb-4 sm:hidden"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label="Chọn phạm vi chi nhánh trên di động" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả chi nhánh</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
+          {activePage === 'overview' ? <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} onNavigate={navigate} onQuickCreate={openCreate} /> : activePage === 'subscription' ? <SubscriptionPage tenantName={tenantName} branchCount={branchRows.length} onNotify={setToast} /> : currentConfig && <ModulePage config={currentConfig} rows={scopedRows} searchQuery={searchQuery} activeTab={activeTab || currentConfig.tabs[0]} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate()} onExport={exportRows} scopeLabel={branchScopeLabel} />}
         </main>
       </div>
 

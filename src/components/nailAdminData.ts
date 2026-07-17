@@ -1,6 +1,7 @@
 export type NailPageId =
   | 'overview'
   | 'subscription'
+  | 'branches'
   | 'appointments'
   | 'stations'
   | 'pos'
@@ -35,6 +36,7 @@ export interface NailRow {
   badgeTone: UiTone;
   details: Array<{ label: string; value: string }>;
   note?: string;
+  branchCode?: string;
 }
 
 export interface NailInsight {
@@ -74,6 +76,37 @@ export interface NailModuleConfig {
 const d = (label: string, value: string) => ({ label, value });
 
 export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscription'>, NailModuleConfig> = {
+  branches: {
+    id: 'branches', eyebrow: 'Phạm vi quản trị tenant', title: 'Chi nhánh', description: 'Quản lý các chi nhánh thuộc tenant, người phụ trách, giờ hoạt động và hiệu suất theo gói đăng ký.', primaryAction: 'Thêm chi nhánh', secondaryAction: 'Xuất danh sách',
+    stats: [
+      { label: 'Chi nhánh đang dùng', value: '2 / 3', detail: 'Còn 1 chi nhánh trong gói Premium', tone: 'violet' },
+      { label: 'Đang hoạt động', value: '2', detail: 'Không có chi nhánh tạm ngưng', tone: 'emerald' },
+      { label: 'Doanh thu tháng', value: '312,8 triệu', detail: '+15,6% so với tháng trước', tone: 'blue' },
+      { label: 'Công suất trung bình', value: '82%', detail: 'Quận 3 cao nhất với 86%', tone: 'amber' }
+    ],
+    tabs: ['Tất cả', 'Đang hoạt động', 'Tạm ngưng', 'Chuẩn bị mở'],
+    columns: ['Chi nhánh', 'Giờ hoạt động', 'Quản lý', 'Nhân sự', 'Doanh thu tháng', 'Trạng thái'],
+    rows: [
+      { id: 'BR-Q3', title: 'Chi nhánh Quận 3', subtitle: 'Chi nhánh chính · 95 Võ Văn Tần', cells: ['08:00–21:00', 'Nguyễn Văn Boss', '17 người', '186,4 triệu'], badge: 'Đang hoạt động', badgeTone: 'emerald', branchCode: 'Q3', details: [d('Mã chi nhánh', 'Q3'), d('Địa chỉ', '95 Võ Văn Tần, Phường 6, Quận 3'), d('Điện thoại', '028 3930 8899'), d('Số ghế', '14 vị trí'), d('Công suất', '86%'), d('Ngày mở cửa', '12/03/2024')], note: 'Chi nhánh chính, phụ trách kho trung tâm và đào tạo kỹ thuật viên.' },
+      { id: 'BR-Q1', title: 'Chi nhánh Quận 1', subtitle: 'Studio trung tâm · 28 Nguyễn Huệ', cells: ['09:00–22:00', 'Trần Ngọc Hà', '11 người', '126,4 triệu'], badge: 'Đang hoạt động', badgeTone: 'emerald', branchCode: 'Q1', details: [d('Mã chi nhánh', 'Q1'), d('Địa chỉ', '28 Nguyễn Huệ, Phường Bến Nghé, Quận 1'), d('Điện thoại', '028 3822 6688'), d('Số ghế', '10 vị trí'), d('Công suất', '76%'), d('Ngày mở cửa', '08/01/2026')], note: 'Tập trung khách du lịch, dịch vụ VIP và khung giờ tối.' }
+    ],
+    insightTitle: 'Hiệu suất chuỗi',
+    insights: [
+      { label: 'Chi nhánh dẫn đầu', value: 'Quận 3', detail: '59,6% doanh thu toàn tenant', tone: 'violet' },
+      { label: 'Tăng trưởng tốt nhất', value: 'Quận 1', detail: '+21,8% trong tháng 7', tone: 'emerald' },
+      { label: 'Hạn mức gói', value: '2 / 3', detail: 'Có thể mở thêm 1 chi nhánh', tone: 'blue' }
+    ],
+    checklistTitle: 'Việc quản trị chi nhánh', checklist: ['Duyệt lịch vận hành dịp lễ', 'Đối soát doanh thu Quận 1', 'Phân bổ kho Gel giữa hai chi nhánh', 'Rà soát quyền quản lý chi nhánh'],
+    formTitle: 'Thêm chi nhánh mới', formFields: [
+      { key: 'name', label: 'Tên chi nhánh', type: 'text', placeholder: 'Ví dụ: Chi nhánh Thảo Điền' },
+      { key: 'code', label: 'Mã chi nhánh', type: 'text', placeholder: 'Ví dụ: TD' },
+      { key: 'address', label: 'Địa chỉ', type: 'text', placeholder: 'Số nhà, đường, phường, quận' },
+      { key: 'manager', label: 'Người quản lý', type: 'text', placeholder: 'Họ và tên quản lý chi nhánh' },
+      { key: 'phone', label: 'Số điện thoại', type: 'text', placeholder: '028 xxxx xxxx' },
+      { key: 'openingHours', label: 'Giờ hoạt động', type: 'text', placeholder: '08:00–21:00' },
+      { key: 'note', label: 'Ghi chú triển khai', type: 'textarea', placeholder: 'Số ghế, ngày dự kiến mở và lưu ý vận hành...' }
+    ]
+  },
   appointments: {
     id: 'appointments', eyebrow: 'Vận hành hôm nay', title: 'Lịch hẹn', description: 'Điều phối khách, kỹ thuật viên, ghế Nail và toàn bộ hành trình phục vụ.', primaryAction: 'Tạo lịch hẹn', secondaryAction: 'Xuất lịch',
     stats: [
