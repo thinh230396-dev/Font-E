@@ -48,8 +48,9 @@ import {
   SUBSCRIPTION_CAPABILITY_CATALOG
 } from '../utils/subscriptions';
 import {
-  findTenantUpgradePackage, formatTenantQuota, getTenantCapabilityLabel, getTenantPageAccess,
-  getTenantPageCapabilityKey, getTenantUsagePercent, isUnlimitedTenantLimit, type TenantPageAccess
+  findTenantUpgradePackage, formatTenantQuota, getEnabledTenantCapabilities, getTenantCapabilityLabel,
+  getTenantPageAccess, getTenantPageCapabilityKey, getTenantUsagePercent,
+  isTenantPackageUpgradeCandidate, isUnlimitedTenantLimit, type TenantPageAccess
 } from '../utils/tenantAdminEntitlements';
 import type { DemoAccount } from '../auth/demoAccounts';
 import BeautifulSelect from './BeautifulSelect';
@@ -433,10 +434,10 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
         price: billingCycle === 'yearly' ? getYearlyPackagePrice(subscriptionPackage) : subscriptionPackage.price,
         currency: subscriptionPackage.currency || 'USD'
       };
-  const enabledCapabilityKeys = new Set((subscriptionPackage.capabilities || []).filter((item) => item.enabled).map((item) => item.key));
+  const enabledCapabilityKeys = getEnabledTenantCapabilities(subscriptionPackage, availablePackages);
   const lockedCapabilities = SUBSCRIPTION_CAPABILITY_CATALOG.filter((item) => !enabledCapabilityKeys.has(item.key));
   const upgradePackage = availablePackages
-    .filter((item) => (item.status || 'ACTIVE') === 'ACTIVE' && item.id !== subscriptionPackage.id && item.price > subscriptionPackage.price)
+    .filter((item) => isTenantPackageUpgradeCandidate(subscriptionPackage, item))
     .sort((a, b) => a.price - b.price)[0];
   const renewalDate = tenant?.subscriptionRenewsAt || tenant?.trialEndDate;
   const statusLabel = tenant?.status === 'TRIAL' ? 'Đang dùng thử'
@@ -587,7 +588,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const currentRows = activePage === 'overview' || activePage === 'subscription' ? [] : rowsByPage[activePage] || currentConfig?.rows || [];
   const scopedRows = activePage === 'branches' || branch === 'ALL' ? currentRows : currentRows.filter((row) => row.branchCode === branch);
   const branchScopeLabel = activePage === 'branches' || branch === 'ALL' ? 'Toàn tenant' : branchRows.find((row) => row.branchCode === branch)?.title || 'Chi nhánh ' + branch;
-  const currentAccessMode = getTenantPageAccess(currentPackage, activePage);
+  const currentAccessMode = getTenantPageAccess(currentPackage, activePage, normalizedAvailablePackages);
   const readOnlyReason = tenant?.status === 'SUSPENDED'
     ? 'Tenant đang tạm ngưng. Bạn chỉ có thể xem dữ liệu và quản lý thanh toán.'
     : tenant?.status === 'OVERDUE'
@@ -625,7 +626,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   };
 
   const navigate = (page: NailPageId) => {
-    if (getTenantPageAccess(currentPackage, page) === 'locked') {
+    if (getTenantPageAccess(currentPackage, page, normalizedAvailablePackages) === 'locked') {
       showPageGate(page);
       return false;
     }
@@ -641,7 +642,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
 
   const openCreate = (page?: Exclude<NailPageId, 'overview' | 'subscription'>) => {
     const targetPage = (page || activePage) as NailPageId;
-    const access = getTenantPageAccess(currentPackage, targetPage);
+    const access = getTenantPageAccess(currentPackage, targetPage, normalizedAvailablePackages);
     if (access !== 'full') {
       showPageGate(targetPage);
       return;
@@ -669,7 +670,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
 
   const exportRows = () => {
     if (!currentConfig) return;
-    if (getTenantPageAccess(currentPackage, currentConfig.id) === 'locked') {
+    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) === 'locked') {
       showPageGate(currentConfig.id);
       return;
     }
@@ -691,7 +692,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       setToast(readOnlyReason);
       return;
     }
-    if (getTenantPageAccess(currentPackage, currentConfig.id) !== 'full') {
+    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) !== 'full') {
       showPageGate(currentConfig.id);
       return;
     }
@@ -731,7 +732,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       setToast(readOnlyReason);
       return;
     }
-    if (getTenantPageAccess(currentPackage, currentConfig.id) !== 'full') {
+    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) !== 'full') {
       showPageGate(currentConfig.id);
       return;
     }
@@ -769,7 +770,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
               <p className="mb-2 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600">{group.label}</p>
               <nav className="space-y-1">{group.items.map(({ id, label, icon: Icon, badge }) => {
                 const active = activePage === id;
-                const access = getTenantPageAccess(currentPackage, id);
+                const access = getTenantPageAccess(currentPackage, id, normalizedAvailablePackages);
                 const locked = access === 'locked';
                 const limitBadge = id === 'branches'
                   ? branchRows.length + '/' + (isUnlimitedTenantLimit(branchLimit, 'branches') ? '∞' : branchLimit)
