@@ -16,6 +16,7 @@ import {
   ChevronDown,
   CircleDollarSign,
   Clock3,
+  Copy,
   CreditCard,
   Download,
   LockKeyhole,
@@ -377,6 +378,53 @@ const getRequiredBranchSelectionErrors = (values: Record<string, string>): Recor
   ...(!values.status?.trim() ? { status: 'Vui lòng chọn trạng thái chi nhánh.' } : {})
 });
 
+interface BranchActionsMenuProps {
+  row: NailRow;
+  onView: (row: NailRow) => void;
+}
+
+function BranchActionsMenu({ row, onView }: BranchActionsMenuProps) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const phone = getBranchField(row, 'Điện thoại', 'Chưa cập nhật');
+  const branchCode = getBranchField(row, 'Mã chi nhánh', row.id);
+
+  const copyBranchCode = async () => {
+    await navigator.clipboard?.writeText(branchCode);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-label={`Mở menu thao tác của ${row.title}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`flex h-9 w-9 items-center justify-center border p-0 shadow-sm ${open ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'}`}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+      {open && (
+        <>
+          <button type="button" aria-label="Đóng menu thao tác" onClick={() => setOpen(false)} className="fixed inset-0 z-20 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
+          <div role="menu" className="absolute right-0 top-11 z-30 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_18px_55px_rgba(15,23,42,0.18)]">
+            <div className="px-3 pb-2 pt-1">
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Thao tác nhanh</p>
+              <p className="mt-1 truncate text-xs font-bold text-slate-700">{row.title}</p>
+            </div>
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); onView(row); }} className="flex h-10 w-full items-center gap-3 border-0 bg-transparent px-3 text-left text-xs font-bold text-slate-700 shadow-none hover:bg-violet-50 hover:text-violet-700"><ArrowRight className="h-4 w-4" />Xem và chỉnh sửa hồ sơ</button>
+            {phone !== 'Chưa cập nhật' && <a role="menuitem" href={`tel:${phone.replace(/[^\d+]/g, '')}`} onClick={() => setOpen(false)} className="flex h-10 items-center gap-3 rounded-xl px-3 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700"><Phone className="h-4 w-4" />Gọi chi nhánh</a>}
+            <button type="button" role="menuitem" onClick={() => void copyBranchCode()} className="flex h-10 w-full items-center gap-3 border-0 bg-transparent px-3 text-left text-xs font-bold text-slate-700 shadow-none hover:bg-slate-50"><Copy className="h-4 w-4" />{copied ? 'Đã sao chép mã' : 'Sao chép mã chi nhánh'}{copied && <Check className="ml-auto h-4 w-4 text-emerald-600" />}</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const branchToNailRow = (branch: Branch): NailRow => ({
   id: branch.id,
   title: branch.name,
@@ -456,7 +504,7 @@ function BranchesPage({ rows, searchQuery, activeTab, onSearch, onTab, onSelectR
             const staff = getBranchStaffCount(row);
             const isPrimary = getBranchField(row, 'Vai trò', '') === 'Chi nhánh chính';
             return <article key={row.id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-[0_18px_45px_rgba(76,29,149,0.08)]">
-              <div className="border-b border-slate-100 p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><Store className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black uppercase tracking-wide text-violet-600">{row.id}</span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span>{isPrimary && <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold text-white">Chi nhánh chính</span>}<span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700">{getBranchField(row, 'Mô hình kinh doanh', 'Salon đầy đủ dịch vụ')}</span></div><h2 className="mt-2 text-lg font-black text-slate-900">{row.title}</h2><p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p></div><button type="button" onClick={() => onSelectRow(row)} aria-label={`Mở hồ sơ ${row.title}`} className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><MoreHorizontal className="h-4 w-4" /></button></div></div>
+              <div className="border-b border-slate-100 p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><Store className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black uppercase tracking-wide text-violet-600">{row.id}</span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span>{isPrimary && <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold text-white">Chi nhánh chính</span>}<span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700">{getBranchField(row, 'Mô hình kinh doanh', 'Salon đầy đủ dịch vụ')}</span></div><h2 className="mt-2 text-lg font-black text-slate-900">{row.title}</h2><p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p></div><BranchActionsMenu row={row} onView={onSelectRow} /></div></div>
               <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4"><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Quản lý phụ trách</p><div className="mt-2 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600"><UserCheck className="h-3.5 w-3.5" /></span><p className="text-xs font-black text-slate-700">{manager}</p></div></div><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Nguồn lực</p><p className="mt-3 text-sm font-black text-slate-800">{staff} nhân sự · {stations}</p></div><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Doanh thu tháng</p><p className="mt-3 text-sm font-black text-emerald-600">{monthlyRevenue}</p></div><div className="p-4 sm:p-5"><div className="flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Công suất</p><span className="text-xs font-black text-violet-700">{capacity}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400" style={{ width: capacity }} /></div></div></div>
               <div className="flex flex-col gap-3 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center"><div className="flex flex-1 flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-slate-500"><span className="flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{hours}</span><span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{phone}</span><span className="flex items-center gap-1.5"><CalendarCheck2 className="h-3.5 w-3.5" />{Math.max(18, 32 - index * 7)} lịch hôm nay</span></div><button type="button" onClick={() => onSelectRow(row)} className="flex h-9 items-center justify-center gap-2 border border-violet-200 bg-white px-4 text-xs font-black text-violet-700 shadow-sm">Xem hồ sơ chi tiết<ArrowRight className="h-3.5 w-3.5" /></button></div>
             </article>;
@@ -482,22 +530,118 @@ interface BranchDetailDrawerProps {
   onUpdate: () => void;
 }
 
-function BranchDetailDrawer({ row, tenantName, onClose, onEdit, onUpdate }: BranchDetailDrawerProps) {
+function BranchDetailDrawer({ row, tenantName, onClose, onEdit }: BranchDetailDrawerProps) {
   const address = getBranchField(row, 'Địa chỉ', row.subtitle.includes('·') ? row.subtitle.split('·').slice(1).join('·').trim() : row.subtitle);
-  const staff = getBranchStaffCount(row);
-  const phone = getBranchField(row, 'Điện thoại', '028 3930 8899');
+  const phone = getBranchField(row, 'Điện thoại', 'Chưa cập nhật');
   const email = getBranchField(row, 'Email', 'Chưa cập nhật');
-  const manager = getBranchField(row, 'Quản lý', row.cells[1] || 'Nguyễn Văn Boss');
+  const manager = getBranchField(row, 'Quản lý', row.cells[1] || 'Chưa phân công');
   const hours = getBranchField(row, 'Giờ hoạt động', row.cells[0] || '08:00–21:00');
-  const stations = getBranchField(row, 'Số ghế', '14 vị trí');
-  const capacity = getBranchField(row, 'Công suất', '86%');
-  return <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/50 backdrop-blur-[2px]"><button type="button" aria-label="Đóng hồ sơ chi nhánh" onClick={onClose} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[680px] flex-col overflow-hidden bg-[#f7f8fb] shadow-2xl"><header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-7"><div className="flex items-start gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><Store className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-violet-600">{row.id}</span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span></div><h2 className="mt-2 text-xl font-black text-slate-900">{row.title}</h2><p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p></div><button type="button" onClick={onClose} aria-label="Đóng" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div></header>
-    <div className="flex-1 overflow-y-auto p-5 sm:p-7"><section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#19152f] to-[#35245e] p-6 text-white"><div className="flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-violet-300">Tổng quan vận hành hôm nay</p><p className="mt-2 text-2xl font-black">{row.title}</p><p className="mt-2 text-xs text-slate-400">Đồng bộ lúc 10:32 · {tenantName}</p></div><span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-[10px] font-black text-emerald-300 ring-1 ring-emerald-300/20">Hệ thống ổn định</span></div><div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">{[{ label: 'Lịch hôm nay', value: '32' }, { label: 'Doanh thu', value: row.cells[3] || '18,6tr' }, { label: 'Công suất', value: capacity }, { label: 'CSAT', value: '4,8/5' }].map((item) => <div key={item.label} className="rounded-2xl bg-white/[0.07] p-3"><p className="text-[10px] text-slate-400">{item.label}</p><p className="mt-1 text-base font-black">{item.value}</p></div>)}</div></section>
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2"><Store className="h-4 w-4 text-violet-600" /><h3 className="text-sm font-black text-slate-900">Thông tin chi nhánh</h3></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{[{ label: 'Quản lý phụ trách', value: manager, icon: UserCheck }, { label: 'Điện thoại', value: phone, icon: Phone }, { label: 'Email chi nhánh', value: email, icon: Mail }, { label: 'Giờ hoạt động', value: hours, icon: Clock3 }, { label: 'Múi giờ', value: getBranchField(row, 'Múi giờ', 'Asia/Ho_Chi_Minh'), icon: Globe2 }, { label: 'Ngày khai trương', value: getBranchField(row, 'Ngày mở cửa', 'Chưa cập nhật'), icon: CalendarClock }].map(({ label, value, icon: Icon }) => <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><Icon className="h-3.5 w-3.5" />{label}</div><p className="mt-2 text-xs font-black leading-5 text-slate-700">{value}</p></div>)}</div></section>
-      <section className="mt-5 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-sm font-black text-slate-900">Nguồn lực & cơ sở vật chất</h3><div className="mt-4 space-y-3">{[{ label: 'Nhân sự đang hoạt động', value: `${staff} người` }, { label: 'Vị trí phục vụ', value: stations }, { label: 'Khu vực', value: 'Manicure · Pedicure · VIP' }, { label: 'Kho vật tư', value: 'Kho chi nhánh · Đồng bộ trung tâm' }].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"><span className="text-[11px] text-slate-500">{item.label}</span><span className="text-right text-[11px] font-black text-slate-800">{item.value}</span></div>)}</div></div><div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-sm font-black text-slate-900">Chất lượng vận hành</h3><div className="mt-4 space-y-3">{[{ label: 'Checklist mở ca', value: '12/12', color: 'text-emerald-600' }, { label: 'Vệ sinh & khử khuẩn', value: 'Đạt', color: 'text-emerald-600' }, { label: 'Thiết bị cần bảo trì', value: '1', color: 'text-amber-600' }, { label: 'Sự cố đang mở', value: '0', color: 'text-emerald-600' }].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"><span className="text-[11px] text-slate-500">{item.label}</span><span className={`text-[11px] font-black ${item.color}`}>{item.value}</span></div>)}</div></div></section>
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-900">Lịch hoạt động trong tuần</h3><p className="mt-1 text-[11px] text-slate-500">Giờ nhận lịch cuối cùng trước khi đóng cửa 60 phút</p></div><CalendarClock className="h-4 w-4 text-violet-600" /></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{['T2 · 08:00–21:00', 'T3 · 08:00–21:00', 'T4 · 08:00–21:00', 'T5 · 08:00–21:00', 'T6 · 08:00–22:00', 'T7 · 08:00–22:00', 'CN · 09:00–21:00', 'Ngày lễ · Theo lịch'].map((item) => <div key={item} className="rounded-xl bg-slate-50 px-3 py-2.5 text-[10px] font-bold text-slate-600">{item}</div>)}</div></section>
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-start gap-3"><Activity className="mt-0.5 h-4 w-4 text-slate-400" /><div><h3 className="text-sm font-black text-slate-900">Nhật ký quản trị gần nhất</h3><p className="mt-2 text-xs leading-5 text-slate-500">10:32 hôm nay · Đồng bộ lịch hẹn và công suất ghế tự động.</p><p className="mt-1 text-xs leading-5 text-slate-500">09:05 hôm nay · {manager} hoàn tất checklist mở ca.</p><p className="mt-1 text-xs leading-5 text-slate-500">16/07 · Cập nhật định mức tồn kho Gel và hóa chất.</p></div></div></section>
-    </div><footer className="shrink-0 border-t border-slate-200 bg-white p-4 sm:px-7"><div className="flex gap-2"><button type="button" onClick={onEdit} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm"><Settings className="h-4 w-4" />Chỉnh sửa hồ sơ</button><button type="button" onClick={onUpdate} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Xác nhận & cập nhật</button></div></footer></aside></div>;
+  const stations = getBranchField(row, 'Số ghế', '0 vị trí');
+  const staff = getBranchStaffCount(row);
+  const capacity = getBranchField(row, 'Công suất', '0%');
+  const capacityValue = Math.max(0, Math.min(100, Number(capacity.replace(/[^\d.]/g, '')) || 0));
+  const branchModel = getBranchField(row, 'Mô hình kinh doanh', 'Chưa cấu hình');
+  const branchRole = getBranchField(row, 'Vai trò', 'Chi nhánh thành viên');
+  const services = getBranchField(row, 'Dịch vụ', 'Chưa cấu hình').split(',').map((item) => item.trim()).filter(Boolean);
+  const isOperating = row.badge === 'Đang hoạt động';
+
+  return (
+    <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/55 backdrop-blur-[3px]">
+      <button type="button" aria-label="Đóng hồ sơ chi nhánh" onClick={onClose} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
+      <aside role="dialog" aria-modal="true" aria-labelledby="branch-detail-title" className="relative flex h-full w-full max-w-[760px] flex-col overflow-hidden bg-[#f6f7fb] shadow-2xl">
+        <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-7 sm:py-5">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 sm:h-12 sm:w-12"><Store className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wide text-violet-600">{getBranchField(row, 'Mã chi nhánh', row.id)}</span>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span>
+                <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold text-white">{branchRole}</span>
+              </div>
+              <h2 id="branch-detail-title" className="mt-2 text-lg font-black leading-tight text-slate-950 sm:text-xl">{row.title}</h2>
+              <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Đóng" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm hover:bg-slate-50"><X className="h-4 w-4" /></button>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#18142e] via-[#251a49] to-[#432777] p-5 text-white shadow-[0_18px_45px_rgba(42,27,83,0.2)] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Vận hành hôm nay</p>
+                <h3 className="mt-2 text-xl font-black">Tổng quan chi nhánh</h3>
+                <p className="mt-2 text-xs text-slate-300">Đồng bộ từ lịch hẹn, ca làm việc và vị trí phục vụ · {tenantName}</p>
+              </div>
+              <span className={`w-fit rounded-full px-3 py-1.5 text-[10px] font-black ring-1 ${isOperating ? 'bg-emerald-400/15 text-emerald-300 ring-emerald-300/20' : 'bg-white/10 text-slate-300 ring-white/15'}`}>{isOperating ? 'Đang vận hành' : row.badge}</span>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: 'Lịch hôm nay', value: isOperating ? '32' : '—', icon: CalendarCheck2 },
+                { label: 'Doanh thu tháng', value: row.cells[3] || 'Chưa có', icon: TrendingUp },
+                { label: 'Nhân sự', value: `${staff} người`, icon: UsersRound },
+                { label: 'Vị trí phục vụ', value: stations, icon: Armchair }
+              ].map(({ label, value, icon: Icon }) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.08] p-3.5"><Icon className="h-4 w-4 text-violet-300" /><p className="mt-3 text-[10px] text-slate-400">{label}</p><p className="mt-1 text-sm font-black">{value}</p></div>)}
+            </div>
+          </section>
+
+          <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div className="flex-1">
+                <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-slate-900">Công suất phục vụ hôm nay</p><p className="mt-1 text-[11px] text-slate-500">Tự động tính từ thời lượng lịch hẹn trên năng lực khả dụng.</p></div><span className="text-2xl font-black text-violet-700">{isOperating ? capacity : '—'}</span></div>
+                <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all" style={{ width: isOperating ? `${capacityValue}%` : '0%' }} /></div>
+                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[10px] font-semibold text-slate-500"><span>{hours} giờ hoạt động</span><span>{staff} nhân sự</span><span>{stations}</span></div>
+              </div>
+            </div>
+          </section>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2"><UserCheck className="h-4 w-4 text-blue-600" /><h3 className="text-sm font-black text-slate-900">Liên hệ & phụ trách</h3></div>
+              <div className="mt-4 space-y-3">
+                {[
+                  { label: 'Quản lý phụ trách', value: manager, icon: UserCheck },
+                  { label: 'Số điện thoại', value: phone, icon: Phone },
+                  { label: 'Email chi nhánh', value: email, icon: Mail },
+                  { label: 'Địa chỉ đầy đủ', value: address, icon: MapPin }
+                ].map(({ label, value, icon: Icon }) => <div key={label} className="flex items-start gap-3 rounded-xl bg-slate-50 p-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm"><Icon className="h-3.5 w-3.5" /></span><div className="min-w-0"><p className="text-[10px] font-bold text-slate-400">{label}</p><p className="mt-1 break-words text-xs font-bold leading-5 text-slate-700">{value}</p></div></div>)}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2"><Settings className="h-4 w-4 text-violet-600" /><h3 className="text-sm font-black text-slate-900">Cấu hình vận hành</h3></div>
+              <dl className="mt-4 divide-y divide-slate-100">
+                {[
+                  { label: 'Mô hình kinh doanh', value: branchModel, icon: Store },
+                  { label: 'Giờ hoạt động', value: hours, icon: Clock3 },
+                  { label: 'Múi giờ', value: getBranchField(row, 'Múi giờ', 'Asia/Ho_Chi_Minh'), icon: Globe2 },
+                  { label: 'Ngày khai trương', value: getBranchField(row, 'Ngày mở cửa', 'Chưa cập nhật'), icon: CalendarClock },
+                  { label: 'Mã số thuế', value: getBranchField(row, 'Mã số thuế', 'Theo tenant'), icon: ReceiptText }
+                ].map(({ label, value, icon: Icon }) => <div key={label} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><Icon className="h-4 w-4 shrink-0 text-slate-400" /><dt className="flex-1 text-[11px] font-semibold text-slate-500">{label}</dt><dd className="max-w-[55%] text-right text-xs font-black leading-5 text-slate-700">{value}</dd></div>)}
+              </dl>
+            </section>
+          </div>
+
+          <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-black text-slate-900">Dịch vụ đang cung cấp</h3><p className="mt-1 text-[11px] text-slate-500">Danh mục áp dụng riêng tại chi nhánh này.</p></div><span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-black text-violet-700">{services[0] === 'Chưa cấu hình' ? 0 : services.length} dịch vụ</span></div>
+            <div className="mt-4 flex flex-wrap gap-2">{services.map((service) => <span key={service} className="rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-[11px] font-bold text-violet-700">{service}</span>)}</div>
+          </section>
+
+          <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><div><h3 className="text-sm font-black text-slate-900">Nhật ký & đồng bộ dữ liệu</h3><p className="mt-2 text-xs leading-5 text-slate-500">Hồ sơ được đồng bộ giữa Tenant Admin và Super Admin. Cập nhật quản trị gần nhất lúc 14:32 và được lưu trong nhật ký hệ thống.</p></div></div>
+            {row.note && <div className="mt-4 rounded-xl bg-amber-50 p-3"><p className="text-[10px] font-black uppercase tracking-wide text-amber-700">Ghi chú quản lý</p><p className="mt-1.5 text-xs leading-5 text-amber-800">{row.note}</p></div>}
+          </section>
+        </main>
+
+        <footer className="shrink-0 border-t border-slate-200 bg-white p-4 sm:px-7">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} className="h-11 border border-slate-200 bg-white px-5 text-xs font-bold text-slate-600 shadow-sm">Đóng</button>
+            <button type="button" onClick={onEdit} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><Settings className="h-4 w-4" />Chỉnh sửa chi nhánh<ArrowRight className="h-4 w-4" /></button>
+          </div>
+        </footer>
+      </aside>
+    </div>
+  );
 }
 
 function ModulePage({ config, rows, searchQuery, activeTab, onSearch, onTab, onSelectRow, onCreate, onExport, scopeLabel, planName, accessMode, branchCount, branchLimit, staffCount, staffLimit, onUpgrade }: ModulePageProps) {
