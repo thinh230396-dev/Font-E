@@ -88,6 +88,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
       { id: 'finance', label: 'Thu chi', icon: WalletCards },
       { id: 'sanitation', label: 'Vệ sinh & an toàn', icon: ShieldCheck, badge: '4' },
       { id: 'reports', label: 'Báo cáo', icon: BarChart3 },
+      { id: 'subscription', label: 'Gói đăng ký', icon: BadgePercent },
       { id: 'settings', label: 'Cài đặt tiệm', icon: Settings }
     ]
   }
@@ -137,7 +138,7 @@ function StatCard({ stat, index }: { stat: NailModuleConfig['stats'][number]; in
   );
 }
 
-function OverviewPage({ branch, onNavigate, onQuickCreate }: { branch: string; onNavigate: (page: NailPageId) => void; onQuickCreate: (page: Exclude<NailPageId, 'overview'>) => void }) {
+function OverviewPage({ branch, onNavigate, onQuickCreate }: { branch: string; onNavigate: (page: NailPageId) => void; onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription'>) => void }) {
   const branchName = branch === 'ALL' ? 'Tất cả chi nhánh' : branch === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3';
   const overviewStats: NailModuleConfig['stats'] = [
     { label: 'Doanh thu hôm nay', value: branch === 'ALL' ? '31,8 triệu' : '18,6 triệu', detail: '+16,8% so với thứ Năm trước', tone: 'emerald' },
@@ -296,6 +297,55 @@ function ModulePage({ config, rows, searchQuery, activeTab, onSearch, onTab, onS
   );
 }
 
+function SubscriptionPage({ onNotify }: { onNotify: (message: string) => void }) {
+  const usageItems = [
+    { label: 'Nhân sự đang hoạt động', value: '17 / 25', percent: 68, detail: 'Còn 8 tài khoản nhân sự', icon: UsersRound, tone: 'violet' as UiTone },
+    { label: 'Chi nhánh', value: '2 / 3', percent: 67, detail: 'Còn 1 chi nhánh trong gói', icon: Store, tone: 'blue' as UiTone },
+    { label: 'Lịch hẹn tháng này', value: '842 / 1.500', percent: 56, detail: 'Đặt online và tại quầy', icon: CalendarCheck2, tone: 'emerald' as UiTone },
+    { label: 'Tin nhắn chăm sóc', value: '1.560 / 2.000', percent: 78, detail: 'Còn 440 SMS/ZNS', icon: Megaphone, tone: 'amber' as UiTone },
+    { label: 'Dung lượng lưu trữ', value: '6,4 / 10 GB', percent: 64, detail: 'Ảnh mẫu Nail và hồ sơ', icon: Boxes, tone: 'cyan' as UiTone }
+  ];
+  const featureGroups = [
+    { title: 'Vận hành tiệm', items: ['Lịch hẹn và đặt cọc online', 'POS, hóa đơn và thu chi', 'Quản lý ghế, kho và nhân sự'] },
+    { title: 'Khách hàng & tăng trưởng', items: ['CRM và lịch sử dịch vụ', 'Thành viên, điểm và ưu đãi', 'Chăm sóc khách tự động'] },
+    { title: 'Quản trị & bảo mật', items: ['Báo cáo đa chi nhánh', 'Phân quyền theo vị trí', 'Nhật ký hoạt động và sao lưu'] }
+  ];
+  const addOns = [
+    { title: '500 tin nhắn bổ sung', price: '190.000đ', detail: 'Dùng đến hết chu kỳ hiện tại', icon: Megaphone },
+    { title: 'Thêm 1 chi nhánh', price: '390.000đ/tháng', detail: 'Bao gồm 10 tài khoản nhân sự', icon: Store },
+    { title: 'Thêm 10 GB lưu trữ', price: '120.000đ/tháng', detail: 'Ảnh mẫu và tệp khách hàng', icon: Boxes }
+  ];
+  const invoices = [
+    { code: 'INV-20260701', period: '01/07 – 31/07/2026', issued: '01/07/2026', amount: '1.609.200đ', status: 'Đã thanh toán' },
+    { code: 'INV-20260601', period: '01/06 – 30/06/2026', issued: '01/06/2026', amount: '1.609.200đ', status: 'Đã thanh toán' },
+    { code: 'INV-20260501', period: '01/05 – 31/05/2026', issued: '01/05/2026', amount: '1.609.200đ', status: 'Đã thanh toán' }
+  ];
+
+  return (
+    <div className="space-y-5">
+      <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div><div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Đăng ký & thanh toán</div><h1 className="font-black tracking-[-0.035em] text-slate-950">Gói đăng ký</h1><p className="mt-2 max-w-2xl text-[11px] text-slate-500">Theo dõi gói dịch vụ, hạn mức sử dụng, quyền truy cập, phương thức thanh toán và lịch sử hóa đơn của Nailé Studio.</p></div>
+        <div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => onNotify('Đã mở cổng hỗ trợ về gói đăng ký.')} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"><ShieldCheck className="h-4 w-4" />Liên hệ hỗ trợ</button><button type="button" onClick={() => onNotify('Yêu cầu nâng cấp đã được ghi nhận. Chuyên viên sẽ liên hệ trong 30 phút.')} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[10px] font-black text-white shadow-lg shadow-violet-200"><TrendingUp className="h-4 w-4" />Nâng cấp gói</button></div>
+      </section>
+
+      <section className="grid overflow-hidden rounded-3xl bg-gradient-to-br from-[#171328] via-[#21183c] to-[#34215a] text-white shadow-xl lg:grid-cols-[1.45fr_0.75fr]">
+        <div className="p-6 sm:p-8"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-violet-400/15 px-3 py-1 text-[8px] font-black uppercase tracking-wide text-violet-200 ring-1 ring-violet-300/25">Gói hiện tại</span><span className="rounded-full bg-emerald-400/15 px-3 py-1 text-[8px] font-bold text-emerald-300 ring-1 ring-emerald-300/20">Đang hoạt động</span><span className="rounded-full bg-white/8 px-3 py-1 text-[8px] font-bold text-slate-300">Tự động gia hạn</span></div><div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-3xl font-black tracking-tight sm:text-4xl">Premium</p><p className="mt-2 text-[10px] text-slate-300">Dành cho chuỗi Nail đang tăng trưởng</p></div><div className="sm:text-right"><p className="text-2xl font-black">1.490.000đ<span className="text-[9px] font-semibold text-slate-400"> / tháng</span></p><p className="mt-1 text-[8px] text-slate-400">Chưa gồm VAT · Thanh toán hàng tháng</p></div></div><div className="mt-7"><div className="flex items-center justify-between text-[8px] font-bold text-slate-300"><span>Chu kỳ 01/07 – 31/07/2026</span><span>Gia hạn 01/08/2026</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[52%] rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400" /></div><p className="mt-2 text-[7px] text-slate-500">Còn 15 ngày trong chu kỳ thanh toán hiện tại</p></div></div>
+        <div className="border-t border-white/10 bg-white/[0.05] p-6 sm:p-8 lg:border-l lg:border-t-0"><p className="text-[8px] font-black uppercase tracking-wide text-violet-200">Kỳ thanh toán tiếp theo</p><p className="mt-3 text-2xl font-black">1.609.200đ</p><p className="mt-1 text-[8px] text-slate-400">Đã gồm VAT 8% · Ngày 01/08/2026</p><div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.06] p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-violet-200"><CreditCard className="h-5 w-5" /></span><div><p className="text-[9px] font-black">Visa •••• 4826</p><p className="mt-1 text-[7px] text-slate-400">Hết hạn 08/2028 · Thẻ mặc định</p></div></div></div><button type="button" onClick={() => onNotify('Phương thức thanh toán đã sẵn sàng để cập nhật.')} className="mt-4 flex h-10 w-full items-center justify-center border border-white/15 bg-white/10 text-[8px] font-black text-white shadow-none hover:bg-white/15">Quản lý thanh toán</button></div>
+      </section>
+
+      <section><div className="mb-3 flex items-end justify-between"><div><h2 className="text-base font-black text-slate-900">Hạn mức sử dụng</h2><p className="mt-1 text-[8px] text-slate-500">Cập nhật theo chu kỳ hiện tại</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-[8px] font-bold text-emerald-700">Tổng thể ổn định</span></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{usageItems.map(({ label, value, percent, detail, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${toneClasses[tone].icon}`}><Icon className="h-4 w-4" /></span><span className="text-[8px] font-black text-slate-400">{percent}%</span></div><p className="mt-4 text-[8px] font-bold text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-slate-900">{value}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${toneClasses[tone].bar}`} style={{ width: `${percent}%` }} /></div><p className="mt-2 text-[7px] text-slate-400">{detail}</p></article>)}</div></section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-base font-black text-slate-900">Quyền lợi trong gói Premium</h2><p className="mt-1 text-[8px] text-slate-500">Các tính năng đang được mở cho Tenant Admin</p></div><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><BadgePercent className="h-5 w-5" /></span></div><div className="mt-5 grid gap-4 md:grid-cols-3">{featureGroups.map((group) => <div key={group.title} className="rounded-2xl bg-slate-50 p-4"><p className="text-[9px] font-black text-slate-800">{group.title}</p><div className="mt-3 space-y-3">{group.items.map((item) => <div key={item} className="flex items-start gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><Check className="h-2.5 w-2.5" /></span><p className="text-[8px] leading-5 text-slate-600">{item}</p></div>)}</div></div>)}</div><div className="mt-4 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600"><Globe2 className="h-4 w-4" /></span><div className="flex-1"><p className="text-[9px] font-black text-amber-900">Tính năng dành cho Enterprise</p><p className="mt-1 text-[8px] text-amber-700">API tích hợp nâng cao, SSO doanh nghiệp và quản lý trên 10 chi nhánh.</p></div><button type="button" onClick={() => onNotify('Đã gửi yêu cầu tư vấn gói Enterprise.')} className="h-9 border border-amber-300 bg-white px-3 text-[8px] font-black text-amber-800 shadow-sm">Tìm hiểu thêm</button></div></article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div><h2 className="text-base font-black text-slate-900">Mua thêm dung lượng</h2><p className="mt-1 text-[8px] text-slate-500">Áp dụng ngay trong chu kỳ hiện tại</p></div><div className="mt-4 space-y-3">{addOns.map(({ title, price, detail, icon: Icon }) => <div key={title} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm"><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-[8px] font-black text-slate-800">{title}</p><p className="mt-1 text-[7px] text-slate-400">{detail}</p><p className="mt-1 text-[8px] font-black text-violet-700">{price}</p></div><button type="button" onClick={() => onNotify(`Đã thêm “${title}” vào yêu cầu mua.`)} className="h-9 shrink-0 border border-slate-200 bg-white px-3 text-[8px] font-black text-slate-700 shadow-sm">Mua thêm</button></div>)}</div></article>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-base font-black text-slate-900">Lịch sử hóa đơn</h2><p className="mt-1 text-[8px] text-slate-500">Thông tin xuất hóa đơn: Công ty TNHH Nailé Studio · MST 0318123456</p></div><button type="button" onClick={() => onNotify('Đã chuẩn bị danh sách hóa đơn để xuất.')} className="flex h-10 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm"><Download className="h-4 w-4" />Xuất danh sách</button></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-slate-100 bg-slate-50 text-[7px] font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Mã hóa đơn</th><th className="px-4 py-3">Chu kỳ</th><th className="px-4 py-3">Ngày phát hành</th><th className="px-4 py-3">Tổng tiền</th><th className="px-4 py-3">Trạng thái</th><th className="px-5 py-3 text-right">Tệp</th></tr></thead><tbody className="divide-y divide-slate-100">{invoices.map((invoice) => <tr key={invoice.code} className="text-[8px] text-slate-600"><td className="px-5 py-4 font-black text-slate-800">{invoice.code}</td><td className="px-4 py-4">{invoice.period}</td><td className="px-4 py-4">{invoice.issued}</td><td className="px-4 py-4 font-black text-slate-800">{invoice.amount}</td><td className="px-4 py-4"><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[7px] font-bold text-emerald-700 ring-1 ring-emerald-200">{invoice.status}</span></td><td className="px-5 py-4 text-right"><button type="button" onClick={() => onNotify(`Đang tải hóa đơn ${invoice.code}.`)} className="inline-flex h-9 items-center gap-1.5 border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-sm"><ReceiptText className="h-3.5 w-3.5" />Tải PDF</button></td></tr>)}</tbody></table></div></section>
+    </div>
+  );
+}
+
 export default function NailTenantAdminPortal({ account, onLogout }: NailTenantAdminPortalProps) {
   const [activePage, setActivePage] = useState<NailPageId>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -310,20 +360,20 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
   const [toast, setToast] = useState('');
   const [rowsByPage, setRowsByPage] = useState<Partial<Record<NailPageId, NailRow[]>>>(() => Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [id, config.rows])) as Partial<Record<NailPageId, NailRow[]>>);
 
-  const currentConfig = activePage === 'overview' ? null : nailModuleConfigs[activePage];
-  const currentRows = activePage === 'overview' ? [] : rowsByPage[activePage] || currentConfig?.rows || [];
+  const currentConfig = activePage === 'overview' || activePage === 'subscription' ? null : nailModuleConfigs[activePage];
+  const currentRows = activePage === 'overview' || activePage === 'subscription' ? [] : rowsByPage[activePage] || currentConfig?.rows || [];
 
   const navigate = (page: NailPageId) => {
     setActivePage(page);
     setSearchQuery('');
     setSelectedRow(null);
     setCreateOpen(false);
-    setActiveTab(page === 'overview' ? '' : nailModuleConfigs[page].tabs[0]);
+    setActiveTab(page === 'overview' || page === 'subscription' ? '' : nailModuleConfigs[page].tabs[0]);
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const openCreate = (page?: Exclude<NailPageId, 'overview'>) => {
+  const openCreate = (page?: Exclude<NailPageId, 'overview' | 'subscription'>) => {
     if (page && page !== activePage) navigate(page);
     setFormValues({});
     setCreateOpen(true);
@@ -390,7 +440,7 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
           {navGroups.map((group, groupIndex) => <div key={group.label} className={groupIndex ? 'mt-5' : ''}><p className="mb-2 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600">{group.label}</p><nav className="space-y-1">{group.items.map(({ id, label, icon: Icon, badge }) => { const active = activePage === id; return <button key={id} type="button" onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} className={`flex h-9 w-full items-center gap-3 border-0 px-3 text-left text-[9px] font-bold shadow-none ${active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className={`h-4 w-4 ${active ? 'text-violet-400' : ''}`} /><span className="min-w-0 flex-1 truncate">{label}</span>{badge && <span className={`rounded-full px-2 py-0.5 text-[7px] ${active ? 'bg-violet-500/20 text-violet-300' : 'bg-white/5 text-slate-500'}`}>{badge}</span>}</button>; })}</nav></div>)}
         </div>
 
-        <div className="m-3 shrink-0 rounded-2xl border border-white/8 bg-white/[0.04] p-4"><div className="mb-3 flex items-center justify-between"><span className="text-[9px] font-bold text-slate-300">Gói Premium</span><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[7px] font-bold text-emerald-300">Đang hoạt động</span></div><div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[68%] rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400" /></div><p className="mt-2 text-[7px] leading-4 text-slate-500">68% hạn mức tháng · Gia hạn 01/08/2026</p></div>
+        <button type="button" onClick={() => navigate('subscription')} aria-current={activePage === 'subscription' ? 'page' : undefined} className={`m-3 shrink-0 rounded-2xl border p-4 text-left shadow-none ${activePage === 'subscription' ? 'border-violet-400/50 bg-violet-500/15 ring-1 ring-violet-400/20' : 'border-white/8 bg-white/[0.04] hover:bg-white/[0.07]'}`}><div className="mb-3 flex items-center justify-between"><span className="text-[9px] font-bold text-slate-300">Gói Premium</span><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[7px] font-bold text-emerald-300">Đang hoạt động</span></div><div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[68%] rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400" /></div><div className="mt-2 flex items-center justify-between gap-2"><p className="text-[7px] leading-4 text-slate-500">68% hạn mức · Gia hạn 01/08</p><ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-300" /></div></button>
       </aside>
 
       <div className="min-h-screen lg:pl-[284px]">
@@ -410,7 +460,7 @@ export default function NailTenantAdminPortal({ account, onLogout }: NailTenantA
         </header>
 
         <main className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
-          {activePage === 'overview' ? <OverviewPage branch={branch} onNavigate={navigate} onQuickCreate={openCreate} /> : currentConfig && <ModulePage config={currentConfig} rows={currentRows} searchQuery={searchQuery} activeTab={activeTab || currentConfig.tabs[0]} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate()} onExport={exportRows} />}
+          {activePage === 'overview' ? <OverviewPage branch={branch} onNavigate={navigate} onQuickCreate={openCreate} /> : activePage === 'subscription' ? <SubscriptionPage onNotify={setToast} /> : currentConfig && <ModulePage config={currentConfig} rows={currentRows} searchQuery={searchQuery} activeTab={activeTab || currentConfig.tabs[0]} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate()} onExport={exportRows} />}
         </main>
       </div>
 

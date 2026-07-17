@@ -1,5 +1,6 @@
 export type NailPageId =
   | 'overview'
+  | 'subscription'
   | 'appointments'
   | 'stations'
   | 'pos'
@@ -52,7 +53,7 @@ export interface NailFormField {
 }
 
 export interface NailModuleConfig {
-  id: Exclude<NailPageId, 'overview'>;
+  id: Exclude<NailPageId, 'overview' | 'subscription'>;
   eyebrow: string;
   title: string;
   description: string;
@@ -72,7 +73,7 @@ export interface NailModuleConfig {
 
 const d = (label: string, value: string) => ({ label, value });
 
-export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview'>, NailModuleConfig> = {
+export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscription'>, NailModuleConfig> = {
   appointments: {
     id: 'appointments', eyebrow: 'Vận hành hôm nay', title: 'Lịch hẹn', description: 'Điều phối khách, kỹ thuật viên, ghế Nail và toàn bộ hành trình phục vụ.', primaryAction: 'Tạo lịch hẹn', secondaryAction: 'Xuất lịch',
     stats: [
