@@ -100,11 +100,19 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
     formTitle: 'Thêm chi nhánh mới', formFields: [
       { key: 'name', label: 'Tên chi nhánh', type: 'text', placeholder: 'Ví dụ: Chi nhánh Thảo Điền' },
       { key: 'code', label: 'Mã chi nhánh', type: 'text', placeholder: 'Ví dụ: TD' },
-      { key: 'address', label: 'Địa chỉ', type: 'text', placeholder: 'Số nhà, đường, phường, quận' },
+      { key: 'branchType', label: 'Mô hình chi nhánh', type: 'select', options: ['Chi nhánh chính', 'Chi nhánh tiêu chuẩn', 'Premium Studio', 'Kiosk'] },
+      { key: 'province', label: 'Tỉnh / Thành phố', type: 'select', options: ['TP. Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Khánh Hòa', 'Cần Thơ', 'Bình Dương'] },
+      { key: 'address', label: 'Địa chỉ đầy đủ', type: 'text', placeholder: 'Số nhà, đường, phường/xã, quận/huyện' },
       { key: 'manager', label: 'Người quản lý', type: 'text', placeholder: 'Họ và tên quản lý chi nhánh' },
       { key: 'phone', label: 'Số điện thoại', type: 'text', placeholder: '028 xxxx xxxx' },
+      { key: 'email', label: 'Email chi nhánh', type: 'text', placeholder: 'branch@salon.vn' },
       { key: 'openingHours', label: 'Giờ hoạt động', type: 'text', placeholder: '08:00–21:00' },
-      { key: 'note', label: 'Ghi chú triển khai', type: 'textarea', placeholder: 'Số ghế, ngày dự kiến mở và lưu ý vận hành...' }
+      { key: 'openingDate', label: 'Ngày dự kiến khai trương', type: 'date' },
+      { key: 'stations', label: 'Số vị trí phục vụ', type: 'number', placeholder: 'Ví dụ: 12' },
+      { key: 'staffCapacity', label: 'Sức chứa nhân sự', type: 'number', placeholder: 'Ví dụ: 20' },
+      { key: 'taxCode', label: 'Mã số thuế / đơn vị xuất hóa đơn', type: 'text', placeholder: 'Nhập mã số thuế áp dụng' },
+      { key: 'services', label: 'Nhóm dịch vụ triển khai', type: 'textarea', placeholder: 'Manicure, Pedicure, Nail Art, Acrylic, dịch vụ VIP...' },
+      { key: 'note', label: 'Ghi chú triển khai', type: 'textarea', placeholder: 'Kế hoạch khai trương, thiết bị, kho, phân quyền và lưu ý vận hành...' }
     ]
   },
   appointments: {

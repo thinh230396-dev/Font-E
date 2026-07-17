@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
+  Activity,
   Armchair,
   ArrowRight,
   BadgePercent,
@@ -10,6 +11,7 @@ import {
   Boxes,
   CalendarCheck2,
   CalendarDays,
+  CalendarClock,
   Check,
   ChevronDown,
   CircleDollarSign,
@@ -24,9 +26,13 @@ import {
   LogOut,
   Megaphone,
   Menu,
+  MapPin,
+  Mail,
+  MoreHorizontal,
   PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
+  Phone,
   Plus,
   ReceiptText,
   Search,
@@ -35,8 +41,10 @@ import {
   Sparkles,
   Star,
   Store,
+  Target,
   TrendingUp,
   UserRound,
+  UserCheck,
   UsersRound,
   WalletCards,
   X
@@ -333,6 +341,118 @@ interface ModulePageProps {
   staffCount: number;
   staffLimit: number;
   onUpgrade: () => void;
+}
+
+interface BranchesPageProps {
+  rows: NailRow[];
+  searchQuery: string;
+  activeTab: string;
+  onSearch: (value: string) => void;
+  onTab: (value: string) => void;
+  onSelectRow: (row: NailRow) => void;
+  onCreate: () => void;
+  onExport: () => void;
+  planName: string;
+  branchLimit: number;
+}
+
+const getBranchField = (row: NailRow, label: string, fallback: string) => (
+  row.details.find((item) => item.label.toLocaleLowerCase('vi') === label.toLocaleLowerCase('vi'))?.value || fallback
+);
+
+const getBranchStaffCount = (row: NailRow) => {
+  const value = getBranchField(row, 'Nhân sự', row.cells[2] || '0');
+  return Number(value.match(/\d+/)?.[0] || 0);
+};
+
+function BranchesPage({ rows, searchQuery, activeTab, onSearch, onTab, onSelectRow, onCreate, onExport, planName, branchLimit }: BranchesPageProps) {
+  const activeCount = rows.filter((row) => row.badge === 'Đang hoạt động').length;
+  const totalStaff = rows.reduce((sum, row) => sum + getBranchStaffCount(row), 0);
+  const unlimited = isUnlimitedTenantLimit(branchLimit, 'branches');
+  const remaining = unlimited ? null : Math.max(0, branchLimit - rows.length);
+  const tabs = ['Tất cả', 'Đang hoạt động', 'Tạm ngưng', 'Chuẩn bị mở'];
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase('vi');
+    return rows.filter((row) => {
+      const searchable = `${row.id} ${row.title} ${row.subtitle} ${row.cells.join(' ')} ${row.badge} ${row.details.map((item) => `${item.label} ${item.value}`).join(' ')}`.toLocaleLowerCase('vi');
+      return (!query || searchable.includes(query)) && (activeTab === 'Tất cả' || row.badge === activeTab);
+    });
+  }, [activeTab, rows, searchQuery]);
+  const revenue = rows.reduce((sum, _row, index) => sum + Math.max(72.4, 186.4 - index * 60), 0);
+  const quotaPercent = unlimited || !branchLimit ? 22 : Math.min(100, Math.round((rows.length / branchLimit) * 100));
+
+  return (
+    <div className="space-y-6">
+      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#17132b] via-[#211942] to-[#38236b] text-white shadow-[0_20px_55px_rgba(49,31,94,0.2)]">
+        <div className="relative p-6 sm:p-8">
+          <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-violet-400/15 blur-3xl" />
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl"><div className="flex flex-wrap items-center gap-2 text-xs font-bold text-violet-200"><span className="h-2 w-2 rounded-full bg-emerald-400" />Phạm vi quản trị tenant<span className="rounded-full bg-white/10 px-3 py-1 text-[11px] ring-1 ring-white/10">Gói {planName}</span></div><h1 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-4xl">Hệ thống chi nhánh</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Quản lý toàn bộ địa điểm kinh doanh, người phụ trách, nguồn lực, giờ mở cửa và hiệu quả vận hành của chuỗi salon trong một màn hình.</p></div>
+            <div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={onExport} className="flex h-11 items-center justify-center gap-2 border border-white/15 bg-white/10 px-4 text-xs font-bold text-white shadow-none hover:bg-white/15"><Download className="h-4 w-4" />Xuất danh sách</button><button type="button" onClick={onCreate} className="flex h-11 items-center justify-center gap-2 border border-violet-400 bg-violet-500 px-5 text-xs font-black text-white shadow-lg shadow-violet-950/30"><Plus className="h-4 w-4" />Thêm chi nhánh</button></div>
+          </div>
+          <div className="relative mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[{ label: 'Tổng chi nhánh', value: String(rows.length), detail: unlimited ? 'Không giới hạn theo gói' : `${remaining} vị trí còn lại`, icon: Store }, { label: 'Đang hoạt động', value: String(activeCount), detail: `${Math.max(0, rows.length - activeCount)} chi nhánh chưa hoạt động`, icon: Activity }, { label: 'Tổng nhân sự', value: String(totalStaff), detail: 'Phân bổ trên toàn hệ thống', icon: UsersRound }, { label: 'Doanh thu tháng', value: `${revenue.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`, detail: '+15,6% so với tháng trước', icon: TrendingUp }].map(({ label, value, detail, icon: Icon }) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 backdrop-blur-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold text-slate-400">{label}</p><p className="mt-2 text-2xl font-black">{value}</p><p className="mt-2 text-[11px] text-slate-400">{detail}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-violet-200"><Icon className="h-4 w-4" /></span></div></div>)}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">{tabs.map((tab) => <button key={tab} type="button" onClick={() => onTab(tab)} className={`h-9 shrink-0 border-0 px-4 text-xs font-bold shadow-none ${activeTab === tab ? 'bg-white text-violet-700 shadow-sm' : 'bg-transparent text-slate-500'}`}>{tab}</button>)}</div><div className="relative min-w-0 lg:w-80"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => onSearch(event.target.value)} placeholder="Tìm tên, mã, địa chỉ, quản lý..." className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-9 text-xs outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />{searchQuery && <button type="button" onClick={() => onSearch('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-4 w-4" /></button>}</div></div>
+          </div>
+
+          {filteredRows.map((row, index) => {
+            const address = getBranchField(row, 'Địa chỉ', row.subtitle.includes('·') ? row.subtitle.split('·').slice(1).join('·').trim() : row.subtitle);
+            const manager = getBranchField(row, 'Quản lý', row.cells[1] || 'Chưa phân công');
+            const phone = getBranchField(row, 'Điện thoại', index ? '028 3822 6688' : '028 3930 8899');
+            const hours = getBranchField(row, 'Giờ hoạt động', row.cells[0] || '08:00–21:00');
+            const stations = getBranchField(row, 'Số ghế', `${Math.max(8, 14 - index * 4)} vị trí`);
+            const capacity = getBranchField(row, 'Công suất', `${Math.max(68, 86 - index * 10)}%`);
+            const monthlyRevenue = row.cells[3] && !row.cells[3].includes('Chưa') ? row.cells[3] : `${Math.max(72.4, 186.4 - index * 60).toLocaleString('vi-VN')} triệu`;
+            const staff = getBranchStaffCount(row);
+            return <article key={row.id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-[0_18px_45px_rgba(76,29,149,0.08)]">
+              <div className="border-b border-slate-100 p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><Store className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black uppercase tracking-wide text-violet-600">{row.id}</span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span>{index === 0 && <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold text-white">Chi nhánh chính</span>}</div><h2 className="mt-2 text-lg font-black text-slate-900">{row.title}</h2><p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p></div><button type="button" onClick={() => onSelectRow(row)} aria-label={`Mở hồ sơ ${row.title}`} className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><MoreHorizontal className="h-4 w-4" /></button></div></div>
+              <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4"><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Quản lý phụ trách</p><div className="mt-2 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600"><UserCheck className="h-3.5 w-3.5" /></span><p className="text-xs font-black text-slate-700">{manager}</p></div></div><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Nguồn lực</p><p className="mt-3 text-sm font-black text-slate-800">{staff} nhân sự · {stations}</p></div><div className="p-4 sm:p-5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Doanh thu tháng</p><p className="mt-3 text-sm font-black text-emerald-600">{monthlyRevenue}</p></div><div className="p-4 sm:p-5"><div className="flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Công suất</p><span className="text-xs font-black text-violet-700">{capacity}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400" style={{ width: capacity }} /></div></div></div>
+              <div className="flex flex-col gap-3 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center"><div className="flex flex-1 flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-slate-500"><span className="flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{hours}</span><span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{phone}</span><span className="flex items-center gap-1.5"><CalendarCheck2 className="h-3.5 w-3.5" />{Math.max(18, 32 - index * 7)} lịch hôm nay</span></div><button type="button" onClick={() => onSelectRow(row)} className="flex h-9 items-center justify-center gap-2 border border-violet-200 bg-white px-4 text-xs font-black text-violet-700 shadow-sm">Xem hồ sơ chi tiết<ArrowRight className="h-3.5 w-3.5" /></button></div>
+            </article>;
+          })}
+          {!filteredRows.length && <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><Search className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-black text-slate-700">Không tìm thấy chi nhánh phù hợp</p><button type="button" onClick={() => { onSearch(''); onTab('Tất cả'); }} className="mt-2 border-0 bg-transparent text-xs font-bold text-violet-600 shadow-none">Xóa bộ lọc</button></div>}
+        </div>
+
+        <aside className="space-y-4">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><p className="text-sm font-black text-slate-900">Hạn mức gói</p><p className="mt-1 text-[11px] text-slate-500">Số địa điểm được phép quản lý</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><Target className="h-4 w-4" /></span></div><div className="mt-5 flex items-end justify-between"><div><span className="text-3xl font-black text-slate-900">{rows.length}</span><span className="ml-1 text-sm font-bold text-slate-400">/ {unlimited ? '∞' : branchLimit}</span></div><span className="text-xs font-black text-violet-600">{quotaPercent}%</span></div><div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500" style={{ width: `${quotaPercent}%` }} /></div><p className="mt-3 text-[11px] leading-5 text-slate-500">{unlimited ? `Gói ${planName} không giới hạn chi nhánh.` : remaining ? `Bạn có thể mở thêm ${remaining} chi nhánh trong gói ${planName}.` : `Bạn đã dùng hết hạn mức chi nhánh của gói ${planName}.`}</p></section>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div><p className="text-sm font-black text-slate-900">Sức khỏe hệ thống</p><p className="mt-1 text-[11px] text-slate-500">Cập nhật theo dữ liệu vận hành hôm nay</p></div><div className="mt-4 space-y-4">{[{ label: 'Công suất phục vụ', value: '82%', tone: 'bg-violet-500', width: 82 }, { label: 'Đúng giờ mở ca', value: '100%', tone: 'bg-emerald-500', width: 100 }, { label: 'Hoàn tất checklist', value: '94%', tone: 'bg-blue-500', width: 94 }, { label: 'CSAT trung bình', value: '4,8/5', tone: 'bg-amber-500', width: 96 }].map((item) => <div key={item.label}><div className="flex justify-between text-[11px]"><span className="font-semibold text-slate-500">{item.label}</span><span className="font-black text-slate-800">{item.value}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${item.width}%` }} /></div></div>)}</div></section>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><p className="text-sm font-black text-slate-900">Cần xử lý</p><span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">4 việc</span></div><div className="mt-4 space-y-2.5">{['Duyệt lịch vận hành cuối tuần', 'Đối soát doanh thu chi nhánh chính', 'Điều chuyển 12 mã sơn Gel', 'Rà soát quyền của quản lý chi nhánh'].map((item, index) => <div key={item} className="flex items-start gap-3 rounded-xl bg-slate-50 p-3"><span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${index === 0 ? 'bg-amber-100 text-amber-700' : 'bg-violet-100 text-violet-700'}`}>{index === 0 ? <Clock3 className="h-3 w-3" /> : <Check className="h-3 w-3" />}</span><p className="text-[11px] font-semibold leading-5 text-slate-600">{item}</p></div>)}</div></section>
+        </aside>
+      </section>
+    </div>
+  );
+}
+
+interface BranchDetailDrawerProps {
+  row: NailRow;
+  tenantName: string;
+  onClose: () => void;
+  onEdit: () => void;
+  onUpdate: () => void;
+}
+
+function BranchDetailDrawer({ row, tenantName, onClose, onEdit, onUpdate }: BranchDetailDrawerProps) {
+  const address = getBranchField(row, 'Địa chỉ', row.subtitle.includes('·') ? row.subtitle.split('·').slice(1).join('·').trim() : row.subtitle);
+  const staff = getBranchStaffCount(row);
+  const phone = getBranchField(row, 'Điện thoại', '028 3930 8899');
+  const manager = getBranchField(row, 'Quản lý', row.cells[1] || 'Nguyễn Văn Boss');
+  const hours = getBranchField(row, 'Giờ hoạt động', row.cells[0] || '08:00–21:00');
+  const stations = getBranchField(row, 'Số ghế', '14 vị trí');
+  const capacity = getBranchField(row, 'Công suất', '86%');
+  return <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/50 backdrop-blur-[2px]"><button type="button" aria-label="Đóng hồ sơ chi nhánh" onClick={onClose} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[680px] flex-col overflow-hidden bg-[#f7f8fb] shadow-2xl"><header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-7"><div className="flex items-start gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><Store className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-violet-600">{row.id}</span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${toneClasses[row.badgeTone].badge}`}>{row.badge}</span></div><h2 className="mt-2 text-xl font-black text-slate-900">{row.title}</h2><p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p></div><button type="button" onClick={onClose} aria-label="Đóng" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div></header>
+    <div className="flex-1 overflow-y-auto p-5 sm:p-7"><section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#19152f] to-[#35245e] p-6 text-white"><div className="flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-violet-300">Tổng quan vận hành hôm nay</p><p className="mt-2 text-2xl font-black">{row.title}</p><p className="mt-2 text-xs text-slate-400">Đồng bộ lúc 10:32 · {tenantName}</p></div><span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-[10px] font-black text-emerald-300 ring-1 ring-emerald-300/20">Hệ thống ổn định</span></div><div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">{[{ label: 'Lịch hôm nay', value: '32' }, { label: 'Doanh thu', value: row.cells[3] || '18,6tr' }, { label: 'Công suất', value: capacity }, { label: 'CSAT', value: '4,8/5' }].map((item) => <div key={item.label} className="rounded-2xl bg-white/[0.07] p-3"><p className="text-[10px] text-slate-400">{item.label}</p><p className="mt-1 text-base font-black">{item.value}</p></div>)}</div></section>
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2"><Store className="h-4 w-4 text-violet-600" /><h3 className="text-sm font-black text-slate-900">Thông tin chi nhánh</h3></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{[{ label: 'Quản lý phụ trách', value: manager, icon: UserCheck }, { label: 'Điện thoại', value: phone, icon: Phone }, { label: 'Email chi nhánh', value: 'branch@bossnail.vn', icon: Mail }, { label: 'Giờ hoạt động', value: hours, icon: Clock3 }, { label: 'Múi giờ', value: 'Asia/Ho_Chi_Minh (GMT+7)', icon: Globe2 }, { label: 'Ngày khai trương', value: getBranchField(row, 'Ngày mở cửa', '12/03/2024'), icon: CalendarClock }].map(({ label, value, icon: Icon }) => <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><Icon className="h-3.5 w-3.5" />{label}</div><p className="mt-2 text-xs font-black leading-5 text-slate-700">{value}</p></div>)}</div></section>
+      <section className="mt-5 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-sm font-black text-slate-900">Nguồn lực & cơ sở vật chất</h3><div className="mt-4 space-y-3">{[{ label: 'Nhân sự đang hoạt động', value: `${staff} người` }, { label: 'Vị trí phục vụ', value: stations }, { label: 'Khu vực', value: 'Manicure · Pedicure · VIP' }, { label: 'Kho vật tư', value: 'Kho chi nhánh · Đồng bộ trung tâm' }].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"><span className="text-[11px] text-slate-500">{item.label}</span><span className="text-right text-[11px] font-black text-slate-800">{item.value}</span></div>)}</div></div><div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-sm font-black text-slate-900">Chất lượng vận hành</h3><div className="mt-4 space-y-3">{[{ label: 'Checklist mở ca', value: '12/12', color: 'text-emerald-600' }, { label: 'Vệ sinh & khử khuẩn', value: 'Đạt', color: 'text-emerald-600' }, { label: 'Thiết bị cần bảo trì', value: '1', color: 'text-amber-600' }, { label: 'Sự cố đang mở', value: '0', color: 'text-emerald-600' }].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"><span className="text-[11px] text-slate-500">{item.label}</span><span className={`text-[11px] font-black ${item.color}`}>{item.value}</span></div>)}</div></div></section>
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-900">Lịch hoạt động trong tuần</h3><p className="mt-1 text-[11px] text-slate-500">Giờ nhận lịch cuối cùng trước khi đóng cửa 60 phút</p></div><CalendarClock className="h-4 w-4 text-violet-600" /></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{['T2 · 08:00–21:00', 'T3 · 08:00–21:00', 'T4 · 08:00–21:00', 'T5 · 08:00–21:00', 'T6 · 08:00–22:00', 'T7 · 08:00–22:00', 'CN · 09:00–21:00', 'Ngày lễ · Theo lịch'].map((item) => <div key={item} className="rounded-xl bg-slate-50 px-3 py-2.5 text-[10px] font-bold text-slate-600">{item}</div>)}</div></section>
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-start gap-3"><Activity className="mt-0.5 h-4 w-4 text-slate-400" /><div><h3 className="text-sm font-black text-slate-900">Nhật ký quản trị gần nhất</h3><p className="mt-2 text-xs leading-5 text-slate-500">10:32 hôm nay · Đồng bộ lịch hẹn và công suất ghế tự động.</p><p className="mt-1 text-xs leading-5 text-slate-500">09:05 hôm nay · {manager} hoàn tất checklist mở ca.</p><p className="mt-1 text-xs leading-5 text-slate-500">16/07 · Cập nhật định mức tồn kho Gel và hóa chất.</p></div></div></section>
+    </div><footer className="shrink-0 border-t border-slate-200 bg-white p-4 sm:px-7"><div className="flex gap-2"><button type="button" onClick={onEdit} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm"><Settings className="h-4 w-4" />Chỉnh sửa hồ sơ</button><button type="button" onClick={onUpdate} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Xác nhận & cập nhật</button></div></footer></aside></div>;
 }
 
 function ModulePage({ config, rows, searchQuery, activeTab, onSearch, onTab, onSelectRow, onCreate, onExport, scopeLabel, planName, accessMode, branchCount, branchLimit, staffCount, staffLimit, onUpgrade }: ModulePageProps) {
@@ -836,6 +956,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
             <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
           ) : activePage === 'subscription' ? (
             <SubscriptionPage tenantName={tenantName} tenant={tenant} subscriptionPackage={currentPackage} availablePackages={normalizedAvailablePackages} invoices={invoices} branchCount={branchRows.length} staffCount={staffUsage} onNotify={setToast} />
+          ) : activePage === 'branches' ? (
+            <BranchesPage rows={scopedRows} searchQuery={searchQuery} activeTab={activeTab || 'Tất cả'} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate('branches')} onExport={exportRows} planName={currentPackage.name} branchLimit={branchLimit} />
           ) : currentConfig && (
             <ModulePage config={currentConfig} rows={scopedRows} searchQuery={searchQuery} activeTab={activeTab || currentConfig.tabs[0]} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate()} onExport={exportRows} scopeLabel={branchScopeLabel} planName={currentPackage.name} accessMode={currentAccessMode} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onUpgrade={() => showPageGate(currentConfig.id)} />
           )}
@@ -857,7 +979,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           </div>
         </section>
       </div>}
-      {selectedRow && currentConfig && <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"><button type="button" aria-label="Đóng chi tiết" onClick={() => setSelectedRow(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[500px] flex-col overflow-hidden bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div><div className="flex items-center gap-2"><span className="text-[8px] font-black uppercase tracking-wide text-violet-600">{selectedRow.id}</span><span className={`rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${toneClasses[selectedRow.badgeTone].badge}`}>{selectedRow.badge}</span></div><h2 className="mt-2 text-lg font-black text-slate-900">{selectedRow.title}</h2><p className="mt-1 text-[8px] text-slate-400">{selectedRow.subtitle}</p></div><button type="button" onClick={() => setSelectedRow(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="flex-1 overflow-y-auto p-5 sm:p-6"><div className="rounded-2xl bg-gradient-to-br from-[#19152e] to-[#292148] p-5 text-white"><p className="text-[8px] font-bold uppercase tracking-[0.14em] text-violet-300">{currentConfig.title}</p><p className="mt-2 text-xl font-black">{selectedRow.title}</p><p className="mt-2 text-[8px] leading-4 text-slate-400">{selectedRow.subtitle}</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{selectedRow.details.map((item, index) => <div key={`${item.label}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3"><p className="text-[7px] font-bold text-slate-400">{item.label}</p><p className="mt-1.5 text-[9px] font-black leading-4 text-slate-700">{item.value}</p></div>)}</div>{selectedRow.note && <div className="mt-5 rounded-2xl bg-violet-50 p-4"><p className="text-[8px] font-black uppercase tracking-wide text-violet-500">Ghi chú vận hành</p><p className="mt-2 text-[9px] leading-5 text-violet-700">{selectedRow.note}</p></div>}<div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-start gap-3"><ReceiptText className="mt-0.5 h-4 w-4 text-slate-400" /><div><p className="text-[9px] font-black text-slate-700">Lịch sử hoạt động</p><p className="mt-1 text-[8px] leading-4 text-slate-400">Cập nhật gần nhất lúc 14:32 bởi hệ thống {tenantName}. Mọi thay đổi quản trị được ghi lại trong nhật ký.</p></div></div></div></div><div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><div className="flex gap-2"><button type="button" onClick={openEdit} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm"><Settings className="h-3.5 w-3.5" />Chỉnh sửa</button><button type="button" onClick={updateSelectedRowStatus} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Xác nhận & cập nhật</button></div></div></aside></div>}
+      {selectedRow && currentConfig && (currentConfig.id === 'branches' ? <BranchDetailDrawer row={selectedRow} tenantName={tenantName} onClose={() => setSelectedRow(null)} onEdit={openEdit} onUpdate={updateSelectedRowStatus} /> : <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"><button type="button" aria-label="Đóng chi tiết" onClick={() => setSelectedRow(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[500px] flex-col overflow-hidden bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div><div className="flex items-center gap-2"><span className="text-[8px] font-black uppercase tracking-wide text-violet-600">{selectedRow.id}</span><span className={`rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${toneClasses[selectedRow.badgeTone].badge}`}>{selectedRow.badge}</span></div><h2 className="mt-2 text-lg font-black text-slate-900">{selectedRow.title}</h2><p className="mt-1 text-[8px] text-slate-400">{selectedRow.subtitle}</p></div><button type="button" onClick={() => setSelectedRow(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="flex-1 overflow-y-auto p-5 sm:p-6"><div className="rounded-2xl bg-gradient-to-br from-[#19152e] to-[#292148] p-5 text-white"><p className="text-[8px] font-bold uppercase tracking-[0.14em] text-violet-300">{currentConfig.title}</p><p className="mt-2 text-xl font-black">{selectedRow.title}</p><p className="mt-2 text-[8px] leading-4 text-slate-400">{selectedRow.subtitle}</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{selectedRow.details.map((item, index) => <div key={`${item.label}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3"><p className="text-[7px] font-bold text-slate-400">{item.label}</p><p className="mt-1.5 text-[9px] font-black leading-4 text-slate-700">{item.value}</p></div>)}</div>{selectedRow.note && <div className="mt-5 rounded-2xl bg-violet-50 p-4"><p className="text-[8px] font-black uppercase tracking-wide text-violet-500">Ghi chú vận hành</p><p className="mt-2 text-[9px] leading-5 text-violet-700">{selectedRow.note}</p></div>}<div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-start gap-3"><ReceiptText className="mt-0.5 h-4 w-4 text-slate-400" /><div><p className="text-[9px] font-black text-slate-700">Lịch sử hoạt động</p><p className="mt-1 text-[8px] leading-4 text-slate-400">Cập nhật gần nhất lúc 14:32 bởi hệ thống {tenantName}. Mọi thay đổi quản trị được ghi lại trong nhật ký.</p></div></div></div></div><div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><div className="flex gap-2"><button type="button" onClick={openEdit} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm"><Settings className="h-3.5 w-3.5" />Chỉnh sửa</button><button type="button" onClick={updateSelectedRowStatus} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Xác nhận & cập nhật</button></div></div></aside></div>)}
 
       {createOpen && currentConfig && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitCreate} className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><p className="text-[8px] font-black uppercase tracking-wide text-violet-600">{currentConfig.title}</p><h2 className="mt-1 text-base font-black text-slate-900">{currentConfig.formTitle}</h2><p className="mt-1 text-[8px] text-slate-500">Nhập thông tin cần thiết; bạn có thể bổ sung chi tiết sau khi lưu.</p></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">{currentConfig.formFields.map((field) => <label key={field.key} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-[8px] font-bold text-slate-600">{field.label}</span>{field.type === 'select' ? <BeautifulSelect value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] font-medium"><option value="">Chọn {field.label.toLocaleLowerCase('vi')}</option>{field.options?.map((option) => <option key={option} value={option}>{option}</option>)}</BeautifulSelect> : field.type === 'textarea' ? <textarea value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[9px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /> : <input type={field.type} value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder} required={field === currentConfig.formFields[0]} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />}</label>)}</div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />Lưu thông tin</button></div></form></div>}
     </div>
