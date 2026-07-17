@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, Fragment, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -50,7 +50,7 @@ import {
   X
 } from 'lucide-react';
 import type { Branch, Invoice, SubscriptionPackage, Tenant } from '../types';
-import { BRANCH_MODEL_OPTIONS, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches } from '../utils/branches';
+import { BRANCH_MODEL_OPTIONS, generateBranchCode, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches, validateBranchDraft } from '../utils/branches';
 import {
   formatSubscriptionLimit,
   getTenantLockedSubscriptionPrice,
@@ -717,6 +717,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [selectedRow, setSelectedRow] = useState<NailRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [pendingBranchChange, setPendingBranchChange] = useState<{ branch: Branch; updatedBranches: Branch[]; isEditing: boolean } | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [toast, setToast] = useState('');
   const [lockedPage, setLockedPage] = useState<NailPageId | null>(null);
@@ -825,7 +826,11 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     }
     if (page && page !== activePage && !navigate(page)) return;
     setEditingRowId(null);
-    setFormValues(targetPage === 'branches' ? { branchRole: 'Chi nhánh thành viên', branchModel: 'Salon đầy đủ dịch vụ', status: 'Đang hoạt động', openingHours: '08:00–21:00', capacityPercent: '0' } : {});
+    if (targetPage === 'branches') {
+      const existingBranches = tenant ? normalizeTenantBranches(tenant) : [];
+      const defaultName = `${tenantName} - Chi nhánh ${existingBranches.length + 1}`;
+      setFormValues({ name: defaultName, code: generateBranchCode(defaultName, tenantName, existingBranches), branchRole: 'Chi nhánh thành viên', branchModel: 'Salon đầy đủ dịch vụ', status: 'Đang hoạt động', openingHours: '08:00–21:00', stations: '8', staffCount: '0', staffCapacity: '8', monthlyRevenue: '0', capacityPercent: '0', services: 'Manicure, Pedicure, Sơn Gel, Nail Art' });
+    } else setFormValues({});
     setCreateOpen(true);
   };
 
@@ -884,6 +889,31 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       const status: Branch['status'] = formValues.status === 'Chuẩn bị mở' ? 'PLANNING' : formValues.status === 'Tạm ngưng' ? 'INACTIVE' : 'ACTIVE';
       const staffCount = Math.max(0, Number(formValues.staffCount || existingBranch?.staffUsed || 0));
       const stationCount = Math.max(1, Number(formValues.stations || existingBranch?.stationCount || 1));
+      const services = formValues.services?.split(',').map((item) => item.trim()).filter(Boolean) || [];
+      const otherStaffCount = currentBranches.filter((item) => item.id !== editingRowId).reduce((sum, item) => sum + item.staffUsed, 0);
+      const maxAdditionalStaff = isUnlimitedTenantLimit(staffLimit, 'staff') ? null : Math.max(0, staffLimit - otherStaffCount);
+      const validation = validateBranchDraft({
+        id: branchId,
+        name: formValues.name || '',
+        address: formValues.address || '',
+        model,
+        status,
+        managerName: formValues.manager || '',
+        phone: formValues.phone || '',
+        email: formValues.email || '',
+        openingHours: formValues.openingHours || '',
+        openingDate: formValues.openingDate || undefined,
+        stationCount,
+        staffUsed: staffCount,
+        staffCapacity: Number(formValues.staffCapacity || stationCount),
+        monthlyRevenue: Number(formValues.monthlyRevenue || 0),
+        capacityPercent: Number(formValues.capacityPercent || 0),
+        services
+      }, currentBranches, { editingId: editingRowId, maxAdditionalStaff });
+      if (!validation.isValid) {
+        setToast('Thông tin chi nhánh chưa hợp lệ. Vui lòng kiểm tra các điều kiện trong biểu mẫu.');
+        return;
+      }
       const nextBranch = normalizeBranch({
         ...(existingBranch || {} as Branch),
         id: branchId,
@@ -905,7 +935,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
         staffCount,
         staffLimit,
         taxCode: formValues.taxCode?.trim() || '',
-        services: formValues.services?.split(',').map((item) => item.trim()).filter(Boolean) || [],
+        services,
         monthlyRevenue: Math.max(0, Number(formValues.monthlyRevenue || 0)),
         capacityPercent: Math.max(0, Math.min(100, Number(formValues.capacityPercent || 0))),
         status,
@@ -916,19 +946,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       const updatedBranches = editingRowId
         ? normalizedCurrent.map((item) => item.id === editingRowId ? nextBranch : item)
         : [...normalizedCurrent, nextBranch];
-      const updatedStaffCount = updatedBranches.reduce((sum, item) => sum + item.staffUsed, 0);
-      const activity = {
-        date: new Date().toISOString().replace('T', ' ').slice(0, 16),
-        user: account.displayName,
-        type: 'branch',
-        description: `${editingRowId ? 'Cập nhật' : 'Thêm'} chi nhánh "${nextBranch.name}" từ Tenant Admin.`
-      };
-      onUpdateTenant?.(tenant.id, { branches: updatedBranches, staffCount: updatedStaffCount, customActivities: [activity, ...(tenant.customActivities || [])] });
-      setRowsByPage((current) => ({ ...current, branches: updatedBranches.map(branchToNailRow) }));
       setCreateOpen(false);
-      setEditingRowId(null);
-      setFormValues({});
-      setToast(`Đã ${existingBranch ? 'cập nhật' : 'thêm'} chi nhánh “${nextBranch.name}”. Dữ liệu đã đồng bộ với Super Admin.`);
+      setPendingBranchChange({ branch: nextBranch, updatedBranches, isEditing: Boolean(existingBranch) });
       return;
     }
     const title = formValues[fields[0]?.key] || currentConfig.primaryAction + ' mới';
@@ -950,6 +969,23 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     setCreateOpen(false);
     setFormValues({});
     setToast('Đã tạo “' + title + '” trong ' + currentConfig.title + '.');
+  };
+
+  const confirmTenantBranchChange = () => {
+    if (!pendingBranchChange || !tenant) return;
+    const updatedStaffCount = pendingBranchChange.updatedBranches.reduce((sum, item) => sum + item.staffUsed, 0);
+    const activity = {
+      date: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      user: account.displayName,
+      type: 'branch',
+      description: `${pendingBranchChange.isEditing ? 'Cập nhật' : 'Thêm'} chi nhánh "${pendingBranchChange.branch.name}" từ Tenant Admin.`
+    };
+    onUpdateTenant?.(tenant.id, { branches: pendingBranchChange.updatedBranches, staffCount: updatedStaffCount, customActivities: [activity, ...(tenant.customActivities || [])] });
+    setRowsByPage((current) => ({ ...current, branches: pendingBranchChange.updatedBranches.map(branchToNailRow) }));
+    setToast(`Đã ${pendingBranchChange.isEditing ? 'cập nhật' : 'thêm'} chi nhánh “${pendingBranchChange.branch.name}”. Dữ liệu đã đồng bộ với Super Admin.`);
+    setPendingBranchChange(null);
+    setEditingRowId(null);
+    setFormValues({});
   };
 
   const openEdit = () => {
@@ -1009,10 +1045,37 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     setToast('Đã cập nhật trạng thái “' + selectedRow.title + '”.');
     setSelectedRow(null);
   };
+  const liveTenantBranchValidation = (() => {
+    if (currentConfig?.id !== 'branches' || !tenant) return { errors: {} as Record<string, string>, isValid: true };
+    const existingBranches = normalizeTenantBranches(tenant);
+    const existingBranch = existingBranches.find((item) => item.id === editingRowId);
+    const model = BRANCH_MODEL_OPTIONS.find((option) => option.label === formValues.branchModel)?.value || 'FULL_SERVICE';
+    const status: Branch['status'] = formValues.status === 'Chuẩn bị mở' ? 'PLANNING' : formValues.status === 'Tạm ngưng' ? 'INACTIVE' : 'ACTIVE';
+    const otherStaffCount = existingBranches.filter((item) => item.id !== editingRowId).reduce((sum, item) => sum + item.staffUsed, 0);
+    return validateBranchDraft({
+      id: editingRowId || formValues.code,
+      name: formValues.name || '',
+      address: formValues.address || '',
+      model,
+      status,
+      managerName: formValues.manager || '',
+      phone: formValues.phone || '',
+      email: formValues.email || '',
+      openingHours: formValues.openingHours || '',
+      openingDate: formValues.openingDate || undefined,
+      stationCount: Number(formValues.stations || 0),
+      staffUsed: Number(formValues.staffCount || existingBranch?.staffUsed || 0),
+      staffCapacity: Number(formValues.staffCapacity || 0),
+      monthlyRevenue: Number(formValues.monthlyRevenue || 0),
+      capacityPercent: Number(formValues.capacityPercent || 0),
+      services: formValues.services?.split(',').map((item) => item.trim()).filter(Boolean) || []
+    }, existingBranches, { editingId: editingRowId, maxAdditionalStaff: isUnlimitedTenantLimit(staffLimit, 'staff') ? null : Math.max(0, staffLimit - otherStaffCount) });
+  })();
   return (
     <div className="nail-admin min-h-screen bg-[#f5f7fb] text-slate-950">
       {toast && <div className="fixed right-4 top-24 z-[90] flex max-w-sm items-center gap-3 rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-2xl"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><Check className="h-4 w-4" /></span><p className="text-[9px] font-bold text-slate-700">{toast}</p><button type="button" onClick={() => setToast('')} aria-label="Đóng thông báo" className="ml-2 flex h-7 w-7 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button></div>}
       {sidebarOpen && <button type="button" aria-label="Đóng lớp phủ menu" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-40 min-h-0 rounded-none border-0 bg-slate-950/45 p-0 shadow-none lg:hidden" />}
+      {pendingBranchChange && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><section className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="bg-gradient-to-br from-[#19152f] to-[#35245e] p-6 text-white"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Bước xác nhận cuối</p><h2 className="mt-2 text-xl font-black">{pendingBranchChange.isEditing ? 'Xác nhận cập nhật chi nhánh' : 'Xác nhận thêm chi nhánh'}</h2><p className="mt-2 text-xs leading-5 text-slate-300">Dữ liệu sau khi xác nhận sẽ được đồng bộ cho cả Tenant Admin và Super Admin.</p></div><div className="space-y-4 p-6"><div className="rounded-2xl border border-violet-100 bg-violet-50 p-4"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-violet-700">{pendingBranchChange.branch.code}</span><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-violet-700">{getBranchModelLabel(pendingBranchChange.branch.model)}</span>{pendingBranchChange.branch.isPrimary && <span className="rounded-full bg-slate-900 px-2 py-1 text-[10px] font-bold text-white">Chi nhánh chính</span>}</div><p className="mt-2 text-base font-black text-slate-900">{pendingBranchChange.branch.name}</p><p className="mt-1 text-xs text-slate-500">{pendingBranchChange.branch.address}</p></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-400">Quản lý</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.branch.managerName}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-400">Trạng thái</p><p className="mt-1 text-xs font-black text-slate-700">{getBranchStatusLabel(pendingBranchChange.branch.status)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-400">Nguồn lực</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.branch.staffUsed} nhân sự · {pendingBranchChange.branch.stationCount} vị trí</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-400">Hạn mức sau lưu</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.updatedBranches.length} / {isUnlimitedTenantLimit(branchLimit, 'branches') ? 'Không giới hạn' : branchLimit + ' chi nhánh'}</p></div></div></div><div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => { setPendingBranchChange(null); setCreateOpen(true); }} className="h-11 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Quay lại chỉnh sửa</button><button type="button" onClick={confirmTenantBranchChange} className="h-11 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200">{pendingBranchChange.isEditing ? 'Xác nhận cập nhật' : 'Xác nhận thêm chi nhánh'}</button></div></section></div>}
 
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[284px] flex-col bg-[#111625] text-white shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[88px]' : 'lg:w-[284px]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <button type="button" onClick={toggleSidebarCollapsed} aria-label={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} className="absolute -right-3 top-[26px] z-10 hidden h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-[#1b2234] p-0 text-slate-300 shadow-lg transition hover:border-violet-400 hover:bg-violet-600 hover:text-white lg:flex">
@@ -1105,7 +1168,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       </div>}
       {selectedRow && currentConfig && (currentConfig.id === 'branches' ? <BranchDetailDrawer row={selectedRow} tenantName={tenantName} onClose={() => setSelectedRow(null)} onEdit={openEdit} onUpdate={updateSelectedRowStatus} /> : <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"><button type="button" aria-label="Đóng chi tiết" onClick={() => setSelectedRow(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[500px] flex-col overflow-hidden bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div><div className="flex items-center gap-2"><span className="text-[8px] font-black uppercase tracking-wide text-violet-600">{selectedRow.id}</span><span className={`rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${toneClasses[selectedRow.badgeTone].badge}`}>{selectedRow.badge}</span></div><h2 className="mt-2 text-lg font-black text-slate-900">{selectedRow.title}</h2><p className="mt-1 text-[8px] text-slate-400">{selectedRow.subtitle}</p></div><button type="button" onClick={() => setSelectedRow(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="flex-1 overflow-y-auto p-5 sm:p-6"><div className="rounded-2xl bg-gradient-to-br from-[#19152e] to-[#292148] p-5 text-white"><p className="text-[8px] font-bold uppercase tracking-[0.14em] text-violet-300">{currentConfig.title}</p><p className="mt-2 text-xl font-black">{selectedRow.title}</p><p className="mt-2 text-[8px] leading-4 text-slate-400">{selectedRow.subtitle}</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{selectedRow.details.map((item, index) => <div key={`${item.label}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3"><p className="text-[7px] font-bold text-slate-400">{item.label}</p><p className="mt-1.5 text-[9px] font-black leading-4 text-slate-700">{item.value}</p></div>)}</div>{selectedRow.note && <div className="mt-5 rounded-2xl bg-violet-50 p-4"><p className="text-[8px] font-black uppercase tracking-wide text-violet-500">Ghi chú vận hành</p><p className="mt-2 text-[9px] leading-5 text-violet-700">{selectedRow.note}</p></div>}<div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-start gap-3"><ReceiptText className="mt-0.5 h-4 w-4 text-slate-400" /><div><p className="text-[9px] font-black text-slate-700">Lịch sử hoạt động</p><p className="mt-1 text-[8px] leading-4 text-slate-400">Cập nhật gần nhất lúc 14:32 bởi hệ thống {tenantName}. Mọi thay đổi quản trị được ghi lại trong nhật ký.</p></div></div></div></div><div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><div className="flex gap-2"><button type="button" onClick={openEdit} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm"><Settings className="h-3.5 w-3.5" />Chỉnh sửa</button><button type="button" onClick={updateSelectedRowStatus} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Xác nhận & cập nhật</button></div></div></aside></div>)}
 
-      {createOpen && currentConfig && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitCreate} className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><p className="text-[8px] font-black uppercase tracking-wide text-violet-600">{currentConfig.title}</p><h2 className="mt-1 text-base font-black text-slate-900">{currentConfig.formTitle}</h2><p className="mt-1 text-[8px] text-slate-500">Nhập thông tin cần thiết; bạn có thể bổ sung chi tiết sau khi lưu.</p></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">{currentConfig.formFields.map((field) => <label key={field.key} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-[8px] font-bold text-slate-600">{field.label}</span>{field.type === 'select' ? <BeautifulSelect value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] font-medium"><option value="">Chọn {field.label.toLocaleLowerCase('vi')}</option>{field.options?.map((option) => <option key={option} value={option}>{option}</option>)}</BeautifulSelect> : field.type === 'textarea' ? <textarea value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[9px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /> : <input type={field.type} value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder} required={field === currentConfig.formFields[0]} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />}</label>)}</div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />Lưu thông tin</button></div></form></div>}
+      {createOpen && currentConfig && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitCreate} className={`relative max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-3xl bg-white shadow-2xl ${currentConfig.id === 'branches' ? 'max-w-4xl' : 'max-w-2xl'}`}><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><p className="text-[10px] font-black uppercase tracking-wide text-violet-600">{currentConfig.title}</p><h2 className="mt-1 text-lg font-black text-slate-900">{editingRowId && currentConfig.id === 'branches' ? 'Chỉnh sửa hồ sơ chi nhánh' : currentConfig.formTitle}</h2><p className="mt-1 text-xs text-slate-500">{currentConfig.id === 'branches' ? 'Hoàn thiện thông tin theo từng nhóm. Mã chi nhánh được tạo tự động và dữ liệu chỉ được lưu sau bước xác nhận.' : 'Nhập thông tin cần thiết; bạn có thể bổ sung chi tiết sau khi lưu.'}</p></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>{currentConfig.id === 'branches' && <div className="mx-5 mt-5 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:mx-6 sm:grid-cols-3"><div className="rounded-xl bg-white p-3"><p className="text-[10px] font-black text-violet-600">1 · Nhận diện</p><p className="mt-1 text-[10px] text-slate-500">Tên, vai trò và mô hình</p></div><div className="rounded-xl bg-white p-3"><p className="text-[10px] font-black text-violet-600">2 · Vận hành</p><p className="mt-1 text-[10px] text-slate-500">Địa điểm, quản lý, nguồn lực</p></div><div className="rounded-xl bg-white p-3"><p className="text-[10px] font-black text-violet-600">3 · Xác nhận</p><p className="mt-1 text-[10px] text-slate-500">Kiểm tra hạn mức và đồng bộ</p></div></div>}<div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">{currentConfig.formFields.map((field) => <Fragment key={field.key}>{currentConfig.id === 'branches' && field.key === 'name' && <div className="sm:col-span-2"><p className="text-xs font-black text-slate-900">Thông tin nhận diện</p><p className="mt-1 text-[10px] text-slate-500">Mã chi nhánh được sinh tự động từ tên và không trùng trong tenant.</p></div>}{currentConfig.id === 'branches' && field.key === 'province' && <div className="mt-2 border-t border-slate-200 pt-5 sm:col-span-2"><p className="text-xs font-black text-slate-900">Địa điểm & người phụ trách</p></div>}{currentConfig.id === 'branches' && field.key === 'openingHours' && <div className="mt-2 border-t border-slate-200 pt-5 sm:col-span-2"><p className="text-xs font-black text-slate-900">Vận hành & nguồn lực</p></div>}{currentConfig.id === 'branches' && field.key === 'monthlyRevenue' && <div className="mt-2 border-t border-slate-200 pt-5 sm:col-span-2"><p className="text-xs font-black text-slate-900">Chỉ số ban đầu & dịch vụ</p></div>}<label className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-[10px] font-bold text-slate-600">{field.label}{currentConfig.id === 'branches' && ['name', 'address', 'manager', 'openingHours', 'stations', 'services'].includes(field.key) && <span className="text-rose-500"> *</span>}</span>{field.type === 'select' ? <BeautifulSelect value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium"><option value="">Chọn {field.label.toLocaleLowerCase('vi')}</option>{field.options?.map((option) => <option key={option} value={option}>{option}</option>)}</BeautifulSelect> : field.type === 'textarea' ? <textarea value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /> : <input type={field.type} value={formValues[field.key] || ''} readOnly={currentConfig.id === 'branches' && field.key === 'code'} aria-readonly={currentConfig.id === 'branches' && field.key === 'code'} onChange={(event) => { const value = event.target.value; setFormValues((current) => ({ ...current, [field.key]: value, ...(currentConfig.id === 'branches' && field.key === 'name' && !editingRowId ? { code: generateBranchCode(value, tenantName, tenant ? normalizeTenantBranches(tenant) : []) } : {}) })); }} placeholder={field.placeholder} required={field === currentConfig.formFields[0]} className={`h-11 w-full rounded-xl border px-3 text-xs font-medium outline-none ${currentConfig.id === 'branches' && field.key === 'code' ? 'cursor-not-allowed border-violet-200 bg-violet-50 font-black text-violet-700' : 'border-slate-200 bg-slate-50 focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100'}`} />}{currentConfig.id === 'branches' && liveTenantBranchValidation.errors[field.key] && <span className="mt-1.5 block text-[10px] font-semibold text-rose-600">{liveTenantBranchValidation.errors[field.key]}</span>}{currentConfig.id === 'branches' && field.key === 'code' && <span className="mt-1.5 block text-[10px] text-slate-400">Tự động tạo; không thể chỉnh sửa thủ công.</span>}</label></Fragment>)}</div>{currentConfig.id === 'branches' && <div className={`mx-5 mb-5 rounded-2xl border p-4 sm:mx-6 ${liveTenantBranchValidation.isValid ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}><p className={`text-xs font-black ${liveTenantBranchValidation.isValid ? 'text-emerald-700' : 'text-amber-800'}`}>{liveTenantBranchValidation.isValid ? 'Đã đáp ứng đầy đủ điều kiện thêm chi nhánh' : `Cần hoàn thiện ${Object.keys(liveTenantBranchValidation.errors).length} điều kiện trước khi xác nhận`}</p>{!liveTenantBranchValidation.isValid && <ul className="mt-2 grid gap-1 text-[10px] leading-5 text-amber-800 sm:grid-cols-2">{Object.values(liveTenantBranchValidation.errors).map((error) => <li key={error}>• {error}</li>)}</ul>}</div>}<div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" disabled={currentConfig.id === 'branches' && !liveTenantBranchValidation.isValid} className={`flex items-center gap-2 px-5 text-xs font-black text-white shadow-lg ${currentConfig.id === 'branches' && !liveTenantBranchValidation.isValid ? 'cursor-not-allowed border border-slate-300 bg-slate-300 shadow-none' : 'border border-violet-700 bg-violet-600 shadow-violet-200'}`}><Check className="h-4 w-4" />{currentConfig.id === 'branches' ? 'Kiểm tra & xác nhận' : 'Lưu thông tin'}</button></div></form></div>}
     </div>
   );
 }

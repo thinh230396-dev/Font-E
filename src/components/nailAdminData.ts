@@ -113,6 +113,7 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
       { key: 'openingHours', label: 'Giờ hoạt động', type: 'text', placeholder: '08:00–21:00' },
       { key: 'openingDate', label: 'Ngày dự kiến khai trương', type: 'date' },
       { key: 'stations', label: 'Số vị trí phục vụ', type: 'number', placeholder: 'Ví dụ: 12' },
+      { key: 'staffCount', label: 'Nhân sự ban đầu', type: 'number', placeholder: 'Ví dụ: 8' },
       { key: 'staffCapacity', label: 'Sức chứa nhân sự', type: 'number', placeholder: 'Ví dụ: 20' },
       { key: 'monthlyRevenue', label: 'Doanh thu tháng hiện tại', type: 'number', placeholder: 'Nhập số tiền VND' },
       { key: 'capacityPercent', label: 'Công suất hiện tại (%)', type: 'number', placeholder: '0–100' },

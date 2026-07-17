@@ -35,7 +35,7 @@ import {
   Save
 } from 'lucide-react';
 import { Branch, SubscriptionPackage, Tenant, SubscriptionPackageName, TenantStatus } from '../types';
-import { BRANCH_MODEL_OPTIONS, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches } from '../utils/branches';
+import { BRANCH_MODEL_OPTIONS, generateBranchCode, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches, validateBranchDraft } from '../utils/branches';
 import { convertMoney, formatMoney, normalizeCurrency } from '../utils/money';
 import { inferPaymentGateway } from '../utils/invoicePayments';
 import {
@@ -457,9 +457,11 @@ export default function TenantDetailModal({
   const [newBranchPhone, setNewBranchPhone] = useState('');
   const [newBranchEmail, setNewBranchEmail] = useState('');
   const [newBranchOpeningHours, setNewBranchOpeningHours] = useState('08:00–21:00');
+  const [newBranchOpeningDate, setNewBranchOpeningDate] = useState('');
   const [newBranchStationCount, setNewBranchStationCount] = useState(8);
   const [newBranchStatus, setNewBranchStatus] = useState<Branch['status']>('ACTIVE');
   const [newBranchStaffCount, setNewBranchStaffCount] = useState(0);
+  const [pendingBranch, setPendingBranch] = useState<Branch | null>(null);
 
   // Local configs that can be updated in real-time
   const [allowOnlineBooking, setAllowOnlineBooking] = useState(tenant.allowOnlineBooking !== undefined ? tenant.allowOnlineBooking : true);
@@ -488,6 +490,24 @@ export default function TenantDetailModal({
   const totalStaffLimit = currentStaffLimit;
   const totalStaffLimitDisplay = isUnlimitedStaff(totalStaffLimit) ? 'Không giới hạn' : totalStaffLimit;
   const remainingStaffCapacity = isUnlimitedStaff(currentStaffLimit) ? 999 : Math.max(0, currentStaffLimit - totalStaffUsed);
+  const newBranchDraft = {
+    name: newBranchName,
+    address: newBranchAddress,
+    model: newBranchModel,
+    status: newBranchStatus,
+    managerName: newBranchManager,
+    phone: newBranchPhone,
+    email: newBranchEmail,
+    openingHours: newBranchOpeningHours,
+    openingDate: newBranchOpeningDate || undefined,
+    stationCount: newBranchStationCount,
+    staffUsed: newBranchStaffCount,
+    staffCapacity: Math.max(newBranchStaffCount, newBranchStationCount),
+    monthlyRevenue: 0,
+    capacityPercent: 0,
+    services: newBranchModel === 'EXPRESS_KIOSK' ? ['Sơn gel nhanh', 'Manicure cơ bản'] : ['Manicure', 'Pedicure', 'Sơn Gel', 'Nail Art']
+  };
+  const newBranchValidation = validateBranchDraft(newBranchDraft, details.branches, { maxAdditionalStaff: remainingStaffCapacity });
 
   // Sync state if tenant updates from outside or when tab changes
   useEffect(() => {
@@ -518,6 +538,7 @@ export default function TenantDetailModal({
     setNewBranchPhone('');
     setNewBranchEmail('');
     setNewBranchOpeningHours('08:00–21:00');
+    setNewBranchOpeningDate('');
     setNewBranchStationCount(8);
     setNewBranchStatus('ACTIVE');
     setNewBranchStaffCount(0);
@@ -530,8 +551,9 @@ export default function TenantDetailModal({
     }
 
     const nextBranchNumber = details.branches.length + 1;
-    setNewBranchCode(`BR-${nextBranchNumber}`);
-    setNewBranchName(`${tenant.name} - Chi nhánh ${nextBranchNumber}`);
+    const defaultName = `${tenant.name} - Chi nhánh ${nextBranchNumber}`;
+    setNewBranchCode(generateBranchCode(defaultName, tenant.name, details.branches));
+    setNewBranchName(defaultName);
     setNewBranchModel('FULL_SERVICE');
     setNewBranchIsPrimary(false);
     setNewBranchAddress('');
@@ -539,6 +561,7 @@ export default function TenantDetailModal({
     setNewBranchPhone('');
     setNewBranchEmail('');
     setNewBranchOpeningHours('08:00–21:00');
+    setNewBranchOpeningDate('');
     setNewBranchStationCount(8);
     setNewBranchStatus('ACTIVE');
     setNewBranchStaffCount(0);
@@ -558,18 +581,8 @@ export default function TenantDetailModal({
     const branchAddress = newBranchAddress.trim();
     const staffCount = Math.max(0, Number(newBranchStaffCount || 0));
 
-    if (!branchCode || !branchName || !branchAddress) {
-      alert('Vui lòng nhập đầy đủ mã, tên và địa chỉ chi nhánh.');
-      return;
-    }
-
-    if (details.branches.some((branch) => branch.id.toUpperCase() === branchCode || branch.code?.toUpperCase() === branchCode)) {
-      alert(`Mã chi nhánh ${branchCode} đã tồn tại trong tenant này.`);
-      return;
-    }
-
-    if (currentStaffLimit < 999 && staffCount > currentStaffLimit) {
-      alert(`Gói ${tenant.packageName} chỉ hỗ trợ tối đa ${currentStaffLimit} thợ toàn tenant.`);
+    if (!newBranchValidation.isValid || !branchCode || details.branches.some((branch) => branch.id.toUpperCase() === branchCode || branch.code?.toUpperCase() === branchCode)) {
+      alert(!branchCode ? 'Không thể sinh mã chi nhánh. Vui lòng kiểm tra tên chi nhánh.' : 'Thông tin chi nhánh chưa hợp lệ. Vui lòng kiểm tra các cảnh báo trong biểu mẫu.');
       return;
     }
 
@@ -595,6 +608,7 @@ export default function TenantDetailModal({
       email: newBranchEmail.trim(),
       timezone: tenant.timezone || 'Asia/Ho_Chi_Minh',
       openingHours: newBranchOpeningHours.trim() || '08:00–21:00',
+      openingDate: newBranchOpeningDate || undefined,
       stationCount: Math.max(1, Number(newBranchStationCount || 1)),
       staffCapacity: Math.max(staffCount, Number(newBranchStationCount || 1)),
       staffUsed: staffCount,
@@ -608,14 +622,23 @@ export default function TenantDetailModal({
         : ['Manicure', 'Pedicure', 'Sơn Gel', 'Nail Art']
     }, tenant, existingBranches.length);
 
-    const updatedBranches = [...existingBranches, newBranch];
+    setPendingBranch(newBranch);
+    setShowAddBranchModal(false);
+  };
+
+  const confirmAddBranch = () => {
+    if (!pendingBranch) return;
+    const existingBranches = (tenant.branches && tenant.branches.length > 0 ? tenant.branches : details.branches)
+      .map((branch, index) => normalizeBranch(branch, tenant, index))
+      .map((branch) => pendingBranch.isPrimary ? { ...branch, isPrimary: false } : branch);
+    const updatedBranches = [...existingBranches, pendingBranch];
     const updatedStaffCount = updatedBranches.reduce((sum, branch) => sum + Number(branch.staffUsed || branch.staffCount || 0), 0);
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
     const newActivity = {
       date: nowStr,
       user: 'Superadmin',
       type: 'branch',
-      description: `Thêm chi nhánh "${branchName}" vào tenant ${tenant.name}. Nhân sự ban đầu: ${staffCount}.`
+      description: `Thêm chi nhánh "${pendingBranch.name}" vào tenant ${tenant.name}. Nhân sự ban đầu: ${pendingBranch.staffUsed}.`
     };
 
     onUpdateTenant(tenant.id, {
@@ -626,8 +649,8 @@ export default function TenantDetailModal({
 
     setLocalActivities(prev => [newActivity, ...prev]);
     resetAddBranchForm();
-    setShowAddBranchModal(false);
-    triggerToast(`Đã thêm chi nhánh "${branchName}" cho tenant ${tenant.name}.`);
+    setPendingBranch(null);
+    triggerToast(`Đã thêm chi nhánh "${pendingBranch.name}" cho tenant ${tenant.name}.`);
   };
 
   const handleToggleBranchStatus = (branchId: string, nextStatus: 'ACTIVE' | 'INACTIVE') => {
@@ -1579,6 +1602,16 @@ export default function TenantDetailModal({
         </div>
       )}
 
+      {pendingBranch && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-bg/90 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl">
+            <div className="border-b border-brand-outline/40 bg-brand-surface-high px-6 py-5"><p className="text-[10px] font-black uppercase tracking-wider text-brand-primary">Bước xác nhận cuối</p><h3 className="mt-1 text-lg font-black text-brand-text">Xác nhận thêm chi nhánh</h3><p className="mt-1 text-xs text-brand-text-muted">Kiểm tra thông tin trước khi đồng bộ cho Super Admin và Tenant Admin.</p></div>
+            <div className="space-y-4 p-6"><div className="rounded-2xl border border-brand-primary/20 bg-brand-primary/10 p-4"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-black text-brand-primary">{pendingBranch.code}</span><span className="rounded-full bg-brand-surface px-2 py-1 text-[9px] font-bold text-brand-text-muted">{getBranchModelLabel(pendingBranch.model)}</span>{pendingBranch.isPrimary && <span className="rounded-full bg-slate-900 px-2 py-1 text-[9px] font-bold text-white">Chi nhánh chính</span>}</div><p className="mt-2 text-base font-black text-brand-text">{pendingBranch.name}</p><p className="mt-1 text-xs text-brand-text-muted">{pendingBranch.address}</p></div><div className="grid grid-cols-2 gap-3 text-xs"><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Quản lý</p><p className="mt-1 font-bold text-brand-text">{pendingBranch.managerName}</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Trạng thái</p><p className="mt-1 font-bold text-brand-text">{getBranchStatusLabel(pendingBranch.status)}</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Nguồn lực</p><p className="mt-1 font-bold text-brand-text">{pendingBranch.staffUsed} nhân sự · {pendingBranch.stationCount} vị trí</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Hạn mức sau thêm</p><p className="mt-1 font-bold text-brand-text">{details.branches.length + 1} / {currentBranchLimitLabel}</p></div></div><div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-[10px] leading-5 text-brand-text-muted">Sau khi xác nhận, chi nhánh sẽ xuất hiện đồng thời ở Super Admin và Tenant Admin. Nếu đặt làm chi nhánh chính, chi nhánh chính hiện tại sẽ chuyển thành chi nhánh thành viên.</div></div>
+            <div className="flex justify-end gap-2 border-t border-brand-outline/40 bg-brand-surface-high px-6 py-4"><button type="button" onClick={() => { setPendingBranch(null); setShowAddBranchModal(true); }} className="rounded-lg border border-brand-outline/40 bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text">Quay lại chỉnh sửa</button><button type="button" onClick={confirmAddBranch} className="rounded-lg bg-brand-primary px-5 py-2 text-xs font-black text-brand-on-primary shadow-md">Xác nhận thêm chi nhánh</button></div>
+          </div>
+        </div>
+      )}
+
       {showAddBranchModal && (
         <div className="fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fadeIn">
           <form onSubmit={handleAddBranch} className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl">
@@ -1610,7 +1643,8 @@ export default function TenantDetailModal({
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Mã chi nhánh <span className="font-bold text-brand-primary">*</span></label>
-                  <input type="text" value={newBranchCode} onChange={(e) => setNewBranchCode(e.target.value.toUpperCase())} placeholder="Ví dụ: BR-Q3" className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs uppercase text-brand-text focus:border-brand-primary focus:outline-none" required />
+                  <input type="text" value={newBranchCode} readOnly aria-readonly="true" className="w-full cursor-not-allowed rounded-lg border border-brand-outline/40 bg-brand-surface-highest px-3 py-2 text-xs font-bold uppercase text-brand-primary outline-none" />
+                  <p className="mt-1 text-[9px] text-brand-text-muted">Tự động tạo từ tên chi nhánh và không thể chỉnh sửa.</p>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Mô hình kinh doanh <span className="font-bold text-brand-primary">*</span></label>
@@ -1630,6 +1664,7 @@ export default function TenantDetailModal({
                   <BeautifulSelect value={newBranchStatus} onChange={(e) => setNewBranchStatus(e.target.value as Branch['status'])} className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none">
                     <option value="ACTIVE">Đang hoạt động</option><option value="PLANNING">Chuẩn bị mở</option><option value="INACTIVE">Tạm ngưng</option>
                   </BeautifulSelect>
+                  {newBranchStatus === 'PLANNING' && <div className="mt-2"><label className="mb-1 block text-[9px] font-bold text-brand-text-muted">Ngày dự kiến khai trương</label><input type="date" value={newBranchOpeningDate} onChange={(e) => setNewBranchOpeningDate(e.target.value)} className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none" /></div>}
                 </div>
               </div>
 
@@ -1642,12 +1677,17 @@ export default function TenantDetailModal({
                   <input
                     type="text"
                     value={newBranchName}
-                    onChange={(e) => setNewBranchName(e.target.value)}
+                    onChange={(e) => { const value = e.target.value; setNewBranchName(value); setNewBranchCode(generateBranchCode(value, tenant.name, details.branches)); }}
                     placeholder="Ví dụ: Queen Nail - Chi nhánh Quận 7"
                     className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
                     required
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Địa chỉ chi nhánh <span className="text-brand-primary font-bold">*</span></label>
+                <div className="relative"><MapPin className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50" /><input type="text" value={newBranchAddress} onChange={(e) => setNewBranchAddress(e.target.value)} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành phố" className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary" required /></div>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1661,23 +1701,6 @@ export default function TenantDetailModal({
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Số vị trí phục vụ</label><input type="number" min="1" value={newBranchStationCount} onChange={(e) => setNewBranchStationCount(Math.max(1, Number(e.target.value)))} className="w-full rounded-lg border border-brand-outline/40 bg-brand-surface-lowest px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none" /></div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">
-                  Địa chỉ chi nhánh <span className="text-brand-primary font-bold">*</span>
-                </label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-brand-text-muted/50" />
-                  <input
-                    type="text"
-                    value={newBranchAddress}
-                    onChange={(e) => setNewBranchAddress(e.target.value)}
-                    placeholder="Số nhà, đường, quận/huyện, tỉnh/thành phố"
-                    className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
-                    required
-                  />
-                </div>
-              </div>
 
               <div>
                 <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">
@@ -1702,6 +1725,7 @@ export default function TenantDetailModal({
                 </p>
               </div>
               </div>
+              <div className={`rounded-xl border p-3 ${newBranchValidation.isValid ? 'border-emerald-500/25 bg-emerald-500/10' : 'border-amber-500/25 bg-amber-500/10'}`}><p className={`text-xs font-bold ${newBranchValidation.isValid ? 'text-emerald-500' : 'text-amber-500'}`}>{newBranchValidation.isValid ? 'Thông tin hợp lệ — sẵn sàng xác nhận' : `Cần hoàn thiện ${Object.keys(newBranchValidation.errors).length} điều kiện`}</p>{!newBranchValidation.isValid && <ul className="mt-2 space-y-1 text-[10px] leading-4 text-brand-text-muted">{Object.values(newBranchValidation.errors).map((error) => <li key={error}>• {error}</li>)}</ul>}</div>
             </div>
 
             <div className="px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex justify-end gap-2.5">
@@ -1717,10 +1741,11 @@ export default function TenantDetailModal({
               </button>
               <button
                 type="submit"
-                className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 cursor-pointer shadow-md"
+                disabled={!newBranchValidation.isValid || !newBranchCode}
+                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-colors ${newBranchValidation.isValid && newBranchCode ? 'cursor-pointer bg-brand-primary text-brand-on-primary shadow-md hover:bg-brand-primary/90' : 'cursor-not-allowed bg-brand-outline text-brand-text-muted'}`}
               >
                 <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Thêm chi nhánh</span>
+                <span>Kiểm tra & xác nhận</span>
               </button>
             </div>
           </form>
