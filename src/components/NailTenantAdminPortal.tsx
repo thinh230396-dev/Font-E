@@ -546,9 +546,9 @@ function BranchDetailDrawer({ row, tenantName, onClose, onEdit }: BranchDetailDr
   const isOperating = row.badge === 'Đang hoạt động';
 
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/55 backdrop-blur-[3px]">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-[3px] sm:p-6">
       <button type="button" aria-label="Đóng hồ sơ chi nhánh" onClick={onClose} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-      <aside role="dialog" aria-modal="true" aria-labelledby="branch-detail-title" className="relative flex h-full w-full max-w-[760px] flex-col overflow-hidden bg-[#f6f7fb] shadow-2xl">
+      <aside role="dialog" aria-modal="true" aria-labelledby="branch-detail-title" className="relative flex h-[calc(100vh-1rem)] w-full max-w-[920px] flex-col overflow-hidden rounded-2xl border border-white/70 bg-[#f6f7fb] shadow-[0_30px_100px_rgba(15,23,42,0.4)] sm:h-auto sm:max-h-[92vh] sm:rounded-[30px]">
         <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-7 sm:py-5">
           <div className="flex items-start gap-3 sm:gap-4">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 sm:h-12 sm:w-12"><Store className="h-5 w-5" /></span>
@@ -565,7 +565,7 @@ function BranchDetailDrawer({ row, tenantName, onClose, onEdit }: BranchDetailDr
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-4 sm:p-6">
           <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#18142e] via-[#251a49] to-[#432777] p-5 text-white shadow-[0_18px_45px_rgba(42,27,83,0.2)] sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -633,7 +633,7 @@ function BranchDetailDrawer({ row, tenantName, onClose, onEdit }: BranchDetailDr
           </section>
         </main>
 
-        <footer className="shrink-0 border-t border-slate-200 bg-white p-4 sm:px-7">
+        <footer className="shrink-0 border-t border-slate-200 bg-white p-4 shadow-[0_-12px_30px_rgba(15,23,42,0.06)] sm:px-7">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button type="button" onClick={onClose} className="h-11 border border-slate-200 bg-white px-5 text-xs font-bold text-slate-600 shadow-sm">Đóng</button>
             <button type="button" onClick={onEdit} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><Settings className="h-4 w-4" />Chỉnh sửa chi nhánh<ArrowRight className="h-4 w-4" /></button>
