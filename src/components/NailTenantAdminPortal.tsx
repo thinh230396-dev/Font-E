@@ -371,6 +371,12 @@ const formatBranchRevenue = (value?: number) => value && value > 0
   ? `${(value / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`
   : 'Chưa có dữ liệu';
 
+const getRequiredBranchSelectionErrors = (values: Record<string, string>): Record<string, string> => ({
+  ...(!values.branchRole?.trim() ? { branchRole: 'Vui lòng chọn vai trò trong tenant.' } : {}),
+  ...(!values.branchModel?.trim() ? { branchModel: 'Vui lòng chọn mô hình kinh doanh.' } : {}),
+  ...(!values.status?.trim() ? { status: 'Vui lòng chọn trạng thái chi nhánh.' } : {})
+});
+
 const branchToNailRow = (branch: Branch): NailRow => ({
   id: branch.id,
   title: branch.name,
@@ -717,7 +723,12 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [selectedRow, setSelectedRow] = useState<NailRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
-  const [pendingBranchChange, setPendingBranchChange] = useState<{ branch: Branch; updatedBranches: Branch[]; isEditing: boolean } | null>(null);
+  const [pendingBranchChange, setPendingBranchChange] = useState<{
+    branch: Branch;
+    updatedBranches: Branch[];
+    isEditing: boolean;
+    requiredSelections: { branchRole: string; branchModel: string; status: string };
+  } | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [toast, setToast] = useState('');
   const [lockedPage, setLockedPage] = useState<NailPageId | null>(null);
@@ -829,7 +840,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     if (targetPage === 'branches') {
       const existingBranches = tenant ? normalizeTenantBranches(tenant) : [];
       const defaultName = `${tenantName} - Chi nhánh ${existingBranches.length + 1}`;
-      setFormValues({ name: defaultName, code: generateBranchCode(defaultName, tenantName, existingBranches), branchRole: 'Chi nhánh thành viên', branchModel: 'Salon đầy đủ dịch vụ', status: 'Đang hoạt động', openingHours: '08:00–21:00', stations: '8', staffCount: '0', staffCapacity: '8', monthlyRevenue: '0', capacityPercent: '0', services: 'Manicure, Pedicure, Sơn Gel, Nail Art' });
+      setFormValues({ name: defaultName, code: generateBranchCode(defaultName, tenantName, existingBranches), branchRole: '', branchModel: '', status: '', openingHours: '08:00–21:00', stations: '8', staffCount: '0', staffCapacity: '8', monthlyRevenue: '0', capacityPercent: '0', services: 'Manicure, Pedicure, Sơn Gel, Nail Art' });
     } else setFormValues({});
     setCreateOpen(true);
   };
@@ -872,6 +883,11 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     }
     const fields = currentConfig.formFields;
     if (currentConfig.id === 'branches' && tenant) {
+      const requiredSelectionErrors = getRequiredBranchSelectionErrors(formValues);
+      if (Object.keys(requiredSelectionErrors).length > 0) {
+        setToast('Vui lòng chọn đủ vai trò trong tenant, mô hình kinh doanh và trạng thái chi nhánh.');
+        return;
+      }
       const rawCode = (formValues.code || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
       const branchId = editingRowId || (rawCode.startsWith('BR-') ? rawCode : `BR-${rawCode || Date.now().toString().slice(-6)}`);
       const currentBranches = normalizeTenantBranches(tenant);
@@ -947,7 +963,16 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
         ? normalizedCurrent.map((item) => item.id === editingRowId ? nextBranch : item)
         : [...normalizedCurrent, nextBranch];
       setCreateOpen(false);
-      setPendingBranchChange({ branch: nextBranch, updatedBranches, isEditing: Boolean(existingBranch) });
+      setPendingBranchChange({
+        branch: nextBranch,
+        updatedBranches,
+        isEditing: Boolean(existingBranch),
+        requiredSelections: {
+          branchRole: formValues.branchRole,
+          branchModel: formValues.branchModel,
+          status: formValues.status
+        }
+      });
       return;
     }
     const title = formValues[fields[0]?.key] || currentConfig.primaryAction + ' mới';
@@ -973,6 +998,12 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
 
   const confirmTenantBranchChange = () => {
     if (!pendingBranchChange || !tenant) return;
+    if (Object.keys(getRequiredBranchSelectionErrors(pendingBranchChange.requiredSelections)).length > 0) {
+      setToast('Không thể lưu: vui lòng chọn đủ vai trò, mô hình kinh doanh và trạng thái chi nhánh.');
+      setPendingBranchChange(null);
+      setCreateOpen(true);
+      return;
+    }
     const updatedStaffCount = pendingBranchChange.updatedBranches.reduce((sum, item) => sum + item.staffUsed, 0);
     const activity = {
       date: new Date().toISOString().replace('T', ' ').slice(0, 16),
@@ -1052,7 +1083,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     const model = BRANCH_MODEL_OPTIONS.find((option) => option.label === formValues.branchModel)?.value || 'FULL_SERVICE';
     const status: Branch['status'] = formValues.status === 'Chuẩn bị mở' ? 'PLANNING' : formValues.status === 'Tạm ngưng' ? 'INACTIVE' : 'ACTIVE';
     const otherStaffCount = existingBranches.filter((item) => item.id !== editingRowId).reduce((sum, item) => sum + item.staffUsed, 0);
-    return validateBranchDraft({
+    const branchValidation = validateBranchDraft({
       id: editingRowId || formValues.code,
       name: formValues.name || '',
       address: formValues.address || '',
@@ -1070,6 +1101,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       capacityPercent: Number(formValues.capacityPercent || 0),
       services: formValues.services?.split(',').map((item) => item.trim()).filter(Boolean) || []
     }, existingBranches, { editingId: editingRowId, maxAdditionalStaff: isUnlimitedTenantLimit(staffLimit, 'staff') ? null : Math.max(0, staffLimit - otherStaffCount) });
+    const errors = { ...getRequiredBranchSelectionErrors(formValues), ...branchValidation.errors };
+    return { errors, isValid: Object.keys(errors).length === 0 };
   })();
   return (
     <div className="nail-admin min-h-screen bg-[#f5f7fb] text-slate-950">
