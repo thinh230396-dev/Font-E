@@ -12,6 +12,7 @@ import { Tenant, SubscriptionPackage, SystemAlert, Invoice, TenantStatus, Tenant
 import { convertMoney, normalizeCurrency } from './utils/money';
 import {
   getSubscriptionPackage,
+  getSubscriptionPackageForTenant,
   getSubscriptionPrice,
   getYearlyPackagePrice,
   normalizeSubscriptionPackage
@@ -287,8 +288,12 @@ export default function App() {
       const matchesIdentifier = tenant.adminEmail.trim().toLowerCase() === normalizedIdentifier || tenant.adminUsername?.trim().toLowerCase() === normalizedIdentifier;
       return matchesIdentifier && tenant.adminTempPassword === password && tenant.status !== 'SUSPENDED';
     });
+    const managedAdminTenant = managedAdmin
+      ? tenants.find((tenant) => managedAdmin.tenantIds.includes(tenant.id) || tenant.tenantAdminId === managedAdmin.id || tenant.adminEmail.trim().toLowerCase() === managedAdmin.email.trim().toLowerCase())
+      : undefined;
+    const authenticatedTenant = managedTenant || managedAdminTenant;
     const managedAccount: DemoAccount | null = managedAdmin
-      ? { email: managedAdmin.email, password, role: 'TENANT_ADMIN', displayName: managedAdmin.name, tenantName: managedAdmin.tenantName }
+      ? { email: managedAdmin.email, password, role: 'TENANT_ADMIN', displayName: managedAdmin.name, tenantName: managedAdminTenant?.name || managedAdmin.tenantName }
       : managedTenant
         ? { email: managedTenant.adminEmail, password, role: 'TENANT_ADMIN', displayName: managedTenant.adminName, tenantName: managedTenant.name }
         : null;
@@ -299,11 +304,18 @@ export default function App() {
     const otherStorage = remember ? sessionStorage : localStorage;
     storage.setItem('salonsys_authenticated', 'true');
     storage.setItem('salonsys_role', account.role);
-    if (account.role === 'TENANT_ADMIN') storage.setItem('salonsys_tenant_admin_email', account.email);
-    else storage.removeItem('salonsys_tenant_admin_email');
+    if (account.role === 'TENANT_ADMIN') {
+      storage.setItem('salonsys_tenant_admin_email', account.email);
+      if (authenticatedTenant) storage.setItem('salonsys_tenant_id', authenticatedTenant.id);
+      else storage.removeItem('salonsys_tenant_id');
+    } else {
+      storage.removeItem('salonsys_tenant_admin_email');
+      storage.removeItem('salonsys_tenant_id');
+    }
     otherStorage.removeItem('salonsys_authenticated');
     otherStorage.removeItem('salonsys_role');
     otherStorage.removeItem('salonsys_tenant_admin_email');
+    otherStorage.removeItem('salonsys_tenant_id');
     setPortalRole(account.role);
     setIsAuthenticated(true);
     return true;
@@ -316,6 +328,8 @@ export default function App() {
     sessionStorage.removeItem('salonsys_role');
     localStorage.removeItem('salonsys_tenant_admin_email');
     sessionStorage.removeItem('salonsys_tenant_admin_email');
+    localStorage.removeItem('salonsys_tenant_id');
+    sessionStorage.removeItem('salonsys_tenant_id');
     setIsAuthenticated(false);
   };
 
@@ -1414,21 +1428,39 @@ export default function App() {
 
   const defaultTenantAccount = getDemoAccountByRole('TENANT_ADMIN');
   const targetOwnerName = 'nguyễn văn boss';
+  const storedTenantId = localStorage.getItem('salonsys_tenant_id') || sessionStorage.getItem('salonsys_tenant_id') || '';
   const storedTenantEmail = (localStorage.getItem('salonsys_tenant_admin_email') || sessionStorage.getItem('salonsys_tenant_admin_email') || '').trim().toLowerCase();
-  const targetAdmin = tenantAdmins.find((admin) => admin.name.trim().toLowerCase() === targetOwnerName)
-    || tenantAdmins.find((admin) => admin.email.trim().toLowerCase() === storedTenantEmail);
-  const targetTenant = tenants.find((tenant) => tenant.adminName.trim().toLowerCase() === targetOwnerName)
-    || tenants.find((tenant) => targetAdmin?.tenantIds.includes(tenant.id))
+  const sessionTenant = tenants.find((tenant) => tenant.id === storedTenantId)
     || tenants.find((tenant) => tenant.adminEmail.trim().toLowerCase() === storedTenantEmail);
+  const sessionAdmin = tenantAdmins.find((admin) => admin.email.trim().toLowerCase() === storedTenantEmail);
+  const fallbackAdmin = tenantAdmins.find((admin) => admin.name.trim().toLowerCase() === targetOwnerName);
+  const targetAdmin = sessionAdmin
+    || tenantAdmins.find((admin) => Boolean(sessionTenant) && (admin.tenantIds.includes(sessionTenant!.id) || sessionTenant!.tenantAdminId === admin.id))
+    || (!sessionTenant ? fallbackAdmin : undefined);
+  const targetTenant = sessionTenant
+    || tenants.find((tenant) => targetAdmin?.tenantIds.includes(tenant.id) || tenant.tenantAdminId === targetAdmin?.id)
+    || tenants.find((tenant) => tenant.adminName.trim().toLowerCase() === targetOwnerName);
   const tenantPortalAccount: DemoAccount = {
     ...defaultTenantAccount,
     displayName: targetAdmin?.name || targetTenant?.adminName || defaultTenantAccount.displayName,
     email: targetAdmin?.email || targetTenant?.adminEmail || defaultTenantAccount.email,
     tenantName: targetTenant?.name || targetAdmin?.tenantName || defaultTenantAccount.tenantName
   };
+  const tenantPortalPackage = targetTenant
+    ? getSubscriptionPackageForTenant(packages, targetTenant)
+    : packages.find((pkg) => pkg.name === 'Premium') || packages[0];
 
   if (portalRole === 'TENANT_ADMIN') {
-    return <TenantAdminPortal account={tenantPortalAccount} onLogout={handleLogout} />;
+    return (
+      <TenantAdminPortal
+        account={tenantPortalAccount}
+        tenant={targetTenant}
+        subscriptionPackage={tenantPortalPackage}
+        availablePackages={packages}
+        invoices={targetTenant ? invoices.filter((invoice) => invoice.tenantId === targetTenant.id) : []}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return (
