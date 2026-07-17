@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, useMemo, useState } from 'react';
+import { FormEvent, Fragment, lazy, Suspense, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -67,6 +67,8 @@ import {
 import type { DemoAccount } from '../auth/demoAccounts';
 import BeautifulSelect from './BeautifulSelect';
 import { nailModuleConfigs, type NailModuleConfig, type NailPageId, type NailRow, type UiTone } from './nailAdminData';
+
+const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
 
 interface NailTenantAdminPortalProps {
   account: DemoAccount;
@@ -1322,6 +1324,20 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
             <SubscriptionPage tenantName={tenantName} tenant={tenant} subscriptionPackage={currentPackage} availablePackages={normalizedAvailablePackages} invoices={invoices} branchCount={branchRows.length} staffCount={staffUsage} onNotify={setToast} />
           ) : activePage === 'branches' ? (
             <BranchesPage rows={scopedRows} searchQuery={searchQuery} activeTab={activeTab || 'Tất cả'} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate('branches')} onExport={exportRows} planName={currentPackage.name} branchLimit={branchLimit} />
+          ) : activePage === 'appointments' ? (
+            <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải lịch hẹn...</div>}>
+              <TenantAdminAppointments
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                selectedBranch={branch}
+                onSelectedBranchChange={(value) => { setBranch(value); setSelectedRow(null); }}
+                tenantName={tenantName}
+                roleLabel="Owner · Tenant Admin"
+                accessMode={currentAccessMode}
+                readOnlyReason={readOnlyReason}
+                onNotify={setToast}
+              />
+            </Suspense>
           ) : currentConfig && (
             <ModulePage config={currentConfig} rows={scopedRows} searchQuery={searchQuery} activeTab={activeTab || currentConfig.tabs[0]} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate()} onExport={exportRows} scopeLabel={branchScopeLabel} planName={currentPackage.name} accessMode={currentAccessMode} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onUpgrade={() => showPageGate(currentConfig.id)} />
           )}

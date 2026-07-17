@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CalendarCheck2,
@@ -20,6 +20,7 @@ import {
   Plus,
   ReceiptText,
   Search,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   UserRound,
@@ -48,6 +49,9 @@ interface TenantAppointment {
   price: number;
   deposit: number;
   note: string;
+  station?: string;
+  reminderSent?: boolean;
+  createdBy?: string;
   firstVisit?: boolean;
   createdAt: string;
 }
@@ -57,6 +61,11 @@ interface TenantAdminAppointmentsProps {
   onSearchQueryChange: (value: string) => void;
   selectedBranch: string;
   onSelectedBranchChange: (value: string) => void;
+  tenantName?: string;
+  roleLabel?: string;
+  accessMode?: 'full' | 'limited' | 'locked';
+  readOnlyReason?: string;
+  onNotify?: (message: string) => void;
 }
 
 interface AppointmentFormState {
@@ -70,6 +79,7 @@ interface AppointmentFormState {
   source: AppointmentSource;
   status: AppointmentStatus;
   deposit: string;
+  station: string;
   note: string;
 }
 
@@ -96,40 +106,40 @@ const branchLabels: Record<BranchCode, string> = {
 };
 
 const services = [
-  { name: 'Nhuộm Balayage', duration: 120, price: 1_850_000 },
-  { name: 'Cắt & tạo kiểu', duration: 60, price: 450_000 },
-  { name: 'Phục hồi Keratin', duration: 90, price: 1_250_000 },
-  { name: 'Cắt tóc nam', duration: 45, price: 280_000 },
-  { name: 'Uốn setting', duration: 150, price: 1_650_000 },
-  { name: 'Gội dưỡng sinh', duration: 60, price: 390_000 },
-  { name: 'Nhuộm phủ bạc', duration: 90, price: 850_000 }
+  { name: 'Combo manicure & sơn gel', duration: 75, price: 480_000 },
+  { name: 'Pedicure spa chuyên sâu', duration: 90, price: 650_000 },
+  { name: 'Nail Art Premium', duration: 120, price: 1_200_000 },
+  { name: 'Tháo gel & dưỡng móng', duration: 45, price: 220_000 },
+  { name: 'Đắp gel nối móng', duration: 150, price: 1_350_000 },
+  { name: 'Sơn gel Hàn Quốc', duration: 60, price: 380_000 },
+  { name: 'Dặm gel & sửa form', duration: 60, price: 450_000 }
 ];
 
 const staffDirectory = [
-  { name: 'Thảo Nguyễn', branch: 'Q3' as BranchCode, initials: 'TN', role: 'Senior Stylist', shift: '08:00–18:00' },
-  { name: 'Minh Khang', branch: 'Q3' as BranchCode, initials: 'MK', role: 'Hair Stylist', shift: '09:00–20:00' },
-  { name: 'Quốc Bảo', branch: 'Q3' as BranchCode, initials: 'QB', role: 'Barber', shift: '08:00–17:00' },
-  { name: 'Thuỳ Dương', branch: 'Q3' as BranchCode, initials: 'TD', role: 'Hair Assistant', shift: '10:00–20:00' },
-  { name: 'Hà My', branch: 'Q1' as BranchCode, initials: 'HM', role: 'Senior Stylist', shift: '08:00–18:00' },
-  { name: 'Gia Huy', branch: 'Q1' as BranchCode, initials: 'GH', role: 'Hair Stylist', shift: '09:00–20:00' }
+  { name: 'Thảo Nguyễn', branch: 'Q3' as BranchCode, initials: 'TN', role: 'Nail Artist Senior', shift: '08:00–18:00' },
+  { name: 'Minh Khang', branch: 'Q3' as BranchCode, initials: 'MK', role: 'Nail Technician', shift: '09:00–20:00' },
+  { name: 'Quốc Bảo', branch: 'Q3' as BranchCode, initials: 'QB', role: 'Pedicure Specialist', shift: '08:00–17:00' },
+  { name: 'Thuỳ Dương', branch: 'Q3' as BranchCode, initials: 'TD', role: 'Nail Technician', shift: '10:00–20:00' },
+  { name: 'Hà My', branch: 'Q1' as BranchCode, initials: 'HM', role: 'Nail Artist Senior', shift: '08:00–18:00' },
+  { name: 'Gia Huy', branch: 'Q1' as BranchCode, initials: 'GH', role: 'Nail Technician', shift: '09:00–20:00' }
 ];
 
 const appointmentSeed: TenantAppointment[] = [
-  { id: 'APT-1040', customer: 'Đặng Hải Yến', phone: '0903 114 668', date: '2026-07-16', start: '08:00', duration: 60, service: 'Gội dưỡng sinh', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'COMPLETED', price: 390_000, deposit: 0, note: 'Khách nhạy cảm với tinh dầu bạc hà.', createdAt: '15/07/2026 · 18:42' },
-  { id: 'APT-1041', customer: 'Nguyễn Lan Anh', phone: '0988 226 510', date: '2026-07-16', start: '08:15', duration: 90, service: 'Phục hồi Keratin', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'RECEPTION', status: 'COMPLETED', price: 1_250_000, deposit: 300_000, note: 'Sử dụng liệu trình dành cho tóc tẩy.', createdAt: '14/07/2026 · 10:20' },
-  { id: 'APT-1042', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: '2026-07-16', start: '10:00', duration: 120, service: 'Nhuộm Balayage', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'IN_SERVICE', price: 1_850_000, deposit: 500_000, note: 'Tông nâu lạnh, tránh ánh đỏ. Khách đã gửi ảnh mẫu qua Zalo.', createdAt: '13/07/2026 · 21:05' },
-  { id: 'APT-1043', customer: 'Trần Thu Hà', phone: '0908 337 912', date: '2026-07-16', start: '10:15', duration: 60, service: 'Cắt & tạo kiểu', staff: 'Minh Khang', branch: 'Q3', source: 'ZALO', status: 'CHECKED_IN', price: 450_000, deposit: 100_000, note: 'Khách muốn giữ độ dài ngang vai.', createdAt: '15/07/2026 · 09:12' },
-  { id: 'APT-1044', customer: 'Lê Ngọc Mai', phone: '0936 221 557', date: '2026-07-16', start: '11:30', duration: 90, service: 'Phục hồi Keratin', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_250_000, deposit: 300_000, note: 'Lần đầu đến salon, cần tư vấn tình trạng tóc trước khi làm.', firstVisit: true, createdAt: '15/07/2026 · 22:18' },
-  { id: 'APT-1045', customer: 'Phạm Hoài Nam', phone: '0977 660 341', date: '2026-07-16', start: '13:45', duration: 45, service: 'Cắt tóc nam', staff: 'Quốc Bảo', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 280_000, deposit: 0, note: 'Gọi lại xác nhận trước 12:00.', firstVisit: true, createdAt: '16/07/2026 · 08:04' },
-  { id: 'APT-1046', customer: 'Vũ Khánh Linh', phone: '0909 552 770', date: '2026-07-16', start: '15:00', duration: 150, service: 'Uốn setting', staff: 'Minh Khang', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_650_000, deposit: 500_000, note: 'Ưu tiên trục uốn lớn, sóng tự nhiên.', createdAt: '15/07/2026 · 15:36' },
-  { id: 'APT-1047', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', date: '2026-07-16', start: '16:00', duration: 60, service: 'Gội dưỡng sinh', staff: 'Thuỳ Dương', branch: 'Q3', source: 'ZALO', status: 'PENDING', price: 390_000, deposit: 0, note: 'Khách dùng voucher sinh nhật.', createdAt: '16/07/2026 · 09:31' },
-  { id: 'APT-1048', customer: 'Đỗ Tuấn Kiệt', phone: '0918 734 662', date: '2026-07-16', start: '16:30', duration: 45, service: 'Cắt tóc nam', staff: 'Quốc Bảo', branch: 'Q3', source: 'RECEPTION', status: 'CONFIRMED', price: 280_000, deposit: 0, note: '', createdAt: '16/07/2026 · 10:02' },
-  { id: 'APT-1049', customer: 'Trương Bảo Ngọc', phone: '0902 778 219', date: '2026-07-16', start: '09:00', duration: 90, service: 'Nhuộm phủ bạc', staff: 'Hà My', branch: 'Q1', source: 'PHONE', status: 'COMPLETED', price: 850_000, deposit: 200_000, note: 'Công thức màu đã lưu trong hồ sơ khách.', createdAt: '14/07/2026 · 13:16' },
-  { id: 'APT-1050', customer: 'Ngô Minh Châu', phone: '0966 124 700', date: '2026-07-16', start: '13:00', duration: 120, service: 'Nhuộm Balayage', staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'CONFIRMED', price: 1_850_000, deposit: 500_000, note: 'Khách mới, kiểm tra tiền sử dị ứng thuốc nhuộm.', firstVisit: true, createdAt: '15/07/2026 · 20:11' },
-  { id: 'APT-1051', customer: 'Mai Đức Anh', phone: '0901 533 008', date: '2026-07-16', start: '15:30', duration: 60, service: 'Cắt & tạo kiểu', staff: 'Gia Huy', branch: 'Q1', source: 'ZALO', status: 'PENDING', price: 450_000, deposit: 0, note: '', createdAt: '16/07/2026 · 07:55' },
-  { id: 'APT-1052', customer: 'Tạ Mỹ Duyên', phone: '0933 112 800', date: '2026-07-15', start: '14:00', duration: 150, service: 'Uốn setting', staff: 'Minh Khang', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 1_650_000, deposit: 500_000, note: '', createdAt: '13/07/2026 · 11:42' },
-  { id: 'APT-1053', customer: 'Huỳnh Phương Thảo', phone: '0905 811 229', date: '2026-07-17', start: '09:30', duration: 120, service: 'Nhuộm Balayage', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_850_000, deposit: 500_000, note: 'Khách cần hoàn tất trước 12:00.', createdAt: '15/07/2026 · 16:30' },
-  { id: 'APT-1054', customer: 'Phan Gia Hân', phone: '0974 360 118', date: '2026-07-17', start: '13:00', duration: 60, service: 'Gội dưỡng sinh', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 390_000, deposit: 0, note: '', createdAt: '16/07/2026 · 10:18' }
+  { id: 'APT-1040', customer: 'Đặng Hải Yến', phone: '0903 114 668', date: '2026-07-16', start: '08:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'COMPLETED', price: 380_000, deposit: 0, note: 'Da tay nhạy cảm, ưu tiên sản phẩm không mùi.', station: 'Bàn M-04', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '15/07/2026 · 18:42' },
+  { id: 'APT-1041', customer: 'Nguyễn Lan Anh', phone: '0988 226 510', date: '2026-07-16', start: '08:15', duration: 90, service: 'Pedicure spa chuyên sâu', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'RECEPTION', status: 'COMPLETED', price: 650_000, deposit: 200_000, note: 'Không dùng sản phẩm tẩy tế bào chết có bạc hà.', station: 'Ghế P-02', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '14/07/2026 · 10:20' },
+  { id: 'APT-1042', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: '2026-07-16', start: '10:00', duration: 120, service: 'Nail Art Premium', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'IN_SERVICE', price: 1_200_000, deposit: 500_000, note: 'Mẫu chrome bạc, khách đã gửi ảnh tham khảo qua Zalo.', station: 'Bàn VIP-01', reminderSent: true, createdBy: 'Website booking', createdAt: '13/07/2026 · 21:05' },
+  { id: 'APT-1043', customer: 'Trần Thu Hà', phone: '0908 337 912', date: '2026-07-16', start: '10:15', duration: 75, service: 'Combo manicure & sơn gel', staff: 'Minh Khang', branch: 'Q3', source: 'ZALO', status: 'CHECKED_IN', price: 480_000, deposit: 100_000, note: 'Giữ form móng oval ngắn, tông nude công sở.', station: 'Bàn M-02', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '15/07/2026 · 09:12' },
+  { id: 'APT-1044', customer: 'Lê Ngọc Mai', phone: '0936 221 557', date: '2026-07-16', start: '11:30', duration: 90, service: 'Pedicure spa chuyên sâu', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 650_000, deposit: 200_000, note: 'Khách lần đầu, cần tư vấn tình trạng móng trước khi làm.', station: 'Ghế P-03', reminderSent: true, createdBy: 'Website booking', firstVisit: true, createdAt: '15/07/2026 · 22:18' },
+  { id: 'APT-1045', customer: 'Phạm Hoài Nam', phone: '0977 660 341', date: '2026-07-16', start: '13:45', duration: 45, service: 'Tháo gel & dưỡng móng', staff: 'Quốc Bảo', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 220_000, deposit: 0, note: 'Gọi lại xác nhận trước 12:00.', station: 'Ghế P-01', reminderSent: false, createdBy: 'Owner', firstVisit: true, createdAt: '16/07/2026 · 08:04' },
+  { id: 'APT-1046', customer: 'Vũ Khánh Linh', phone: '0909 552 770', date: '2026-07-16', start: '15:00', duration: 150, service: 'Đắp gel nối móng', staff: 'Minh Khang', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_350_000, deposit: 500_000, note: 'Form almond dài vừa, phối french ombre.', station: 'Bàn VIP-02', reminderSent: true, createdBy: 'Website booking', createdAt: '15/07/2026 · 15:36' },
+  { id: 'APT-1047', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', date: '2026-07-16', start: '16:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'ZALO', status: 'PENDING', price: 380_000, deposit: 0, note: 'Khách dùng voucher sinh nhật.', station: 'Bàn M-04', reminderSent: false, createdBy: 'Lễ tân Mai', createdAt: '16/07/2026 · 09:31' },
+  { id: 'APT-1048', customer: 'Đỗ Tuấn Kiệt', phone: '0918 734 662', date: '2026-07-16', start: '16:30', duration: 45, service: 'Tháo gel & dưỡng móng', staff: 'Quốc Bảo', branch: 'Q3', source: 'RECEPTION', status: 'CONFIRMED', price: 220_000, deposit: 0, note: '', station: 'Ghế P-01', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '16/07/2026 · 10:02' },
+  { id: 'APT-1049', customer: 'Trương Bảo Ngọc', phone: '0902 778 219', date: '2026-07-16', start: '09:00', duration: 60, service: 'Dặm gel & sửa form', staff: 'Hà My', branch: 'Q1', source: 'PHONE', status: 'COMPLETED', price: 450_000, deposit: 200_000, note: 'Mã màu cũ đã lưu trong hồ sơ khách.', station: 'Bàn M-01', reminderSent: true, createdBy: 'Quản lý Q1', createdAt: '14/07/2026 · 13:16' },
+  { id: 'APT-1050', customer: 'Ngô Minh Châu', phone: '0966 124 700', date: '2026-07-16', start: '13:00', duration: 120, service: 'Nail Art Premium', staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'CONFIRMED', price: 1_200_000, deposit: 500_000, note: 'Khách mới, kiểm tra tiền sử dị ứng gel và keo.', station: 'Bàn VIP-01', reminderSent: true, createdBy: 'Website booking', firstVisit: true, createdAt: '15/07/2026 · 20:11' },
+  { id: 'APT-1051', customer: 'Mai Đức Anh', phone: '0901 533 008', date: '2026-07-16', start: '15:30', duration: 75, service: 'Combo manicure & sơn gel', staff: 'Gia Huy', branch: 'Q1', source: 'ZALO', status: 'PENDING', price: 480_000, deposit: 0, note: '', station: 'Bàn M-03', reminderSent: false, createdBy: 'Quản lý Q1', createdAt: '16/07/2026 · 07:55' },
+  { id: 'APT-1052', customer: 'Tạ Mỹ Duyên', phone: '0933 112 800', date: '2026-07-15', start: '14:00', duration: 150, service: 'Đắp gel nối móng', staff: 'Minh Khang', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 1_350_000, deposit: 500_000, note: '', station: 'Bàn VIP-02', reminderSent: true, createdBy: 'Website booking', createdAt: '13/07/2026 · 11:42' },
+  { id: 'APT-1053', customer: 'Huỳnh Phương Thảo', phone: '0905 811 229', date: '2026-07-17', start: '09:30', duration: 120, service: 'Nail Art Premium', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_200_000, deposit: 500_000, note: 'Khách cần hoàn tất trước 12:00.', station: 'Bàn VIP-01', reminderSent: true, createdBy: 'Website booking', createdAt: '15/07/2026 · 16:30' },
+  { id: 'APT-1054', customer: 'Phan Gia Hân', phone: '0974 360 118', date: '2026-07-17', start: '13:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 380_000, deposit: 0, note: '', station: 'Bàn M-04', reminderSent: false, createdBy: 'Owner', createdAt: '16/07/2026 · 10:18' }
 ];
 
 const nextStatus: Partial<Record<AppointmentStatus, AppointmentStatus>> = {
@@ -201,11 +211,31 @@ const emptyForm = (date: string, branch: string): AppointmentFormState => ({
   source: 'RECEPTION',
   status: 'PENDING',
   deposit: '0',
+  station: branch === 'Q1' ? 'Bàn M-01' : 'Bàn M-02',
   note: ''
 });
 
-export default function TenantAdminAppointments({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange }: TenantAdminAppointmentsProps) {
-  const [appointments, setAppointments] = useState<TenantAppointment[]>(appointmentSeed);
+export default function TenantAdminAppointments({
+  searchQuery,
+  onSearchQueryChange,
+  selectedBranch,
+  onSelectedBranchChange,
+  tenantName = 'Nailé Studio',
+  roleLabel = 'Owner · Tenant Admin',
+  accessMode = 'full',
+  readOnlyReason = '',
+  onNotify
+}: TenantAdminAppointmentsProps) {
+  const storageKey = `tenant-admin-appointments-v2:${tenantName}`;
+  const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
+    if (typeof window === 'undefined') return appointmentSeed;
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) as TenantAppointment[] : appointmentSeed;
+    } catch {
+      return appointmentSeed;
+    }
+  });
   const [selectedDate, setSelectedDate] = useState('2026-07-16');
   const [viewMode, setViewMode] = useState<ViewMode>('SCHEDULE');
   const [statusFilter, setStatusFilter] = useState<'ALL' | AppointmentStatus>('ALL');
@@ -216,6 +246,17 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
   const [formMode, setFormMode] = useState<'CREATE' | 'EDIT' | null>(null);
   const [form, setForm] = useState<AppointmentFormState>(() => emptyForm('2026-07-16', selectedBranch));
   const [formError, setFormError] = useState('');
+  const canManage = accessMode === 'full' && !readOnlyReason;
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKey, JSON.stringify(appointments));
+  }, [appointments, storageKey]);
+
+  const requireManageAccess = () => {
+    if (canManage) return true;
+    onNotify?.(readOnlyReason || 'Gói hiện tại chỉ cho phép xem lịch hẹn. Vui lòng nâng cấp để thay đổi dữ liệu.');
+    return false;
+  };
 
   const scopedAppointments = useMemo(() => appointments.filter((appointment) => (
     appointment.date === selectedDate && (selectedBranch === 'ALL' || appointment.branch === selectedBranch)
@@ -246,17 +287,20 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
   const activeFilterCount = [statusFilter !== 'ALL', staffFilter !== 'ALL', sourceFilter !== 'ALL'].filter(Boolean).length;
 
   const updateAppointment = (id: string, patch: Partial<TenantAppointment>) => {
+    if (!requireManageAccess()) return;
     setAppointments((current) => current.map((appointment) => appointment.id === id ? { ...appointment, ...patch } : appointment));
     setSelectedAppointment((current) => current?.id === id ? { ...current, ...patch } : current);
   };
 
   const openCreateForm = () => {
+    if (!requireManageAccess()) return;
     setForm(emptyForm(selectedDate, selectedBranch));
     setFormError('');
     setFormMode('CREATE');
   };
 
   const openEditForm = (appointment: TenantAppointment) => {
+    if (!requireManageAccess()) return;
     setForm({
       customer: appointment.customer,
       phone: appointment.phone,
@@ -268,6 +312,7 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
       source: appointment.source,
       status: appointment.status,
       deposit: String(appointment.deposit),
+      station: appointment.station || 'Bàn M-01',
       note: appointment.note
     });
     setFormError('');
@@ -276,6 +321,7 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
 
   const submitAppointment = (event: FormEvent) => {
     event.preventDefault();
+    if (!requireManageAccess()) return;
     if (!form.customer.trim() || !form.phone.trim() || !form.date || !form.start || !form.service || !form.staff) {
       setFormError('Vui lòng nhập đầy đủ khách hàng, số điện thoại, dịch vụ, nhân viên và thời gian.');
       return;
@@ -283,6 +329,22 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
 
     const service = services.find((item) => item.name === form.service) || services[0];
     const existingId = formMode === 'EDIT' ? selectedAppointment?.id : undefined;
+    const startMinute = minutesFromStart(form.start);
+    const endMinute = startMinute + service.duration;
+    const conflictingAppointment = appointments.find((appointment) => {
+      if (appointment.id === existingId || appointment.date !== form.date || appointment.branch !== form.branch || ['CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
+      const existingStart = minutesFromStart(appointment.start);
+      const overlaps = startMinute < existingStart + appointment.duration && endMinute > existingStart;
+      return overlaps && (appointment.staff === form.staff || Boolean(form.station && appointment.station === form.station));
+    });
+    if (conflictingAppointment) {
+      setFormError(`${conflictingAppointment.staff === form.staff ? 'Kỹ thuật viên' : 'Bàn/ghế'} đang bận với lịch ${conflictingAppointment.id} từ ${conflictingAppointment.start} đến ${getEndTime(conflictingAppointment.start, conflictingAppointment.duration)}.`);
+      return;
+    }
+    if ((Number(form.deposit) || 0) > service.price) {
+      setFormError('Tiền đặt cọc không được lớn hơn giá dịch vụ dự kiến.');
+      return;
+    }
     const nextId = existingId || `APT-${Math.max(...appointments.map((appointment) => Number(appointment.id.replace('APT-', '')))) + 1}`;
     const payload: TenantAppointment = {
       id: nextId,
@@ -298,6 +360,9 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
       status: form.status,
       price: service.price,
       deposit: Math.max(0, Number(form.deposit) || 0),
+      station: form.station,
+      reminderSent: form.status !== 'PENDING',
+      createdBy: formMode === 'EDIT' && selectedAppointment ? selectedAppointment.createdBy : roleLabel,
       note: form.note.trim(),
       createdAt: formMode === 'EDIT' && selectedAppointment ? selectedAppointment.createdAt : '16/07/2026 · vừa xong'
     };
@@ -324,9 +389,9 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
     <div className="space-y-5">
       <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Đồng bộ lúc 14:32 · Dữ liệu theo thời gian thực</div>
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Đồng bộ lúc 14:32 · Dữ liệu theo thời gian thực<span className="text-slate-300">•</span><span className="text-slate-500">{tenantName}</span></div>
           <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Lịch hẹn</h1>
-          <p className="mt-2 text-[11px] text-slate-500">Quản lý lịch đặt, phân bổ nhân viên và theo dõi hành trình phục vụ của khách.</p>
+          <p className="mt-2 text-[11px] text-slate-500">Điều phối khách, kỹ thuật viên, bàn nail và toàn bộ hành trình phục vụ theo thời gian thực.</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} aria-label="Chọn chi nhánh" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-700 shadow-sm sm:w-48">
@@ -334,8 +399,13 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
             <option value="Q1">Chi nhánh Quận 1</option>
             <option value="ALL">Tất cả chi nhánh</option>
           </BeautifulSelect>
-          <button type="button" onClick={openCreateForm} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[11px] font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700"><Plus className="h-4 w-4" />Tạo lịch hẹn</button>
+          <button type="button" onClick={openCreateForm} disabled={!canManage} title={!canManage ? readOnlyReason || 'Bạn chỉ có quyền xem' : undefined} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[11px] font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Tạo lịch hẹn</button>
         </div>
+      </section>
+
+      <section className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? 'border-violet-100 bg-gradient-to-r from-violet-50 to-white' : 'border-amber-200 bg-amber-50'}`}>
+        <div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? 'bg-violet-600 text-white' : 'bg-amber-100 text-amber-700'}`}><ShieldCheck className="h-4.5 w-4.5" /></span><div><p className="text-[10px] font-black text-slate-800">Phạm vi quyền: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{canManage ? 'Toàn quyền tạo, phân công, đổi trạng thái, thu cọc và hủy lịch trong tenant. Mọi thay đổi được lưu theo tenant.' : readOnlyReason || 'Chỉ được xem dữ liệu lịch hẹn theo quyền của gói hiện tại.'}</p></div></div>
+        <span className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-100 text-amber-800 ring-amber-200'}`}>{canManage ? 'Có quyền chỉnh sửa' : 'Chỉ xem'}</span>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -507,9 +577,11 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
 
               <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-[10px] font-black text-violet-700">{selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}</span><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-black text-slate-800">{selectedAppointment.customer}</p><p className="mt-1 text-[8px] text-slate-400">Khách hàng · {selectedAppointment.firstVisit ? 'Lần đầu sử dụng dịch vụ' : 'Đã có hồ sơ tại salon'}</p></div></div><div className="mt-4 grid grid-cols-2 gap-2"><a href={`tel:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-9 items-center justify-center gap-2 rounded-xl bg-slate-100 text-[8px] font-bold text-slate-700 no-underline"><Phone className="h-3.5 w-3.5" />{selectedAppointment.phone}</a><button type="button" className="flex h-9 items-center justify-center gap-2 border-0 bg-violet-50 text-[8px] font-bold text-violet-700 shadow-none"><MessageCircle className="h-3.5 w-3.5" />Gửi tin nhắn</button></div></div>
 
-              <div className="mt-5 space-y-4"><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-4 w-4" /></span><div><p className="text-[8px] font-bold text-slate-400">Dịch vụ</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedAppointment.service}</p><p className="mt-1 text-[8px] text-slate-400">{selectedAppointment.duration} phút · {formatCurrency(selectedAppointment.price)}</p></div></div><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><UserRound className="h-4 w-4" /></span><div><p className="text-[8px] font-bold text-slate-400">Nhân viên phụ trách</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedAppointment.staff}</p><p className="mt-1 text-[8px] text-slate-400">{staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role}</p></div></div><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><ReceiptText className="h-4 w-4" /></span><div><p className="text-[8px] font-bold text-slate-400">Thanh toán</p><p className="mt-1 text-[10px] font-black text-slate-800">Đã cọc {formatCurrency(selectedAppointment.deposit)}</p><p className="mt-1 text-[8px] text-slate-400">Còn lại {formatCurrency(Math.max(0, selectedAppointment.price - selectedAppointment.deposit))} · {sourceLabels[selectedAppointment.source]}</p></div></div></div>
+              <div className="mt-5 space-y-4"><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-4 w-4" /></span><div><p className="text-[8px] font-bold text-slate-400">Dịch vụ & vị trí</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedAppointment.service}</p><p className="mt-1 text-[8px] text-slate-400">{selectedAppointment.duration} phút · {selectedAppointment.station || 'Chưa xếp bàn'} · {formatCurrency(selectedAppointment.price)}</p></div></div><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><UserRound className="h-4 w-4" /></span><div><p className="text-[8px] font-bold text-slate-400">Kỹ thuật viên phụ trách</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedAppointment.staff}</p><p className="mt-1 text-[8px] text-slate-400">{staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role}</p></div></div><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><ReceiptText className="h-4 w-4" /></span><div><p className="text-[8px] font-bold text-slate-400">Thanh toán & nguồn đặt</p><p className="mt-1 text-[10px] font-black text-slate-800">Đã cọc {formatCurrency(selectedAppointment.deposit)}</p><p className="mt-1 text-[8px] text-slate-400">Còn lại {formatCurrency(Math.max(0, selectedAppointment.price - selectedAppointment.deposit))} · {sourceLabels[selectedAppointment.source]}</p></div></div></div>
 
               <div className="mt-5 rounded-2xl bg-slate-50 p-4"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Ghi chú phục vụ</p><p className="mt-2 text-[9px] leading-5 text-slate-600">{selectedAppointment.note || 'Chưa có ghi chú cho lịch hẹn này.'}</p></div>
+
+              <div className="mt-3 grid grid-cols-2 gap-3"><div className="rounded-xl border border-slate-200 p-3"><p className="text-[7px] font-bold uppercase text-slate-400">Nhắc lịch</p><p className={`mt-1.5 text-[9px] font-black ${selectedAppointment.reminderSent ? 'text-emerald-600' : 'text-amber-600'}`}>{selectedAppointment.reminderSent ? 'Đã gửi SMS/Zalo' : 'Chưa gửi'}</p></div><div className="rounded-xl border border-slate-200 p-3"><p className="text-[7px] font-bold uppercase text-slate-400">Người tạo</p><p className="mt-1.5 text-[9px] font-black text-slate-700">{selectedAppointment.createdBy || roleLabel}</p></div></div>
 
               {!['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(selectedAppointment.status) && <div className="mt-5"><p className="mb-2 text-[8px] font-black uppercase tracking-wide text-slate-400">Cập nhật trạng thái</p><div className="flex gap-1.5">{(['CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'] as AppointmentStatus[]).map((status, index) => {
                 const order: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'];
@@ -517,7 +589,7 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
                 return <div key={status} className="min-w-0 flex-1"><div className={`h-1.5 rounded-full ${isReached ? 'bg-violet-500' : 'bg-slate-100'}`} /><p className={`mt-1.5 truncate text-center text-[6px] font-bold ${isReached ? 'text-violet-600' : 'text-slate-300'}`}>{index === 0 ? 'Xác nhận' : index === 1 ? 'Đã đến' : index === 2 ? 'Phục vụ' : 'Xong'}</p></div>;
               })}</div></div>}
             </div>
-            <div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><div className="flex gap-2"><button type="button" onClick={() => openEditForm(selectedAppointment)} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button>{nextStatus[selectedAppointment.status] && <button type="button" onClick={() => updateAppointment(selectedAppointment.id, { status: nextStatus[selectedAppointment.status]! })} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />{nextStatusLabel[selectedAppointment.status]}</button>}</div>{!['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(selectedAppointment.status) && <button type="button" onClick={() => updateAppointment(selectedAppointment.id, { status: 'CANCELLED' })} className="mt-2 flex h-9 w-full items-center justify-center border-0 bg-transparent text-[8px] font-bold text-rose-600 shadow-none">Hủy lịch hẹn</button>}</div>
+            <div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><div className="flex gap-2"><button type="button" onClick={() => openEditForm(selectedAppointment)} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button>{nextStatus[selectedAppointment.status] && <button type="button" onClick={() => updateAppointment(selectedAppointment.id, { status: nextStatus[selectedAppointment.status]! })} disabled={!canManage} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Check className="h-4 w-4" />{nextStatusLabel[selectedAppointment.status]}</button>}</div>{!['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(selectedAppointment.status) && <button type="button" onClick={() => updateAppointment(selectedAppointment.id, { status: 'CANCELLED' })} disabled={!canManage} className="mt-2 flex h-9 w-full items-center justify-center border-0 bg-transparent text-[8px] font-bold text-rose-600 shadow-none disabled:text-slate-400">Hủy lịch hẹn</button>}</div>
           </aside>
         </div>
       )}
@@ -530,9 +602,9 @@ export default function TenantAdminAppointments({ searchQuery, onSearchQueryChan
             <div className="space-y-5 p-5 sm:p-6">
               {formError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{formError}</div>}
               <fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><UserRound className="h-3.5 w-3.5" /></span>Thông tin khách hàng</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên khách hàng *</span><input value={form.customer} onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nguyễn Minh Anh" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số điện thoại *</span><input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className={inputClass} placeholder="09xx xxx xxx" /></label></div></fieldset>
-              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-3.5 w-3.5" /></span>Dịch vụ & phân công</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Dịch vụ *</span><BeautifulSelect value={form.service} onChange={(event) => setForm((current) => ({ ...current, service: event.target.value }))} className={inputClass}>{services.map((service) => <option key={service.name} value={service.name}>{service.name} · {service.duration} phút</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={form.branch} onChange={(event) => { const branch = event.target.value as BranchCode; setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn' })); }} className={inputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nhân viên phụ trách *</span><BeautifulSelect value={form.staff} onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))} className={inputClass}>{staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nguồn đặt lịch</span><BeautifulSelect value={form.source} onChange={(event) => setForm((current) => ({ ...current, source: event.target.value as AppointmentSource }))} className={inputClass}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label></div></fieldset>
+              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-3.5 w-3.5" /></span>Dịch vụ & phân công</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Dịch vụ *</span><BeautifulSelect value={form.service} onChange={(event) => setForm((current) => ({ ...current, service: event.target.value }))} className={inputClass}>{services.map((service) => <option key={service.name} value={service.name}>{service.name} · {service.duration} phút</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={form.branch} onChange={(event) => { const branch = event.target.value as BranchCode; setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn', station: branch === 'Q1' ? 'Bàn M-01' : 'Bàn M-02' })); }} className={inputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kỹ thuật viên phụ trách *</span><BeautifulSelect value={form.staff} onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))} className={inputClass}>{staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Bàn / ghế phục vụ</span><BeautifulSelect value={form.station} onChange={(event) => setForm((current) => ({ ...current, station: event.target.value }))} className={inputClass}>{['Bàn M-01', 'Bàn M-02', 'Bàn M-03', 'Bàn M-04', 'Ghế P-01', 'Ghế P-02', 'Ghế P-03', 'Bàn VIP-01', 'Bàn VIP-02'].map((station) => <option key={station} value={station}>{station}</option>)}</BeautifulSelect></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nguồn đặt lịch</span><BeautifulSelect value={form.source} onChange={(event) => setForm((current) => ({ ...current, source: event.target.value as AppointmentSource }))} className={inputClass}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label></div></fieldset>
               <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Clock3 className="h-3.5 w-3.5" /></span>Thời gian & trạng thái</legend><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ngày *</span><input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Giờ bắt đầu *</span><input type="time" value={form.start} onChange={(event) => setForm((current) => ({ ...current, start: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Trạng thái</span><BeautifulSelect value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as AppointmentStatus }))} className={inputClass}>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label></div></fieldset>
-              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CircleDollarSign className="h-3.5 w-3.5" /></span>Thanh toán & ghi chú</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tiền đặt cọc</span><input type="number" min="0" step="10000" value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} className={inputClass} /></label><div className="rounded-xl bg-slate-50 px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Giá dịch vụ dự kiến</p><p className="mt-1 text-[12px] font-black text-slate-800">{formatCurrency(services.find((service) => service.name === form.service)?.price || 0)}</p></div></div><label className="mt-3 block"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghi chú phục vụ</span><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Màu tóc mong muốn, lưu ý dị ứng, yêu cầu riêng..." /></label></fieldset>
+              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CircleDollarSign className="h-3.5 w-3.5" /></span>Thanh toán & ghi chú</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tiền đặt cọc</span><input type="number" min="0" step="10000" value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} className={inputClass} /></label><div className="rounded-xl bg-slate-50 px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Giá dịch vụ dự kiến</p><p className="mt-1 text-[12px] font-black text-slate-800">{formatCurrency(services.find((service) => service.name === form.service)?.price || 0)}</p></div></div><label className="mt-3 block"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghi chú phục vụ</span><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Mẫu nail, màu sắc, tình trạng móng, dị ứng hoặc yêu cầu riêng..." /></label></fieldset>
             </div>
             <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setFormMode(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><CalendarCheck2 className="h-4 w-4" />{formMode === 'CREATE' ? 'Lưu lịch hẹn' : 'Lưu thay đổi'}</button></div>
           </form>
