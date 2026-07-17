@@ -25,6 +25,8 @@ import {
   Megaphone,
   Menu,
   PackageCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   ReceiptText,
   Search,
@@ -545,6 +547,9 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   );
   const [activePage, setActivePage] = useState<NailPageId>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => (
+    typeof window !== 'undefined' && window.localStorage.getItem('tenant-admin-sidebar-collapsed') === 'true'
+  ));
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [branch, setBranch] = useState('ALL');
@@ -623,6 +628,14 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     setLockedPage(page);
     setSidebarOpen(false);
     setCreateOpen(false);
+  };
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem('tenant-admin-sidebar-collapsed', String(next));
+      return next;
+    });
   };
 
   const navigate = (page: NailPageId) => {
@@ -757,17 +770,20 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       {toast && <div className="fixed right-4 top-24 z-[90] flex max-w-sm items-center gap-3 rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-2xl"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><Check className="h-4 w-4" /></span><p className="text-[9px] font-bold text-slate-700">{toast}</p><button type="button" onClick={() => setToast('')} aria-label="Đóng thông báo" className="ml-2 flex h-7 w-7 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button></div>}
       {sidebarOpen && <button type="button" aria-label="Đóng lớp phủ menu" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-40 min-h-0 rounded-none border-0 bg-slate-950/45 p-0 shadow-none lg:hidden" />}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[284px] flex-col bg-[#111625] text-white shadow-2xl transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-[80px] shrink-0 items-center gap-3 border-b border-white/8 px-5">
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[284px] flex-col bg-[#111625] text-white shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[88px]' : 'lg:w-[284px]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <button type="button" onClick={toggleSidebarCollapsed} aria-label={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} className="absolute -right-3 top-[26px] z-10 hidden h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-[#1b2234] p-0 text-slate-300 shadow-lg transition hover:border-violet-400 hover:bg-violet-600 hover:text-white lg:flex">
+          {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+        </button>
+        <div className={`flex h-[80px] shrink-0 items-center gap-3 border-b border-white/8 px-5 ${sidebarCollapsed ? 'lg:justify-center lg:px-3' : ''}`}>
           <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-indigo-600 shadow-lg shadow-violet-950/30"><Sparkles className="h-5 w-5" /><span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-pink-200/80" /></div>
-          <div className="min-w-0"><p className="truncate text-sm font-black tracking-tight">{tenantName}</p><p className="mt-0.5 truncate text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">Nail · Beauty · Care</p></div>
+          <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}><p className="truncate text-sm font-black tracking-tight">{tenantName}</p><p className="mt-0.5 truncate text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">Nail · Beauty · Care</p></div>
           <button type="button" onClick={() => setSidebarOpen(false)} aria-label="Đóng menu" className="ml-auto flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none lg:hidden"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-4">
           {navGroups.map((group, groupIndex) => (
             <div key={group.label} className={groupIndex ? 'mt-5' : ''}>
-              <p className="mb-2 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600">{group.label}</p>
+              <p className={`mb-2 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>{group.label}</p>
               <nav className="space-y-1">{group.items.map(({ id, label, icon: Icon, badge }) => {
                 const active = activePage === id;
                 const access = getTenantPageAccess(currentPackage, id, normalizedAvailablePackages);
@@ -778,10 +794,10 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                     ? staffUsage + '/' + (isUnlimitedTenantLimit(staffLimit, 'staff') ? '∞' : staffLimit)
                     : badge;
                 return (
-                  <button key={id} type="button" onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} aria-disabled={locked} title={locked ? 'Chưa có trong gói ' + currentPackage.name : undefined} className={'flex h-10 w-full items-center gap-3 border-0 px-3 text-left text-[9px] font-bold shadow-none ' + (active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : locked ? 'bg-transparent text-slate-600 hover:bg-white/5 hover:text-slate-300' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white')}>
+                  <button key={id} type="button" onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} aria-disabled={locked} title={(sidebarCollapsed ? label : '') + (locked ? (sidebarCollapsed ? ' · ' : '') + 'Chưa có trong gói ' + currentPackage.name : '') || undefined} className={'flex h-10 w-full items-center gap-3 border-0 px-3 text-left text-[9px] font-bold shadow-none ' + (sidebarCollapsed ? 'lg:justify-center lg:px-0 ' : '') + (active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : locked ? 'bg-transparent text-slate-600 hover:bg-white/5 hover:text-slate-300' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white')}>
                     <Icon className={'h-4 w-4 ' + (active ? 'text-violet-400' : locked ? 'text-slate-600' : '')} />
-                    <span className="min-w-0 flex-1 truncate">{label}</span>
-                    {locked ? <span className="flex items-center gap-1 rounded-full bg-amber-400/10 px-2 py-0.5 text-[7px] text-amber-300"><LockKeyhole className="h-2.5 w-2.5" />Khóa</span> : limitBadge && <span className={'rounded-full px-2 py-0.5 text-[7px] ' + (active ? 'bg-violet-500/20 text-violet-300' : 'bg-white/5 text-slate-500')}>{limitBadge}</span>}
+                    <span className={`min-w-0 flex-1 truncate ${sidebarCollapsed ? 'lg:hidden' : ''}`}>{label}</span>
+                    <span className={sidebarCollapsed ? 'lg:hidden' : ''}>{locked ? <span className="flex items-center gap-1 rounded-full bg-amber-400/10 px-2 py-0.5 text-[7px] text-amber-300"><LockKeyhole className="h-2.5 w-2.5" />Khóa</span> : limitBadge && <span className={'rounded-full px-2 py-0.5 text-[7px] ' + (active ? 'bg-violet-500/20 text-violet-300' : 'bg-white/5 text-slate-500')}>{limitBadge}</span>}</span>
                   </button>
                 );
               })}</nav>
@@ -789,14 +805,15 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           ))}
         </div>
 
-        <button type="button" onClick={() => navigate('subscription')} aria-current={activePage === 'subscription' ? 'page' : undefined} className={'m-3 shrink-0 rounded-2xl border p-4 text-left shadow-none ' + (activePage === 'subscription' ? 'border-violet-400/50 bg-violet-500/15 ring-1 ring-violet-400/20' : 'border-white/8 bg-white/[0.04] hover:bg-white/[0.07]')}>
-          <div className="mb-3 flex items-center justify-between gap-2"><span className="truncate text-[9px] font-bold text-slate-300">Gói {currentPackage.name}</span><span className={'shrink-0 rounded-full px-2 py-1 text-[7px] font-bold ' + subscriptionStatusTone}>{subscriptionStatusLabel}</span></div>
+        <button type="button" onClick={() => navigate('subscription')} aria-current={activePage === 'subscription' ? 'page' : undefined} title={sidebarCollapsed ? 'Gói ' + currentPackage.name : undefined} className={'m-3 shrink-0 rounded-2xl border text-left shadow-none ' + (sidebarCollapsed ? 'lg:flex lg:h-12 lg:items-center lg:justify-center lg:p-0' : 'p-4 ') + (activePage === 'subscription' ? 'border-violet-400/50 bg-violet-500/15 ring-1 ring-violet-400/20' : 'border-white/8 bg-white/[0.04] hover:bg-white/[0.07]')}>
+          {sidebarCollapsed && <PackageCheck className="hidden h-5 w-5 text-violet-300 lg:block" />}
+          <div className={sidebarCollapsed ? 'lg:hidden' : ''}><div className="mb-3 flex items-center justify-between gap-2"><span className="truncate text-[9px] font-bold text-slate-300">Gói {currentPackage.name}</span><span className={'shrink-0 rounded-full px-2 py-1 text-[7px] font-bold ' + subscriptionStatusTone}>{subscriptionStatusLabel}</span></div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400" style={{ width: Math.max(8, planUsagePercent) + '%' }} /></div>
-          <div className="mt-2 flex items-center justify-between gap-2"><p className="text-[7px] leading-4 text-slate-500">{planUsagePercent > 0 ? planUsagePercent + '% hạn mức' : 'Hạn mức linh hoạt'} · Gia hạn {renewalLabel}</p><ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-300" /></div>
+          <div className="mt-2 flex items-center justify-between gap-2"><p className="text-[7px] leading-4 text-slate-500">{planUsagePercent > 0 ? planUsagePercent + '% hạn mức' : 'Hạn mức linh hoạt'} · Gia hạn {renewalLabel}</p><ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-300" /></div></div>
         </button>
       </aside>
 
-      <div className="min-h-screen lg:pl-[284px]">
+      <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[88px]' : 'lg:pl-[284px]'}`}>
         <header className="sticky top-0 z-30 flex h-[80px] items-center gap-3 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm lg:hidden"><Menu className="h-5 w-5" /></button>
           <div className="relative max-w-md flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={`Tìm trong ${formatModuleLabel(activePage).toLocaleLowerCase('vi')}...`} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[10px] font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></div>
