@@ -19,7 +19,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: 'tenantadmin@lumierehair.vn',
     password: 'Lumiere@2026',
     role: 'TENANT_ADMIN',
-    displayName: 'Lê Hoàng Nam',
+    displayName: 'Nguyễn Văn Boss',
     tenantName: 'Nailé Studio'
   }
 ];

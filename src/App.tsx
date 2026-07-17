@@ -32,7 +32,7 @@ import Header from './components/Header';
 import LoginPage from './components/LoginPage';
 import TenantAdminPortal from './components/NailTenantAdminPortal';
 import type { InterfaceLanguage } from './components/AccountPreferences';
-import { authenticateDemoAccount, getDemoAccountByRole, type PortalRole } from './auth/demoAccounts';
+import { authenticateDemoAccount, getDemoAccountByRole, type DemoAccount, type PortalRole } from './auth/demoAccounts';
 
 const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v2';
 
@@ -278,15 +278,32 @@ export default function App() {
   }, [interfaceLanguage, isAuthenticated, systemSettings.general.systemName, systemSettings.general.timezone]);
 
   const handleLogin = (identifier: string, password: string, remember: boolean): boolean => {
-    const account = authenticateDemoAccount(identifier, password);
+    const normalizedIdentifier = identifier.trim().toLowerCase();
+    const managedAdmin = tenantAdmins.find((admin) => {
+      const matchesIdentifier = admin.email.trim().toLowerCase() === normalizedIdentifier || admin.username?.trim().toLowerCase() === normalizedIdentifier;
+      return matchesIdentifier && admin.tempPassword === password && admin.status === 'ACTIVE';
+    });
+    const managedTenant = tenants.find((tenant) => {
+      const matchesIdentifier = tenant.adminEmail.trim().toLowerCase() === normalizedIdentifier || tenant.adminUsername?.trim().toLowerCase() === normalizedIdentifier;
+      return matchesIdentifier && tenant.adminTempPassword === password && tenant.status !== 'SUSPENDED';
+    });
+    const managedAccount: DemoAccount | null = managedAdmin
+      ? { email: managedAdmin.email, password, role: 'TENANT_ADMIN', displayName: managedAdmin.name, tenantName: managedAdmin.tenantName }
+      : managedTenant
+        ? { email: managedTenant.adminEmail, password, role: 'TENANT_ADMIN', displayName: managedTenant.adminName, tenantName: managedTenant.name }
+        : null;
+    const account = authenticateDemoAccount(identifier, password) || managedAccount;
     if (!account) return false;
 
     const storage = remember ? localStorage : sessionStorage;
     const otherStorage = remember ? sessionStorage : localStorage;
     storage.setItem('salonsys_authenticated', 'true');
     storage.setItem('salonsys_role', account.role);
+    if (account.role === 'TENANT_ADMIN') storage.setItem('salonsys_tenant_admin_email', account.email);
+    else storage.removeItem('salonsys_tenant_admin_email');
     otherStorage.removeItem('salonsys_authenticated');
     otherStorage.removeItem('salonsys_role');
+    otherStorage.removeItem('salonsys_tenant_admin_email');
     setPortalRole(account.role);
     setIsAuthenticated(true);
     return true;
@@ -297,6 +314,8 @@ export default function App() {
     sessionStorage.removeItem('salonsys_authenticated');
     localStorage.removeItem('salonsys_role');
     sessionStorage.removeItem('salonsys_role');
+    localStorage.removeItem('salonsys_tenant_admin_email');
+    sessionStorage.removeItem('salonsys_tenant_admin_email');
     setIsAuthenticated(false);
   };
 
@@ -1393,8 +1412,23 @@ export default function App() {
     return <LoginPage systemName={systemSettings.general.systemName} onLogin={handleLogin} />;
   }
 
+  const defaultTenantAccount = getDemoAccountByRole('TENANT_ADMIN');
+  const targetOwnerName = 'nguyễn văn boss';
+  const storedTenantEmail = (localStorage.getItem('salonsys_tenant_admin_email') || sessionStorage.getItem('salonsys_tenant_admin_email') || '').trim().toLowerCase();
+  const targetAdmin = tenantAdmins.find((admin) => admin.name.trim().toLowerCase() === targetOwnerName)
+    || tenantAdmins.find((admin) => admin.email.trim().toLowerCase() === storedTenantEmail);
+  const targetTenant = tenants.find((tenant) => tenant.adminName.trim().toLowerCase() === targetOwnerName)
+    || tenants.find((tenant) => targetAdmin?.tenantIds.includes(tenant.id))
+    || tenants.find((tenant) => tenant.adminEmail.trim().toLowerCase() === storedTenantEmail);
+  const tenantPortalAccount: DemoAccount = {
+    ...defaultTenantAccount,
+    displayName: targetAdmin?.name || targetTenant?.adminName || defaultTenantAccount.displayName,
+    email: targetAdmin?.email || targetTenant?.adminEmail || defaultTenantAccount.email,
+    tenantName: targetTenant?.name || targetAdmin?.tenantName || defaultTenantAccount.tenantName
+  };
+
   if (portalRole === 'TENANT_ADMIN') {
-    return <TenantAdminPortal account={getDemoAccountByRole('TENANT_ADMIN')} onLogout={handleLogout} />;
+    return <TenantAdminPortal account={tenantPortalAccount} onLogout={handleLogout} />;
   }
 
   return (
