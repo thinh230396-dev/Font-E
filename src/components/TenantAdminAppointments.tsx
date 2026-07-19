@@ -14,7 +14,9 @@ import {
   LayoutGrid,
   LayoutList,
   MapPin,
+  Maximize2,
   MessageCircle,
+  Minimize2,
   Pencil,
   Phone,
   Plus,
@@ -239,6 +241,7 @@ export default function TenantAdminAppointments({
   });
   const [selectedDate, setSelectedDate] = useState('2026-07-16');
   const [viewMode, setViewMode] = useState<ViewMode>('SCHEDULE');
+  const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | AppointmentStatus>('ALL');
   const [staffFilter, setStaffFilter] = useState('ALL');
   const [sourceFilter, setSourceFilter] = useState<'ALL' | AppointmentSource>('ALL');
@@ -254,20 +257,21 @@ export default function TenantAdminAppointments({
   }, [appointments, storageKey]);
 
   useEffect(() => {
-    if (!selectedAppointment && !formMode) return;
+    if (!selectedAppointment && !formMode && !isScheduleExpanded) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (formMode) setFormMode(null);
-      else setSelectedAppointment(null);
+      else if (selectedAppointment) setSelectedAppointment(null);
+      else setIsScheduleExpanded(false);
     };
     window.addEventListener('keydown', handleEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [formMode, selectedAppointment]);
+  }, [formMode, isScheduleExpanded, selectedAppointment]);
 
   const requireManageAccess = () => {
     if (canManage) return true;
@@ -302,6 +306,9 @@ export default function TenantAdminAppointments({
   const pendingCount = scopedAppointments.filter((appointment) => appointment.status === 'PENDING').length;
   const servingCount = scopedAppointments.filter((appointment) => ['CHECKED_IN', 'IN_SERVICE'].includes(appointment.status)).length;
   const activeFilterCount = [statusFilter !== 'ALL', staffFilter !== 'ALL', sourceFilter !== 'ALL'].filter(Boolean).length;
+  const scheduleHourHeight = isScheduleExpanded && typeof window !== 'undefined'
+    ? Math.max(42, Math.floor((window.innerHeight - 260) / 12))
+    : SCHEDULE_HOUR_HEIGHT;
 
   const updateAppointment = (id: string, patch: Partial<TenantAppointment>) => {
     if (!requireManageAccess()) return;
@@ -439,7 +446,7 @@ export default function TenantAdminAppointments({
         ))}
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+      <section className={`overflow-hidden border border-slate-200 bg-white ${isScheduleExpanded ? 'fixed inset-3 z-[60] flex flex-col rounded-3xl shadow-2xl' : 'rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]'}`}>
         <div className="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
             <button type="button" onClick={() => setSelectedDate(addDays(selectedDate, -1))} aria-label="Ngày trước" className="flex h-9 w-9 items-center justify-center border-0 bg-transparent p-0 text-slate-500 shadow-none hover:bg-white"><ChevronLeft className="h-4 w-4" /></button>
@@ -458,10 +465,11 @@ export default function TenantAdminAppointments({
               <button type="button" onClick={() => setViewMode('SCHEDULE')} aria-label="Xem lịch ngày" className={`flex h-8 w-9 items-center justify-center border-0 p-0 shadow-none ${viewMode === 'SCHEDULE' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutGrid className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={() => setViewMode('LIST')} aria-label="Xem danh sách" className={`flex h-8 w-9 items-center justify-center border-0 p-0 shadow-none ${viewMode === 'LIST' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutList className="h-3.5 w-3.5" /></button>
             </div>
+            {viewMode === 'SCHEDULE' && <button type="button" onClick={() => { setIsScheduleExpanded((value) => !value); setShowFilters(false); }} className={`flex h-10 items-center justify-center gap-2 border px-3 text-[9px] font-black shadow-sm ${isScheduleExpanded ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'}`}>{isScheduleExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}{isScheduleExpanded ? 'Thu nhỏ' : 'Vừa màn hình'}</button>}
           </div>
         </div>
 
-        <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/70 px-2 sm:px-4">
+        <div className={`${isScheduleExpanded ? 'hidden' : 'grid'} grid-cols-7 border-b border-slate-100 bg-slate-50/70 px-2 sm:px-4`}>
           {weekDates.map((date) => {
             const dayAppointments = appointments.filter((appointment) => appointment.date === date && (selectedBranch === 'ALL' || appointment.branch === selectedBranch));
             const isSelected = date === selectedDate;
@@ -486,7 +494,7 @@ export default function TenantAdminAppointments({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-100 px-4 py-3">
+        <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-100 px-4 ${isScheduleExpanded ? 'py-2' : 'py-3'}`}>
           <span className="flex items-center gap-2 text-[8px] font-bold uppercase tracking-wide text-slate-400"><SlidersHorizontal className="h-3.5 w-3.5" />Trạng thái</span>
           {(['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'] as const).map((status) => {
             const count = status === 'ALL' ? scopedAppointments.length : scopedAppointments.filter((appointment) => appointment.status === status).length;
@@ -495,26 +503,26 @@ export default function TenantAdminAppointments({
         </div>
 
         {viewMode === 'SCHEDULE' ? (
-          <div className="relative max-h-[760px] overflow-auto bg-white">
-            <div style={{ minWidth: `${Math.max(980, 72 + scheduleStaff.length * 230)}px` }}>
-              <div className="sticky top-0 z-30 grid border-b border-slate-200 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.05)] backdrop-blur" style={{ gridTemplateColumns: `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))` }}>
+          <div className={`relative bg-white ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'max-h-[760px] overflow-auto'}`}>
+            <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${Math.max(980, 72 + scheduleStaff.length * 230)}px` }}>
+              <div className="sticky top-0 z-30 grid border-b border-slate-200 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.05)] backdrop-blur" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${scheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))` }}>
                 <div className="flex items-center justify-center border-r border-slate-100 text-[9px] font-black text-slate-400">GMT+7</div>
                 {scheduleStaff.map((staff) => {
                   const staffAppointments = scopedAppointments.filter((appointment) => appointment.staff === staff.name && !['CANCELLED', 'NO_SHOW'].includes(appointment.status));
                   const bookedMinutes = staffAppointments.reduce((sum, appointment) => sum + appointment.duration, 0);
                   const utilization = Math.min(100, Math.round(bookedMinutes / 600 * 100));
-                  return <div key={staff.name} className="flex min-h-16 items-center gap-2.5 border-r border-slate-100 px-3.5 py-3 last:border-r-0"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[9px] font-black text-slate-700">{staff.initials}</span><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black text-slate-800">{staff.name}</p><p className="mt-0.5 truncate text-[8px] text-slate-400">{staff.role}</p><p className="mt-0.5 text-[7px] font-semibold text-slate-400">{staff.shift}</p></div><span className="rounded-lg bg-violet-50 px-2 py-1 text-[9px] font-black text-violet-600">{utilization}%</span></div>;
+                  return <div key={staff.name} className={`flex items-center border-r border-slate-100 last:border-r-0 ${isScheduleExpanded ? 'min-h-14 gap-2 px-2 py-2' : 'min-h-16 gap-2.5 px-3.5 py-3'}`}><span className={`flex shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-700 ${isScheduleExpanded ? 'h-8 w-8 text-[8px]' : 'h-9 w-9 text-[9px]'}`}>{staff.initials}</span><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black text-slate-800">{staff.name}</p><p className="mt-0.5 truncate text-[8px] text-slate-400">{staff.role}</p>{!isScheduleExpanded && <p className="mt-0.5 text-[7px] font-semibold text-slate-400">{staff.shift}</p>}</div><span className={`rounded-lg bg-violet-50 font-black text-violet-600 ${isScheduleExpanded ? 'px-1.5 py-1 text-[8px]' : 'px-2 py-1 text-[9px]'}`}>{utilization}%</span></div>;
                 })}
               </div>
-              <div className="relative grid" style={{ gridTemplateColumns: `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))`, height: SCHEDULE_HOUR_HEIGHT * 12 }}>
+              <div className="relative grid" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${scheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))`, height: scheduleHourHeight * 12 }}>
                 <div className="relative border-r border-slate-200 bg-slate-50/70">
-                  {Array.from({ length: 13 }, (_, index) => 8 + index).map((hour) => <span key={hour} className="absolute right-3 -translate-y-1/2 text-[9px] font-bold text-slate-400" style={{ top: (hour - 8) * SCHEDULE_HOUR_HEIGHT }}>{String(hour).padStart(2, '0')}:00</span>)}
+                  {Array.from({ length: 13 }, (_, index) => 8 + index).map((hour) => <span key={hour} className={`absolute right-2 text-[9px] font-bold text-slate-400 ${hour === 8 ? '' : '-translate-y-1/2'}`} style={{ top: hour === 8 ? 8 : (hour - 8) * scheduleHourHeight }}>{String(hour).padStart(2, '0')}:00</span>)}
                 </div>
                 {scheduleStaff.map((staff) => (
-                  <div key={staff.name} className="relative border-r border-slate-100 last:border-r-0" style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${SCHEDULE_HOUR_HEIGHT - 1}px, #e8edf5 ${SCHEDULE_HOUR_HEIGHT}px)` }}>
+                  <div key={staff.name} className="relative border-r border-slate-100 last:border-r-0" style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${scheduleHourHeight - 1}px, #e8edf5 ${scheduleHourHeight}px)` }}>
                     {filteredAppointments.filter((appointment) => appointment.staff === staff.name).map((appointment) => {
-                      const top = Math.max(0, (minutesFromStart(appointment.start) - 480) / 60 * SCHEDULE_HOUR_HEIGHT);
-                      const height = Math.max(48, appointment.duration / 60 * SCHEDULE_HOUR_HEIGHT - 6);
+                      const top = Math.max(0, (minutesFromStart(appointment.start) - 480) / 60 * scheduleHourHeight);
+                      const height = Math.max(isScheduleExpanded ? 38 : 48, appointment.duration / 60 * scheduleHourHeight - 6);
                       const meta = statusMeta[appointment.status];
                       const isCompact = height < 60;
                       const showService = height >= 78;
@@ -540,7 +548,7 @@ export default function TenantAdminAppointments({
                     })}
                   </div>
                 ))}
-                {selectedDate === '2026-07-16' && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (14 * 60 + 32 - 480) / 60 * SCHEDULE_HOUR_HEIGHT }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">14:32</span></div>}
+                {selectedDate === '2026-07-16' && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (14 * 60 + 32 - 480) / 60 * scheduleHourHeight }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">14:32</span></div>}
               </div>
             </div>
             {!filteredAppointments.length && <div className="absolute inset-x-0 top-80 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không có lịch phù hợp với bộ lọc</p></div>}
