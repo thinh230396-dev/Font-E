@@ -70,6 +70,7 @@ import { nailModuleConfigs, type NailModuleConfig, type NailPageId, type NailRow
 
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
 const TenantAdminStations = lazy(() => import('./TenantAdminStations'));
+const TenantAdminPayments = lazy(() => import('./TenantAdminPayments'));
 
 interface NailTenantAdminPortalProps {
   account: DemoAccount;
@@ -1342,6 +1343,20 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           ) : activePage === 'stations' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải sơ đồ ghế & khu vực...</div>}>
               <TenantAdminStations
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                selectedBranch={branch}
+                onSelectedBranchChange={(value) => { setBranch(value); setSelectedRow(null); }}
+                tenantName={tenantName}
+                roleLabel="Owner · Tenant Admin"
+                accessMode={currentAccessMode}
+                readOnlyReason={readOnlyReason}
+                onNotify={setToast}
+              />
+            </Suspense>
+          ) : activePage === 'pos' ? (
+            <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải thanh toán & đối soát...</div>}>
+              <TenantAdminPayments
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
                 selectedBranch={branch}
