@@ -85,14 +85,14 @@ interface AppointmentFormState {
   note: string;
 }
 
-const statusMeta: Record<AppointmentStatus, { label: string; badge: string; card: string; dot: string }> = {
-  PENDING: { label: 'Chờ xác nhận', badge: 'bg-amber-50 text-amber-700 ring-amber-200', card: 'border-amber-200 bg-amber-50/90 text-amber-950', dot: 'bg-amber-500' },
-  CONFIRMED: { label: 'Đã xác nhận', badge: 'bg-blue-50 text-blue-700 ring-blue-200', card: 'border-blue-200 bg-blue-50/90 text-blue-950', dot: 'bg-blue-500' },
-  CHECKED_IN: { label: 'Đã đến', badge: 'bg-cyan-50 text-cyan-700 ring-cyan-200', card: 'border-cyan-200 bg-cyan-50/90 text-cyan-950', dot: 'bg-cyan-500' },
-  IN_SERVICE: { label: 'Đang phục vụ', badge: 'bg-violet-50 text-violet-700 ring-violet-200', card: 'border-violet-200 bg-violet-50/90 text-violet-950', dot: 'bg-violet-500' },
-  COMPLETED: { label: 'Hoàn thành', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', card: 'border-emerald-200 bg-emerald-50/90 text-emerald-950', dot: 'bg-emerald-500' },
-  CANCELLED: { label: 'Đã hủy', badge: 'bg-rose-50 text-rose-700 ring-rose-200', card: 'border-rose-200 bg-rose-50/85 text-rose-950', dot: 'bg-rose-500' },
-  NO_SHOW: { label: 'Không đến', badge: 'bg-slate-100 text-slate-600 ring-slate-200', card: 'border-slate-200 bg-slate-100/90 text-slate-700', dot: 'bg-slate-500' }
+const statusMeta: Record<AppointmentStatus, { label: string; shortLabel: string; symbol: string; badge: string; card: string; dot: string }> = {
+  PENDING: { label: 'Chờ xác nhận', shortLabel: 'Chờ', symbol: '!', badge: 'bg-amber-50 text-amber-700 ring-amber-200', card: 'border-amber-300 bg-amber-50/95 text-amber-950', dot: 'bg-amber-500' },
+  CONFIRMED: { label: 'Đã xác nhận', shortLabel: 'Xác nhận', symbol: '✓', badge: 'bg-blue-50 text-blue-700 ring-blue-200', card: 'border-blue-300 bg-blue-50/95 text-blue-950', dot: 'bg-blue-500' },
+  CHECKED_IN: { label: 'Đã đến', shortLabel: 'Đã đến', symbol: '↳', badge: 'bg-cyan-50 text-cyan-700 ring-cyan-200', card: 'border-cyan-300 bg-cyan-50/95 text-cyan-950', dot: 'bg-cyan-500' },
+  IN_SERVICE: { label: 'Đang phục vụ', shortLabel: 'Phục vụ', symbol: '●', badge: 'bg-violet-50 text-violet-700 ring-violet-200', card: 'border-violet-300 bg-violet-50/95 text-violet-950', dot: 'bg-violet-500' },
+  COMPLETED: { label: 'Hoàn thành', shortLabel: 'Xong', symbol: '✓', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', card: 'border-emerald-300 bg-emerald-50/95 text-emerald-950', dot: 'bg-emerald-500' },
+  CANCELLED: { label: 'Đã hủy', shortLabel: 'Đã hủy', symbol: '×', badge: 'bg-rose-50 text-rose-700 ring-rose-200', card: 'border-rose-300 bg-rose-50/90 text-rose-950', dot: 'bg-rose-500' },
+  NO_SHOW: { label: 'Không đến', shortLabel: 'Vắng', symbol: '—', badge: 'bg-slate-100 text-slate-600 ring-slate-200', card: 'border-slate-300 bg-slate-100/95 text-slate-700', dot: 'bg-slate-500' }
 };
 
 const sourceLabels: Record<AppointmentSource, string> = {
@@ -495,10 +495,11 @@ export default function TenantAdminAppointments({
         )}
 
         <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-100 px-4 ${isScheduleExpanded ? 'py-2' : 'py-3'}`}>
-          <span className="flex items-center gap-2 text-[8px] font-bold uppercase tracking-wide text-slate-400"><SlidersHorizontal className="h-3.5 w-3.5" />Trạng thái</span>
-          {(['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'] as const).map((status) => {
+          <span className="flex items-center gap-2 text-[8px] font-bold uppercase tracking-wide text-slate-400"><SlidersHorizontal className="h-3.5 w-3.5" />Màu = trạng thái</span>
+          <span className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400"><Clock3 className="h-3 w-3" />Chiều cao = thời lượng</span>
+          {(['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const).map((status) => {
             const count = status === 'ALL' ? scopedAppointments.length : scopedAppointments.filter((appointment) => appointment.status === status).length;
-            return <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`flex h-7 min-h-0 items-center gap-1.5 border-0 bg-transparent px-0 text-[8px] font-bold shadow-none ${statusFilter === status ? 'text-violet-700' : 'text-slate-500'}`}>{status !== 'ALL' && <span className={`h-1.5 w-1.5 rounded-full ${statusMeta[status].dot}`} />}{status === 'ALL' ? 'Tất cả' : statusMeta[status].label}<span className={`rounded-full px-1.5 py-0.5 ${statusFilter === status ? 'bg-violet-100' : 'bg-slate-100'}`}>{count}</span></button>;
+            return <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`flex h-7 min-h-0 items-center gap-1.5 border-0 bg-transparent px-0 text-[8px] font-bold shadow-none ${statusFilter === status ? 'text-violet-700' : 'text-slate-500'}`}>{status !== 'ALL' && <span aria-hidden="true" className={`flex h-4 w-4 items-center justify-center rounded text-[7px] font-black text-white ${statusMeta[status].dot}`}>{statusMeta[status].symbol}</span>}{status === 'ALL' ? 'Tất cả' : statusMeta[status].label}<span className={`rounded-full px-1.5 py-0.5 ${statusFilter === status ? 'bg-violet-100' : 'bg-slate-100'}`}>{count}</span></button>;
           })}
         </div>
 
@@ -527,20 +528,29 @@ export default function TenantAdminAppointments({
                       const isCompact = height < 60;
                       const showService = height >= 78;
                       const showOperationalMeta = height >= 110;
+                      const appointmentStart = minutesFromStart(appointment.start);
+                      const hasConflict = scopedAppointments.some((other) => {
+                        if (other.id === appointment.id || ['CANCELLED', 'NO_SHOW'].includes(other.status)) return false;
+                        const otherStart = minutesFromStart(other.start);
+                        const overlaps = appointmentStart < otherStart + other.duration && appointmentStart + appointment.duration > otherStart;
+                        return overlaps && (other.staff === appointment.staff || Boolean(appointment.station && appointment.station === other.station));
+                      });
+                      const fullSummary = `${appointment.start}–${getEndTime(appointment.start, appointment.duration)} · ${appointment.customer} · ${appointment.service} · ${meta.label}${appointment.station ? ` · ${appointment.station}` : ''}${hasConflict ? ' · Có xung đột nguồn lực' : ''}`;
                       return (
-                        <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} aria-label={`Xem lịch ${appointment.start}, ${appointment.customer}, ${appointment.service}, ${meta.label}`} className={`group absolute left-2 right-2 z-10 h-auto overflow-hidden rounded-xl border border-l-4 px-2.5 text-left shadow-sm transition-all hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${isCompact ? 'py-1.5' : 'py-2'} ${meta.card}`} style={{ top: top + 3, height }}>
+                        <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} aria-label={`Xem lịch: ${fullSummary}`} title={fullSummary} className={`group absolute left-2 right-2 z-10 h-auto overflow-hidden rounded-xl border border-l-4 px-2.5 text-left shadow-sm transition-all hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${isCompact ? 'py-1.5' : 'py-2'} ${['CANCELLED', 'NO_SHOW'].includes(appointment.status) ? 'opacity-70' : ''} ${meta.card}`} style={{ top: top + 3, height }}>
                           {isCompact ? (
                             <span className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0 text-[8px] font-black tracking-tight">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
-                              <span className="min-w-0 flex-1 truncate text-[9px] font-black">{appointment.customer}</span>
-                              <span className={`h-2 w-2 shrink-0 rounded-full ring-4 ring-white/60 ${meta.dot}`} />
+                              <span className="shrink-0 text-[8px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
+                              <span className={`min-w-0 flex-1 truncate text-[9px] font-black ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
+                              {hasConflict && <CircleAlert aria-label="Có xung đột nguồn lực" className="h-3.5 w-3.5 shrink-0 text-rose-600" />}
+                              <span aria-label={meta.label} className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[7px] font-black text-white ${meta.dot}`}>{meta.symbol}</span>
                             </span>
                           ) : (
                             <>
-                              <span className="flex items-center justify-between gap-2"><span className="text-[9px] font-black tracking-tight">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span><span className={`h-2 w-2 shrink-0 rounded-full ring-4 ring-white/60 ${meta.dot}`} /></span>
-                              <span className="mt-1 block truncate text-[10px] font-black leading-4">{appointment.customer}</span>
+                              <span className="flex items-center justify-between gap-2"><span className="text-[9px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span><span className="flex items-center gap-1.5">{hasConflict && <CircleAlert aria-label="Có xung đột nguồn lực" className="h-3.5 w-3.5 text-rose-600" />}<span aria-label={meta.label} className={`flex h-4 w-4 items-center justify-center rounded text-[7px] font-black text-white ${meta.dot}`}>{meta.symbol}</span></span></span>
+                              <span className={`mt-1 block truncate text-[10px] font-black leading-4 ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
                               {showService && <span className="block truncate text-[8px] font-medium leading-4 opacity-70">{appointment.service}</span>}
-                              {showOperationalMeta && <span className="mt-1.5 flex items-center justify-between gap-2"><span className="inline-flex min-w-0 truncate rounded-md bg-white/70 px-1.5 py-0.5 text-[7px] font-bold">{meta.label}</span><span className="shrink-0 truncate text-[7px] font-bold opacity-60">{appointment.station}</span></span>}
+                              {showOperationalMeta && <span className="mt-1.5 flex items-center justify-between gap-2"><span className="inline-flex min-w-0 truncate rounded-md bg-white/75 px-1.5 py-0.5 text-[7px] font-bold ring-1 ring-black/5">{meta.shortLabel}</span><span className="shrink-0 truncate text-[7px] font-bold opacity-60">{appointment.station || 'Chưa xếp bàn'}</span></span>}
                             </>
                           )}
                         </button>
