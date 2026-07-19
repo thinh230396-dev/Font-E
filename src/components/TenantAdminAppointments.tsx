@@ -516,18 +516,31 @@ export default function TenantAdminAppointments({
                       const top = Math.max(0, (minutesFromStart(appointment.start) - 480) / 60 * SCHEDULE_HOUR_HEIGHT);
                       const height = Math.max(48, appointment.duration / 60 * SCHEDULE_HOUR_HEIGHT - 6);
                       const meta = statusMeta[appointment.status];
+                      const isCompact = height < 60;
+                      const showService = height >= 78;
+                      const showOperationalMeta = height >= 110;
                       return (
-                        <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} aria-label={`Xem lịch ${appointment.start}, ${appointment.customer}, ${appointment.service}, ${meta.label}`} className={`group absolute left-2 right-2 z-10 h-auto overflow-hidden rounded-xl border border-l-4 px-2.5 py-2 text-left shadow-sm transition-all hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${meta.card}`} style={{ top: top + 3, height }}>
-                          <span className="flex items-center justify-between gap-2"><span className="text-[9px] font-black tracking-tight">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span><span className={`h-2 w-2 shrink-0 rounded-full ring-4 ring-white/60 ${meta.dot}`} /></span>
-                          <span className="mt-1 block truncate text-[10px] font-black leading-4">{appointment.customer}</span>
-                          {height >= 58 && <span className="block truncate text-[8px] font-medium opacity-70">{appointment.service}</span>}
-                          {height >= 84 && <span className="mt-1.5 flex items-center justify-between gap-2"><span className="inline-flex truncate rounded-md bg-white/70 px-1.5 py-0.5 text-[7px] font-bold">{meta.label}</span><span className="truncate text-[7px] font-bold opacity-60">{appointment.station}</span></span>}
+                        <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} aria-label={`Xem lịch ${appointment.start}, ${appointment.customer}, ${appointment.service}, ${meta.label}`} className={`group absolute left-2 right-2 z-10 h-auto overflow-hidden rounded-xl border border-l-4 px-2.5 text-left shadow-sm transition-all hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${isCompact ? 'py-1.5' : 'py-2'} ${meta.card}`} style={{ top: top + 3, height }}>
+                          {isCompact ? (
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0 text-[8px] font-black tracking-tight">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
+                              <span className="min-w-0 flex-1 truncate text-[9px] font-black">{appointment.customer}</span>
+                              <span className={`h-2 w-2 shrink-0 rounded-full ring-4 ring-white/60 ${meta.dot}`} />
+                            </span>
+                          ) : (
+                            <>
+                              <span className="flex items-center justify-between gap-2"><span className="text-[9px] font-black tracking-tight">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span><span className={`h-2 w-2 shrink-0 rounded-full ring-4 ring-white/60 ${meta.dot}`} /></span>
+                              <span className="mt-1 block truncate text-[10px] font-black leading-4">{appointment.customer}</span>
+                              {showService && <span className="block truncate text-[8px] font-medium leading-4 opacity-70">{appointment.service}</span>}
+                              {showOperationalMeta && <span className="mt-1.5 flex items-center justify-between gap-2"><span className="inline-flex min-w-0 truncate rounded-md bg-white/70 px-1.5 py-0.5 text-[7px] font-bold">{meta.label}</span><span className="shrink-0 truncate text-[7px] font-bold opacity-60">{appointment.station}</span></span>}
+                            </>
+                          )}
                         </button>
                       );
                     })}
                   </div>
                 ))}
-                {selectedDate === '2026-07-16' && <div className="pointer-events-none absolute left-0 right-0 z-20 border-t border-rose-500" style={{ top: (14 * 60 + 32 - 480) / 60 * SCHEDULE_HOUR_HEIGHT }}><span className="absolute -left-0.5 -top-2.5 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">14:32</span></div>}
+                {selectedDate === '2026-07-16' && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (14 * 60 + 32 - 480) / 60 * SCHEDULE_HOUR_HEIGHT }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">14:32</span></div>}
               </div>
             </div>
             {!filteredAppointments.length && <div className="absolute inset-x-0 top-80 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không có lịch phù hợp với bộ lọc</p></div>}
