@@ -82,6 +82,7 @@ const TenantAdminOnlineBooking = lazy(() => import('./TenantAdminOnlineBooking')
 const TenantAdminFinance = lazy(() => import('./TenantAdminFinance'));
 const TenantAdminSanitation = lazy(() => import('./TenantAdminSanitation'));
 const TenantAdminReports = lazy(() => import('./TenantAdminReports'));
+const TenantAdminSubscription = lazy(() => import('./TenantAdminSubscription'));
 
 interface NailTenantAdminPortalProps {
   account: DemoAccount;
@@ -1334,7 +1335,20 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           {activePage === 'overview' ? (
             <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
           ) : activePage === 'subscription' ? (
-            <SubscriptionPage tenantName={tenantName} tenant={tenant} subscriptionPackage={currentPackage} availablePackages={normalizedAvailablePackages} invoices={invoices} branchCount={branchRows.length} staffCount={staffUsage} onNotify={setToast} />
+            <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải trung tâm gói đăng ký...</div>}>
+              <TenantAdminSubscription
+                tenantName={tenantName}
+                tenant={tenant}
+                subscriptionPackage={currentPackage}
+                availablePackages={normalizedAvailablePackages}
+                invoices={invoices}
+                branchCount={branchRows.length}
+                staffCount={staffUsage}
+                roleLabel="Owner · Tenant Admin"
+                readOnlyReason={readOnlyReason}
+                onNotify={setToast}
+              />
+            </Suspense>
           ) : activePage === 'branches' ? (
             <BranchesPage rows={scopedRows} searchQuery={searchQuery} activeTab={activeTab || 'Tất cả'} onSearch={setSearchQuery} onTab={setActiveTab} onSelectRow={setSelectedRow} onCreate={() => openCreate('branches')} onExport={exportRows} planName={currentPackage.name} branchLimit={branchLimit} />
           ) : activePage === 'appointments' ? (
