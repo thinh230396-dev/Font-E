@@ -81,6 +81,7 @@ const TenantAdminNailGallery = lazy(() => import('./TenantAdminNailGallery'));
 const TenantAdminOnlineBooking = lazy(() => import('./TenantAdminOnlineBooking'));
 const TenantAdminFinance = lazy(() => import('./TenantAdminFinance'));
 const TenantAdminSanitation = lazy(() => import('./TenantAdminSanitation'));
+const TenantAdminReports = lazy(() => import('./TenantAdminReports'));
 
 interface NailTenantAdminPortalProps {
   account: DemoAccount;
@@ -1507,6 +1508,20 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           ) : activePage === 'sanitation' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải trung tâm vệ sinh & an toàn...</div>}>
               <TenantAdminSanitation
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                selectedBranch={branch}
+                onSelectedBranchChange={(value) => { setBranch(value); setSelectedRow(null); }}
+                tenantName={tenantName}
+                roleLabel="Owner · Tenant Admin"
+                accessMode={currentAccessMode}
+                readOnlyReason={readOnlyReason}
+                onNotify={setToast}
+              />
+            </Suspense>
+          ) : activePage === 'reports' ? (
+            <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải trung tâm báo cáo...</div>}>
+              <TenantAdminReports
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
                 selectedBranch={branch}
