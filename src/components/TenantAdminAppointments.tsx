@@ -446,7 +446,7 @@ export default function TenantAdminAppointments({
         ))}
       </section>
 
-      <section className={`overflow-hidden border border-slate-200 bg-white ${isScheduleExpanded ? 'fixed inset-3 z-[60] flex flex-col rounded-3xl shadow-2xl' : 'rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]'}`}>
+      <section className={`isolate overflow-hidden border border-slate-200 bg-white ${isScheduleExpanded ? 'fixed inset-3 z-[60] flex flex-col rounded-3xl shadow-2xl' : 'rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]'}`}>
         <div className="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
             <button type="button" onClick={() => setSelectedDate(addDays(selectedDate, -1))} aria-label="Ngày trước" className="flex h-9 w-9 items-center justify-center border-0 bg-transparent p-0 text-slate-500 shadow-none hover:bg-white"><ChevronLeft className="h-4 w-4" /></button>
@@ -506,7 +506,7 @@ export default function TenantAdminAppointments({
         {viewMode === 'SCHEDULE' ? (
           <div className={`relative bg-white ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'max-h-[760px] overflow-auto'}`}>
             <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${Math.max(980, 72 + scheduleStaff.length * 230)}px` }}>
-              <div className="sticky top-0 z-30 grid border-b border-slate-200 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.05)] backdrop-blur" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${scheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))` }}>
+              <div className="sticky top-0 z-20 grid border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.05)]" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${scheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))` }}>
                 <div className="flex items-center justify-center border-r border-slate-100 text-[9px] font-black text-slate-400">GMT+7</div>
                 {scheduleStaff.map((staff) => {
                   const staffAppointments = scopedAppointments.filter((appointment) => appointment.staff === staff.name && !['CANCELLED', 'NO_SHOW'].includes(appointment.status));
