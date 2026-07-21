@@ -160,18 +160,18 @@ function ServiceDetailDrawer({
   const totalSlotTime = service.duration + service.bufferTime;
 
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/50 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:p-6">
       <button
         type="button"
         aria-label="Đóng chi tiết dịch vụ"
         onClick={onClose}
         className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
       />
-      <aside
+      <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="service-detail-title"
-        className="relative flex h-full w-full max-w-[640px] flex-col overflow-hidden border-l border-slate-200 bg-slate-50 shadow-2xl"
+        className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-[920px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 shadow-2xl sm:max-h-[calc(100vh-3rem)]"
       >
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
           <div>
@@ -453,7 +453,7 @@ function ServiceDetailDrawer({
             </button>
           </div>
         </footer>
-      </aside>
+      </section>
     </div>
   );
 }
