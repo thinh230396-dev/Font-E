@@ -52,6 +52,14 @@ interface InvoiceLineDraft {
   staff: string;
 }
 
+interface CatalogItem {
+  name: string;
+  price: number;
+  category: string;
+  duration?: number;
+  stock?: number;
+}
+
 interface ReceptionAppointment {
   id: string;
   customerId?: string;
@@ -116,7 +124,7 @@ interface ReceptionistPortalProps {
 const today = () => new Date().toISOString().slice(0, 10);
 const nowTime = () => new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
 const money = (value: number) => `${new Intl.NumberFormat('vi-VN').format(value)}đ`;
-const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
 const seedAppointments = (): ReceptionAppointment[] => [
   { id: 'APT-2107', customerId: 'CUS-1842', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: today(), start: '09:00', duration: 90, service: 'Gel Manicure + Nail Art', services: ['Gel Manicure', 'Nail Art'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'IN_SERVICE', price: 850000, deposit: 300000, note: 'Khách VIP, ưu tiên phòng yên tĩnh.', station: 'M-01', reminderSent: true, createdBy: 'Website', createdAt: new Date().toISOString() },
@@ -145,23 +153,30 @@ const methodMeta: Record<PaymentMethod, { label: string; icon: typeof Banknote }
   ZALOPAY: { label: 'ZaloPay', icon: Smartphone },
 };
 
-const serviceCatalog = [
-  { name: 'Gel Manicure', price: 450000 },
-  { name: 'Pedicure Spa', price: 550000 },
-  { name: 'Sơn gel Hàn Quốc', price: 620000 },
-  { name: 'Nail Art cơ bản', price: 400000 },
-  { name: 'Nail Art Premium', price: 980000 },
-  { name: 'Combo Manicure', price: 620000 },
-  { name: 'Combo VIP', price: 1650000 },
-  { name: 'Tháo gel & phục hồi móng', price: 280000 },
+const serviceCatalog: CatalogItem[] = [
+  { name: 'Gel Manicure', price: 450000, category: 'Sơn móng', duration: 60 },
+  { name: 'Pedicure Spa', price: 550000, category: 'Chăm sóc móng', duration: 75 },
+  { name: 'Sơn gel Hàn Quốc', price: 620000, category: 'Sơn móng', duration: 60 },
+  { name: 'Nail Art cơ bản', price: 400000, category: 'Vẽ nghệ thuật', duration: 45 },
+  { name: 'Nail Art Premium', price: 980000, category: 'Vẽ nghệ thuật', duration: 120 },
+  { name: 'Combo Manicure', price: 620000, category: 'Combo', duration: 75 },
+  { name: 'Combo VIP', price: 1650000, category: 'Combo', duration: 120 },
+  { name: 'Tháo gel & phục hồi móng', price: 280000, category: 'Chăm sóc móng', duration: 40 },
+  { name: 'Đắp bột', price: 850000, category: 'Đắp bột', duration: 90 },
+  { name: 'Nối móng Tips', price: 750000, category: 'Nối móng', duration: 90 },
+  { name: 'Đính đá nghệ thuật', price: 250000, category: 'Đính đá', duration: 30 },
+  { name: 'Waxing tay', price: 320000, category: 'Waxing', duration: 30 },
 ];
 
-const productCatalog = [
-  { name: 'Dầu dưỡng móng', price: 170000 },
-  { name: 'Kem dưỡng tay', price: 220000 },
-  { name: 'Serum phục hồi móng', price: 290000 },
-  { name: 'Sơn dưỡng tại nhà', price: 260000 },
-  { name: 'Bộ chăm sóc móng mini', price: 390000 },
+const productCatalog: CatalogItem[] = [
+  { name: 'Dầu dưỡng móng', price: 170000, category: 'Dưỡng móng', stock: 24 },
+  { name: 'Kem dưỡng tay', price: 220000, category: 'Chăm sóc tay', stock: 18 },
+  { name: 'Serum phục hồi móng', price: 290000, category: 'Dưỡng móng', stock: 12 },
+  { name: 'Sơn dưỡng tại nhà', price: 260000, category: 'Sơn bán lẻ', stock: 16 },
+  { name: 'Bộ chăm sóc móng mini', price: 390000, category: 'Bộ sản phẩm', stock: 8 },
+  { name: 'Nước rửa tay dưỡng ẩm', price: 145000, category: 'Chăm sóc tay', stock: 22 },
+  { name: 'Dũa móng cao cấp', price: 85000, category: 'Phụ kiện', stock: 35 },
+  { name: 'Sticker Nail Art', price: 95000, category: 'Phụ kiện', stock: 28 },
 ];
 
 const invoiceStaff = ['Thảo Nguyễn', 'Minh Châu', 'Hà My', 'Quốc Bảo', 'Thuỳ Dương', 'Chưa phân công'];
@@ -199,7 +214,7 @@ function Modal({ title, description, onClose, children, wide = false }: { title:
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
       <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 cursor-default bg-slate-950/55 backdrop-blur-sm" />
-      <div className={`relative max-h-[90vh] w-full overflow-y-auto rounded-[26px] border border-brand-outline bg-brand-surface p-6 shadow-2xl ${wide ? 'max-w-5xl' : 'max-w-lg'}`}>
+      <div className={`relative max-h-[92vh] w-full overflow-y-auto rounded-[26px] border border-brand-outline bg-brand-surface p-4 shadow-2xl sm:p-6 ${wide ? 'max-w-[1500px]' : 'max-w-lg'}`}>
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-black tracking-tight text-brand-text">{title}</h2>
@@ -250,6 +265,9 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
   const [walkIn, setWalkIn] = useState({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', start: nowTime(), duration: '60', price: '450000', note: '' });
   const [paymentForm, setPaymentForm] = useState({ method: 'CASH' as PaymentMethod, discount: '0', tip: '0', reference: '', note: '' });
   const [invoiceLines, setInvoiceLines] = useState<InvoiceLineDraft[]>([]);
+  const [invoiceCatalogTab, setInvoiceCatalogTab] = useState<InvoiceLineType>('SERVICE');
+  const [invoiceCatalogQuery, setInvoiceCatalogQuery] = useState('');
+  const [invoiceCategory, setInvoiceCategory] = useState('Tất cả');
   const [cashAmount, setCashAmount] = useState('1000000');
 
   useEffect(() => localStorage.setItem(appointmentStorageKey, JSON.stringify(appointments)), [appointmentStorageKey, appointments]);
@@ -275,6 +293,12 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
   const invoiceDiscount = Math.max(0, Number(paymentForm.discount) || 0);
   const invoiceTip = Math.max(0, Number(paymentForm.tip) || 0);
   const invoiceTotal = Math.max(0, invoiceSubtotal - (paymentAppointment?.deposit || 0) - invoiceDiscount + invoiceTip);
+  const activeCatalog = invoiceCatalogTab === 'SERVICE' ? serviceCatalog : productCatalog;
+  const invoiceCategories = ['Tất cả', ...Array.from(new Set(activeCatalog.map((item) => item.category)))];
+  const filteredCatalog = activeCatalog.filter((item) => (
+    (invoiceCategory === 'Tất cả' || item.category === invoiceCategory)
+    && item.name.toLowerCase().includes(invoiceCatalogQuery.trim().toLowerCase())
+  ));
 
   const requireOpenShift = () => {
     if (shift.status === 'OPEN') return true;
@@ -325,29 +349,30 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
       staff: appointment.staff,
     })));
     setPaymentForm({ method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
+    setInvoiceCatalogTab('SERVICE');
+    setInvoiceCatalogQuery('');
+    setInvoiceCategory('Tất cả');
     setFormError('');
   };
 
-  const addInvoiceLine = (type: InvoiceLineType) => {
-    const firstItem = type === 'SERVICE' ? serviceCatalog[0] : productCatalog[0];
-    setInvoiceLines((current) => [...current, {
-      id: makeId('LINE'),
-      type,
-      name: firstItem.name,
-      quantity: 1,
-      unitPrice: firstItem.price,
-      staff: type === 'SERVICE' ? 'Chưa phân công' : 'Quầy bán lẻ',
-    }]);
+  const addCatalogItem = (type: InvoiceLineType, item: CatalogItem) => {
+    setInvoiceLines((current) => {
+      const existing = current.find((line) => line.type === type && line.name === item.name && (type === 'PRODUCT' || line.staff === paymentAppointment?.staff));
+      if (existing) return current.map((line) => line.id === existing.id ? { ...line, quantity: line.quantity + 1 } : line);
+      return [...current, {
+        id: makeId('LINE'),
+        type,
+        name: item.name,
+        quantity: 1,
+        unitPrice: item.price,
+        staff: type === 'SERVICE' ? paymentAppointment?.staff || 'Chưa phân công' : 'Quầy bán lẻ',
+      }];
+    });
+    setFormError('');
   };
 
   const updateInvoiceLine = (id: string, patch: Partial<InvoiceLineDraft>) => {
     setInvoiceLines((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line));
-  };
-
-  const selectCatalogItem = (line: InvoiceLineDraft, name: string) => {
-    const catalog = line.type === 'SERVICE' ? serviceCatalog : productCatalog;
-    const selected = catalog.find((item) => item.name === name);
-    updateInvoiceLine(line.id, { name, unitPrice: selected?.price || line.unitPrice });
   };
 
   const submitPayment = (event: FormEvent) => {
@@ -535,83 +560,82 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
           description={`${paymentAppointment.customer} · ${paymentAppointment.phone} · ${branchName}`}
           onClose={() => setPaymentAppointment(null)}
         >
-          <form onSubmit={submitPayment} className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-            <section className="min-w-0 space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="text-sm font-black text-brand-text">Dịch vụ & sản phẩm</h3>
-                  <p className="mt-1 text-[10px] text-brand-text-muted">Thêm nhiều dòng, mỗi dòng có số lượng, đơn giá và người phụ trách riêng.</p>
+          <form onSubmit={submitPayment} className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(350px,1fr)]">
+            <section className="min-w-0 overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface-high/25">
+              <div className="border-b border-brand-outline p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-brand-text">Chọn dịch vụ hoặc sản phẩm</h3>
+                    <p className="mt-1 text-[10px] text-brand-text-muted">Nhấn vào một mục để thêm nhanh vào hóa đơn.</p>
+                  </div>
+                  <div className="flex rounded-xl border border-brand-outline bg-brand-surface p-1">
+                    <button type="button" onClick={() => { setInvoiceCatalogTab('SERVICE'); setInvoiceCategory('Tất cả'); }} className={`rounded-lg px-4 py-2 text-[10px] font-black transition ${invoiceCatalogTab === 'SERVICE' ? 'bg-emerald-600 text-white shadow-sm' : 'text-brand-text-muted'}`}>Dịch vụ</button>
+                    <button type="button" onClick={() => { setInvoiceCatalogTab('PRODUCT'); setInvoiceCategory('Tất cả'); }} className={`rounded-lg px-4 py-2 text-[10px] font-black transition ${invoiceCatalogTab === 'PRODUCT' ? 'bg-blue-600 text-white shadow-sm' : 'text-brand-text-muted'}`}>Sản phẩm</button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => addInvoiceLine('SERVICE')} className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-800"><Plus className="h-3.5 w-3.5" /> Dịch vụ</button>
-                  <button type="button" onClick={() => addInvoiceLine('PRODUCT')} className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-black text-blue-800"><Plus className="h-3.5 w-3.5" /> Sản phẩm</button>
+                <div className="relative mt-4"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" /><input value={invoiceCatalogQuery} onChange={(event) => setInvoiceCatalogQuery(event.target.value)} className="reception-input pl-10" placeholder={invoiceCatalogTab === 'SERVICE' ? 'Tìm tên dịch vụ...' : 'Tìm tên sản phẩm...'} /></div>
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  {invoiceCategories.map((category) => <button key={category} type="button" onClick={() => setInvoiceCategory(category)} className={`shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold ${invoiceCategory === category ? (invoiceCatalogTab === 'SERVICE' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-blue-600 bg-blue-600 text-white') : 'border-brand-outline bg-brand-surface text-brand-text-muted'}`}>{category}</button>)}
                 </div>
               </div>
 
-              <div className="space-y-3">
-                {invoiceLines.map((line, index) => {
-                  const catalog = line.type === 'SERVICE' ? serviceCatalog : productCatalog;
+              <div className="grid max-h-[58vh] gap-3 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
+                {filteredCatalog.map((item, index) => {
+                  const count = invoiceLines.filter((line) => line.type === invoiceCatalogTab && line.name === item.name).reduce((sum, line) => sum + line.quantity, 0);
                   return (
-                    <div key={line.id} className="rounded-2xl border border-brand-outline bg-brand-surface-high/35 p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-black ${line.type === 'SERVICE' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>{index + 1}</span>
-                          <span className={`rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-wide ${line.type === 'SERVICE' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{line.type === 'SERVICE' ? 'Dịch vụ' : 'Sản phẩm'}</span>
-                        </div>
-                        <button type="button" onClick={() => setInvoiceLines((current) => current.filter((item) => item.id !== line.id))} className="rounded-lg border border-rose-200 p-1.5 text-rose-600 hover:bg-rose-50" aria-label={`Xóa dòng ${index + 1}`}><X className="h-3.5 w-3.5" /></button>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label={line.type === 'SERVICE' ? 'Tên dịch vụ' : 'Tên sản phẩm'}>
-                          <select value={line.name} onChange={(event) => selectCatalogItem(line, event.target.value)} className="reception-input">
-                            {!catalog.some((item) => item.name === line.name) && <option value={line.name}>{line.name}</option>}
-                            {catalog.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
-                          </select>
-                        </Field>
-                        <Field label={line.type === 'SERVICE' ? 'Kỹ thuật viên' : 'Người bán'}>
-                          {line.type === 'SERVICE' ? (
-                            <select value={line.staff} onChange={(event) => updateInvoiceLine(line.id, { staff: event.target.value })} className="reception-input">{invoiceStaff.map((staff) => <option key={staff}>{staff}</option>)}</select>
-                          ) : (
-                            <input value={line.staff} readOnly className="reception-input bg-brand-surface-high text-brand-text-muted" />
-                          )}
-                        </Field>
-                        <Field label="Số lượng">
-                          <input type="number" min="1" max="99" step="1" value={line.quantity} onChange={(event) => updateInvoiceLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} className="reception-input" />
-                        </Field>
-                        <Field label="Đơn giá">
-                          <input type="number" min="0" step="1000" value={line.unitPrice} onChange={(event) => updateInvoiceLine(line.id, { unitPrice: Math.max(0, Number(event.target.value) || 0) })} className="reception-input" />
-                        </Field>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between border-t border-brand-outline pt-3 text-[10px]"><span className="font-semibold text-brand-text-muted">{line.quantity} × {money(line.unitPrice)}</span><span className="text-xs font-black text-brand-text">{money(line.quantity * line.unitPrice)}</span></div>
-                    </div>
+                    <button key={item.name} type="button" onClick={() => addCatalogItem(invoiceCatalogTab, item)} className="group relative flex min-h-36 flex-col rounded-2xl border border-brand-outline bg-brand-surface p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg">
+                      {count > 0 && <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[9px] font-black text-white">{count}</span>}
+                      <span className={`flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? 'bg-gradient-to-br from-emerald-100 to-cyan-100 text-emerald-800' : 'bg-gradient-to-br from-blue-100 to-violet-100 text-blue-800'}`}>{String(index + 1).padStart(2, '0')}</span>
+                      <span className="mt-3 line-clamp-2 text-xs font-black leading-5 text-brand-text">{item.name}</span>
+                      <span className="mt-1 text-[9px] font-semibold text-brand-text-muted">{item.category}</span>
+                      <span className="mt-auto flex items-end justify-between gap-3 pt-3"><span><span className={`block text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? 'text-emerald-700' : 'text-blue-700'}`}>{money(item.price)}</span><span className="mt-0.5 block text-[8px] text-brand-text-muted">{invoiceCatalogTab === 'SERVICE' ? `${item.duration} phút` : `Còn ${item.stock} sản phẩm`}</span></span><span className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition group-hover:scale-105 ${invoiceCatalogTab === 'SERVICE' ? 'bg-emerald-600' : 'bg-blue-600'}`}><Plus className="h-4 w-4" /></span></span>
+                    </button>
                   );
                 })}
-                {!invoiceLines.length && <div className="rounded-2xl border border-dashed border-brand-outline p-8 text-center text-xs text-brand-text-muted">Chưa có dòng hóa đơn. Hãy thêm dịch vụ hoặc sản phẩm.</div>}
+                {!filteredCatalog.length && <div className="col-span-full py-16 text-center text-xs text-brand-text-muted">Không tìm thấy mục phù hợp.</div>}
               </div>
-
-              <Field label="Ghi chú hóa đơn">
-                <textarea value={paymentForm.note} onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })} className="reception-input min-h-20 resize-none" placeholder="Ưu đãi, yêu cầu xuất hóa đơn hoặc ghi chú đối soát..." />
-              </Field>
             </section>
 
-            <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
-              <div className="rounded-2xl border border-brand-outline bg-brand-surface-high/45 p-4">
-                <h3 className="text-xs font-black text-brand-text">Tổng kết hóa đơn</h3>
-                <div className="mt-4 space-y-3 text-[11px]">
-                  <div className="flex justify-between text-brand-text-muted"><span>Tạm tính ({invoiceLines.length} dòng)</span><strong className="text-brand-text">{money(invoiceSubtotal)}</strong></div>
-                  <div className="flex justify-between text-brand-text-muted"><span>Đã đặt cọc</span><strong className="text-emerald-700">- {money(paymentAppointment.deposit)}</strong></div>
-                  <div className="grid grid-cols-[1fr_130px] items-center gap-3"><span className="text-brand-text-muted">Giảm giá</span><input type="number" min="0" step="1000" value={paymentForm.discount} onChange={(event) => setPaymentForm({ ...paymentForm, discount: event.target.value })} className="reception-input h-9 min-h-9 py-1.5 text-right" /></div>
-                  <div className="grid grid-cols-[1fr_130px] items-center gap-3"><span className="text-brand-text-muted">Tiền tip</span><input type="number" min="0" step="1000" value={paymentForm.tip} onChange={(event) => setPaymentForm({ ...paymentForm, tip: event.target.value })} className="reception-input h-9 min-h-9 py-1.5 text-right" /></div>
-                  <div className="flex items-end justify-between border-t border-brand-outline pt-4"><span className="font-black text-brand-text">Khách cần trả</span><strong className="text-xl font-black tracking-tight text-emerald-700">{money(invoiceTotal)}</strong></div>
+            <aside className="min-w-0 space-y-3 lg:sticky lg:top-0 lg:self-start">
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm">
+                <div className="flex items-center gap-3 border-b border-brand-outline pb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 font-black text-emerald-800">{paymentAppointment.customer.split(' ').slice(-2).map((part) => part[0]).join('')}</div>
+                  <div className="min-w-0"><p className="truncate text-xs font-black text-brand-text">{paymentAppointment.customer}</p><p className="mt-1 text-[9px] text-brand-text-muted">{paymentAppointment.phone} · {paymentAppointment.id}</p></div>
+                  <span className="ml-auto rounded-full bg-violet-50 px-2 py-1 text-[8px] font-black text-violet-700">{branchCode}</span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between"><h3 className="text-xs font-black text-brand-text">Chi tiết hóa đơn</h3><span className="text-[9px] font-bold text-brand-text-muted">{invoiceLines.length} dòng</span></div>
+                <div className="mt-3 max-h-[27vh] space-y-2 overflow-y-auto pr-1">
+                  {invoiceLines.map((line, index) => (
+                    <div key={line.id} className="rounded-xl border border-brand-outline bg-brand-surface-high/40 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[8px] font-black ${line.type === 'SERVICE' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>{index + 1}</span>
+                        <div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black text-brand-text">{line.name}</p><p className="mt-1 text-[9px] font-bold text-brand-text-muted">{money(line.unitPrice)}</p></div>
+                        <button type="button" onClick={() => setInvoiceLines((current) => current.filter((item) => item.id !== line.id))} className="rounded-lg p-1 text-rose-500 hover:bg-rose-50" aria-label={`Xóa ${line.name}`}><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                      {line.type === 'SERVICE' && <select value={line.staff} onChange={(event) => updateInvoiceLine(line.id, { staff: event.target.value })} className="reception-input mt-2 h-8 min-h-8 py-1 text-[9px]">{invoiceStaff.map((staff) => <option key={staff}>{staff}</option>)}</select>}
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center rounded-lg border border-brand-outline bg-brand-surface"><button type="button" onClick={() => updateInvoiceLine(line.id, { quantity: Math.max(1, line.quantity - 1) })} className="h-7 w-7 text-sm font-black text-brand-text-muted">−</button><span className="w-7 text-center text-[10px] font-black">{line.quantity}</span><button type="button" onClick={() => updateInvoiceLine(line.id, { quantity: line.quantity + 1 })} className="h-7 w-7 text-sm font-black text-brand-text-muted">+</button></div>
+                        <strong className="text-[11px] font-black text-brand-text">{money(line.quantity * line.unitPrice)}</strong>
+                      </div>
+                    </div>
+                  ))}
+                  {!invoiceLines.length && <div className="rounded-xl border border-dashed border-brand-outline py-8 text-center text-[10px] text-brand-text-muted">Chọn dịch vụ hoặc sản phẩm ở bên trái.</div>}
                 </div>
               </div>
 
-              <Field label="Phương thức thanh toán">
-                <div className="grid grid-cols-2 gap-2">{Object.entries(methodMeta).map(([value, meta]) => { const Icon = meta.icon; return <button key={value} type="button" onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })} className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[9px] font-bold ${paymentForm.method === value ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-brand-outline text-brand-text-muted'}`}><Icon className="h-4 w-4" />{meta.label}</button>; })}</div>
-              </Field>
-              {paymentForm.method !== 'CASH' && <Field label="Mã giao dịch *"><input value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className="reception-input" placeholder="Mã ngân hàng hoặc cổng thanh toán" /></Field>}
-              {formError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-[10px] font-bold leading-4 text-rose-700">{formError}</p>}
-              <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-emerald-600/20"><ShieldCheck className="h-4 w-4" /> Thu {money(invoiceTotal)} & hoàn tất</button>
-              <p className="text-center text-[9px] leading-4 text-brand-text-muted">Hóa đơn sẽ lưu đầy đủ từng dịch vụ, sản phẩm, kỹ thuật viên và đơn giá.</p>
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm">
+                <div className="space-y-2.5 text-[10px]"><div className="flex justify-between text-brand-text-muted"><span>Tạm tính</span><strong className="text-brand-text">{money(invoiceSubtotal)}</strong></div><div className="flex justify-between text-brand-text-muted"><span>Tiền cọc</span><strong className="text-emerald-700">- {money(paymentAppointment.deposit)}</strong></div><div className="grid grid-cols-[1fr_115px] items-center gap-2"><span className="text-brand-text-muted">Giảm giá</span><input type="number" min="0" step="1000" value={paymentForm.discount} onChange={(event) => setPaymentForm({ ...paymentForm, discount: event.target.value })} className="reception-input h-8 min-h-8 py-1 text-right text-[9px]" /></div><div className="grid grid-cols-[1fr_115px] items-center gap-2"><span className="text-brand-text-muted">Tiền tip</span><input type="number" min="0" step="1000" value={paymentForm.tip} onChange={(event) => setPaymentForm({ ...paymentForm, tip: event.target.value })} className="reception-input h-8 min-h-8 py-1 text-right text-[9px]" /></div><div className="flex items-end justify-between border-t border-brand-outline pt-3"><span className="text-xs font-black text-brand-text">Tổng thanh toán</span><strong className="text-xl font-black tracking-tight text-emerald-700">{money(invoiceTotal)}</strong></div></div>
+              </div>
+
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm">
+                <p className="mb-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-brand-text-muted">Phương thức thanh toán</p>
+                <div className="grid grid-cols-3 gap-2">{Object.entries(methodMeta).map(([value, meta]) => { const Icon = meta.icon; return <button key={value} type="button" onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[8px] font-bold ${paymentForm.method === value ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-brand-outline text-brand-text-muted'}`}><Icon className="h-4 w-4" />{meta.label}</button>; })}</div>
+                {paymentForm.method !== 'CASH' && <input value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className="reception-input mt-3" placeholder="Mã giao dịch *" />}
+                <textarea value={paymentForm.note} onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })} className="reception-input mt-3 min-h-16 resize-none" placeholder="Ghi chú hóa đơn..." />
+                {formError && <p role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-[9px] font-bold leading-4 text-rose-700">{formError}</p>}
+                <button type="submit" className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-emerald-600/20"><ShieldCheck className="h-4 w-4" /> Thanh toán {money(invoiceTotal)}</button>
+              </div>
             </aside>
           </form>
         </Modal>
