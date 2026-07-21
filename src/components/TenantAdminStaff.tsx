@@ -121,6 +121,14 @@ interface StaffFormState {
   canCollectPayment: boolean;
 }
 
+interface RolePermissionPreset {
+  canManageAppointments: boolean;
+  canViewCustomers: boolean;
+  canCollectPayment: boolean;
+  summary: string;
+  permissions: string[];
+}
+
 const branchLabels: Record<BranchCode, string> = {
   Q1: "Chi nhánh Quận 1",
   Q3: "Chi nhánh Quận 3",
@@ -166,6 +174,88 @@ const roleMeta: Record<
     avatar: "bg-amber-100 text-amber-700",
   },
 };
+
+const rolePermissionPresets: Record<StaffRole, RolePermissionPreset> = {
+  OWNER: {
+    canManageAppointments: true,
+    canViewCustomers: true,
+    canCollectPayment: true,
+    summary: "Toàn quyền vận hành salon, nhân sự, khách hàng và thanh toán.",
+    permissions: [
+      "Toàn quyền hệ thống",
+      "Quản lý toàn bộ lịch và ca làm",
+      "Xem và cập nhật hồ sơ khách",
+      "Thu tiền tại quầy",
+    ],
+  },
+  MANAGER: {
+    canManageAppointments: true,
+    canViewCustomers: true,
+    canCollectPayment: true,
+    summary:
+      "Quản lý lịch, ca làm, hồ sơ khách và nghiệp vụ thanh toán tại salon.",
+    permissions: [
+      "Quản lý toàn bộ lịch và ca làm",
+      "Xem và cập nhật hồ sơ khách",
+      "Thu tiền tại quầy",
+    ],
+  },
+  RECEPTIONIST: {
+    canManageAppointments: true,
+    canViewCustomers: true,
+    canCollectPayment: true,
+    summary:
+      "Tiếp nhận lịch hẹn, tra cứu hồ sơ khách và xử lý thanh toán tại quầy.",
+    permissions: [
+      "Quản lý toàn bộ lịch hẹn",
+      "Xem và cập nhật hồ sơ khách",
+      "Thu tiền tại quầy",
+    ],
+  },
+  NAIL_ARTIST_SENIOR: {
+    canManageAppointments: true,
+    canViewCustomers: false,
+    canCollectPayment: false,
+    summary:
+      "Chỉ xem và điều chỉnh lịch, ca làm cùng công việc được giao của cá nhân.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+  },
+  NAIL_TECHNICIAN: {
+    canManageAppointments: true,
+    canViewCustomers: false,
+    canCollectPayment: false,
+    summary:
+      "Chỉ xem và điều chỉnh lịch, ca làm cùng công việc được giao của cá nhân.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+  },
+  PEDICURE_SPECIALIST: {
+    canManageAppointments: true,
+    canViewCustomers: false,
+    canCollectPayment: false,
+    summary:
+      "Chỉ xem và điều chỉnh lịch, ca làm cùng công việc được giao của cá nhân.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+  },
+  ASSISTANT: {
+    canManageAppointments: true,
+    canViewCustomers: false,
+    canCollectPayment: false,
+    summary:
+      "Chỉ xem và điều chỉnh lịch, ca làm cùng công việc được giao của cá nhân.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+  },
+};
+
+const normalizeStaffPermissions = (members: StaffMember[]) =>
+  members.map((member) => {
+    const preset =
+      rolePermissionPresets[member.role] ||
+      rolePermissionPresets.NAIL_TECHNICIAN;
+    return {
+      ...member,
+      permissions: [...preset.permissions],
+    };
+  });
 
 const statusMeta: Record<
   StaffStatus,
@@ -534,24 +624,27 @@ const performanceTone = (value: number) =>
       ? "text-violet-600"
       : "text-amber-600";
 
-const emptyForm = (branch: string): StaffFormState => ({
-  name: "",
-  phone: "",
-  email: "",
-  birthday: "",
-  branch: branch === "Q1" ? "Q1" : "Q3",
-  role: "NAIL_TECHNICIAN",
-  status: "OFF_SHIFT",
-  employmentType: "FULL_TIME",
-  startDate: "2026-07-16",
-  shiftStart: "09:00",
-  shiftEnd: "18:00",
-  commissionRate: "15",
-  notes: "",
-  canManageAppointments: true,
-  canViewCustomers: true,
-  canCollectPayment: false,
-});
+const emptyForm = (branch: string): StaffFormState => {
+  const preset = rolePermissionPresets.NAIL_TECHNICIAN;
+  return {
+    name: "",
+    phone: "",
+    email: "",
+    birthday: "",
+    branch: branch === "Q1" ? "Q1" : "Q3",
+    role: "NAIL_TECHNICIAN",
+    status: "OFF_SHIFT",
+    employmentType: "FULL_TIME",
+    startDate: "2026-07-16",
+    shiftStart: "09:00",
+    shiftEnd: "18:00",
+    commissionRate: "15",
+    notes: "",
+    canManageAppointments: preset.canManageAppointments,
+    canViewCustomers: preset.canViewCustomers,
+    canCollectPayment: preset.canCollectPayment,
+  };
+};
 
 export default function TenantAdminStaff({
   searchQuery,
@@ -566,12 +659,14 @@ export default function TenantAdminStaff({
 }: TenantAdminStaffProps) {
   const storageKey = `tenant-admin-staff-v2:${tenantName}`;
   const [staff, setStaff] = useState<StaffMember[]>(() => {
-    if (typeof window === "undefined") return staffSeed;
+    if (typeof window === "undefined")
+      return normalizeStaffPermissions(staffSeed);
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? (JSON.parse(stored) as StaffMember[]) : staffSeed;
+      const members = stored ? (JSON.parse(stored) as StaffMember[]) : staffSeed;
+      return normalizeStaffPermissions(members);
     } catch {
-      return staffSeed;
+      return normalizeStaffPermissions(staffSeed);
     }
   });
   const [roleFilter, setRoleFilter] = useState<"ALL" | StaffRole>("ALL");
@@ -714,6 +809,7 @@ export default function TenantAdminStaff({
   };
   const openEdit = (member: StaffMember) => {
     if (!requireManage()) return;
+    const preset = rolePermissionPresets[member.role];
     setForm({
       name: member.name,
       phone: member.phone,
@@ -728,13 +824,9 @@ export default function TenantAdminStaff({
       shiftEnd: member.shiftEnd,
       commissionRate: String(member.commissionRate),
       notes: member.notes,
-      canManageAppointments: member.permissions.some((item) =>
-        item.includes("lịch"),
-      ),
-      canViewCustomers: member.permissions.some((item) =>
-        item.includes("hồ sơ khách"),
-      ),
-      canCollectPayment: member.permissions.includes("Thu tiền"),
+      canManageAppointments: preset.canManageAppointments,
+      canViewCustomers: preset.canViewCustomers,
+      canCollectPayment: preset.canCollectPayment,
     });
     setFormError("");
     setFormMode("EDIT");
@@ -763,11 +855,7 @@ export default function TenantAdminStaff({
     const id =
       existing?.id ||
       `STF-${String(Math.max(...staff.map((member) => Number(member.id.replace("STF-", "")))) + 1).padStart(3, "0")}`;
-    const permissions = [
-      form.canManageAppointments ? "Quản lý lịch cá nhân" : "",
-      form.canViewCustomers ? "Xem hồ sơ khách" : "",
-      form.canCollectPayment ? "Thu tiền" : "",
-    ].filter(Boolean);
+    const permissions = [...rolePermissionPresets[form.role].permissions];
     const payload: StaffMember = {
       id,
       name: form.name.trim(),
@@ -2426,12 +2514,18 @@ export default function TenantAdminStaff({
                     </span>
                     <BeautifulSelect
                       value={form.role}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const role = event.target.value as StaffRole;
+                        const preset = rolePermissionPresets[role];
                         setForm((current) => ({
                           ...current,
-                          role: event.target.value as StaffRole,
-                        }))
-                      }
+                          role,
+                          canManageAppointments:
+                            preset.canManageAppointments,
+                          canViewCustomers: preset.canViewCustomers,
+                          canCollectPayment: preset.canCollectPayment,
+                        }));
+                      }}
                       className={inputClass}
                     >
                       {Object.entries(roleMeta).map(([value, meta]) => (
@@ -2573,11 +2667,26 @@ export default function TenantAdminStaff({
                   </span>
                   Quyền nghiệp vụ
                 </legend>
+                <div className="mb-3 flex items-start gap-3 rounded-xl border border-violet-100 bg-violet-50/70 p-3">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                  <div>
+                    <p className="text-[8px] font-black text-violet-800">
+                      Quyền tự động theo vai trò {roleMeta[form.role].label}
+                    </p>
+                    <p className="mt-1 text-[8px] leading-4 text-violet-600">
+                      {rolePermissionPresets[form.role].summary}
+                    </p>
+                  </div>
+                </div>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {[
                     {
                       key: "canManageAppointments" as const,
-                      label: "Quản lý lịch hẹn",
+                      label: ["OWNER", "MANAGER", "RECEPTIONIST"].includes(
+                        form.role,
+                      )
+                        ? "Quản lý lịch hẹn"
+                        : "Lịch & ca làm cá nhân",
                     },
                     {
                       key: "canViewCustomers" as const,
@@ -2588,25 +2697,30 @@ export default function TenantAdminStaff({
                       label: "Thu tiền tại quầy",
                     },
                   ].map((permission) => (
-                    <label
+                    <div
                       key={permission.key}
-                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                      className={`flex items-center gap-3 rounded-xl border p-3 ${form[permission.key] ? "border-violet-200 bg-violet-50/70" : "border-slate-200 bg-slate-50"}`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={form[permission.key]}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            [permission.key]: event.target.checked,
-                          }))
-                        }
-                        className="h-4 w-4 accent-violet-600"
-                      />
-                      <span className="text-[8px] font-bold text-slate-700">
-                        {permission.label}
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${form[permission.key] ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-400"}`}
+                      >
+                        {form[permission.key] ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <X className="h-3.5 w-3.5" />
+                        )}
                       </span>
-                    </label>
+                      <span>
+                        <span className="block text-[8px] font-bold text-slate-700">
+                          {permission.label}
+                        </span>
+                        <span
+                          className={`mt-0.5 block text-[7px] font-bold ${form[permission.key] ? "text-violet-600" : "text-slate-400"}`}
+                        >
+                          {form[permission.key] ? "Được cấp" : "Không được cấp"}
+                        </span>
+                      </span>
+                    </div>
                   ))}
                 </div>
                 <label className="mt-3 block">
