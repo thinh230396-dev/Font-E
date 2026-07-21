@@ -44,6 +44,7 @@ interface TenantAppointment {
   start: string;
   duration: number;
   service: string;
+  services?: string[];
   staff: string;
   branch: BranchCode;
   source: AppointmentSource;
@@ -75,7 +76,7 @@ interface AppointmentFormState {
   phone: string;
   date: string;
   start: string;
-  service: string;
+  services: string[];
   staff: string;
   branch: BranchCode;
   source: AppointmentSource;
@@ -212,7 +213,7 @@ const emptyForm = (date: string, branch: string): AppointmentFormState => ({
   phone: '',
   date,
   start: '09:00',
-  service: services[0].name,
+  services: [services[0].name],
   staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn',
   branch: branch === 'Q1' ? 'Q1' : 'Q3',
   source: 'RECEPTION',
@@ -337,6 +338,12 @@ export default function TenantAdminAppointments({
   const scheduleHourHeight = isScheduleExpanded && typeof window !== 'undefined'
     ? Math.max(42, Math.floor((window.innerHeight - 260) / 12))
     : SCHEDULE_HOUR_HEIGHT;
+  const selectedServiceDetails = form.services
+    .map((name) => services.find((service) => service.name === name))
+    .filter((service): service is (typeof services)[number] => Boolean(service));
+  const selectedServiceDuration = selectedServiceDetails.reduce((sum, service) => sum + service.duration, 0);
+  const selectedServicePrice = selectedServiceDetails.reduce((sum, service) => sum + service.price, 0);
+  const selectedServiceEnd = form.start && selectedServiceDuration ? getEndTime(form.start, selectedServiceDuration) : '--:--';
 
   const updateAppointment = (id: string, patch: Partial<TenantAppointment>) => {
     if (!requireManageAccess()) return;
@@ -358,7 +365,7 @@ export default function TenantAdminAppointments({
       phone: appointment.phone,
       date: appointment.date,
       start: appointment.start,
-      service: appointment.service,
+      services: appointment.services?.length ? appointment.services : [appointment.service],
       staff: appointment.staff,
       branch: appointment.branch,
       source: appointment.source,
@@ -374,15 +381,19 @@ export default function TenantAdminAppointments({
   const submitAppointment = (event: FormEvent) => {
     event.preventDefault();
     if (!requireManageAccess()) return;
-    if (!form.customer.trim() || !form.phone.trim() || !form.date || !form.start || !form.service || !form.staff) {
-      setFormError('Vui lòng nhập đầy đủ khách hàng, số điện thoại, dịch vụ, nhân viên và thời gian.');
+    if (!form.customer.trim() || !form.phone.trim() || !form.date || !form.start || !form.services.length || !form.staff) {
+      setFormError('Vui lòng nhập đầy đủ khách hàng, số điện thoại, ít nhất một dịch vụ, nhân viên và thời gian.');
       return;
     }
 
-    const service = services.find((item) => item.name === form.service) || services[0];
+    const chosenServices = form.services
+      .map((name) => services.find((service) => service.name === name))
+      .filter((service): service is (typeof services)[number] => Boolean(service));
+    const totalDuration = chosenServices.reduce((sum, service) => sum + service.duration, 0);
+    const totalPrice = chosenServices.reduce((sum, service) => sum + service.price, 0);
     const existingId = formMode === 'EDIT' ? selectedAppointment?.id : undefined;
     const startMinute = minutesFromStart(form.start);
-    const endMinute = startMinute + service.duration;
+    const endMinute = startMinute + totalDuration;
     const conflictingAppointment = appointments.find((appointment) => {
       if (appointment.id === existingId || appointment.date !== form.date || appointment.branch !== form.branch || ['CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
       const existingStart = minutesFromStart(appointment.start);
@@ -393,8 +404,8 @@ export default function TenantAdminAppointments({
       setFormError(`${conflictingAppointment.staff === form.staff ? 'Kỹ thuật viên' : 'Bàn/ghế'} đang bận với lịch ${conflictingAppointment.id} từ ${conflictingAppointment.start} đến ${getEndTime(conflictingAppointment.start, conflictingAppointment.duration)}.`);
       return;
     }
-    if ((Number(form.deposit) || 0) > service.price) {
-      setFormError('Tiền đặt cọc không được lớn hơn giá dịch vụ dự kiến.');
+    if ((Number(form.deposit) || 0) > totalPrice) {
+      setFormError('Tiền đặt cọc không được lớn hơn tổng giá dịch vụ dự kiến.');
       return;
     }
     const nextId = existingId || `APT-${Math.max(...appointments.map((appointment) => Number(appointment.id.replace('APT-', '')))) + 1}`;
@@ -404,13 +415,14 @@ export default function TenantAdminAppointments({
       phone: form.phone.trim(),
       date: form.date,
       start: form.start,
-      duration: service.duration,
-      service: service.name,
+      duration: totalDuration,
+      service: chosenServices.map((service) => service.name).join(' + '),
+      services: chosenServices.map((service) => service.name),
       staff: form.staff,
       branch: form.branch,
       source: form.source,
       status: form.status,
-      price: service.price,
+      price: totalPrice,
       deposit: Math.max(0, Number(form.deposit) || 0),
       station: form.station,
       reminderSent: form.status !== 'PENDING',
@@ -674,7 +686,7 @@ export default function TenantAdminAppointments({
 
                   <div className="rounded-2xl border border-slate-200 p-4 sm:p-5"><div className="flex items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-[11px] font-black text-violet-700">{selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-slate-900">{selectedAppointment.customer}</p><p className="mt-1 text-[9px] text-slate-400">{selectedAppointment.firstVisit ? 'Khách lần đầu sử dụng dịch vụ' : 'Khách đã có hồ sơ tại salon'}</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><a href={`tel:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-100 text-[9px] font-bold text-slate-700 no-underline"><Phone className="h-4 w-4" />{selectedAppointment.phone}</a><button type="button" onClick={() => onNotify?.(`Đã mở nội dung nhắn tin cho ${selectedAppointment.customer}.`)} className="flex h-10 items-center justify-center gap-2 border-0 bg-violet-50 text-[9px] font-bold text-violet-700 shadow-none"><MessageCircle className="h-4 w-4" />Gửi tin nhắn</button></div></div>
 
-                  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/50 p-4"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-fuchsia-600 shadow-sm"><Sparkles className="h-4 w-4" /></span><p className="mt-3 text-[8px] font-bold uppercase text-fuchsia-500">Dịch vụ</p><p className="mt-1 text-[11px] font-black text-slate-900">{selectedAppointment.service}</p><p className="mt-1 text-[9px] text-slate-500">{selectedAppointment.duration} phút · {formatCurrency(selectedAppointment.price)}</p></div><div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm"><UserRound className="h-4 w-4" /></span><p className="mt-3 text-[8px] font-bold uppercase text-blue-500">Kỹ thuật viên</p><p className="mt-1 text-[11px] font-black text-slate-900">{selectedAppointment.staff}</p><p className="mt-1 text-[9px] text-slate-500">{staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role}</p></div></div>
+                  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/50 p-4"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-fuchsia-600 shadow-sm"><Sparkles className="h-4 w-4" /></span><div className="mt-3 flex items-center justify-between gap-2"><p className="text-[8px] font-bold uppercase text-fuchsia-500">Dịch vụ</p><span className="rounded-full bg-white px-2 py-1 text-[7px] font-black text-fuchsia-600 shadow-sm">{selectedAppointment.services?.length || 1} dịch vụ</span></div><div className="mt-2 space-y-1.5">{(selectedAppointment.services?.length ? selectedAppointment.services : [selectedAppointment.service]).map((service, index) => <div key={`${service}-${index}`} className="flex items-start gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-white text-[7px] font-black text-fuchsia-600 shadow-sm">{index + 1}</span><p className="text-[9px] font-bold leading-4 text-slate-800">{service}</p></div>)}</div><p className="mt-2 border-t border-fuchsia-100 pt-2 text-[9px] font-semibold text-slate-500">Tổng {selectedAppointment.duration} phút · {formatCurrency(selectedAppointment.price)}</p></div><div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm"><UserRound className="h-4 w-4" /></span><p className="mt-3 text-[8px] font-bold uppercase text-blue-500">Kỹ thuật viên</p><p className="mt-1 text-[11px] font-black text-slate-900">{selectedAppointment.staff}</p><p className="mt-1 text-[9px] text-slate-500">{staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role}</p></div></div>
                 </div>
 
                 <div className="space-y-4">
@@ -697,16 +709,28 @@ export default function TenantAdminAppointments({
       {formMode && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <button type="button" aria-label="Đóng biểu mẫu" onClick={() => setFormMode(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-          <form onSubmit={submitAppointment} className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><h2 className="text-base font-black text-slate-900">{formMode === 'CREATE' ? 'Tạo lịch hẹn mới' : `Chỉnh sửa ${selectedAppointment?.id}`}</h2><p className="mt-1 text-[9px] text-slate-500">Điền thông tin khách, dịch vụ và thời gian phục vụ.</p></div><button type="button" onClick={() => setFormMode(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>
+          <form onSubmit={submitAppointment} className="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><h2 className="text-base font-black text-slate-900">{formMode === 'CREATE' ? 'Tạo lịch hẹn mới' : `Chỉnh sửa ${selectedAppointment?.id}`}</h2><p className="mt-1 text-[9px] text-slate-500">Chọn một hoặc nhiều dịch vụ cho khách trong cùng lịch hẹn.</p></div><button type="button" onClick={() => setFormMode(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>
             <div className="space-y-5 p-5 sm:p-6">
               {formError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{formError}</div>}
               <fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><UserRound className="h-3.5 w-3.5" /></span>Thông tin khách hàng</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên khách hàng *</span><input value={form.customer} onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nguyễn Minh Anh" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số điện thoại *</span><input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className={inputClass} placeholder="09xx xxx xxx" /></label></div></fieldset>
-              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-3.5 w-3.5" /></span>Dịch vụ & phân công</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Dịch vụ *</span><BeautifulSelect value={form.service} onChange={(event) => setForm((current) => ({ ...current, service: event.target.value }))} className={inputClass}>{services.map((service) => <option key={service.name} value={service.name}>{service.name} · {service.duration} phút</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={form.branch} onChange={(event) => { const branch = event.target.value as BranchCode; setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn', station: branch === 'Q1' ? 'Bàn M-01' : 'Bàn M-02' })); }} className={inputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kỹ thuật viên phụ trách *</span><BeautifulSelect value={form.staff} onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))} className={inputClass}>{staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Bàn / ghế phục vụ</span><BeautifulSelect value={form.station} onChange={(event) => setForm((current) => ({ ...current, station: event.target.value }))} className={inputClass}>{['Bàn M-01', 'Bàn M-02', 'Bàn M-03', 'Bàn M-04', 'Ghế P-01', 'Ghế P-02', 'Ghế P-03', 'Bàn VIP-01', 'Bàn VIP-02'].map((station) => <option key={station} value={station}>{station}</option>)}</BeautifulSelect></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nguồn đặt lịch</span><BeautifulSelect value={form.source} onChange={(event) => setForm((current) => ({ ...current, source: event.target.value as AppointmentSource }))} className={inputClass}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label></div></fieldset>
+              <fieldset className="border-t border-slate-100 pt-5">
+                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-3.5 w-3.5" /></span>Dịch vụ & phân công</legend>
+                <div className="flex items-center justify-between gap-3"><div><p className="text-[9px] font-bold text-slate-700">Chọn dịch vụ *</p><p className="mt-0.5 text-[8px] text-slate-400">Có thể chọn nhiều dịch vụ cho cùng một khách</p></div><span className="rounded-full bg-violet-50 px-2.5 py-1 text-[8px] font-black text-violet-700">{form.services.length} đã chọn</span></div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {services.map((service) => {
+                    const isSelected = form.services.includes(service.name);
+                    return <button key={service.name} type="button" aria-pressed={isSelected} onClick={() => { setForm((current) => ({ ...current, services: isSelected ? current.services.filter((name) => name !== service.name) : [...current.services, service.name] })); setFormError(''); }} className={`flex h-auto items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-none transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-1 ${isSelected ? 'border-violet-300 bg-violet-50 ring-2 ring-violet-100' : 'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/40'}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-white ${isSelected ? 'border-violet-600 bg-violet-600' : 'border-slate-200 bg-white'}`}>{isSelected && <Check className="h-3.5 w-3.5" />}</span><span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-black text-slate-800">{service.name}</span><span className="mt-1 block text-[8px] font-semibold text-slate-400">{service.duration} phút · {formatCurrency(service.price)}</span></span></button>;
+                  })}
+                </div>
+                {selectedServiceDetails.length ? <div className="mt-3 overflow-hidden rounded-2xl border border-violet-100 bg-violet-50/40"><div className="flex items-center justify-between border-b border-violet-100 px-4 py-2.5"><p className="text-[8px] font-black uppercase tracking-wide text-violet-700">Danh sách dịch vụ</p><p className="text-[8px] font-bold text-violet-600">{selectedServiceDuration} phút</p></div><div className="divide-y divide-violet-100/80">{selectedServiceDetails.map((service, index) => <div key={service.name} className="flex items-center gap-3 px-4 py-2.5"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-[8px] font-black text-violet-600 shadow-sm">{index + 1}</span><span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-bold text-slate-700">{service.name}</span><span className="text-[7px] text-slate-400">{service.duration} phút</span></span><span className="shrink-0 text-[8px] font-black text-slate-700">{formatCurrency(service.price)}</span><button type="button" onClick={() => setForm((current) => ({ ...current, services: current.services.filter((name) => name !== service.name) }))} aria-label={`Bỏ dịch vụ ${service.name}`} className="flex h-7 w-7 shrink-0 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none hover:text-rose-600"><X className="h-3.5 w-3.5" /></button></div>)}</div><div className="grid grid-cols-3 gap-px bg-violet-100"><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Tổng dịch vụ</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedServiceDetails.length}</p></div><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Thời lượng</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedServiceDuration} phút</p></div><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Tạm tính</p><p className="mt-1 text-[10px] font-black text-violet-700">{formatCurrency(selectedServicePrice)}</p></div></div></div> : <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-[8px] font-bold text-amber-700">Chọn ít nhất một dịch vụ để tiếp tục.</div>}
+                <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={form.branch} onChange={(event) => { const branch = event.target.value as BranchCode; setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn', station: branch === 'Q1' ? 'Bàn M-01' : 'Bàn M-02' })); }} className={inputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kỹ thuật viên phụ trách *</span><BeautifulSelect value={form.staff} onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))} className={inputClass}>{staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Bàn / ghế phục vụ</span><BeautifulSelect value={form.station} onChange={(event) => setForm((current) => ({ ...current, station: event.target.value }))} className={inputClass}>{['Bàn M-01', 'Bàn M-02', 'Bàn M-03', 'Bàn M-04', 'Ghế P-01', 'Ghế P-02', 'Ghế P-03', 'Bàn VIP-01', 'Bàn VIP-02'].map((station) => <option key={station} value={station}>{station}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nguồn đặt lịch</span><BeautifulSelect value={form.source} onChange={(event) => setForm((current) => ({ ...current, source: event.target.value as AppointmentSource }))} className={inputClass}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label></div>
+                <p className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[8px] leading-4 text-slate-500"><UsersRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" />Nhân viên và bàn/ghế đã chọn được áp dụng cho toàn bộ dịch vụ trong lịch hẹn này.</p>
+              </fieldset>
               <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Clock3 className="h-3.5 w-3.5" /></span>Thời gian & trạng thái</legend><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ngày *</span><input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Giờ bắt đầu *</span><input type="time" value={form.start} onChange={(event) => setForm((current) => ({ ...current, start: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Trạng thái</span><BeautifulSelect value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as AppointmentStatus }))} className={inputClass}>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label></div></fieldset>
-              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CircleDollarSign className="h-3.5 w-3.5" /></span>Thanh toán & ghi chú</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tiền đặt cọc</span><input type="number" min="0" step="10000" value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} className={inputClass} /></label><div className="rounded-xl bg-slate-50 px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Giá dịch vụ dự kiến</p><p className="mt-1 text-[12px] font-black text-slate-800">{formatCurrency(services.find((service) => service.name === form.service)?.price || 0)}</p></div></div><label className="mt-3 block"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghi chú phục vụ</span><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Mẫu nail, màu sắc, tình trạng móng, dị ứng hoặc yêu cầu riêng..." /></label></fieldset>
+              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CircleDollarSign className="h-3.5 w-3.5" /></span>Thanh toán & ghi chú</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tiền đặt cọc</span><input type="number" min="0" max={selectedServicePrice || undefined} step="10000" value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} className={inputClass} /></label><div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-100 bg-slate-50"><div className="px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Tổng dự kiến</p><p className="mt-1 text-[12px] font-black text-slate-800">{formatCurrency(selectedServicePrice)}</p></div><div className="border-l border-slate-200 px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Kết thúc</p><p className="mt-1 text-[12px] font-black text-violet-700">{selectedServiceEnd}</p></div></div></div><label className="mt-3 block"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghi chú phục vụ</span><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Mẫu nail, màu sắc, tình trạng móng, dị ứng hoặc yêu cầu riêng..." /></label></fieldset>
             </div>
-            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setFormMode(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><CalendarCheck2 className="h-4 w-4" />{formMode === 'CREATE' ? 'Lưu lịch hẹn' : 'Lưu thay đổi'}</button></div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setFormMode(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" disabled={!form.services.length} className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><CalendarCheck2 className="h-4 w-4" />{formMode === 'CREATE' ? `Lưu ${form.services.length} dịch vụ` : 'Lưu thay đổi'}</button></div>
           </form>
         </div>
       )}
