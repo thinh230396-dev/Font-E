@@ -38,6 +38,7 @@ type ViewMode = 'SCHEDULE' | 'LIST';
 
 interface TenantAppointment {
   id: string;
+  customerId?: string;
   customer: string;
   phone: string;
   date: string;
@@ -73,9 +74,22 @@ interface TenantAdminAppointmentsProps {
   accessMode?: 'full' | 'limited' | 'locked';
   readOnlyReason?: string;
   onNotify?: (message: string) => void;
+  bookingRequest?: {
+    requestId: number;
+    customerId: string;
+    name: string;
+    phone: string;
+    branch: BranchCode;
+    note: string;
+    allergies: string;
+    nailCondition: string;
+    favoriteTechnician: string;
+  } | null;
+  onBookingRequestHandled?: () => void;
 }
 
 interface AppointmentFormState {
+  customerId: string;
   customer: string;
   phone: string;
   date: string;
@@ -222,6 +236,7 @@ const getEndTime = (start: string, duration: number) => {
 };
 
 const emptyForm = (date: string, branch: string): AppointmentFormState => ({
+  customerId: '',
   customer: '',
   phone: '',
   date,
@@ -245,7 +260,9 @@ export default function TenantAdminAppointments({
   roleLabel = 'Owner · Tenant Admin',
   accessMode = 'full',
   readOnlyReason = '',
-  onNotify
+  onNotify,
+  bookingRequest,
+  onBookingRequestHandled
 }: TenantAdminAppointmentsProps) {
   const storageKey = `tenant-admin-appointments-v2:${tenantName}`;
   const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
@@ -279,6 +296,29 @@ export default function TenantAdminAppointments({
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(appointments));
   }, [appointments, storageKey]);
+
+  useEffect(() => {
+    if (!bookingRequest) return;
+    const preferredStaff = staffDirectory.find((staff) => staff.branch === bookingRequest.branch && staff.name === bookingRequest.favoriteTechnician)?.name;
+    const safetyNotes = [
+      bookingRequest.note,
+      bookingRequest.allergies && bookingRequest.allergies !== 'Không ghi nhận' ? `Dị ứng: ${bookingRequest.allergies}` : '',
+      bookingRequest.nailCondition ? `Tình trạng móng: ${bookingRequest.nailCondition}` : ''
+    ].filter(Boolean).join('\n');
+    const nextForm = emptyForm(selectedDate, bookingRequest.branch);
+    setForm({
+      ...nextForm,
+      customerId: bookingRequest.customerId,
+      customer: bookingRequest.name,
+      phone: bookingRequest.phone,
+      staff: preferredStaff || nextForm.staff,
+      note: safetyNotes
+    });
+    setFormError('');
+    setSelectedAppointment(null);
+    setFormMode('CREATE');
+    onBookingRequestHandled?.();
+  }, [bookingRequest, onBookingRequestHandled, selectedDate]);
 
   useEffect(() => {
     if (!selectedAppointment && !formMode && !isScheduleExpanded && !showCancelForm) return;
@@ -379,6 +419,7 @@ export default function TenantAdminAppointments({
   const openEditForm = (appointment: TenantAppointment) => {
     if (!requireManageAccess()) return;
     setForm({
+      customerId: appointment.customerId || '',
       customer: appointment.customer,
       phone: appointment.phone,
       date: appointment.date,
@@ -467,6 +508,7 @@ export default function TenantAdminAppointments({
     const nextId = existingId || `APT-${Math.max(...appointments.map((appointment) => Number(appointment.id.replace('APT-', '')))) + 1}`;
     const payload: TenantAppointment = {
       id: nextId,
+      customerId: form.customerId || undefined,
       customer: form.customer.trim(),
       phone: form.phone.trim(),
       date: form.date,
@@ -788,7 +830,7 @@ export default function TenantAdminAppointments({
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><h2 className="text-base font-black text-slate-900">{formMode === 'CREATE' ? 'Tạo lịch hẹn mới' : `Chỉnh sửa ${selectedAppointment?.id}`}</h2><p className="mt-1 text-[9px] text-slate-500">Chọn một hoặc nhiều dịch vụ cho khách trong cùng lịch hẹn.</p></div><button type="button" onClick={() => setFormMode(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>
             <div className="space-y-5 p-5 sm:p-6">
               {formError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{formError}</div>}
-              <fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><UserRound className="h-3.5 w-3.5" /></span>Thông tin khách hàng</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên khách hàng *</span><input value={form.customer} onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nguyễn Minh Anh" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số điện thoại *</span><input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className={inputClass} placeholder="09xx xxx xxx" /></label></div></fieldset>
+              <fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><UserRound className="h-3.5 w-3.5" /></span>Thông tin khách hàng</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên khách hàng *</span><input value={form.customer} onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nguyễn Minh Anh" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số điện thoại *</span><input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className={inputClass} placeholder="09xx xxx xxx" /></label></div>{form.customerId && <div className="mt-3 flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2.5 text-[8px] font-bold text-violet-700"><Check className="h-3.5 w-3.5" />Đã liên kết hồ sơ khách hàng <span className="font-black">{form.customerId}</span></div>}</fieldset>
               <fieldset className="border-t border-slate-100 pt-5">
                 <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-3.5 w-3.5" /></span>Dịch vụ & phân công</legend>
                 <div className="flex items-center justify-between gap-3"><div><p className="text-[9px] font-bold text-slate-700">Chọn dịch vụ *</p><p className="mt-0.5 text-[8px] text-slate-400">Có thể chọn nhiều dịch vụ cho cùng một khách</p></div><span className="rounded-full bg-violet-50 px-2.5 py-1 text-[8px] font-black text-violet-700">{form.services.length} đã chọn</span></div>

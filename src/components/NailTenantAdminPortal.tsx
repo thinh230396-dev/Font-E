@@ -874,6 +874,17 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     [availablePackages]
   );
   const [activePage, setActivePage] = useState<NailPageId>('overview');
+  const [appointmentBookingRequest, setAppointmentBookingRequest] = useState<{
+    requestId: number;
+    customerId: string;
+    name: string;
+    phone: string;
+    branch: 'Q1' | 'Q3';
+    note: string;
+    allergies: string;
+    nailCondition: string;
+    favoriteTechnician: string;
+  } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => (
     typeof window !== 'undefined' && window.localStorage.getItem('tenant-admin-sidebar-collapsed') === 'true'
@@ -973,6 +984,40 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return true;
+  };
+
+  const bookCustomerFromProfile = (customer: {
+    id: string;
+    name: string;
+    phone: string;
+    branch: 'Q1' | 'Q3';
+    note: string;
+    allergies: string;
+    nailCondition: string;
+    favoriteTechnician: string;
+  }) => {
+    const appointmentAccess = getTenantPageAccess(currentPackage, 'appointments', normalizedAvailablePackages);
+    if (appointmentAccess !== 'full') {
+      showPageGate('appointments');
+      return;
+    }
+    if (readOnlyReason) {
+      setToast(readOnlyReason);
+      return;
+    }
+    if (!navigate('appointments')) return;
+    setBranch(customer.branch);
+    setAppointmentBookingRequest({
+      requestId: Date.now(),
+      customerId: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+      branch: customer.branch,
+      note: customer.note,
+      allergies: customer.allergies,
+      nailCondition: customer.nailCondition,
+      favoriteTechnician: customer.favoriteTechnician
+    });
   };
 
   const openCreate = (page?: Exclude<NailPageId, 'overview' | 'subscription'>) => {
@@ -1366,6 +1411,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 accessMode={currentAccessMode}
                 readOnlyReason={readOnlyReason}
                 onNotify={setToast}
+                bookingRequest={appointmentBookingRequest}
+                onBookingRequestHandled={() => setAppointmentBookingRequest(null)}
               />
             </Suspense>
           ) : activePage === 'stations' ? (
@@ -1408,6 +1455,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 accessMode={currentAccessMode}
                 readOnlyReason={readOnlyReason}
                 onNotify={setToast}
+                onBookCustomer={bookCustomerFromProfile}
               />
             </Suspense>
           ) : activePage === 'loyalty' ? (
