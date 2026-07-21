@@ -72,6 +72,12 @@ export default function BeautifulSelect({
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
 
   const options = useMemo(() => collectOptions(children), [children]);
+  const optionValues = new Set(options.map((option) => option.value));
+  const isBranchScopeSelect = options.length >= 2
+    && optionValues.has('ALL')
+    && options.every((option) => option.value === 'ALL' || /^Q\d+$/i.test(option.value));
+  const isGlobalBranchSelect = String(selectProps['aria-label'] || '').startsWith('Chọn phạm vi chi nhánh');
+  const isDuplicatePageBranchSelect = isBranchScopeSelect && !isGlobalBranchSelect;
   const menuId = `${id || name || generatedId}-options`;
   const currentValue = String(value ?? internalValue);
   const selectedOption = options.find((option) => option.value === currentValue) ?? options[0];
@@ -182,7 +188,11 @@ export default function BeautifulSelect({
   );
 
   return (
-    <div ref={rootRef} className="beautiful-select relative min-w-0">
+    <div
+      ref={rootRef}
+      data-page-branch-filter={isDuplicatePageBranchSelect ? 'true' : undefined}
+      className={`beautiful-select relative min-w-0 ${isDuplicatePageBranchSelect ? 'page-branch-filter' : ''}`}
+    >
       <select
         {...selectProps}
         ref={nativeSelectRef}

@@ -893,7 +893,6 @@ export default function TenantAdminStaff({
         : [payload, ...current],
     );
     setSelectedStaff(payload.status === "INACTIVE" ? null : payload);
-    if (selectedBranch !== "ALL") onSelectedBranchChange(payload.branch);
     setFormMode(null);
     setNotice(
       payload.status === "INACTIVE"

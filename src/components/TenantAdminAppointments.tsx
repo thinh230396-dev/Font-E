@@ -534,7 +534,6 @@ export default function TenantAdminAppointments({
     } else {
       setAppointments((current) => [...current, payload]);
       setSelectedDate(payload.date);
-      if (selectedBranch !== 'ALL') onSelectedBranchChange(payload.branch);
     }
     setSelectedAppointment(payload);
     setFormMode(null);

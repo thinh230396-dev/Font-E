@@ -82,6 +82,16 @@ body.system-modal-open .fixed.inset-0 * {
   touch-action: auto;
 }
 
+/* The tenant header owns the global branch scope. Duplicate page-level scope
+   selectors stay hidden, while branch assignment fields inside modals remain available. */
+.page-branch-filter {
+  display: none !important;
+}
+
+.fixed.inset-0 .page-branch-filter {
+  display: block !important;
+}
+
 @keyframes login-enter {
   from {
     opacity: 0;
