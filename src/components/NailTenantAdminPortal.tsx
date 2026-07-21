@@ -66,6 +66,7 @@ import {
 } from '../utils/tenantAdminEntitlements';
 import type { DemoAccount } from '../auth/demoAccounts';
 import BeautifulSelect from './BeautifulSelect';
+import BranchCallDialog from './BranchCallDialog';
 import { nailModuleConfigs, type NailModuleConfig, type NailPageId, type NailRow, type UiTone } from './nailAdminData';
 
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
@@ -402,6 +403,7 @@ interface BranchActionsMenuProps {
 function BranchActionsMenu({ row, onView }: BranchActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [callDialogOpen, setCallDialogOpen] = useState(false);
   const phone = getBranchField(row, 'Điện thoại', 'Chưa cập nhật');
   const branchCode = getBranchField(row, 'Mã chi nhánh', row.id);
 
@@ -432,11 +434,12 @@ function BranchActionsMenu({ row, onView }: BranchActionsMenuProps) {
               <p className="mt-1 truncate text-xs font-bold text-slate-700">{row.title}</p>
             </div>
             <button type="button" role="menuitem" onClick={() => { setOpen(false); onView(row); }} className="flex h-10 w-full items-center gap-3 border-0 bg-transparent px-3 text-left text-xs font-bold text-slate-700 shadow-none hover:bg-violet-50 hover:text-violet-700"><ArrowRight className="h-4 w-4" />Xem và chỉnh sửa hồ sơ</button>
-            {phone !== 'Chưa cập nhật' && <a role="menuitem" href={`tel:${phone.replace(/[^\d+]/g, '')}`} onClick={() => setOpen(false)} className="flex h-10 items-center gap-3 rounded-xl px-3 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700"><Phone className="h-4 w-4" />Gọi chi nhánh</a>}
+            {phone !== 'Chưa cập nhật' && <button type="button" role="menuitem" onClick={() => { setOpen(false); setCallDialogOpen(true); }} className="flex h-10 w-full items-center gap-3 border-0 bg-transparent px-3 text-left text-xs font-bold text-slate-700 shadow-none hover:bg-emerald-50 hover:text-emerald-700"><Phone className="h-4 w-4" />Gọi chi nhánh</button>}
             <button type="button" role="menuitem" onClick={() => void copyBranchCode()} className="flex h-10 w-full items-center gap-3 border-0 bg-transparent px-3 text-left text-xs font-bold text-slate-700 shadow-none hover:bg-slate-50"><Copy className="h-4 w-4" />{copied ? 'Đã sao chép mã' : 'Sao chép mã chi nhánh'}{copied && <Check className="ml-auto h-4 w-4 text-emerald-600" />}</button>
           </div>
         </>
       )}
+      {callDialogOpen && <BranchCallDialog branchName={row.title} phone={phone} onClose={() => setCallDialogOpen(false)} />}
     </div>
   );
 }
