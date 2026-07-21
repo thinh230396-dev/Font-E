@@ -96,6 +96,7 @@ interface TenantAdminInventoryProps {
 interface StockForm {
   action: StockAction;
   itemKey: string;
+  itemLocked: boolean;
   receiveLines: ReceiveLine[];
   addItemKey: string;
   quantity: string;
@@ -505,6 +506,7 @@ const receiveLineFromItem = (
 const emptyStockForm = (key = ""): StockForm => ({
   action: "RECEIVE",
   itemKey: key,
+  itemLocked: false,
   receiveLines: [],
   addItemKey: "",
   quantity: "",
@@ -622,6 +624,9 @@ export default function TenantAdminInventory({
   const selectedItem = selectedKey
     ? items.find((item) => itemKey(item) === selectedKey) || null
     : null;
+  const stockActionItem = stockForm?.itemKey
+    ? items.find((item) => itemKey(item) === stockForm.itemKey) || null
+    : null;
   const inventoryValue = scopedItems.reduce(
     (sum, item) => sum + item.stock * item.averageCost,
     0,
@@ -640,6 +645,7 @@ export default function TenantAdminInventory({
     if (!requireManage()) return;
     const initial = emptyStockForm(item ? itemKey(item) : "");
     initial.action = action;
+    initial.itemLocked = Boolean(item);
     initial.targetBranch = item?.branch === "Q1" ? "Q3" : "Q1";
     initial.unitCost = item ? String(item.unitCost) : "";
     initial.lot = item?.lot || "";
@@ -729,6 +735,14 @@ export default function TenantAdminInventory({
       return;
     }
     if (
+      stockForm.action === "COUNT" &&
+      quantity !== source.stock &&
+      !stockForm.reason.trim()
+    ) {
+      setFormError("Vui lòng nhập lý do khi số lượng thực tế có chênh lệch.");
+      return;
+    }
+    if (
       stockForm.action === "TRANSFER" &&
       stockForm.targetBranch === source.branch
     ) {
@@ -766,7 +780,10 @@ export default function TenantAdminInventory({
           occurredAt: now,
           actor: roleLabel,
           reference,
-          note: stockForm.reason.trim() || "Cập nhật từ trung tâm kho.",
+          note:
+            stockForm.action === "COUNT"
+              ? stockForm.reason.trim() || "Kiểm kê khớp với tồn hệ thống."
+              : stockForm.reason.trim() || "Cập nhật từ trung tâm kho.",
         };
         return {
           ...item,
@@ -829,10 +846,13 @@ export default function TenantAdminInventory({
       }
       return next;
     });
+    const variance = quantity - source.stock;
     const success =
       stockForm.action === "TRANSFER"
         ? `Đã điều chuyển ${quantity} ${source.unit} sang ${branchLabels[stockForm.targetBranch]}.`
-        : `Đã chốt tồn thực tế ${quantity} ${source.unit}.`;
+        : variance === 0
+          ? `Kiểm kê ${source.name} hoàn tất: số lượng khớp ${quantity} ${source.unit}.`
+          : `Kiểm kê ${source.name} hoàn tất: điều chỉnh ${variance > 0 ? "+" : ""}${variance} ${source.unit}.`;
     setNotice(success);
     onNotify?.(success);
     setStockForm(null);
@@ -1925,39 +1945,59 @@ export default function TenantAdminInventory({
                   {formError}
                 </div>
               )}
-              <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
-                  Mã vật tư *
-                </span>
-                <BeautifulSelect
-                  value={stockForm.itemKey}
-                  onChange={(event) => {
-                    const item = items.find(
-                      (candidate) => itemKey(candidate) === event.target.value,
-                    );
-                    setStockForm((current) =>
-                      current
-                        ? {
-                            ...current,
-                            itemKey: event.target.value,
-                            unitCost: item ? String(item.unitCost) : "",
-                            lot: item?.lot || "",
-                            expiry: item?.expiry || "",
-                            targetBranch: item?.branch === "Q1" ? "Q3" : "Q1",
-                          }
-                        : current,
-                    );
-                  }}
-                  className={inputClass}
-                >
-                  <option value="">Chọn SKU</option>
-                  {scopedItems.map((item) => (
-                    <option key={itemKey(item)} value={itemKey(item)}>
-                      {item.id} · {item.name} · {branchLabels[item.branch]}
-                    </option>
-                  ))}
-                </BeautifulSelect>
-              </label>
+              {stockForm.itemLocked && stockActionItem ? (
+                <div>
+                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    Vật tư kiểm kê
+                  </span>
+                  <div className="flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${categoryMeta[stockActionItem.category].badge}`}>
+                      <PackageOpen className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-black text-slate-800">{stockActionItem.name}</p>
+                        <span className="rounded-full bg-white px-2 py-1 text-[7px] font-black text-violet-700 ring-1 ring-violet-200">Đã cố định</span>
+                      </div>
+                      <p className="mt-1 text-[8px] text-slate-500">{stockActionItem.id} · {stockActionItem.variant} · {branchLabels[stockActionItem.branch]}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <label>
+                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    Mã vật tư *
+                  </span>
+                  <BeautifulSelect
+                    value={stockForm.itemKey}
+                    onChange={(event) => {
+                      const item = items.find(
+                        (candidate) => itemKey(candidate) === event.target.value,
+                      );
+                      setStockForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              itemKey: event.target.value,
+                              unitCost: item ? String(item.unitCost) : "",
+                              lot: item?.lot || "",
+                              expiry: item?.expiry || "",
+                              targetBranch: item?.branch === "Q1" ? "Q3" : "Q1",
+                            }
+                          : current,
+                      );
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="">Chọn SKU</option>
+                    {scopedItems.map((item) => (
+                      <option key={itemKey(item)} value={itemKey(item)}>
+                        {item.id} · {item.name} · {branchLabels[item.branch]}
+                      </option>
+                    ))}
+                  </BeautifulSelect>
+                </label>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <label>
                   <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
@@ -2023,6 +2063,22 @@ export default function TenantAdminInventory({
                   </label>
                 )}
               </div>
+              {stockForm.action === "COUNT" && stockActionItem && (
+                <div className="grid grid-cols-3 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div>
+                    <p className="text-[8px] font-bold text-slate-400">Tồn hệ thống</p>
+                    <p className="mt-1 text-lg font-black text-slate-900">{stockActionItem.stock} <span className="text-[8px] text-slate-400">{stockActionItem.unit}</span></p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-bold text-slate-400">Đếm thực tế</p>
+                    <p className="mt-1 text-lg font-black text-violet-700">{stockForm.quantity === "" ? "—" : Number(stockForm.quantity)} <span className="text-[8px] text-slate-400">{stockActionItem.unit}</span></p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-bold text-slate-400">Chênh lệch</p>
+                    {stockForm.quantity === "" ? <p className="mt-1 text-lg font-black text-slate-400">—</p> : <p className={`mt-1 text-lg font-black ${Number(stockForm.quantity) - stockActionItem.stock === 0 ? "text-emerald-600" : "text-amber-600"}`}>{Number(stockForm.quantity) - stockActionItem.stock > 0 ? "+" : ""}{Number(stockForm.quantity) - stockActionItem.stock}</p>}
+                  </div>
+                </div>
+              )}
               {stockForm.action === "RECEIVE" && (
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label>
@@ -2092,7 +2148,7 @@ export default function TenantAdminInventory({
                     )
                   }
                   className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
-                  placeholder="Số PO, kết quả kiểm đếm hoặc lý do điều chuyển..."
+                  placeholder={stockForm.action === "COUNT" ? "Bắt buộc nếu số lượng thực tế có chênh lệch..." : "Lý do điều chuyển..."}
                 />
               </label>
               <div className="flex items-start gap-2 rounded-xl bg-violet-50 p-3 text-[8px] leading-4 text-violet-700">
@@ -2113,7 +2169,7 @@ export default function TenantAdminInventory({
                 className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Xác nhận giao dịch
+                {stockForm.action === "COUNT" ? "Hoàn tất kiểm kê" : "Xác nhận điều chuyển"}
               </button>
             </footer>
           </form>
