@@ -16,6 +16,7 @@ import {
   LogOut,
   Menu,
   MessageCircle,
+  Minus,
   Phone,
   Plus,
   ReceiptText,
@@ -371,6 +372,18 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
     setFormError('');
   };
 
+  const removeCatalogItem = (type: InvoiceLineType, item: CatalogItem) => {
+    setInvoiceLines((current) => {
+      const existing = current.find((line) => line.type === type && line.name === item.name && (type === 'PRODUCT' || line.staff === paymentAppointment?.staff));
+      if (!existing) return current;
+      if (existing.quantity <= 1) {
+        return current.filter((line) => line.id !== existing.id);
+      }
+      return current.map((line) => line.id === existing.id ? { ...line, quantity: line.quantity - 1 } : line);
+    });
+    setFormError('');
+  };
+
   const updateInvoiceLine = (id: string, patch: Partial<InvoiceLineDraft>) => {
     setInvoiceLines((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line));
   };
@@ -561,7 +574,7 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
           description={`${paymentAppointment.customer} · ${paymentAppointment.phone} · ${branchName}`}
           onClose={() => setPaymentAppointment(null)}
         >
-          <form onSubmit={submitPayment} className="grid h-full min-h-0 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,2fr)_minmax(350px,1fr)] lg:overflow-hidden">
+          <form onSubmit={submitPayment} className="grid h-full min-h-0 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:overflow-hidden">
             <section className="min-w-0 overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface-high/25 lg:flex lg:min-h-0 lg:flex-col">
               <div className="shrink-0 border-b border-brand-outline p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -584,58 +597,337 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
                 {filteredCatalog.map((item, index) => {
                   const count = invoiceLines.filter((line) => line.type === invoiceCatalogTab && line.name === item.name).reduce((sum, line) => sum + line.quantity, 0);
                   return (
-                    <button key={item.name} type="button" onClick={() => addCatalogItem(invoiceCatalogTab, item)} className="group relative flex min-h-36 flex-col rounded-2xl border border-brand-outline bg-brand-surface p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg">
+                    <div
+                      key={item.name}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => addCatalogItem(invoiceCatalogTab, item)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          addCatalogItem(invoiceCatalogTab, item);
+                        }
+                      }}
+                      className="group relative flex min-h-[170px] flex-col rounded-2xl border border-brand-outline bg-brand-surface p-4 text-left shadow-sm transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg hover:shadow-emerald-500/5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
                       {count > 0 && <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[9px] font-black text-white">{count}</span>}
                       <span className={`flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? 'bg-gradient-to-br from-emerald-100 to-cyan-100 text-emerald-800' : 'bg-gradient-to-br from-blue-100 to-violet-100 text-blue-800'}`}>{String(index + 1).padStart(2, '0')}</span>
                       <span className="mt-3 line-clamp-2 text-xs font-black leading-5 text-brand-text">{item.name}</span>
                       <span className="mt-1 text-[9px] font-semibold text-brand-text-muted">{item.category}</span>
-                      <span className="mt-auto flex items-end justify-between gap-3 pt-3"><span><span className={`block text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? 'text-emerald-700' : 'text-blue-700'}`}>{money(item.price)}</span><span className="mt-0.5 block text-[8px] text-brand-text-muted">{invoiceCatalogTab === 'SERVICE' ? `${item.duration} phút` : `Còn ${item.stock} sản phẩm`}</span></span><span className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition group-hover:scale-105 ${invoiceCatalogTab === 'SERVICE' ? 'bg-emerald-600' : 'bg-blue-600'}`}><Plus className="h-4 w-4" /></span></span>
-                    </button>
+                      <span className="mt-auto flex items-end justify-between gap-3 pt-3">
+                        <span>
+                          <span className={`block text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? 'text-emerald-700' : 'text-blue-700'}`}>{money(item.price)}</span>
+                          <span className="mt-0.5 block text-[8px] text-brand-text-muted">{invoiceCatalogTab === 'SERVICE' ? `${item.duration} phút` : `Còn ${item.stock} sản phẩm`}</span>
+                        </span>
+                        {count > 0 ? (
+                          <span className="flex items-center gap-1.5 shrink-0 animate-scaleIn" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => removeCatalogItem(invoiceCatalogTab, item)}
+                              className="flex h-8 w-8 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface text-brand-text hover:bg-brand-surface-high transition-all duration-200 cursor-pointer shadow-sm"
+                              aria-label="Giảm số lượng"
+                            >
+                              <Minus className="h-3.5 w-3.5" />
+                            </button>
+                            <span className="text-[11px] font-black w-5 text-center text-brand-text">{count}</span>
+                            <button
+                              type="button"
+                              onClick={() => addCatalogItem(invoiceCatalogTab, item)}
+                              className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition-all duration-200 hover:scale-105 cursor-pointer shadow-sm ${invoiceCatalogTab === 'SERVICE' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                              aria-label="Tăng số lượng"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        ) : (
+                          <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition-all duration-200 group-hover:scale-105 shrink-0 ${invoiceCatalogTab === 'SERVICE' ? 'bg-emerald-600' : 'bg-blue-600'}`}>
+                            <Plus className="h-4 w-4" />
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   );
                 })}
                 {!filteredCatalog.length && <div className="col-span-full py-16 text-center text-xs text-brand-text-muted">Không tìm thấy mục phù hợp.</div>}
               </div>
             </section>
 
-            <aside className="min-w-0 space-y-3 lg:flex lg:min-h-0 lg:flex-col lg:gap-3 lg:space-y-0 lg:overflow-hidden">
-              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-                <div className="flex items-center gap-3 border-b border-brand-outline pb-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 font-black text-emerald-800">{paymentAppointment.customer.split(' ').slice(-2).map((part) => part[0]).join('')}</div>
-                  <div className="min-w-0"><p className="truncate text-xs font-black text-brand-text">{paymentAppointment.customer}</p><p className="mt-1 text-[9px] text-brand-text-muted">{paymentAppointment.phone} · {paymentAppointment.id}</p></div>
-                  <span className="ml-auto rounded-full bg-violet-50 px-2 py-1 text-[8px] font-black text-violet-700">{branchCode}</span>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between"><h3 className="text-xs font-black text-brand-text">Chi tiết hóa đơn</h3><span className="text-[9px] font-bold text-brand-text-muted">{invoiceLines.length} dòng</span></div>
-                <div className="mt-3 max-h-[27vh] space-y-2 overflow-y-auto pr-1 lg:min-h-0 lg:max-h-none lg:flex-1">
-                  {invoiceLines.map((line, index) => (
-                    <div key={line.id} className="rounded-xl border border-brand-outline bg-brand-surface-high/40 p-3">
-                      <div className="flex items-start gap-2">
-                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[8px] font-black ${line.type === 'SERVICE' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>{index + 1}</span>
-                        <div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black text-brand-text">{line.name}</p><p className="mt-1 text-[9px] font-bold text-brand-text-muted">{money(line.unitPrice)}</p></div>
-                        <button type="button" onClick={() => setInvoiceLines((current) => current.filter((item) => item.id !== line.id))} className="rounded-lg p-1 text-rose-500 hover:bg-rose-50" aria-label={`Xóa ${line.name}`}><X className="h-3.5 w-3.5" /></button>
-                      </div>
-                      {line.type === 'SERVICE' && <select value={line.staff} onChange={(event) => updateInvoiceLine(line.id, { staff: event.target.value })} className="reception-input mt-2 h-8 min-h-8 py-1 text-[9px]">{invoiceStaff.map((staff) => <option key={staff}>{staff}</option>)}</select>}
-                      <div className="mt-2 flex items-center justify-between">
-                        <div className="flex items-center rounded-lg border border-brand-outline bg-brand-surface"><button type="button" onClick={() => updateInvoiceLine(line.id, { quantity: Math.max(1, line.quantity - 1) })} className="h-7 w-7 text-sm font-black text-brand-text-muted">−</button><span className="w-7 text-center text-[10px] font-black">{line.quantity}</span><button type="button" onClick={() => updateInvoiceLine(line.id, { quantity: line.quantity + 1 })} className="h-7 w-7 text-sm font-black text-brand-text-muted">+</button></div>
-                        <strong className="text-[11px] font-black text-brand-text">{money(line.quantity * line.unitPrice)}</strong>
-                      </div>
+            <aside className="min-w-0 flex flex-col gap-3 lg:h-full lg:min-h-0 lg:overflow-hidden">
+              {/* Thẻ 1: Khách hàng & Bảng danh sách dịch vụ đã chọn (Vừa khít chiều rộng, không cuộn ngang) */}
+              <div className="selected-services rounded-2xl border border-brand-outline bg-brand-surface p-3.5 sm:p-4 shadow-sm flex flex-col w-full min-w-0 lg:flex-1 lg:min-h-[280px] min-h-[280px] overflow-hidden overflow-x-hidden">
+                <div className="flex items-center gap-3 border-b border-brand-outline pb-3 shrink-0 w-full min-w-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white font-black text-sm shadow-sm">
+                    {paymentAppointment.customer.split(' ').slice(-2).map((part) => part[0]).join('')}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-xs font-black text-brand-text">{paymentAppointment.customer}</p>
+                      <span className="shrink-0 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-bold text-emerald-600">Đã check-in</span>
                     </div>
-                  ))}
-                  {!invoiceLines.length && <div className="rounded-xl border border-dashed border-brand-outline py-8 text-center text-[10px] text-brand-text-muted">Chọn dịch vụ hoặc sản phẩm ở bên trái.</div>}
+                    <p className="mt-0.5 truncate text-[9px] text-brand-text-muted">{paymentAppointment.phone} · ID: {paymentAppointment.id}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-violet-50 px-2.5 py-1 text-[8px] font-black text-violet-700">{branchCode}</span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between shrink-0 pb-2 w-full min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <ReceiptText className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    <h3 className="text-xs font-black text-brand-text truncate">Danh sách dịch vụ đã chọn</h3>
+                  </div>
+                  <span className="rounded-full bg-brand-surface-high px-2 py-0.5 text-[9px] font-bold text-brand-text-muted shrink-0">{invoiceLines.length} mục</span>
+                </div>
+
+                {/* Khung Bảng dịch vụ (overflow-x-hidden) */}
+                <div className="service-list-container mt-1 flex-1 flex flex-col min-h-[200px] w-full min-w-0 overflow-hidden overflow-x-hidden rounded-xl border border-brand-outline/60 bg-brand-surface-high/20">
+                  {/* Hàng tiêu đề Bảng (Hiện trên xl:) */}
+                  <div className="hidden xl:grid grid-cols-[44px_minmax(120px,1fr)_minmax(130px,160px)_120px_minmax(100px,120px)_32px] items-center gap-2.5 px-3 py-2 text-[9px] font-extrabold uppercase tracking-wider text-brand-text-muted border-b border-brand-outline bg-brand-surface-high/50 shrink-0 w-full min-w-0">
+                    <span className="text-center min-w-0">STT</span>
+                    <span className="min-w-0">Tên dịch vụ</span>
+                    <span className="min-w-0">Kỹ thuật viên</span>
+                    <span className="text-center min-w-0">Số lượng</span>
+                    <span className="text-right min-w-0">Thành tiền</span>
+                    <span className="text-center min-w-0">Xóa</span>
+                  </div>
+
+                  {/* Vùng cuộn các dòng Bảng (Chỉ cuộn dọc, cấm cuộn ngang) */}
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 divide-y divide-brand-outline/40 scrollbar-thin scrollbar-thumb-brand-outline/60 px-1 py-0.5">
+                    {invoiceLines.map((line, index) => (
+                      <div
+                        key={line.id}
+                        className="w-full min-w-0 text-xs transition-colors hover:bg-brand-surface-high/40 p-2.5 sm:px-3 sm:py-3 shrink-0"
+                      >
+                        {/* 1-Row Grid Layout chuẩn xác trên xl: */}
+                        <div className="hidden xl:grid grid-cols-[44px_minmax(120px,1fr)_minmax(130px,160px)_120px_minmax(100px,120px)_32px] items-center gap-2.5 w-full min-w-0">
+                          {/* STT: 44px */}
+                          <div className="flex justify-center items-center min-w-0">
+                            <span className={`flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-black border ${line.type === 'SERVICE' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
+                              {String(index + 1).padStart(2, '0')}
+                            </span>
+                          </div>
+
+                          {/* Tên dịch vụ: minmax(120px, 1fr) */}
+                          <div className="min-w-0 pr-1" title={line.name}>
+                            <p className="font-bold text-brand-text text-xs leading-snug line-clamp-2 min-w-0">
+                              {line.name}
+                            </p>
+                          </div>
+
+                          {/* Kỹ thuật viên: minmax(130px, 160px) */}
+                          <div className="min-w-0 w-full">
+                            {line.type === 'SERVICE' ? (
+                              <select
+                                value={line.staff}
+                                onChange={(event) => updateInvoiceLine(line.id, { staff: event.target.value })}
+                                className={`h-9 w-full min-w-0 rounded-xl border px-2 text-xs font-semibold text-brand-text outline-none transition-all cursor-pointer truncate ${
+                                  line.staff === 'Chưa phân công'
+                                    ? 'border-amber-500/60 bg-amber-500/10 text-amber-300 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20'
+                                    : 'border-brand-outline bg-brand-surface-high/80 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+                                }`}
+                                aria-label={`Kỹ thuật viên cho ${line.name}`}
+                              >
+                                {invoiceStaff.map((staff) => (
+                                  <option key={staff} value={staff}>{staff}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <div className="h-9 w-full min-w-0 flex items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
+                                Sản phẩm
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Số lượng: 120px */}
+                          <div className="min-w-0 w-full flex justify-center">
+                            <div className="flex h-8 w-full min-w-0 items-center justify-between rounded-xl border border-brand-outline bg-brand-surface-high/60 p-0.5 shadow-inner">
+                              <button
+                                type="button"
+                                onClick={() => updateInvoiceLine(line.id, { quantity: Math.max(1, line.quantity - 1) })}
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm font-black text-brand-text-muted hover:bg-brand-surface hover:text-brand-text focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
+                                aria-label={`Giảm số lượng ${line.name}`}
+                              >
+                                −
+                              </button>
+                              <span className="text-xs font-black text-brand-text flex-1 text-center min-w-0">{line.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateInvoiceLine(line.id, { quantity: line.quantity + 1 })}
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm font-black text-brand-text-muted hover:bg-brand-surface hover:text-brand-text focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
+                                aria-label={`Tăng số lượng ${line.name}`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Thành tiền: minmax(100px, 120px) */}
+                          <div className="min-w-0 w-full text-right">
+                            <strong className="block text-xs font-bold text-brand-text tracking-tight min-w-0 truncate">
+                              {money(line.quantity * line.unitPrice)}
+                            </strong>
+                          </div>
+
+                          {/* Xóa: 32px */}
+                          <div className="min-w-0 w-[32px] flex justify-center">
+                            <button
+                              type="button"
+                              onClick={() => setInvoiceLines((current) => current.filter((item) => item.id !== line.id))}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-rose-400 hover:text-rose-500 hover:bg-rose-500/15 focus:outline-none focus:ring-2 focus:ring-rose-500/40 transition-all"
+                              title="Xóa dịch vụ"
+                              aria-label={`Xóa ${line.name}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Responsive 2-Row Layout Fallback khi khung hẹp (< xl) */}
+                        <div className="xl:hidden flex flex-col gap-2 w-full min-w-0">
+                          <div className="flex items-center justify-between gap-2 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-black border ${line.type === 'SERVICE' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
+                                {String(index + 1).padStart(2, '0')}
+                              </span>
+                              <p className="font-bold text-brand-text text-xs leading-snug line-clamp-2 min-w-0" title={line.name}>
+                                {line.name}
+                              </p>
+                            </div>
+                            <strong className="text-xs font-bold text-brand-text shrink-0 text-right">
+                              {money(line.quantity * line.unitPrice)}
+                            </strong>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-brand-outline/20 min-w-0">
+                            <div className="min-w-0 flex-1 max-w-[160px]">
+                              {line.type === 'SERVICE' ? (
+                                <select
+                                  value={line.staff}
+                                  onChange={(event) => updateInvoiceLine(line.id, { staff: event.target.value })}
+                                  className={`h-8 w-full min-w-0 rounded-lg border px-2 text-[11px] font-semibold text-brand-text outline-none transition-all cursor-pointer truncate ${
+                                    line.staff === 'Chưa phân công'
+                                      ? 'border-amber-500/60 bg-amber-500/10 text-amber-300'
+                                      : 'border-brand-outline bg-brand-surface-high/80'
+                                  }`}
+                                >
+                                  {invoiceStaff.map((staff) => (
+                                    <option key={staff} value={staff}>{staff}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className="text-[10px] font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-md">Sản phẩm</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex h-7 items-center rounded-lg border border-brand-outline bg-brand-surface-high/60 p-0.5">
+                                <button type="button" onClick={() => updateInvoiceLine(line.id, { quantity: Math.max(1, line.quantity - 1) })} className="h-6 w-6 text-xs font-black text-brand-text-muted hover:text-brand-text flex items-center justify-center">−</button>
+                                <span className="w-5 text-center text-xs font-black text-brand-text">{line.quantity}</span>
+                                <button type="button" onClick={() => updateInvoiceLine(line.id, { quantity: line.quantity + 1 })} className="h-6 w-6 text-xs font-black text-brand-text-muted hover:text-brand-text flex items-center justify-center">+</button>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => setInvoiceLines((current) => current.filter((item) => item.id !== line.id))}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg text-rose-400 hover:text-rose-500 hover:bg-rose-500/15"
+                                title="Xóa dịch vụ"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!invoiceLines.length && (
+                      <div className="py-12 text-center text-xs text-brand-text-muted">
+                        Chưa chọn dịch vụ hoặc sản phẩm nào.<br />Nhấn vào danh mục bên trái để thêm vào hóa đơn.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm lg:shrink-0">
-                <div className="space-y-2.5 text-[10px]"><div className="flex justify-between text-brand-text-muted"><span>Tạm tính</span><strong className="text-brand-text">{money(invoiceSubtotal)}</strong></div><div className="flex justify-between text-brand-text-muted"><span>Tiền cọc</span><strong className="text-emerald-700">- {money(paymentAppointment.deposit)}</strong></div><div className="grid grid-cols-[1fr_115px] items-center gap-2"><span className="text-brand-text-muted">Giảm giá</span><input type="number" min="0" step="1000" value={paymentForm.discount} onChange={(event) => setPaymentForm({ ...paymentForm, discount: event.target.value })} className="reception-input h-8 min-h-8 py-1 text-right text-[9px]" /></div><div className="grid grid-cols-[1fr_115px] items-center gap-2"><span className="text-brand-text-muted">Tiền tip</span><input type="number" min="0" step="1000" value={paymentForm.tip} onChange={(event) => setPaymentForm({ ...paymentForm, tip: event.target.value })} className="reception-input h-8 min-h-8 py-1 text-right text-[9px]" /></div><div className="flex items-end justify-between border-t border-brand-outline pt-3"><span className="text-xs font-black text-brand-text">Tổng thanh toán</span><strong className="text-xl font-black tracking-tight text-emerald-700">{money(invoiceTotal)}</strong></div></div>
+              {/* Thẻ 2: Đối soát tổng quan chi phí & Giảm giá / Tip */}
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm space-y-2.5 text-[10px] lg:shrink-0">
+                <div className="flex items-center justify-between text-brand-text-muted">
+                  <span>Tạm tính ({invoiceLines.reduce((s, l) => s + l.quantity, 0)} mục)</span>
+                  <strong className="text-brand-text text-[10px]">{money(invoiceSubtotal)}</strong>
+                </div>
+
+                {paymentAppointment.deposit > 0 && (
+                  <div className="flex items-center justify-between text-brand-text-muted">
+                    <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Tiền cọc đã trả</span>
+                    <strong className="text-emerald-600 font-bold text-[10px]">- {money(paymentAppointment.deposit)}</strong>
+                  </div>
+                )}
+
+                <div className="space-y-1 pt-1 border-t border-brand-outline/40">
+                  <div className="flex justify-between items-center text-brand-text-muted">
+                    <span className="font-medium">Giảm giá / Ưu đãi</span>
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-rose-500">-</span>
+                      <input type="number" min="0" step="1000" value={paymentForm.discount} onChange={(event) => setPaymentForm({ ...paymentForm, discount: event.target.value })} className="w-[80px] rounded-lg border border-brand-outline bg-brand-surface-high/50 py-1 px-2 text-right text-[10px] font-black text-brand-text outline-none focus:border-emerald-500 focus:bg-brand-surface focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-brand-text-muted/50" placeholder="0" />
+                      <span className="font-bold text-brand-text">đ</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 justify-end">
+                    {[0, 20000, 50000, 100000].map((val) => (
+                      <button key={val} type="button" onClick={() => setPaymentForm({ ...paymentForm, discount: String(val) })} className={`rounded px-1.5 py-0.5 text-[8px] font-bold transition ${Number(paymentForm.discount) === val ? 'bg-rose-500/15 text-rose-600 border border-rose-500/30' : 'bg-brand-surface-high text-brand-text-muted hover:text-brand-text'}`}>
+                        {val === 0 ? 'K.Giảm' : `-${val / 1000}k`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-brand-text-muted">
+                    <span className="font-medium">Tiền tip KTV</span>
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-emerald-500">+</span>
+                      <input type="number" min="0" step="1000" value={paymentForm.tip} onChange={(event) => setPaymentForm({ ...paymentForm, tip: event.target.value })} className="w-[80px] rounded-lg border border-brand-outline bg-brand-surface-high/50 py-1 px-2 text-right text-[10px] font-black text-brand-text outline-none focus:border-emerald-500 focus:bg-brand-surface focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-brand-text-muted/50" placeholder="0" />
+                      <span className="font-bold text-brand-text">đ</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 justify-end">
+                    {[0, 20000, 50000, 100000].map((val) => (
+                      <button key={val} type="button" onClick={() => setPaymentForm({ ...paymentForm, tip: String(val) })} className={`rounded px-1.5 py-0.5 text-[8px] font-bold transition ${Number(paymentForm.tip) === val ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30' : 'bg-brand-surface-high text-brand-text-muted hover:text-brand-text'}`}>
+                        {val === 0 ? 'K.Tip' : `+${val / 1000}k`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-emerald-950/40 via-emerald-900/30 to-teal-950/40 border border-emerald-500/30 p-3 mt-2 shadow-inner">
+                  <div>
+                    <span className="block text-[9px] font-extrabold uppercase tracking-wider text-emerald-400">Tổng cần thanh toán</span>
+                    <span className="text-[8px] text-brand-text-muted">Đã đối soát cọc & ưu đãi</span>
+                  </div>
+                  <strong className="text-2xl font-black tracking-tight text-emerald-400">{money(invoiceTotal)}</strong>
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm lg:shrink-0">
-                <p className="mb-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-brand-text-muted">Phương thức thanh toán</p>
-                <div className="grid grid-cols-3 gap-2">{Object.entries(methodMeta).map(([value, meta]) => { const Icon = meta.icon; return <button key={value} type="button" onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[8px] font-bold ${paymentForm.method === value ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-brand-outline text-brand-text-muted'}`}><Icon className="h-4 w-4" />{meta.label}</button>; })}</div>
-                {paymentForm.method !== 'CASH' && <input value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className="reception-input mt-3" placeholder="Mã giao dịch *" />}
-                <textarea value={paymentForm.note} onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })} className="reception-input mt-3 min-h-16 resize-none" placeholder="Ghi chú hóa đơn..." />
-                {formError && <p role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-[9px] font-bold leading-4 text-rose-700">{formError}</p>}
-                <button type="submit" className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-emerald-600/20"><ShieldCheck className="h-4 w-4" /> Thanh toán {money(invoiceTotal)}</button>
+              {/* Thẻ 3: Phương thức & Xác nhận thanh toán */}
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm space-y-3 lg:shrink-0">
+                <p className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-brand-text-muted">Phương thức thanh toán</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {Object.entries(methodMeta).map(([value, meta]) => {
+                    const Icon = meta.icon;
+                    const selected = paymentForm.method === value;
+                    return (
+                      <button key={value} type="button" onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })} className={`flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border p-1.5 text-[8px] font-bold transition-all ${selected ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400 shadow-sm' : 'border-brand-outline text-brand-text-muted hover:bg-brand-surface-high'}`}>
+                        <Icon className="h-3.5 w-3.5" />
+                        {meta.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {paymentForm.method !== 'CASH' && (
+                  <input value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className="reception-input h-8 text-[10px]" placeholder="Mã giao dịch chuyển khoản / thẻ *" />
+                )}
+                <textarea value={paymentForm.note} onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })} className="reception-input min-h-[50px] text-[10px] resize-none" placeholder="Ghi chú hóa đơn (không bắt buộc)..." />
+                {formError && <p role="alert" className="rounded-xl bg-rose-50 p-2.5 text-[9px] font-bold leading-4 text-rose-700">{formError}</p>}
+                <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-emerald-600/20 hover:from-emerald-500 hover:to-teal-500 transition-all active:scale-[0.99]">
+                  <ShieldCheck className="h-4 w-4" /> Thanh toán {money(invoiceTotal)}
+                </button>
               </div>
             </aside>
           </form>
