@@ -1910,26 +1910,26 @@ export default function TenantAdminStaff({
                     <h3 className="text-[10px] font-black text-slate-800">
                       Lịch làm việc tuần này
                     </h3>
-                    <p className="mt-1 text-[8px] text-slate-400">
+                    <p className="mt-1 text-[9px] font-medium text-slate-500">
                       13/07–19/07/2026
                     </p>
                   </div>
                   <CalendarDays className="h-4 w-4 text-violet-500" />
                 </div>
-                <div className="mt-3 grid grid-cols-7 gap-1.5">
+                <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-7">
                   {selectedStaff.schedule.map((day) => (
                     <div
                       key={day.day}
-                      className={`rounded-xl p-2 text-center ${day.status === "WORK" ? "bg-violet-50" : day.status === "LEAVE" ? "bg-amber-50" : "bg-slate-100"}`}
+                      className={`flex min-h-20 flex-col items-center justify-center rounded-xl px-2 py-3 text-center ${day.status === "WORK" ? "bg-violet-50" : day.status === "LEAVE" ? "bg-amber-50" : "bg-slate-100"}`}
                     >
-                      <p className="text-[7px] font-black text-slate-500">
+                      <p className="text-[9px] font-black text-slate-600">
                         {day.day}
                       </p>
-                      <p className="mt-1 text-[7px] text-slate-400">
+                      <p className="mt-1 text-[8px] font-medium text-slate-400">
                         {day.date}
                       </p>
                       <p
-                        className={`mt-2 text-[6px] font-bold ${day.status === "WORK" ? "text-violet-700" : day.status === "LEAVE" ? "text-amber-700" : "text-slate-400"}`}
+                        className={`mt-2 whitespace-nowrap text-[8px] font-black leading-none ${day.status === "WORK" ? "text-violet-700" : day.status === "LEAVE" ? "text-amber-700" : "text-slate-500"}`}
                       >
                         {day.status === "WORK"
                           ? day.shift.replace(":00", "h").replace(":00", "h")
