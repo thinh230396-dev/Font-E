@@ -159,7 +159,9 @@ const nextStatusLabel: Partial<Record<AppointmentStatus, string>> = {
 };
 
 const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
-const SCHEDULE_HOUR_HEIGHT = 72;
+// Keep the full 08:00–20:00 operating day visible without a nested vertical scroll.
+// Appointment details remain available in the detail dialog after selecting a card.
+const SCHEDULE_HOUR_HEIGHT = 44;
 
 const toDate = (date: string) => new Date(`${date}T00:00:00`);
 
@@ -504,7 +506,7 @@ export default function TenantAdminAppointments({
         </div>
 
         {viewMode === 'SCHEDULE' ? (
-          <div className={`relative bg-white ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'max-h-[760px] overflow-auto'}`}>
+          <div className={`relative bg-white ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
             <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${Math.max(980, 72 + scheduleStaff.length * 230)}px` }}>
               <div className="sticky top-0 z-20 grid border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.05)]" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${scheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))` }}>
                 <div className="flex items-center justify-center border-r border-slate-100 text-[9px] font-black text-slate-400">GMT+7</div>
@@ -523,11 +525,11 @@ export default function TenantAdminAppointments({
                   <div key={staff.name} className="relative border-r border-slate-100 last:border-r-0" style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${scheduleHourHeight - 1}px, #e8edf5 ${scheduleHourHeight}px)` }}>
                     {filteredAppointments.filter((appointment) => appointment.staff === staff.name).map((appointment) => {
                       const top = Math.max(0, (minutesFromStart(appointment.start) - 480) / 60 * scheduleHourHeight);
-                      const height = Math.max(isScheduleExpanded ? 38 : 48, appointment.duration / 60 * scheduleHourHeight - 6);
+                      const height = Math.max(34, appointment.duration / 60 * scheduleHourHeight - 4);
                       const meta = statusMeta[appointment.status];
-                      const isCompact = height < 60;
-                      const showService = height >= 78;
-                      const showOperationalMeta = height >= 110;
+                      const isCompact = height < 72;
+                      const showService = height >= 88;
+                      const showOperationalMeta = height >= 118;
                       const appointmentStart = minutesFromStart(appointment.start);
                       const hasConflict = scopedAppointments.some((other) => {
                         if (other.id === appointment.id || ['CANCELLED', 'NO_SHOW'].includes(other.status)) return false;
@@ -537,7 +539,7 @@ export default function TenantAdminAppointments({
                       });
                       const fullSummary = `${appointment.start}–${getEndTime(appointment.start, appointment.duration)} · ${appointment.customer} · ${appointment.service} · ${meta.label}${appointment.station ? ` · ${appointment.station}` : ''}${hasConflict ? ' · Có xung đột nguồn lực' : ''}`;
                       return (
-                        <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} aria-label={`Xem lịch: ${fullSummary}`} title={fullSummary} className={`group absolute left-2 right-2 z-10 h-auto overflow-hidden rounded-xl border border-l-4 px-2.5 text-left shadow-sm transition-all hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${isCompact ? 'py-1.5' : 'py-2'} ${['CANCELLED', 'NO_SHOW'].includes(appointment.status) ? 'opacity-70' : ''} ${meta.card}`} style={{ top: top + 3, height }}>
+                        <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} aria-label={`Xem lịch: ${fullSummary}`} title={fullSummary} className={`group absolute left-1.5 right-1.5 z-10 h-auto overflow-hidden rounded-lg border border-l-[3px] px-2 text-left shadow-sm transition-all hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${isCompact ? 'py-1' : 'py-1.5'} ${['CANCELLED', 'NO_SHOW'].includes(appointment.status) ? 'opacity-70' : ''} ${meta.card}`} style={{ top: top + 2, height }}>
                           {isCompact ? (
                             <span className="flex min-w-0 items-center gap-2">
                               <span className="shrink-0 text-[8px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
