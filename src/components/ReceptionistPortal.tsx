@@ -41,6 +41,16 @@ type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' |
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
 type BranchCode = 'Q1' | 'Q3';
 type PaymentMethod = 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
+type InvoiceLineType = 'SERVICE' | 'PRODUCT';
+
+interface InvoiceLineDraft {
+  id: string;
+  type: InvoiceLineType;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  staff: string;
+}
 
 interface ReceptionAppointment {
   id: string;
@@ -135,6 +145,27 @@ const methodMeta: Record<PaymentMethod, { label: string; icon: typeof Banknote }
   ZALOPAY: { label: 'ZaloPay', icon: Smartphone },
 };
 
+const serviceCatalog = [
+  { name: 'Gel Manicure', price: 450000 },
+  { name: 'Pedicure Spa', price: 550000 },
+  { name: 'Sơn gel Hàn Quốc', price: 620000 },
+  { name: 'Nail Art cơ bản', price: 400000 },
+  { name: 'Nail Art Premium', price: 980000 },
+  { name: 'Combo Manicure', price: 620000 },
+  { name: 'Combo VIP', price: 1650000 },
+  { name: 'Tháo gel & phục hồi móng', price: 280000 },
+];
+
+const productCatalog = [
+  { name: 'Dầu dưỡng móng', price: 170000 },
+  { name: 'Kem dưỡng tay', price: 220000 },
+  { name: 'Serum phục hồi móng', price: 290000 },
+  { name: 'Sơn dưỡng tại nhà', price: 260000 },
+  { name: 'Bộ chăm sóc móng mini', price: 390000 },
+];
+
+const invoiceStaff = ['Thảo Nguyễn', 'Minh Châu', 'Hà My', 'Quốc Bảo', 'Thuỳ Dương', 'Chưa phân công'];
+
 const navItems: Array<{ id: ReceptionPage; label: string; description: string; icon: typeof LayoutDashboard }> = [
   { id: 'desk', label: 'Bàn lễ tân', description: 'Điều phối hôm nay', icon: LayoutDashboard },
   { id: 'appointments', label: 'Lịch hẹn', description: 'Đặt và chỉnh lịch', icon: CalendarDays },
@@ -153,7 +184,7 @@ function readStorage<T>(key: string, fallback: T): T {
   }
 }
 
-function Modal({ title, description, onClose, children }: { title: string; description: string; onClose: () => void; children: ReactNode }) {
+function Modal({ title, description, onClose, children, wide = false }: { title: string; description: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -168,7 +199,7 @@ function Modal({ title, description, onClose, children }: { title: string; descr
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
       <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 cursor-default bg-slate-950/55 backdrop-blur-sm" />
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[26px] border border-brand-outline bg-brand-surface p-6 shadow-2xl">
+      <div className={`relative max-h-[90vh] w-full overflow-y-auto rounded-[26px] border border-brand-outline bg-brand-surface p-6 shadow-2xl ${wide ? 'max-w-5xl' : 'max-w-lg'}`}>
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-black tracking-tight text-brand-text">{title}</h2>
@@ -217,7 +248,8 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
   const [toast, setToast] = useState('');
   const [formError, setFormError] = useState('');
   const [walkIn, setWalkIn] = useState({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', start: nowTime(), duration: '60', price: '450000', note: '' });
-  const [paymentForm, setPaymentForm] = useState({ method: 'CASH' as PaymentMethod, discount: '0', tip: '0', reference: '' });
+  const [paymentForm, setPaymentForm] = useState({ method: 'CASH' as PaymentMethod, discount: '0', tip: '0', reference: '', note: '' });
+  const [invoiceLines, setInvoiceLines] = useState<InvoiceLineDraft[]>([]);
   const [cashAmount, setCashAmount] = useState('1000000');
 
   useEffect(() => localStorage.setItem(appointmentStorageKey, JSON.stringify(appointments)), [appointmentStorageKey, appointments]);
@@ -239,6 +271,10 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
   const completedIds = new Set(payments.filter((payment) => payment.status === 'PAID').map((payment) => payment.appointmentId));
   const paidToday = payments.filter((payment) => payment.status === 'PAID' && payment.createdAt.includes(new Date().toLocaleDateString('vi-VN')));
   const todayRevenue = paidToday.reduce((sum, payment) => sum + payment.paid, 0);
+  const invoiceSubtotal = invoiceLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+  const invoiceDiscount = Math.max(0, Number(paymentForm.discount) || 0);
+  const invoiceTip = Math.max(0, Number(paymentForm.tip) || 0);
+  const invoiceTotal = Math.max(0, invoiceSubtotal - (paymentAppointment?.deposit || 0) - invoiceDiscount + invoiceTip);
 
   const requireOpenShift = () => {
     if (shift.status === 'OPEN') return true;
@@ -278,31 +314,76 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
   const openPayment = (appointment: ReceptionAppointment) => {
     if (!requireOpenShift()) return;
     setPaymentAppointment(appointment);
-    setPaymentForm({ method: 'CASH', discount: '0', tip: '0', reference: '' });
+    const selectedServices = appointment.services?.length ? appointment.services : [appointment.service];
+    const splitPrice = Math.floor(appointment.price / selectedServices.length);
+    setInvoiceLines(selectedServices.map((name, index) => ({
+      id: `${makeId('LINE')}-${index}`,
+      type: 'SERVICE',
+      name,
+      quantity: 1,
+      unitPrice: index === selectedServices.length - 1 ? appointment.price - splitPrice * index : splitPrice,
+      staff: appointment.staff,
+    })));
+    setPaymentForm({ method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
     setFormError('');
+  };
+
+  const addInvoiceLine = (type: InvoiceLineType) => {
+    const firstItem = type === 'SERVICE' ? serviceCatalog[0] : productCatalog[0];
+    setInvoiceLines((current) => [...current, {
+      id: makeId('LINE'),
+      type,
+      name: firstItem.name,
+      quantity: 1,
+      unitPrice: firstItem.price,
+      staff: type === 'SERVICE' ? 'Chưa phân công' : 'Quầy bán lẻ',
+    }]);
+  };
+
+  const updateInvoiceLine = (id: string, patch: Partial<InvoiceLineDraft>) => {
+    setInvoiceLines((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line));
+  };
+
+  const selectCatalogItem = (line: InvoiceLineDraft, name: string) => {
+    const catalog = line.type === 'SERVICE' ? serviceCatalog : productCatalog;
+    const selected = catalog.find((item) => item.name === name);
+    updateInvoiceLine(line.id, { name, unitPrice: selected?.price || line.unitPrice });
   };
 
   const submitPayment = (event: FormEvent) => {
     event.preventDefault();
     if (!paymentAppointment) return;
+    if (!invoiceLines.length) return setFormError('Hóa đơn phải có ít nhất một dịch vụ hoặc sản phẩm.');
+    if (invoiceLines.some((line) => !line.name.trim() || !Number.isInteger(line.quantity) || line.quantity < 1 || line.unitPrice < 0)) return setFormError('Vui lòng kiểm tra tên, số lượng và đơn giá của từng dòng.');
+    const subtotal = invoiceLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
     const discount = Math.max(0, Number(paymentForm.discount) || 0);
     const tip = Math.max(0, Number(paymentForm.tip) || 0);
-    const total = Math.max(0, paymentAppointment.price - paymentAppointment.deposit - discount + tip);
+    if (discount > subtotal) return setFormError('Giảm giá không được lớn hơn tổng tiền hàng.');
+    const grandTotal = Math.max(0, subtotal - discount + tip);
+    const amountDue = Math.max(0, grandTotal - paymentAppointment.deposit);
     if (paymentForm.method !== 'CASH' && !paymentForm.reference.trim()) return setFormError('Vui lòng nhập mã giao dịch để đối soát.');
     const timestamp = new Date();
     const payment: ReceptionPayment = {
       id: makeId('INV'), appointmentId: paymentAppointment.id, customer: paymentAppointment.customer, phone: paymentAppointment.phone,
       branch: paymentAppointment.branch, createdAt: `${timestamp.toLocaleDateString('vi-VN')} · ${nowTime()}`,
-      subtotal: paymentAppointment.price, discount, tip, deposit: paymentAppointment.deposit, total, paid: total,
+      subtotal, discount, tip, deposit: paymentAppointment.deposit, total: grandTotal, paid: grandTotal,
       refunded: 0, status: 'PAID', method: paymentForm.method, reference: paymentForm.reference.trim() || undefined,
       cashier: account.displayName, source: 'POS tại quầy',
-      items: [{ name: paymentAppointment.service, quantity: 1, amount: paymentAppointment.price, staff: paymentAppointment.staff }],
-      audit: [`${nowTime()} · ${account.displayName} xác nhận thanh toán ${methodMeta[paymentForm.method].label}`],
+      items: invoiceLines.map((line) => ({ name: line.name.trim(), quantity: line.quantity, amount: line.quantity * line.unitPrice, staff: line.staff })),
+      note: paymentForm.note.trim() || undefined,
+      audit: [`${nowTime()} · ${account.displayName} xác nhận ${invoiceLines.length} dòng hàng và thanh toán ${methodMeta[paymentForm.method].label}`],
     };
     setPayments((current) => [payment, ...current]);
-    setAppointments((current) => current.map((item) => item.id === paymentAppointment.id ? { ...item, status: 'COMPLETED' } : item));
+    const serviceNames = invoiceLines.filter((line) => line.type === 'SERVICE').map((line) => line.name.trim());
+    setAppointments((current) => current.map((item) => item.id === paymentAppointment.id ? {
+      ...item,
+      status: 'COMPLETED',
+      service: serviceNames.join(' + ') || item.service,
+      services: serviceNames.length ? serviceNames : item.services,
+      price: subtotal,
+    } : item));
     setPaymentAppointment(null);
-    setToast(`Đã thu ${money(total)} từ ${payment.customer}.`);
+    setToast(`Đã thu ${money(amountDue)} từ ${payment.customer}.`);
   };
 
   const submitShift = (event: FormEvent) => {
@@ -447,7 +528,94 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
 
       {walkInOpen && <Modal title="Tiếp nhận khách vãng lai" description="Tạo lịch tại quầy và check-in khách ngay lập tức." onClose={() => setWalkInOpen(false)}><form onSubmit={submitWalkIn} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><Field label="Tên khách hàng *"><input value={walkIn.customer} onChange={(event) => setWalkIn({ ...walkIn, customer: event.target.value })} className="reception-input" placeholder="Nguyễn Minh Anh" autoFocus /></Field><Field label="Số điện thoại *"><input value={walkIn.phone} onChange={(event) => setWalkIn({ ...walkIn, phone: event.target.value })} className="reception-input" placeholder="09xx xxx xxx" /></Field><Field label="Dịch vụ"><select value={walkIn.service} onChange={(event) => setWalkIn({ ...walkIn, service: event.target.value })} className="reception-input"><option>Gel Manicure</option><option>Pedicure Spa</option><option>Nail Art Premium</option><option>Combo Manicure</option><option>Sơn gel Hàn Quốc</option></select></Field><Field label="Kỹ thuật viên"><select value={walkIn.staff} onChange={(event) => setWalkIn({ ...walkIn, staff: event.target.value })} className="reception-input"><option>Chưa phân công</option><option>Thảo Nguyễn</option><option>Minh Châu</option><option>Hà My</option><option>Quốc Bảo</option><option>Thuỳ Dương</option></select></Field><Field label="Giờ bắt đầu"><input type="time" value={walkIn.start} onChange={(event) => setWalkIn({ ...walkIn, start: event.target.value })} className="reception-input" /></Field><Field label="Thời lượng"><select value={walkIn.duration} onChange={(event) => setWalkIn({ ...walkIn, duration: event.target.value })} className="reception-input"><option value="30">30 phút</option><option value="60">60 phút</option><option value="90">90 phút</option><option value="120">120 phút</option></select></Field><Field label="Giá dự kiến"><input type="number" min="0" value={walkIn.price} onChange={(event) => setWalkIn({ ...walkIn, price: event.target.value })} className="reception-input" /></Field></div><Field label="Ghi chú"><textarea value={walkIn.note} onChange={(event) => setWalkIn({ ...walkIn, note: event.target.value })} className="reception-input min-h-20 resize-none" placeholder="Dị ứng, sở thích hoặc yêu cầu đặc biệt..." /></Field>{formError && <p className="text-xs font-bold text-rose-600">{formError}</p>}<div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setWalkInOpen(false)} className="rounded-xl border border-brand-outline px-4 py-2.5 text-xs font-bold">Hủy</button><button type="submit" className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white">Tạo & check-in</button></div></form></Modal>}
 
-      {paymentAppointment && <Modal title="Thu tiền tại quầy" description={`${paymentAppointment.customer} · ${paymentAppointment.service}`} onClose={() => setPaymentAppointment(null)}><form onSubmit={submitPayment} className="space-y-4"><div className="rounded-2xl bg-brand-surface-high p-4"><div className="flex justify-between text-xs text-brand-text-muted"><span>Giá dịch vụ</span><span>{money(paymentAppointment.price)}</span></div><div className="mt-2 flex justify-between text-xs text-brand-text-muted"><span>Đã đặt cọc</span><span>- {money(paymentAppointment.deposit)}</span></div><div className="mt-3 flex justify-between border-t border-brand-outline pt-3 text-sm font-black"><span>Còn lại</span><span>{money(Math.max(0, paymentAppointment.price - paymentAppointment.deposit - Number(paymentForm.discount || 0) + Number(paymentForm.tip || 0)))}</span></div></div><Field label="Phương thức thanh toán"><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{Object.entries(methodMeta).map(([value, meta]) => { const Icon = meta.icon; return <button key={value} type="button" onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })} className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[10px] font-bold ${paymentForm.method === value ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-brand-outline text-brand-text-muted'}`}><Icon className="h-4 w-4" />{meta.label}</button>; })}</div></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Giảm giá"><input type="number" min="0" value={paymentForm.discount} onChange={(event) => setPaymentForm({ ...paymentForm, discount: event.target.value })} className="reception-input" /></Field><Field label="Tiền tip"><input type="number" min="0" value={paymentForm.tip} onChange={(event) => setPaymentForm({ ...paymentForm, tip: event.target.value })} className="reception-input" /></Field></div>{paymentForm.method !== 'CASH' && <Field label="Mã giao dịch *"><input value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className="reception-input" placeholder="Nhập mã từ cổng thanh toán" /></Field>}{formError && <p className="text-xs font-bold text-rose-600">{formError}</p>}<button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white"><ShieldCheck className="h-4 w-4" /> Xác nhận thanh toán & hoàn tất</button></form></Modal>}
+      {paymentAppointment && (
+        <Modal
+          wide
+          title="Tạo hóa đơn & thanh toán"
+          description={`${paymentAppointment.customer} · ${paymentAppointment.phone} · ${branchName}`}
+          onClose={() => setPaymentAppointment(null)}
+        >
+          <form onSubmit={submitPayment} className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+            <section className="min-w-0 space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-brand-text">Dịch vụ & sản phẩm</h3>
+                  <p className="mt-1 text-[10px] text-brand-text-muted">Thêm nhiều dòng, mỗi dòng có số lượng, đơn giá và người phụ trách riêng.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => addInvoiceLine('SERVICE')} className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-800"><Plus className="h-3.5 w-3.5" /> Dịch vụ</button>
+                  <button type="button" onClick={() => addInvoiceLine('PRODUCT')} className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-black text-blue-800"><Plus className="h-3.5 w-3.5" /> Sản phẩm</button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {invoiceLines.map((line, index) => {
+                  const catalog = line.type === 'SERVICE' ? serviceCatalog : productCatalog;
+                  return (
+                    <div key={line.id} className="rounded-2xl border border-brand-outline bg-brand-surface-high/35 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-black ${line.type === 'SERVICE' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>{index + 1}</span>
+                          <span className={`rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-wide ${line.type === 'SERVICE' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{line.type === 'SERVICE' ? 'Dịch vụ' : 'Sản phẩm'}</span>
+                        </div>
+                        <button type="button" onClick={() => setInvoiceLines((current) => current.filter((item) => item.id !== line.id))} className="rounded-lg border border-rose-200 p-1.5 text-rose-600 hover:bg-rose-50" aria-label={`Xóa dòng ${index + 1}`}><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label={line.type === 'SERVICE' ? 'Tên dịch vụ' : 'Tên sản phẩm'}>
+                          <select value={line.name} onChange={(event) => selectCatalogItem(line, event.target.value)} className="reception-input">
+                            {!catalog.some((item) => item.name === line.name) && <option value={line.name}>{line.name}</option>}
+                            {catalog.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
+                          </select>
+                        </Field>
+                        <Field label={line.type === 'SERVICE' ? 'Kỹ thuật viên' : 'Người bán'}>
+                          {line.type === 'SERVICE' ? (
+                            <select value={line.staff} onChange={(event) => updateInvoiceLine(line.id, { staff: event.target.value })} className="reception-input">{invoiceStaff.map((staff) => <option key={staff}>{staff}</option>)}</select>
+                          ) : (
+                            <input value={line.staff} readOnly className="reception-input bg-brand-surface-high text-brand-text-muted" />
+                          )}
+                        </Field>
+                        <Field label="Số lượng">
+                          <input type="number" min="1" max="99" step="1" value={line.quantity} onChange={(event) => updateInvoiceLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} className="reception-input" />
+                        </Field>
+                        <Field label="Đơn giá">
+                          <input type="number" min="0" step="1000" value={line.unitPrice} onChange={(event) => updateInvoiceLine(line.id, { unitPrice: Math.max(0, Number(event.target.value) || 0) })} className="reception-input" />
+                        </Field>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between border-t border-brand-outline pt-3 text-[10px]"><span className="font-semibold text-brand-text-muted">{line.quantity} × {money(line.unitPrice)}</span><span className="text-xs font-black text-brand-text">{money(line.quantity * line.unitPrice)}</span></div>
+                    </div>
+                  );
+                })}
+                {!invoiceLines.length && <div className="rounded-2xl border border-dashed border-brand-outline p-8 text-center text-xs text-brand-text-muted">Chưa có dòng hóa đơn. Hãy thêm dịch vụ hoặc sản phẩm.</div>}
+              </div>
+
+              <Field label="Ghi chú hóa đơn">
+                <textarea value={paymentForm.note} onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })} className="reception-input min-h-20 resize-none" placeholder="Ưu đãi, yêu cầu xuất hóa đơn hoặc ghi chú đối soát..." />
+              </Field>
+            </section>
+
+            <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface-high/45 p-4">
+                <h3 className="text-xs font-black text-brand-text">Tổng kết hóa đơn</h3>
+                <div className="mt-4 space-y-3 text-[11px]">
+                  <div className="flex justify-between text-brand-text-muted"><span>Tạm tính ({invoiceLines.length} dòng)</span><strong className="text-brand-text">{money(invoiceSubtotal)}</strong></div>
+                  <div className="flex justify-between text-brand-text-muted"><span>Đã đặt cọc</span><strong className="text-emerald-700">- {money(paymentAppointment.deposit)}</strong></div>
+                  <div className="grid grid-cols-[1fr_130px] items-center gap-3"><span className="text-brand-text-muted">Giảm giá</span><input type="number" min="0" step="1000" value={paymentForm.discount} onChange={(event) => setPaymentForm({ ...paymentForm, discount: event.target.value })} className="reception-input h-9 min-h-9 py-1.5 text-right" /></div>
+                  <div className="grid grid-cols-[1fr_130px] items-center gap-3"><span className="text-brand-text-muted">Tiền tip</span><input type="number" min="0" step="1000" value={paymentForm.tip} onChange={(event) => setPaymentForm({ ...paymentForm, tip: event.target.value })} className="reception-input h-9 min-h-9 py-1.5 text-right" /></div>
+                  <div className="flex items-end justify-between border-t border-brand-outline pt-4"><span className="font-black text-brand-text">Khách cần trả</span><strong className="text-xl font-black tracking-tight text-emerald-700">{money(invoiceTotal)}</strong></div>
+                </div>
+              </div>
+
+              <Field label="Phương thức thanh toán">
+                <div className="grid grid-cols-2 gap-2">{Object.entries(methodMeta).map(([value, meta]) => { const Icon = meta.icon; return <button key={value} type="button" onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })} className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[9px] font-bold ${paymentForm.method === value ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-brand-outline text-brand-text-muted'}`}><Icon className="h-4 w-4" />{meta.label}</button>; })}</div>
+              </Field>
+              {paymentForm.method !== 'CASH' && <Field label="Mã giao dịch *"><input value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className="reception-input" placeholder="Mã ngân hàng hoặc cổng thanh toán" /></Field>}
+              {formError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-[10px] font-bold leading-4 text-rose-700">{formError}</p>}
+              <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-emerald-600/20"><ShieldCheck className="h-4 w-4" /> Thu {money(invoiceTotal)} & hoàn tất</button>
+              <p className="text-center text-[9px] leading-4 text-brand-text-muted">Hóa đơn sẽ lưu đầy đủ từng dịch vụ, sản phẩm, kỹ thuật viên và đơn giá.</p>
+            </aside>
+          </form>
+        </Modal>
+      )}
 
       {shiftModal && <Modal title={shiftModal === 'OPEN' ? 'Mở ca lễ tân' : 'Chốt ca lễ tân'} description={shiftModal === 'OPEN' ? 'Ghi nhận số tiền mặt đầu ca.' : 'Đếm quỹ tiền mặt trước khi kết thúc ca.'} onClose={() => setShiftModal(null)}><form onSubmit={submitShift} className="space-y-4"><Field label={shiftModal === 'OPEN' ? 'Tiền quỹ đầu ca' : 'Tiền mặt thực tế cuối ca'}><input type="number" min="0" step="1000" value={cashAmount} onChange={(event) => setCashAmount(event.target.value)} className="reception-input" autoFocus /></Field>{shiftModal === 'CLOSE' && <div className="rounded-xl bg-amber-50 p-3 text-[11px] leading-5 text-amber-800">Hệ thống sẽ lưu thời điểm chốt ca và số tiền thực tế để quản lý đối soát.</div>}{formError && <p className="text-xs font-bold text-rose-600">{formError}</p>}<button type="submit" className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white">{shiftModal === 'OPEN' ? 'Xác nhận mở ca' : 'Xác nhận chốt ca'}</button></form></Modal>}
     </div>
