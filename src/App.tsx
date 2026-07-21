@@ -26,6 +26,7 @@ import {
 import { recordAuditLog } from './utils/auditLogs';
 import { inferPaymentGateway, normalizeInvoicePaymentData } from './utils/invoicePayments';
 import { SUPPORT_MOCK_TICKETS } from './mockData/supportTickets';
+import useGlobalModalGuard from './hooks/useGlobalModalGuard';
 
 // Import subcomponents
 import Sidebar from './components/Sidebar';
@@ -162,6 +163,8 @@ const normalizeInvoiceDueDate = (invoice: Invoice) => {
 };
 
 export default function App() {
+  useGlobalModalGuard();
+
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('salonsys_authenticated') === 'true'
