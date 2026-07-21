@@ -632,3 +632,22 @@ html[data-theme="dark"] .beautiful-select-menu {
 .nail-admin aside nav > button {
   min-height: 2.75rem;
 }
+
+/* Trường ngày trong trung tâm nhân sự: giữ bố cục ổn định và dễ nhận biết. */
+.nail-admin .staff-date-input {
+  color-scheme: light;
+  font-variant-numeric: tabular-nums;
+}
+
+.nail-admin .staff-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.72;
+  padding: 0.35rem;
+  border-radius: 0.5rem;
+  background-color: #ede9fe;
+}
+
+.nail-admin .staff-date-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background-color: #ddd6fe;
+}

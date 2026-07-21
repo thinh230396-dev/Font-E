@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  Archive,
   ArrowRight,
   Award,
   BriefcaseBusiness,
@@ -17,6 +18,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  RotateCcw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -41,6 +43,7 @@ type StaffRole =
   | "ASSISTANT"
   | "RECEPTIONIST";
 type StaffStatus = "WORKING" | "OFF_SHIFT" | "LEAVE" | "INACTIVE";
+type ActiveStaffStatus = Exclude<StaffStatus, "INACTIVE">;
 type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT";
 type BranchCode = "Q1" | "Q3";
 type StaffView = "TABLE" | "CARDS";
@@ -511,6 +514,7 @@ const staffSeed: StaffMember[] = [
 
 const inputClass =
   "h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100";
+const dateInputClass = `${inputClass} staff-date-input pl-10 pr-3`;
 const formatCurrency = (value: number) => `${value.toLocaleString("vi-VN")}đ`;
 const formatDate = (value: string) =>
   new Date(`${value}T00:00:00`).toLocaleDateString("vi-VN");
@@ -569,7 +573,9 @@ export default function TenantAdminStaff({
     }
   });
   const [roleFilter, setRoleFilter] = useState<"ALL" | StaffRole>("ALL");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | StaffStatus>("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | ActiveStaffStatus>(
+    "ALL",
+  );
   const [employmentFilter, setEmploymentFilter] = useState<
     "ALL" | EmploymentType
   >("ALL");
@@ -625,9 +631,17 @@ export default function TenantAdminStaff({
       ),
     [selectedBranch, staff],
   );
+  const activeBranchStaff = useMemo(
+    () => branchStaff.filter((member) => member.status !== "INACTIVE"),
+    [branchStaff],
+  );
+  const inactiveBranchStaff = useMemo(
+    () => branchStaff.filter((member) => member.status === "INACTIVE"),
+    [branchStaff],
+  );
   const filteredStaff = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return branchStaff
+    return activeBranchStaff
       .filter((member) => roleFilter === "ALL" || member.role === roleFilter)
       .filter(
         (member) => statusFilter === "ALL" || member.status === statusFilter,
@@ -654,7 +668,7 @@ export default function TenantAdminStaff({
               : b.revenue - a.revenue,
       );
   }, [
-    branchStaff,
+    activeBranchStaff,
     employmentFilter,
     roleFilter,
     searchQuery,
@@ -662,7 +676,7 @@ export default function TenantAdminStaff({
     statusFilter,
   ]);
 
-  const workingCount = branchStaff.filter(
+  const workingCount = activeBranchStaff.filter(
     (member) => member.status === "WORKING",
   ).length;
   const activeFilterCount = [
@@ -670,7 +684,7 @@ export default function TenantAdminStaff({
     statusFilter !== "ALL",
     employmentFilter !== "ALL",
   ].filter(Boolean).length;
-  const serviceStaff = branchStaff.filter(
+  const serviceStaff = activeBranchStaff.filter(
     (member) => !["OWNER", "MANAGER", "RECEPTIONIST"].includes(member.role),
   );
   const averageUtilization = serviceStaff.length
@@ -679,11 +693,11 @@ export default function TenantAdminStaff({
           serviceStaff.length,
       )
     : 0;
-  const totalRevenue = branchStaff.reduce(
+  const totalRevenue = activeBranchStaff.reduce(
     (sum, member) => sum + member.revenue,
     0,
   );
-  const totalCommission = branchStaff.reduce(
+  const totalCommission = activeBranchStaff.reduce(
     (sum, member) => sum + member.commissionEarned,
     0,
   );
@@ -786,13 +800,15 @@ export default function TenantAdminStaff({
         ? current.map((member) => (member.id === id ? payload : member))
         : [payload, ...current],
     );
-    setSelectedStaff(payload);
+    setSelectedStaff(payload.status === "INACTIVE" ? null : payload);
     if (selectedBranch !== "ALL") onSelectedBranchChange(payload.branch);
     setFormMode(null);
     setNotice(
-      formMode === "CREATE"
-        ? `Đã tạo hồ sơ ${payload.name}.`
-        : `Đã cập nhật hồ sơ ${payload.name}.`,
+      payload.status === "INACTIVE"
+        ? `Đã chuyển hồ sơ ${payload.name} vào khu nhân sự ngừng hoạt động.`
+        : formMode === "CREATE"
+          ? `Đã tạo hồ sơ ${payload.name}.`
+          : `Đã cập nhật hồ sơ ${payload.name}.`,
     );
   };
 
@@ -828,6 +844,13 @@ export default function TenantAdminStaff({
       setNotice(`${shiftAction.staff.name} đã kết thúc ca lúc ${time}.`);
     }
     setShiftAction(null);
+  };
+  const reactivateStaff = (member: StaffMember) => {
+    if (!requireManage()) return;
+    updateStaff(member.id, { status: "OFF_SHIFT" });
+    setNotice(
+      `Đã kích hoạt lại hồ sơ ${member.name}. Nhân viên được đưa về danh sách chính ở trạng thái chưa vào ca.`,
+    );
   };
   const resetFilters = () => {
     setRoleFilter("ALL");
@@ -960,12 +983,7 @@ export default function TenantAdminStaff({
         {[
           {
             label: "Tổng nhân sự",
-            value:
-              selectedBranch === "ALL"
-                ? "18"
-                : selectedBranch === "Q1"
-                  ? "8"
-                  : "10",
+            value: String(activeBranchStaff.length),
             detail: `${workingCount} đang trong ca hôm nay`,
             icon: UsersRound,
             tone: "bg-blue-50 text-blue-600",
@@ -1046,8 +1064,7 @@ export default function TenantAdminStaff({
                 ))}
               </div>
               <div className="mt-2 space-y-2">
-                {branchStaff
-                  .filter((member) => member.status !== "INACTIVE")
+                {activeBranchStaff
                   .slice(0, 6)
                   .map((member) => {
                     const start = Number(member.shiftStart.split(":")[0]);
@@ -1119,7 +1136,7 @@ export default function TenantAdminStaff({
               <p className="text-[7px] text-slate-400">Nghỉ phép</p>
               <p className="mt-1 text-sm font-black">
                 {
-                  branchStaff.filter((member) => member.status === "LEAVE")
+                  activeBranchStaff.filter((member) => member.status === "LEAVE")
                     .length
                 }
               </p>
@@ -1232,16 +1249,20 @@ export default function TenantAdminStaff({
               <BeautifulSelect
                 value={statusFilter}
                 onChange={(event) =>
-                  setStatusFilter(event.target.value as "ALL" | StaffStatus)
+                  setStatusFilter(
+                    event.target.value as "ALL" | ActiveStaffStatus,
+                  )
                 }
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
               >
                 <option value="ALL">Tất cả trạng thái</option>
-                {Object.entries(statusMeta).map(([value, meta]) => (
+                {Object.entries(statusMeta)
+                  .filter(([value]) => value !== "INACTIVE")
+                  .map(([value, meta]) => (
                   <option key={value} value={value}>
                     {meta.label}
                   </option>
-                ))}
+                  ))}
               </BeautifulSelect>
             </label>
             <label>
@@ -1279,8 +1300,8 @@ export default function TenantAdminStaff({
           {(["ALL", "WORKING", "OFF_SHIFT", "LEAVE"] as const).map((status) => {
             const count =
               status === "ALL"
-                ? branchStaff.length
-                : branchStaff.filter((member) => member.status === status)
+                ? activeBranchStaff.length
+                : activeBranchStaff.filter((member) => member.status === status)
                     .length;
             return (
               <button
@@ -1304,7 +1325,7 @@ export default function TenantAdminStaff({
             );
           })}
           <span className="ml-auto text-[8px] text-slate-400">
-            {filteredStaff.length} hồ sơ mẫu phù hợp
+            {filteredStaff.length} hồ sơ phù hợp
           </span>
         </div>
 
@@ -1519,7 +1540,7 @@ export default function TenantAdminStaff({
             <span className="font-black text-slate-600">
               {filteredStaff.length}
             </span>{" "}
-            hồ sơ mẫu · Kỳ hiệu suất tháng 07/2026
+            hồ sơ đang hoạt động · Kỳ hiệu suất tháng 07/2026
           </p>
           <p className="flex items-center gap-1.5 text-[8px] text-slate-400">
             <MapPin className="h-3.5 w-3.5" />
@@ -1528,6 +1549,93 @@ export default function TenantAdminStaff({
               : branchLabels[selectedBranch as BranchCode]}
           </p>
         </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80 shadow-[0_10px_30px_rgba(15,23,42,0.035)]">
+        <div className="flex flex-col gap-3 border-b border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <Archive className="h-4.5 w-4.5" />
+            </span>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xs font-black text-slate-900">
+                  Nhân sự ngừng hoạt động
+                </h2>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[8px] font-black text-slate-600 ring-1 ring-slate-200">
+                  {inactiveBranchStaff.length}
+                </span>
+              </div>
+              <p className="mt-1 text-[8px] leading-4 text-slate-500">
+                Hồ sơ được lưu riêng, không xuất hiện trong danh sách nhân viên,
+                lịch phân ca, xếp hạng hoặc chỉ số đội ngũ.
+              </p>
+            </div>
+          </div>
+          <span className="w-fit rounded-full bg-rose-50 px-3 py-1.5 text-[8px] font-bold text-rose-700 ring-1 ring-rose-200">
+            Kho hồ sơ nội bộ
+          </span>
+        </div>
+
+        {inactiveBranchStaff.length ? (
+          <div className="grid gap-3 p-4 lg:grid-cols-2">
+            {inactiveBranchStaff.map((member) => (
+              <article
+                key={member.id}
+                className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center"
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedStaff(member)}
+                  className="flex h-auto min-w-0 flex-1 items-center gap-3 border-0 bg-transparent p-0 text-left shadow-none"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[8px] font-black text-slate-600">
+                    {initials(member.name)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[10px] font-black text-slate-800">
+                      {member.name}
+                    </span>
+                    <span className="mt-1 block text-[8px] text-slate-500">
+                      {member.id} · {roleMeta[member.role].label}
+                    </span>
+                    <span className="mt-1 block text-[8px] text-slate-400">
+                      {branchLabels[member.branch]} · Bắt đầu {formatDate(member.startDate)}
+                    </span>
+                  </span>
+                </button>
+                <div className="flex shrink-0 items-center gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStaff(member)}
+                    className="border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-sm"
+                  >
+                    Xem hồ sơ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => reactivateStaff(member)}
+                    disabled={!canManage}
+                    className="flex items-center gap-1.5 border border-violet-200 bg-violet-50 px-3 text-[8px] font-black text-violet-700 shadow-sm disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Kích hoạt lại
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-center">
+            <Archive className="mx-auto h-6 w-6 text-slate-300" />
+            <p className="mt-2 text-[9px] font-black text-slate-600">
+              Chưa có hồ sơ ngừng hoạt động
+            </p>
+            <p className="mt-1 text-[8px] text-slate-400">
+              Khi đổi trạng thái một nhân viên, hồ sơ sẽ tự động chuyển vào đây.
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="grid gap-5 lg:grid-cols-3">
@@ -1596,29 +1704,47 @@ export default function TenantAdminStaff({
             {[
               {
                 name: "Yến Nhi",
-                date: "16–17/07",
+                day: "16–17",
+                month: "THG 07",
+                fullDate: "16–17/07/2026",
                 reason: "Việc gia đình",
                 days: "2 ngày",
               },
               {
                 name: "Minh Khang",
-                date: "22/07",
+                day: "22",
+                month: "THG 07",
+                fullDate: "22/07/2026",
                 reason: "Nghỉ phép năm",
                 days: "1 ngày",
               },
               {
                 name: "Hà My",
-                date: "27–28/07",
+                day: "27–28",
+                month: "THG 07",
+                fullDate: "27–28/07/2026",
                 reason: "Nghỉ phép năm",
                 days: "2 ngày",
               },
-            ].map((item) => (
+            ]
+              .filter((item) =>
+                activeBranchStaff.some((member) => member.name === item.name),
+              )
+              .map((item) => (
               <div
-                key={`${item.name}-${item.date}`}
-                className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"
+                key={`${item.name}-${item.fullDate}`}
+                className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3"
               >
-                <span className="flex h-9 w-12 shrink-0 flex-col items-center justify-center rounded-lg bg-white text-[7px] font-black text-violet-600 shadow-sm">
-                  {item.date}
+                <span
+                  className="flex h-14 w-16 shrink-0 flex-col items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 px-1 text-center text-white shadow-md shadow-violet-100"
+                  aria-label={item.fullDate}
+                >
+                  <span className="whitespace-nowrap text-[10px] font-black leading-none">
+                    {item.day}
+                  </span>
+                  <span className="mt-1 whitespace-nowrap text-[7px] font-bold uppercase tracking-wide text-violet-100">
+                    {item.month}
+                  </span>
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[9px] font-black text-slate-700">
@@ -1632,7 +1758,7 @@ export default function TenantAdminStaff({
                   {item.days}
                 </span>
               </div>
-            ))}
+              ))}
           </div>
         </article>
         <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -1746,11 +1872,11 @@ export default function TenantAdminStaff({
                 </div>
               </div>
               <div
-                className={`mt-4 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${selectedStaff.status === "WORKING" ? "border-emerald-200 bg-emerald-50/70" : selectedStaff.status === "OFF_SHIFT" ? "border-slate-200 bg-slate-50" : "border-amber-200 bg-amber-50"}`}
+                className={`mt-4 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${selectedStaff.status === "WORKING" ? "border-emerald-200 bg-emerald-50/70" : selectedStaff.status === "OFF_SHIFT" ? "border-slate-200 bg-slate-50" : selectedStaff.status === "INACTIVE" ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`}
               >
                 <div className="flex items-start gap-3">
                   <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${selectedStaff.status === "WORKING" ? "bg-emerald-600 text-white" : selectedStaff.status === "OFF_SHIFT" ? "bg-slate-200 text-slate-600" : "bg-amber-100 text-amber-700"}`}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${selectedStaff.status === "WORKING" ? "bg-emerald-600 text-white" : selectedStaff.status === "OFF_SHIFT" ? "bg-slate-200 text-slate-600" : selectedStaff.status === "INACTIVE" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}
                   >
                     <Clock3 className="h-4.5 w-4.5" />
                   </span>
@@ -2227,17 +2353,20 @@ export default function TenantAdminStaff({
                     <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
                       Ngày sinh
                     </span>
-                    <input
-                      type="date"
-                      value={form.birthday}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          birthday: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
-                    />
+                    <div className="relative">
+                      <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-500" />
+                      <input
+                        type="date"
+                        value={form.birthday}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            birthday: event.target.value,
+                          }))
+                        }
+                        className={dateInputClass}
+                      />
+                    </div>
                   </label>
                 </div>
               </fieldset>
@@ -2315,17 +2444,20 @@ export default function TenantAdminStaff({
                     <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
                       Ngày bắt đầu
                     </span>
-                    <input
-                      type="date"
-                      value={form.startDate}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          startDate: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
-                    />
+                    <div className="relative">
+                      <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-500" />
+                      <input
+                        type="date"
+                        value={form.startDate}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            startDate: event.target.value,
+                          }))
+                        }
+                        className={dateInputClass}
+                      />
+                    </div>
                   </label>
                   <label>
                     <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
