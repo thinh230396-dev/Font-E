@@ -33,6 +33,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import LoginPage from './components/LoginPage';
 import TenantAdminPortal from './components/NailTenantAdminPortal';
+import ReceptionistPortal from './components/ReceptionistPortal';
 import type { InterfaceLanguage } from './components/AccountPreferences';
 import { authenticateDemoAccount, getDemoAccountByRole, type DemoAccount, type PortalRole } from './auth/demoAccounts';
 
@@ -173,7 +174,7 @@ export default function App() {
   const [portalRole, setPortalRole] = useState<PortalRole>(() => {
     if (typeof window === 'undefined') return 'SUPERADMIN';
     const savedRole = localStorage.getItem('salonsys_role') || sessionStorage.getItem('salonsys_role');
-    return savedRole === 'TENANT_ADMIN' ? 'TENANT_ADMIN' : 'SUPERADMIN';
+    return savedRole === 'TENANT_ADMIN' || savedRole === 'RECEPTIONIST' ? savedRole : 'SUPERADMIN';
   });
   // Mobile sidebar visibility state
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1462,6 +1463,15 @@ export default function App() {
         availablePackages={packages}
         invoices={targetTenant ? invoices.filter((invoice) => invoice.tenantId === targetTenant.id) : []}
         onUpdateTenant={handleUpdateTenant}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  if (portalRole === 'RECEPTIONIST') {
+    return (
+      <ReceptionistPortal
+        account={getDemoAccountByRole('RECEPTIONIST')}
         onLogout={handleLogout}
       />
     );

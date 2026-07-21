@@ -681,3 +681,27 @@ html[data-theme="dark"] .beautiful-select-menu {
   opacity: 1;
   background-color: #ddd6fe;
 }
+
+.reception-input {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--color-brand-outline);
+  border-radius: 0.75rem;
+  background: var(--color-brand-surface);
+  padding: 0.7rem 0.85rem;
+  color: var(--color-brand-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.reception-input:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgb(16 185 129 / 0.1);
+}
+
+.reception-input::placeholder {
+  color: var(--color-brand-text-muted);
+  font-weight: 400;
+}

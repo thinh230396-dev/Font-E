@@ -1,4 +1,4 @@
-export type PortalRole = 'SUPERADMIN' | 'TENANT_ADMIN';
+export type PortalRole = 'SUPERADMIN' | 'TENANT_ADMIN' | 'RECEPTIONIST';
 
 export interface DemoAccount {
   email: string;
@@ -20,6 +20,13 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     password: 'Lumiere@2026',
     role: 'TENANT_ADMIN',
     displayName: 'Nguyễn Văn Boss',
+    tenantName: 'Nailé Studio'
+  },
+  {
+    email: 'receptionist@nailestudio.vn',
+    password: 'Reception@2026',
+    role: 'RECEPTIONIST',
+    displayName: 'Lê Hoàng Nam',
     tenantName: 'Nailé Studio'
   }
 ];
