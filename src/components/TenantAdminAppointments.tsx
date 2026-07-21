@@ -56,6 +56,10 @@ interface TenantAppointment {
   reminderSent?: boolean;
   createdBy?: string;
   firstVisit?: boolean;
+  cancellationReason?: string;
+  cancellationNote?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
   createdAt: string;
 }
 
@@ -107,6 +111,15 @@ const branchLabels: Record<BranchCode, string> = {
   Q1: 'Chi nhánh Quận 1',
   Q3: 'Chi nhánh Quận 3'
 };
+
+const cancellationReasons = [
+  'Khách thay đổi kế hoạch',
+  'Khách không phản hồi',
+  'Khách yêu cầu đổi ngày',
+  'Salon không đủ nguồn lực',
+  'Trùng lịch hoặc sai thông tin',
+  'Khác'
+];
 
 const services = [
   { name: 'Combo manicure & sơn gel', duration: 75, price: 480_000 },
@@ -257,6 +270,10 @@ export default function TenantAdminAppointments({
   const [formMode, setFormMode] = useState<'CREATE' | 'EDIT' | null>(null);
   const [form, setForm] = useState<AppointmentFormState>(() => emptyForm('2026-07-16', selectedBranch));
   const [formError, setFormError] = useState('');
+  const [showCancelForm, setShowCancelForm] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [cancellationNote, setCancellationNote] = useState('');
+  const [cancellationError, setCancellationError] = useState('');
   const canManage = accessMode === 'full' && !readOnlyReason;
 
   useEffect(() => {
@@ -264,12 +281,13 @@ export default function TenantAdminAppointments({
   }, [appointments, storageKey]);
 
   useEffect(() => {
-    if (!selectedAppointment && !formMode && !isScheduleExpanded) return;
+    if (!selectedAppointment && !formMode && !isScheduleExpanded && !showCancelForm) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (formMode) setFormMode(null);
+      if (showCancelForm) setShowCancelForm(false);
+      else if (formMode) setFormMode(null);
       else if (selectedAppointment) setSelectedAppointment(null);
       else setIsScheduleExpanded(false);
     };
@@ -278,7 +296,7 @@ export default function TenantAdminAppointments({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [formMode, isScheduleExpanded, selectedAppointment]);
+  }, [formMode, isScheduleExpanded, selectedAppointment, showCancelForm]);
 
   const requireManageAccess = () => {
     if (canManage) return true;
@@ -376,6 +394,44 @@ export default function TenantAdminAppointments({
     });
     setFormError('');
     setFormMode('EDIT');
+  };
+
+  const openCancelForm = () => {
+    if (!selectedAppointment || !requireManageAccess()) return;
+    setCancellationReason('');
+    setCancellationNote('');
+    setCancellationError('');
+    setShowCancelForm(true);
+  };
+
+  const submitCancellation = (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedAppointment || !requireManageAccess()) return;
+    if (!cancellationReason) {
+      setCancellationError('Vui lòng chọn lý do hủy lịch.');
+      return;
+    }
+    if (cancellationReason === 'Khác' && !cancellationNote.trim()) {
+      setCancellationError('Vui lòng nhập ghi chú khi chọn lý do “Khác”.');
+      return;
+    }
+
+    const cancelledAt = new Date().toLocaleString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    updateAppointment(selectedAppointment.id, {
+      status: 'CANCELLED',
+      cancellationReason,
+      cancellationNote: cancellationNote.trim(),
+      cancelledAt,
+      cancelledBy: roleLabel
+    });
+    setShowCancelForm(false);
+    onNotify?.(`Đã hủy lịch ${selectedAppointment.id} và lưu lý do vào lịch sử.`);
   };
 
   const submitAppointment = (event: FormEvent) => {
@@ -694,6 +750,8 @@ export default function TenantAdminAppointments({
 
                   <div className="rounded-2xl bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Ghi chú phục vụ</p><span className={`rounded-full px-2 py-1 text-[7px] font-bold ${selectedAppointment.reminderSent ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{selectedAppointment.reminderSent ? 'Đã nhắc lịch' : 'Chưa nhắc lịch'}</span></div><p className="mt-3 text-[10px] leading-5 text-slate-600">{selectedAppointment.note || 'Chưa có ghi chú cho lịch hẹn này.'}</p></div>
 
+                  {selectedAppointment.status === 'CANCELLED' && <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-rose-600 shadow-sm"><X className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[8px] font-black uppercase tracking-wide text-rose-600">Thông tin hủy lịch</p>{selectedAppointment.cancelledAt && <span className="text-[7px] font-semibold text-rose-400">{selectedAppointment.cancelledAt}</span>}</div><p className="mt-2 text-[10px] font-black text-rose-900">{selectedAppointment.cancellationReason || 'Chưa ghi nhận lý do'}</p><div className="mt-2 rounded-xl bg-white/80 px-3 py-2.5"><p className="text-[7px] font-bold uppercase text-slate-400">Ghi chú hủy</p><p className="mt-1 text-[9px] leading-4 text-slate-600">{selectedAppointment.cancellationNote || 'Không có ghi chú bổ sung.'}</p></div><p className="mt-2 text-[7px] font-semibold text-rose-500">Thực hiện bởi {selectedAppointment.cancelledBy || roleLabel}</p></div></div></div>}
+
                   <div className="rounded-2xl border border-slate-200 p-4"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Tiến trình phục vụ</p><div className="mt-4 flex gap-2">{(['CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'] as AppointmentStatus[]).map((status, index) => { const order: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED']; const isReached = order.indexOf(selectedAppointment.status) >= order.indexOf(status); return <div key={status} className="min-w-0 flex-1"><div className={`h-2 rounded-full ${isReached ? 'bg-violet-500' : 'bg-slate-100'}`} /><p className={`mt-2 truncate text-center text-[7px] font-bold ${isReached ? 'text-violet-600' : 'text-slate-400'}`}>{index === 0 ? 'Xác nhận' : index === 1 ? 'Đã đến' : index === 2 ? 'Phục vụ' : 'Hoàn thành'}</p></div>; })}</div></div>
 
                   <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" /><div><p className="text-[9px] font-black text-violet-800">Quyền thao tác: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-violet-600">{canManage ? 'Bạn có thể chỉnh sửa thông tin và cập nhật trạng thái lịch hẹn này.' : readOnlyReason || 'Bạn đang ở chế độ chỉ xem.'}</p></div></div></div>
@@ -701,8 +759,25 @@ export default function TenantAdminAppointments({
               </div>
             </div>
 
-            <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div>{!['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(selectedAppointment.status) && <button type="button" onClick={() => updateAppointment(selectedAppointment.id, { status: 'CANCELLED' })} disabled={!canManage} className="h-10 border-0 bg-transparent px-3 text-[9px] font-bold text-rose-600 shadow-none disabled:text-slate-400">Hủy lịch hẹn</button>}</div><div className="flex gap-2"><button type="button" onClick={() => openEditForm(selectedAppointment)} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button>{nextStatus[selectedAppointment.status] && <button type="button" onClick={() => updateAppointment(selectedAppointment.id, { status: nextStatus[selectedAppointment.status]! })} disabled={!canManage} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none sm:flex-none"><Check className="h-4 w-4" />{nextStatusLabel[selectedAppointment.status]}</button>}</div></footer>
+            <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div>{!['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(selectedAppointment.status) && <button type="button" onClick={openCancelForm} disabled={!canManage} className="h-10 border-0 bg-transparent px-3 text-[9px] font-bold text-rose-600 shadow-none disabled:text-slate-400">Hủy lịch hẹn</button>}</div><div className="flex gap-2"><button type="button" onClick={() => openEditForm(selectedAppointment)} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button>{nextStatus[selectedAppointment.status] && <button type="button" onClick={() => updateAppointment(selectedAppointment.id, { status: nextStatus[selectedAppointment.status]! })} disabled={!canManage} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none sm:flex-none"><Check className="h-4 w-4" />{nextStatusLabel[selectedAppointment.status]}</button>}</div></footer>
           </section>
+        </div>
+      )}
+
+      {showCancelForm && selectedAppointment && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <button type="button" aria-label="Đóng xác nhận hủy lịch" onClick={() => setShowCancelForm(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
+          <form onSubmit={submitCancellation} role="dialog" aria-modal="true" aria-labelledby="cancel-appointment-title" className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600"><CircleAlert className="h-5 w-5" /></span><div><h2 id="cancel-appointment-title" className="text-base font-black text-slate-900">Hủy lịch hẹn</h2><p className="mt-1 text-[9px] leading-4 text-slate-500">Lý do và ghi chú sẽ được lưu trong lịch sử lịch hẹn.</p></div></div><button type="button" onClick={() => setShowCancelForm(false)} aria-label="Đóng" className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header>
+            <div className="space-y-5 p-5 sm:p-6">
+              <div className="flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[9px] font-black">{selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}</span><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black">{selectedAppointment.customer}</p><p className="mt-1 truncate text-[8px] text-slate-400">{selectedAppointment.id} · {selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)} · {selectedAppointment.service}</p></div></div>
+              {cancellationError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{cancellationError}</div>}
+              <fieldset><legend className="mb-2 text-[9px] font-black text-slate-700">Lý do hủy *</legend><div className="grid gap-2 sm:grid-cols-2">{cancellationReasons.map((reason) => { const isSelected = cancellationReason === reason; return <button key={reason} type="button" aria-pressed={isSelected} onClick={() => { setCancellationReason(reason); setCancellationError(''); }} className={`flex h-auto min-h-11 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[8px] font-bold shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 ${isSelected ? 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-100' : 'border-slate-200 bg-white text-slate-600 hover:border-rose-200 hover:bg-rose-50/40'}`}><span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${isSelected ? 'border-rose-500 bg-rose-500' : 'border-slate-300 bg-white'}`}>{isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}</span>{reason}</button>; })}</div></fieldset>
+              <label className="block"><span className="flex items-center justify-between gap-3"><span className="text-[9px] font-black text-slate-700">Ghi chú hủy {cancellationReason === 'Khác' ? '*' : '(không bắt buộc)'}</span><span className="text-[7px] font-semibold text-slate-400">{cancellationNote.length}/500</span></span><textarea value={cancellationNote} maxLength={500} onChange={(event) => { setCancellationNote(event.target.value); setCancellationError(''); }} className="mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" placeholder="Ví dụ: Khách báo bận công tác và sẽ đặt lại vào tuần sau..." /></label>
+              <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-[8px] leading-4 text-amber-700"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>Hệ thống sẽ ghi nhận người hủy là <strong>{roleLabel}</strong> cùng thời điểm thao tác.</span></div>
+            </div>
+            <footer className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setShowCancelForm(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Quay lại</button><button type="submit" disabled={!cancellationReason} className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-[9px] font-black text-white shadow-lg shadow-rose-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><X className="h-4 w-4" />Xác nhận hủy lịch</button></footer>
+          </form>
         </div>
       )}
 
