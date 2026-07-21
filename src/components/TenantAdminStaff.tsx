@@ -6,6 +6,8 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   Check,
+  ChevronDown,
+  ChevronUp,
   CircleDollarSign,
   Clock3,
   Download,
@@ -584,6 +586,8 @@ export default function TenantAdminStaff({
   >("REVENUE");
   const [viewMode, setViewMode] = useState<StaffView>("TABLE");
   const [showFilters, setShowFilters] = useState(false);
+  const [isInactiveSectionExpanded, setIsInactiveSectionExpanded] =
+    useState(true);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [formMode, setFormMode] = useState<"CREATE" | "EDIT" | null>(null);
   const [form, setForm] = useState<StaffFormState>(() =>
@@ -1572,12 +1576,31 @@ export default function TenantAdminStaff({
               </p>
             </div>
           </div>
-          <span className="w-fit rounded-full bg-rose-50 px-3 py-1.5 text-[8px] font-bold text-rose-700 ring-1 ring-rose-200">
-            Kho hồ sơ nội bộ
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-fit rounded-full bg-rose-50 px-3 py-1.5 text-[8px] font-bold text-rose-700 ring-1 ring-rose-200">
+              Kho hồ sơ nội bộ
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setIsInactiveSectionExpanded((current) => !current)
+              }
+              aria-expanded={isInactiveSectionExpanded}
+              aria-controls="inactive-staff-list"
+              className="flex h-9 items-center gap-1.5 border border-slate-200 bg-white px-3 text-[8px] font-black text-slate-600 shadow-sm"
+            >
+              {isInactiveSectionExpanded ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+              {isInactiveSectionExpanded ? "Thu gọn" : "Mở rộng"}
+            </button>
+          </div>
         </div>
 
-        {inactiveBranchStaff.length ? (
+        <div id="inactive-staff-list">
+        {isInactiveSectionExpanded && (inactiveBranchStaff.length ? (
           <div className="grid gap-3 p-4 lg:grid-cols-2">
             {inactiveBranchStaff.map((member) => (
               <article
@@ -1635,7 +1658,8 @@ export default function TenantAdminStaff({
               Khi đổi trạng thái một nhân viên, hồ sơ sẽ tự động chuyển vào đây.
             </p>
           </div>
-        )}
+        ))}
+        </div>
       </section>
 
       <section className="grid gap-5 lg:grid-cols-3">
