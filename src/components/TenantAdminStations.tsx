@@ -44,6 +44,7 @@ interface TenantAdminStationsProps {
   onSearchQueryChange: (value: string) => void;
   selectedBranch: string;
   onSelectedBranchChange: (value: string) => void;
+  branchLocked?: boolean;
   tenantName?: string;
   roleLabel?: string;
   accessMode?: 'full' | 'limited' | 'locked';
@@ -88,7 +89,7 @@ const stationSeed: TenantStation[] = [
 const formatPercent = (value: number) => `${Math.min(100, Math.max(0, value))}%`;
 
 export default function TenantAdminStations({
-  searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange,
+  searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, branchLocked = false,
   tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify
 }: TenantAdminStationsProps) {
   const storageKey = `tenant-admin-stations-v2:${tenantName}`;
@@ -161,7 +162,7 @@ export default function TenantAdminStations({
     <div className="space-y-5">
       <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div><div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Trạng thái không gian · Cập nhật 14:32<span className="text-slate-300">•</span><span className="text-slate-500">{tenantName}</span></div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Ghế & khu vực</h1><p className="mt-2 text-[11px] text-slate-500">Điều phối vị trí phục vụ, vệ sinh, khử khuẩn, lịch sử dụng và bảo trì thiết bị.</p></div>
-        <div className="flex flex-col gap-2 sm:flex-row"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold shadow-sm sm:w-48"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect><button type="button" onClick={openCreate} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Thêm vị trí</button></div>
+        <div className="flex flex-col gap-2 sm:flex-row"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold shadow-sm sm:w-48"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect><button type="button" onClick={openCreate} disabled={!canManage || branchLocked} title={branchLocked ? 'Receptionist không có quyền thay đổi cấu hình ghế/phòng' : undefined} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Thêm vị trí</button></div>
       </section>
 
       <section className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? 'border-violet-100 bg-gradient-to-r from-violet-50 to-white' : 'border-amber-200 bg-amber-50'}`}><div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? 'bg-violet-600 text-white' : 'bg-amber-100 text-amber-700'}`}><ShieldCheck className="h-4.5 w-4.5" /></span><div><p className="text-[10px] font-black text-slate-800">Phạm vi quyền: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{canManage ? 'Được thêm vị trí, đổi trạng thái vận hành, xác nhận vệ sinh và đóng/mở bảo trì trong tenant.' : readOnlyReason || 'Chỉ được xem sơ đồ và tình trạng thiết bị.'}</p></div></div><span className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-100 text-amber-800 ring-amber-200'}`}>{canManage ? 'Toàn quyền vận hành' : 'Chỉ xem'}</span></section>

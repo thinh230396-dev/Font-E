@@ -199,12 +199,13 @@ function MetricCard({ icon: Icon, label, value, note, tone }: { icon: typeof Cal
 
 export default function ReceptionistPortal({ account, onLogout }: ReceptionistPortalProps) {
   const tenantName = account.tenantName || 'Nailé Studio';
+  const branchCode: BranchCode = account.branchCode || 'Q3';
+  const branchName = account.branchName || `${tenantName} · Chi nhánh ${branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}`;
   const appointmentStorageKey = `tenant-admin-appointments-v2:${tenantName}`;
   const paymentStorageKey = `tenant-admin-payments-v1:${tenantName}`;
   const shiftStorageKey = `receptionist-shift-v1:${account.email}`;
   const [page, setPage] = useState<ReceptionPage>('desk');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedBranch, setSelectedBranch] = useState('Q3');
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [appointments, setAppointments] = useState<ReceptionAppointment[]>(() => readStorage(appointmentStorageKey, seedAppointments()));
@@ -230,9 +231,9 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
 
   const todayAppointments = useMemo(() => appointments
     .filter((appointment) => appointment.date === today())
-    .filter((appointment) => selectedBranch === 'ALL' || appointment.branch === selectedBranch)
+    .filter((appointment) => appointment.branch === branchCode)
     .filter((appointment) => `${appointment.customer} ${appointment.phone} ${appointment.service}`.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => a.start.localeCompare(b.start)), [appointments, searchQuery, selectedBranch]);
+    .sort((a, b) => a.start.localeCompare(b.start)), [appointments, branchCode, searchQuery]);
   const activeAppointments = todayAppointments.filter((appointment) => ['CHECKED_IN', 'IN_SERVICE'].includes(appointment.status));
   const upcomingAppointments = todayAppointments.filter((appointment) => ['PENDING', 'CONFIRMED'].includes(appointment.status));
   const completedIds = new Set(payments.filter((payment) => payment.status === 'PAID').map((payment) => payment.appointmentId));
@@ -264,7 +265,7 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
     if (!/^(?:\+84|0)[0-9\s.-]{8,12}$/.test(walkIn.phone.trim())) return setFormError('Số điện thoại chưa đúng định dạng.');
     const appointment: ReceptionAppointment = {
       id: makeId('APT'), customer: walkIn.customer.trim(), phone: walkIn.phone.trim(), date: today(), start: walkIn.start,
-      duration: Number(walkIn.duration), service: walkIn.service, staff: walkIn.staff, branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3'),
+      duration: Number(walkIn.duration), service: walkIn.service, staff: walkIn.staff, branch: branchCode,
       source: 'RECEPTION', status: 'CHECKED_IN', price: Number(walkIn.price), deposit: 0, note: walkIn.note.trim(),
       createdBy: account.displayName, firstVisit: true, createdAt: new Date().toISOString(),
     };
@@ -342,7 +343,7 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
           </div>
         </div>
         <div className="mt-6 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
-          <div><p className="text-[9px] font-bold uppercase tracking-wider text-emerald-100/55">Chi nhánh</p><p className="mt-1 text-sm font-bold">{selectedBranch === 'Q1' ? 'Quận 1' : selectedBranch === 'Q3' ? 'Quận 3' : 'Tất cả chi nhánh'}</p></div>
+          <div><p className="text-[9px] font-bold uppercase tracking-wider text-emerald-100/55">Phạm vi được phân công</p><p className="mt-1 text-sm font-bold">{branchName}</p></div>
           <div><p className="text-[9px] font-bold uppercase tracking-wider text-emerald-100/55">Trạng thái ca</p><p className="mt-1 flex items-center gap-2 text-sm font-bold"><span className={`h-2 w-2 rounded-full ${shift.status === 'OPEN' ? 'bg-emerald-400' : 'bg-slate-400'}`} />{shift.status === 'OPEN' ? `Đang mở · ${new Date(shift.openedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : 'Đã đóng ca'}</p></div>
           <div><p className="text-[9px] font-bold uppercase tracking-wider text-emerald-100/55">Quỹ đầu ca</p><p className="mt-1 text-sm font-bold">{money(shift.openingCash)}</p></div>
         </div>
@@ -401,7 +402,7 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
 
   const renderPage = () => {
     if (page === 'desk') return renderDesk();
-    const commonProps = { searchQuery, onSearchQueryChange: setSearchQuery, selectedBranch, onSelectedBranchChange: setSelectedBranch, tenantName, roleLabel: `Receptionist · ${account.displayName}`, accessMode: 'full' as const, onNotify: setToast };
+    const commonProps = { searchQuery, onSearchQueryChange: setSearchQuery, selectedBranch: branchCode, onSelectedBranchChange: () => undefined, branchLocked: true, tenantName, roleLabel: `Receptionist · ${account.displayName} · ${branchName}`, accessMode: 'full' as const, onNotify: setToast };
     if (page === 'appointments') return <TenantAdminAppointments {...commonProps} />;
     if (page === 'customers') return <TenantAdminCustomers {...commonProps} onBookCustomer={(customer) => { setSearchQuery(customer.phone); setPage('appointments'); setToast(`Đã chọn ${customer.name}. Hãy tạo lịch hẹn mới.`); }} />;
     if (page === 'stations') return <TenantAdminStations {...commonProps} />;
@@ -425,7 +426,7 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
           })}
         </nav>
         <div className="border-t border-white/10 p-4">
-          <div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 p-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/15 font-black text-emerald-300">LN</div><div className="min-w-0"><p className="truncate text-[11px] font-bold">{account.displayName}</p><p className="truncate text-[9px] text-emerald-100/45">Receptionist · {selectedBranch === 'Q1' ? 'Quận 1' : 'Quận 3'}</p></div></div>
+          <div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 p-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/15 font-black text-emerald-300">LN</div><div className="min-w-0"><p className="truncate text-[11px] font-bold">{account.displayName}</p><p className="truncate text-[9px] text-emerald-100/45">Receptionist · {branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}</p></div></div>
           <button type="button" onClick={onLogout} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2.5 text-[11px] font-bold text-emerald-50/70 hover:bg-rose-500/15 hover:text-rose-200"><LogOut className="h-4 w-4" /> Đăng xuất</button>
         </div>
       </aside>
@@ -436,7 +437,7 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
           <button type="button" onClick={() => setSidebarOpen(true)} className="rounded-xl border border-brand-outline p-2.5 text-brand-text lg:hidden" aria-label="Mở menu"><Menu className="h-5 w-5" /></button>
           <div className="hidden min-w-0 sm:block"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-brand-text-muted">{new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</p><p className="mt-1 text-sm font-black text-brand-text">{navItems.find((item) => item.id === page)?.label}</p></div>
           <div className="relative ml-auto hidden w-full max-w-sm md:block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Tìm tên, số điện thoại, dịch vụ..." className="h-10 w-full rounded-xl border border-brand-outline bg-brand-surface-high/50 pl-10 pr-4 text-xs font-medium outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10" /></div>
-          <select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} className="h-10 rounded-xl border border-brand-outline bg-brand-surface px-3 text-[11px] font-bold text-brand-text outline-none focus:border-emerald-500" aria-label="Chọn chi nhánh"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></select>
+          <div className="hidden h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[10px] font-black text-emerald-800 sm:flex" title="Tài khoản chỉ được điều phối chi nhánh này"><Store className="h-3.5 w-3.5" />{branchCode === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3'}<ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /></div>
           <div className="relative"><button type="button" onClick={() => setShowNotifications((current) => !current)} className="relative rounded-xl border border-brand-outline p-2.5 text-brand-text-muted hover:bg-brand-surface-high" aria-label="Thông báo"><Bell className="h-4 w-4" /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-brand-surface" /></button>{showNotifications && <div className="absolute right-0 top-12 w-80 rounded-2xl border border-brand-outline bg-brand-surface p-3 shadow-2xl"><div className="flex items-center justify-between px-2 py-2"><p className="text-xs font-black">Thông báo tại quầy</p><span className="text-[9px] font-bold text-rose-600">2 mới</span></div><div className="space-y-1"><div className="rounded-xl bg-amber-50 p-3 text-amber-900"><p className="text-[10px] font-bold">Lịch 11:00 chưa check-in</p><p className="mt-1 text-[9px] text-amber-700">Lê Phương Anh · Nail Art Premium</p></div><div className="rounded-xl bg-cyan-50 p-3 text-cyan-900"><p className="text-[10px] font-bold">Khách đang chờ 8 phút</p><p className="mt-1 text-[9px] text-cyan-700">Trần Thu Hà · Ghế P-02</p></div></div></div>}</div>
         </header>
         <main className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-7"><Suspense fallback={<div className="py-24 text-center text-xs font-bold text-brand-text-muted">Đang tải không gian lễ tân...</div>}>{renderPage()}</Suspense></main>

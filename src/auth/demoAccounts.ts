@@ -6,6 +6,8 @@ export interface DemoAccount {
   role: PortalRole;
   displayName: string;
   tenantName?: string;
+  branchCode?: 'Q1' | 'Q3';
+  branchName?: string;
 }
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
@@ -27,7 +29,9 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     password: 'Reception@2026',
     role: 'RECEPTIONIST',
     displayName: 'Lê Hoàng Nam',
-    tenantName: 'Nailé Studio'
+    tenantName: 'Nailé Studio',
+    branchCode: 'Q3',
+    branchName: 'Nailé Studio · Chi nhánh Quận 3'
   }
 ];
 

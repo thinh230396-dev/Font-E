@@ -69,6 +69,7 @@ interface TenantAdminAppointmentsProps {
   onSearchQueryChange: (value: string) => void;
   selectedBranch: string;
   onSelectedBranchChange: (value: string) => void;
+  branchLocked?: boolean;
   tenantName?: string;
   roleLabel?: string;
   accessMode?: 'full' | 'limited' | 'locked';
@@ -256,6 +257,7 @@ export default function TenantAdminAppointments({
   onSearchQueryChange,
   selectedBranch,
   onSelectedBranchChange,
+  branchLocked = false,
   tenantName = 'Nailé Studio',
   roleLabel = 'Owner · Tenant Admin',
   accessMode = 'full',
@@ -556,7 +558,7 @@ export default function TenantAdminAppointments({
           <p className="mt-2 text-[11px] text-slate-500">Điều phối khách, kỹ thuật viên, bàn nail và toàn bộ hành trình phục vụ theo thời gian thực.</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} aria-label="Chọn chi nhánh" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-700 shadow-sm sm:w-48">
+          <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-700 shadow-sm sm:w-48">
             <option value="Q3">Chi nhánh Quận 3</option>
             <option value="Q1">Chi nhánh Quận 1</option>
             <option value="ALL">Tất cả chi nhánh</option>
@@ -566,7 +568,7 @@ export default function TenantAdminAppointments({
       </section>
 
       <section className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? 'border-violet-100 bg-gradient-to-r from-violet-50 to-white' : 'border-amber-200 bg-amber-50'}`}>
-        <div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? 'bg-violet-600 text-white' : 'bg-amber-100 text-amber-700'}`}><ShieldCheck className="h-4.5 w-4.5" /></span><div><p className="text-[10px] font-black text-slate-800">Phạm vi quyền: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{canManage ? 'Toàn quyền tạo, phân công, đổi trạng thái, thu cọc và hủy lịch trong tenant. Mọi thay đổi được lưu theo tenant.' : readOnlyReason || 'Chỉ được xem dữ liệu lịch hẹn theo quyền của gói hiện tại.'}</p></div></div>
+        <div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? 'bg-violet-600 text-white' : 'bg-amber-100 text-amber-700'}`}><ShieldCheck className="h-4.5 w-4.5" /></span><div><p className="text-[10px] font-black text-slate-800">Phạm vi quyền: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{canManage ? (branchLocked ? 'Được tạo, phân công, đổi trạng thái và thu cọc trong chi nhánh được phân công. Không có quyền xem hoặc điều phối chi nhánh khác.' : 'Toàn quyền tạo, phân công, đổi trạng thái, thu cọc và hủy lịch trong tenant. Mọi thay đổi được lưu theo tenant.') : readOnlyReason || 'Chỉ được xem dữ liệu lịch hẹn theo quyền của gói hiện tại.'}</p></div></div>
         <span className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-100 text-amber-800 ring-amber-200'}`}>{canManage ? 'Có quyền chỉnh sửa' : 'Chỉ xem'}</span>
       </section>
 
