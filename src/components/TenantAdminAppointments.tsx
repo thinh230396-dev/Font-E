@@ -162,6 +162,8 @@ const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 p
 // Keep the full 08:00–20:00 operating day visible without a nested vertical scroll.
 // Appointment details remain available in the detail dialog after selecting a card.
 const SCHEDULE_HOUR_HEIGHT = 44;
+const SCHEDULE_BOTTOM_GUTTER = 22;
+const STAFF_COLUMNS_PER_PAGE = 6;
 
 const toDate = (date: string) => new Date(`${date}T00:00:00`);
 
@@ -246,6 +248,8 @@ export default function TenantAdminAppointments({
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | AppointmentStatus>('ALL');
   const [staffFilter, setStaffFilter] = useState('ALL');
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
+  const [staffPage, setStaffPage] = useState(0);
   const [sourceFilter, setSourceFilter] = useState<'ALL' | AppointmentSource>('ALL');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<TenantAppointment | null>(null);
@@ -299,6 +303,28 @@ export default function TenantAdminAppointments({
     (selectedBranch === 'ALL' || staff.branch === selectedBranch) &&
     (staffFilter === 'ALL' || staff.name === staffFilter)
   )), [selectedBranch, staffFilter]);
+
+  const filteredScheduleStaff = useMemo(() => {
+    const query = staffSearchQuery.trim().toLowerCase();
+    if (!query) return scheduleStaff;
+    return scheduleStaff.filter((staff) => `${staff.name} ${staff.role} ${branchLabels[staff.branch]}`.toLowerCase().includes(query));
+  }, [scheduleStaff, staffSearchQuery]);
+
+  const staffPageCount = Math.max(1, Math.ceil(filteredScheduleStaff.length / STAFF_COLUMNS_PER_PAGE));
+  const visibleScheduleStaff = useMemo(() => {
+    const start = staffPage * STAFF_COLUMNS_PER_PAGE;
+    return filteredScheduleStaff.slice(start, start + STAFF_COLUMNS_PER_PAGE);
+  }, [filteredScheduleStaff, staffPage]);
+  const visibleStaffStart = filteredScheduleStaff.length ? staffPage * STAFF_COLUMNS_PER_PAGE + 1 : 0;
+  const visibleStaffEnd = Math.min((staffPage + 1) * STAFF_COLUMNS_PER_PAGE, filteredScheduleStaff.length);
+
+  useEffect(() => {
+    setStaffPage(0);
+  }, [selectedBranch, staffFilter, staffSearchQuery]);
+
+  useEffect(() => {
+    setStaffPage((current) => Math.min(current, staffPageCount - 1));
+  }, [staffPageCount]);
 
   const weekDates = getWeekDates(selectedDate);
   const totalRevenue = scopedAppointments
@@ -407,6 +433,7 @@ export default function TenantAdminAppointments({
   const resetFilters = () => {
     setStatusFilter('ALL');
     setStaffFilter('ALL');
+    setStaffSearchQuery('');
     setSourceFilter('ALL');
     onSearchQueryChange('');
   };
@@ -506,22 +533,38 @@ export default function TenantAdminAppointments({
         </div>
 
         {viewMode === 'SCHEDULE' ? (
-          <div className={`relative bg-white ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
-            <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${Math.max(980, 72 + scheduleStaff.length * 230)}px` }}>
-              <div className="sticky top-0 z-20 grid border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.05)]" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${scheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))` }}>
+          <>
+            <div className={`flex flex-col gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between ${isScheduleExpanded ? 'shrink-0' : ''}`}>
+              <div className="relative w-full sm:max-w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input value={staffSearchQuery} onChange={(event) => setStaffSearchQuery(event.target.value)} aria-label="Tìm nhân viên trên lịch" placeholder="Tìm tên, vai trò, chi nhánh..." className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 text-[9px] font-semibold text-slate-700 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100" />
+                {staffSearchQuery && <button type="button" onClick={() => setStaffSearchQuery('')} aria-label="Xóa tìm kiếm nhân viên" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none hover:text-slate-700"><X className="h-3.5 w-3.5" /></button>}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-1 text-[8px] font-semibold text-slate-500">Đang xem <strong className="text-slate-800">{visibleStaffStart}–{visibleStaffEnd}</strong> / {filteredScheduleStaff.length} nhân viên</span>
+                {staffPageCount > 1 && <BeautifulSelect value={String(staffPage)} onChange={(event) => setStaffPage(Number(event.target.value))} aria-label="Chọn nhóm nhân viên" className="h-8 min-w-28 rounded-lg border border-slate-200 bg-white px-2 text-[8px] font-bold text-slate-700">{Array.from({ length: staffPageCount }, (_, index) => { const start = index * STAFF_COLUMNS_PER_PAGE + 1; const end = Math.min((index + 1) * STAFF_COLUMNS_PER_PAGE, filteredScheduleStaff.length); return <option key={index} value={index}>Nhóm {index + 1} · {start}–{end}</option>; })}</BeautifulSelect>}
+                <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <button type="button" onClick={() => setStaffPage((current) => Math.max(0, current - 1))} disabled={staffPage === 0} aria-label="Nhóm nhân viên trước" className="flex h-8 w-8 items-center justify-center rounded-none border-0 border-r border-slate-200 bg-white p-0 text-slate-600 shadow-none disabled:cursor-not-allowed disabled:text-slate-300"><ChevronLeft className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => setStaffPage((current) => Math.min(staffPageCount - 1, current + 1))} disabled={staffPage >= staffPageCount - 1} aria-label="Nhóm nhân viên tiếp theo" className="flex h-8 w-8 items-center justify-center rounded-none border-0 bg-white p-0 text-slate-600 shadow-none disabled:cursor-not-allowed disabled:text-slate-300"><ChevronRight className="h-3.5 w-3.5" /></button>
+                </div>
+              </div>
+            </div>
+            <div className={`relative bg-white ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
+            {visibleScheduleStaff.length ? <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${Math.max(980, 72 + visibleScheduleStaff.length * 230)}px` }}>
+              <div className="sticky top-0 z-20 grid border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.05)]" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${visibleScheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${visibleScheduleStaff.length}, minmax(220px, 1fr))` }}>
                 <div className="flex items-center justify-center border-r border-slate-100 text-[9px] font-black text-slate-400">GMT+7</div>
-                {scheduleStaff.map((staff) => {
+                {visibleScheduleStaff.map((staff) => {
                   const staffAppointments = scopedAppointments.filter((appointment) => appointment.staff === staff.name && !['CANCELLED', 'NO_SHOW'].includes(appointment.status));
                   const bookedMinutes = staffAppointments.reduce((sum, appointment) => sum + appointment.duration, 0);
                   const utilization = Math.min(100, Math.round(bookedMinutes / 600 * 100));
-                  return <div key={staff.name} className={`flex items-center border-r border-slate-100 last:border-r-0 ${isScheduleExpanded ? 'min-h-14 gap-2 px-2 py-2' : 'min-h-16 gap-2.5 px-3.5 py-3'}`}><span className={`flex shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-700 ${isScheduleExpanded ? 'h-8 w-8 text-[8px]' : 'h-9 w-9 text-[9px]'}`}>{staff.initials}</span><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black text-slate-800">{staff.name}</p><p className="mt-0.5 truncate text-[8px] text-slate-400">{staff.role}</p>{!isScheduleExpanded && <p className="mt-0.5 text-[7px] font-semibold text-slate-400">{staff.shift}</p>}</div><span className={`rounded-lg bg-violet-50 font-black text-violet-600 ${isScheduleExpanded ? 'px-1.5 py-1 text-[8px]' : 'px-2 py-1 text-[9px]'}`}>{utilization}%</span></div>;
+                  return <div key={staff.name} className={`flex items-center border-r border-slate-100 last:border-r-0 ${isScheduleExpanded ? 'min-h-14 gap-2 px-2 py-2' : 'min-h-16 gap-2.5 px-3.5 py-3'}`}><span className={`flex shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-700 ${isScheduleExpanded ? 'h-8 w-8 text-[8px]' : 'h-9 w-9 text-[9px]'}`}>{staff.initials}</span><div className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[10px] font-black text-slate-800">{staff.name}</span>{selectedBranch === 'ALL' && <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[7px] font-black text-slate-500">{staff.branch}</span>}</span><p className="mt-0.5 truncate text-[8px] text-slate-400">{staff.role}</p>{!isScheduleExpanded && <p className="mt-0.5 text-[7px] font-semibold text-slate-400">{staff.shift}</p>}</div><span className={`rounded-lg bg-violet-50 font-black text-violet-600 ${isScheduleExpanded ? 'px-1.5 py-1 text-[8px]' : 'px-2 py-1 text-[9px]'}`}>{utilization}%</span></div>;
                 })}
               </div>
-              <div className="relative grid" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${scheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${scheduleStaff.length}, minmax(220px, 1fr))`, height: scheduleHourHeight * 12 }}>
+              <div className="relative grid" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${visibleScheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${visibleScheduleStaff.length}, minmax(220px, 1fr))`, height: scheduleHourHeight * 12 + SCHEDULE_BOTTOM_GUTTER }}>
                 <div className="relative border-r border-slate-200 bg-slate-50/70">
                   {Array.from({ length: 13 }, (_, index) => 8 + index).map((hour) => <span key={hour} className={`absolute right-2 text-[9px] font-bold text-slate-400 ${hour === 8 ? '' : '-translate-y-1/2'}`} style={{ top: hour === 8 ? 8 : (hour - 8) * scheduleHourHeight }}>{String(hour).padStart(2, '0')}:00</span>)}
                 </div>
-                {scheduleStaff.map((staff) => (
+                {visibleScheduleStaff.map((staff) => (
                   <div key={staff.name} className="relative border-r border-slate-100 last:border-r-0" style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${scheduleHourHeight - 1}px, #e8edf5 ${scheduleHourHeight}px)` }}>
                     {filteredAppointments.filter((appointment) => appointment.staff === staff.name).map((appointment) => {
                       const top = Math.max(0, (minutesFromStart(appointment.start) - 480) / 60 * scheduleHourHeight);
@@ -562,9 +605,10 @@ export default function TenantAdminAppointments({
                 ))}
                 {selectedDate === '2026-07-16' && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (14 * 60 + 32 - 480) / 60 * scheduleHourHeight }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">14:32</span></div>}
               </div>
-            </div>
+            </div> : <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center"><UsersRound className="h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-700">Không tìm thấy nhân viên</p><p className="mt-1 text-[8px] text-slate-400">Thử tên khác hoặc xóa tìm kiếm để xem toàn bộ lịch.</p><button type="button" onClick={() => setStaffSearchQuery('')} className="mt-3 border border-slate-200 bg-white px-3 text-[8px] font-bold text-violet-600 shadow-sm">Xóa tìm kiếm</button></div>}
             {!filteredAppointments.length && <div className="absolute inset-x-0 top-80 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không có lịch phù hợp với bộ lọc</p></div>}
           </div>
+          </>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1050px] border-collapse text-left">
