@@ -90,6 +90,8 @@ interface TenantAdminInventoryProps {
 interface StockForm {
   action: StockAction;
   itemKey: string;
+  receiveLines: ReceiveLine[];
+  addItemKey: string;
   quantity: string;
   targetBranch: BranchCode;
   unitCost: string;
@@ -97,6 +99,15 @@ interface StockForm {
   expiry: string;
   reference: string;
   reason: string;
+}
+
+interface ReceiveLine {
+  itemKey: string;
+  quantity: string;
+  unitCost: string;
+  lot: string;
+  expiry: string;
+  locked: boolean;
 }
 
 interface ItemForm {
@@ -165,7 +176,8 @@ const inventorySeed: InventoryItem[] = [
   { id: 'SKU-PRIMER-15', name: 'Acid-free Primer 15ml', variant: 'Lớp liên kết không acid', category: 'BUILDER', unit: 'chai', branch: 'Q1', location: 'Kệ A-02', supplier: 'NailPro Supply', supplierPhone: '0908 778 215', stock: 9, reserved: 1, minimum: 5, maximum: 18, unitCost: 285_000, averageCost: 278_000, monthlyUse: 4, lot: 'PRI-0326', expiry: '2026-09-05', barcode: '8936100150152', lastCounted: '18/07/2026 · Khớp', reorderLeadDays: 7, state: 'QUARANTINE', note: 'Cách ly để kiểm tra độ kết dính của lô PRI-0326.', movements: movementSeed('PRIMER', 6, 'PN-260630-06', 'Nhập theo yêu cầu kỹ thuật.') }
 ];
 
-const emptyStockForm = (key = ''): StockForm => ({ action: 'RECEIVE', itemKey: key, quantity: '', targetBranch: 'Q1', unitCost: '', lot: '', expiry: '', reference: '', reason: '' });
+const receiveLineFromItem = (item: InventoryItem, locked = false): ReceiveLine => ({ itemKey: itemKey(item), quantity: '', unitCost: String(item.unitCost), lot: item.lot, expiry: item.expiry, locked });
+const emptyStockForm = (key = ''): StockForm => ({ action: 'RECEIVE', itemKey: key, receiveLines: [], addItemKey: '', quantity: '', targetBranch: 'Q1', unitCost: '', lot: '', expiry: '', reference: '', reason: '' });
 const emptyItemForm = (branch: string): ItemForm => ({ id: '', name: '', variant: '', category: 'GEL_POLISH', unit: 'chai', branch: branch === 'Q1' ? 'Q1' : 'Q3', location: '', supplier: '', supplierPhone: '', stock: '0', minimum: '1', maximum: '10', unitCost: '', lot: '', expiry: '', barcode: '', reorderLeadDays: '5', note: '' });
 const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
 
@@ -195,6 +207,7 @@ export default function TenantAdminInventory({
   const [showFilters, setShowFilters] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [stockForm, setStockForm] = useState<StockForm | null>(null);
+  const [receiveForm, setReceiveForm] = useState<StockForm | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm | null>(null);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
@@ -237,6 +250,13 @@ export default function TenantAdminInventory({
     initial.unitCost = item ? String(item.unitCost) : '';
     initial.lot = item?.lot || '';
     initial.expiry = item?.expiry || '';
+    initial.receiveLines = action === 'RECEIVE' && item ? [receiveLineFromItem(item, true)] : [];
+    if (action === 'RECEIVE') {
+      setReceiveForm(initial);
+      setStockForm(null);
+      setFormError('');
+      return;
+    }
     setStockForm(initial);
     setFormError('');
   };
@@ -244,6 +264,26 @@ export default function TenantAdminInventory({
   const submitStockAction = (event: FormEvent) => {
     event.preventDefault();
     if (!stockForm || !requireManage()) return;
+    if (stockForm.action === 'RECEIVE') {
+      if (!stockForm.receiveLines.length) { setFormError('Vui lòng thêm ít nhất một vật tư vào phiếu nhập.'); return; }
+      const invalidLine = stockForm.receiveLines.find((line) => !Number.isFinite(Number(line.quantity)) || Number(line.quantity) <= 0);
+      if (invalidLine) { setFormError('Số lượng nhập của mỗi vật tư phải lớn hơn 0.'); return; }
+      const now = '20/07/2026 · 15:08';
+      const reference = stockForm.reference.trim() || `PN-260720-${String(Date.now()).slice(-3)}`;
+      setItems((current) => current.map((item) => {
+        const line = stockForm.receiveLines.find((candidate) => candidate.itemKey === itemKey(item));
+        if (!line) return item;
+        const quantity = Number(line.quantity);
+        const movement: Movement = { id: `${reference}-${item.id}-${item.movements.length + 1}`, type: 'IN', quantity, occurredAt: now, actor: roleLabel, reference, note: stockForm.reason.trim() || 'Nhập nhiều vật tư từ trung tâm kho.' };
+        return { ...item, stock: item.stock + quantity, unitCost: Number(line.unitCost) || item.unitCost, averageCost: Number(line.unitCost) || item.averageCost, lot: line.lot.trim() || item.lot, expiry: line.expiry || item.expiry, movements: [movement, ...item.movements] };
+      }));
+      const totalQuantity = stockForm.receiveLines.reduce((sum, line) => sum + Number(line.quantity), 0);
+      const success = `Đã nhập ${stockForm.receiveLines.length} vật tư, tổng ${totalQuantity} đơn vị.`;
+      setNotice(success);
+      onNotify?.(success);
+      setStockForm(null);
+      return;
+    }
     const source = items.find((item) => itemKey(item) === stockForm.itemKey);
     const quantity = Number(stockForm.quantity);
     if (!source) { setFormError('Vui lòng chọn một mã vật tư.'); return; }
@@ -251,7 +291,7 @@ export default function TenantAdminInventory({
     if (stockForm.action === 'TRANSFER' && stockForm.targetBranch === source.branch) { setFormError('Chi nhánh nhận phải khác chi nhánh đang giữ hàng.'); return; }
     if (stockForm.action === 'TRANSFER' && quantity > source.stock) { setFormError(`Chỉ có thể điều chuyển tối đa ${source.stock} ${source.unit}.`); return; }
     const now = '20/07/2026 · 15:08';
-    const reference = stockForm.reference.trim() || `${stockForm.action === 'RECEIVE' ? 'PN' : stockForm.action === 'TRANSFER' ? 'DC' : 'KK'}-260720-${String(Date.now()).slice(-3)}`;
+    const reference = stockForm.reference.trim() || `${stockForm.action === 'TRANSFER' ? 'DC' : 'KK'}-260720-${String(Date.now()).slice(-3)}`;
     setItems((current) => {
       let next = current.map((item) => {
         if (itemKey(item) !== stockForm.itemKey) return item;
@@ -267,10 +307,31 @@ export default function TenantAdminInventory({
       }
       return next;
     });
-    const success = stockForm.action === 'RECEIVE' ? `Đã nhập ${quantity} ${source.unit} ${source.name}.` : stockForm.action === 'TRANSFER' ? `Đã điều chuyển ${quantity} ${source.unit} sang ${branchLabels[stockForm.targetBranch]}.` : `Đã chốt tồn thực tế ${quantity} ${source.unit}.`;
+    const success = stockForm.action === 'TRANSFER' ? `Đã điều chuyển ${quantity} ${source.unit} sang ${branchLabels[stockForm.targetBranch]}.` : `Đã chốt tồn thực tế ${quantity} ${source.unit}.`;
     setNotice(success);
     onNotify?.(success);
     setStockForm(null);
+  };
+
+  const submitReceiveForm = (event: FormEvent) => {
+    event.preventDefault();
+    if (!receiveForm || !requireManage()) return;
+    if (!receiveForm.receiveLines.length) { setFormError('Vui lòng thêm ít nhất một vật tư vào phiếu nhập.'); return; }
+    if (receiveForm.receiveLines.some((line) => !Number.isFinite(Number(line.quantity)) || Number(line.quantity) <= 0)) { setFormError('Số lượng nhập của mỗi vật tư phải lớn hơn 0.'); return; }
+    const now = '20/07/2026 · 15:08';
+    const reference = receiveForm.reference.trim() || `PN-260720-${String(Date.now()).slice(-3)}`;
+    setItems((current) => current.map((item) => {
+      const line = receiveForm.receiveLines.find((candidate) => candidate.itemKey === itemKey(item));
+      if (!line) return item;
+      const quantity = Number(line.quantity);
+      const movement: Movement = { id: `${reference}-${item.id}-${item.movements.length + 1}`, type: 'IN', quantity, occurredAt: now, actor: roleLabel, reference, note: receiveForm.reason.trim() || 'Nhập nhiều vật tư từ trung tâm kho.' };
+      return { ...item, stock: item.stock + quantity, unitCost: Number(line.unitCost) || item.unitCost, averageCost: Number(line.unitCost) || item.averageCost, lot: line.lot.trim() || item.lot, expiry: line.expiry || item.expiry, movements: [movement, ...item.movements] };
+    }));
+    const totalQuantity = receiveForm.receiveLines.reduce((sum, line) => sum + Number(line.quantity), 0);
+    const success = `Đã nhập ${receiveForm.receiveLines.length} vật tư, tổng ${totalQuantity} đơn vị.`;
+    setNotice(success);
+    onNotify?.(success);
+    setReceiveForm(null);
   };
 
   const submitNewItem = (event: FormEvent) => {
@@ -342,6 +403,35 @@ export default function TenantAdminInventory({
       {stockForm && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu giao dịch kho" onClick={() => setStockForm(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitStockAction} className="relative max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div><p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Giao dịch kho</p><h2 className="mt-1 text-lg font-black text-slate-900">{stockForm.action === 'RECEIVE' ? 'Tạo phiếu nhập kho' : stockForm.action === 'TRANSFER' ? 'Điều chuyển vật tư' : 'Chốt kiểm kê thực tế'}</h2><p className="mt-1 text-[9px] text-slate-500">Mọi thay đổi được lưu người thao tác, thời gian và chứng từ.</p></div><button type="button" onClick={() => setStockForm(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="space-y-4 p-5 sm:p-6">{formError && <div className="rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700">{formError}</div>}<label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mã vật tư *</span><BeautifulSelect value={stockForm.itemKey} onChange={(event) => { const item = items.find((candidate) => itemKey(candidate) === event.target.value); setStockForm((current) => current ? { ...current, itemKey: event.target.value, unitCost: item ? String(item.unitCost) : '', lot: item?.lot || '', expiry: item?.expiry || '', targetBranch: item?.branch === 'Q1' ? 'Q3' : 'Q1' } : current); }} className={inputClass}><option value="">Chọn SKU</option>{scopedItems.map((item) => <option key={itemKey(item)} value={itemKey(item)}>{item.id} · {item.name} · {branchLabels[item.branch]}</option>)}</BeautifulSelect></label><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">{stockForm.action === 'COUNT' ? 'Tồn thực tế *' : 'Số lượng *'}</span><input type="number" min="0" step="1" value={stockForm.quantity} onChange={(event) => setStockForm((current) => current ? { ...current, quantity: event.target.value } : current)} className={inputClass} /></label>{stockForm.action === 'TRANSFER' ? <label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh nhận *</span><BeautifulSelect value={stockForm.targetBranch} onChange={(event) => setStockForm((current) => current ? { ...current, targetBranch: event.target.value as BranchCode } : current)} className={inputClass}><option value="Q1">Chi nhánh Quận 1</option><option value="Q3">Chi nhánh Quận 3</option></BeautifulSelect></label> : <label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mã chứng từ</span><input value={stockForm.reference} onChange={(event) => setStockForm((current) => current ? { ...current, reference: event.target.value } : current)} className={inputClass} placeholder="Tự tạo nếu để trống" /></label>}</div>{stockForm.action === 'RECEIVE' && <div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Đơn giá nhập</span><input type="number" min="0" value={stockForm.unitCost} onChange={(event) => setStockForm((current) => current ? { ...current, unitCost: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mã lô</span><input value={stockForm.lot} onChange={(event) => setStockForm((current) => current ? { ...current, lot: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Hạn dùng</span><input type="date" value={stockForm.expiry} onChange={(event) => setStockForm((current) => current ? { ...current, expiry: event.target.value } : current)} className={inputClass} /></label></div>}<label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Lý do / ghi chú</span><textarea value={stockForm.reason} onChange={(event) => setStockForm((current) => current ? { ...current, reason: event.target.value } : current)} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Số PO, kết quả kiểm đếm hoặc lý do điều chuyển..." /></label><div className="flex items-start gap-2 rounded-xl bg-violet-50 p-3 text-[8px] leading-4 text-violet-700"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />Giao dịch được ghi vào lịch sử kho và gắn với quyền {roleLabel}.</div></div><footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setStockForm(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><CheckCircle2 className="h-4 w-4" />Xác nhận giao dịch</button></footer></form></div>}
 
       {itemForm && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu mã vật tư" onClick={() => setItemForm(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitNewItem} className="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Danh mục vật tư</p><h2 className="mt-1 text-lg font-black text-slate-900">Thêm mã vật tư mới</h2><p className="mt-1 text-[9px] text-slate-500">Thiết lập nhận diện, định mức, nhà cung cấp và truy xuất lô.</p></div><button type="button" onClick={() => setItemForm(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="space-y-5 p-5 sm:p-6">{formError && <div className="rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700">{formError}</div>}<fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><Barcode className="h-4 w-4 text-violet-600" />Nhận diện vật tư</legend><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">SKU *</span><input value={itemForm.id} onChange={(event) => setItemForm((current) => current ? { ...current, id: event.target.value } : current)} className={inputClass} placeholder="SKU-GEL-001" /></label><label className="lg:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên vật tư *</span><input value={itemForm.name} onChange={(event) => setItemForm((current) => current ? { ...current, name: event.target.value } : current)} className={inputClass} placeholder="Tên sản phẩm hoặc vật tư" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nhóm</span><BeautifulSelect value={itemForm.category} onChange={(event) => setItemForm((current) => current ? { ...current, category: event.target.value as InventoryCategory } : current)} className={inputClass}>{Object.entries(categoryMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Biến thể / quy cách</span><input value={itemForm.variant} onChange={(event) => setItemForm((current) => current ? { ...current, variant: event.target.value } : current)} className={inputClass} placeholder="Màu, dung tích, quy cách" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Barcode</span><input value={itemForm.barcode} onChange={(event) => setItemForm((current) => current ? { ...current, barcode: event.target.value } : current)} className={inputClass} /></label></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><Warehouse className="h-4 w-4 text-emerald-600" />Tồn kho & định mức</legend><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh</span><BeautifulSelect value={itemForm.branch} onChange={(event) => setItemForm((current) => current ? { ...current, branch: event.target.value as BranchCode } : current)} className={inputClass}><option value="Q1">Quận 1</option><option value="Q3">Quận 3</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Vị trí lưu *</span><input value={itemForm.location} onChange={(event) => setItemForm((current) => current ? { ...current, location: event.target.value } : current)} className={inputClass} placeholder="Kệ / tủ / ngăn" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Đơn vị</span><input value={itemForm.unit} onChange={(event) => setItemForm((current) => current ? { ...current, unit: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tồn đầu</span><input type="number" min="0" value={itemForm.stock} onChange={(event) => setItemForm((current) => current ? { ...current, stock: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tối thiểu</span><input type="number" min="0" value={itemForm.minimum} onChange={(event) => setItemForm((current) => current ? { ...current, minimum: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tối đa</span><input type="number" min="1" value={itemForm.maximum} onChange={(event) => setItemForm((current) => current ? { ...current, maximum: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Giá nhập</span><input type="number" min="0" value={itemForm.unitCost} onChange={(event) => setItemForm((current) => current ? { ...current, unitCost: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Lead time (ngày)</span><input type="number" min="0" value={itemForm.reorderLeadDays} onChange={(event) => setItemForm((current) => current ? { ...current, reorderLeadDays: event.target.value } : current)} className={inputClass} /></label></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><Truck className="h-4 w-4 text-blue-600" />Nhà cung cấp & lô</legend><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nhà cung cấp *</span><input value={itemForm.supplier} onChange={(event) => setItemForm((current) => current ? { ...current, supplier: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Điện thoại</span><input value={itemForm.supplierPhone} onChange={(event) => setItemForm((current) => current ? { ...current, supplierPhone: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mã lô</span><input value={itemForm.lot} onChange={(event) => setItemForm((current) => current ? { ...current, lot: event.target.value } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Hạn dùng</span><input type="date" value={itemForm.expiry} onChange={(event) => setItemForm((current) => current ? { ...current, expiry: event.target.value } : current)} className={inputClass} /></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghi chú kiểm soát</span><textarea value={itemForm.note} onChange={(event) => setItemForm((current) => current ? { ...current, note: event.target.value } : current)} className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label></div></fieldset></div><footer className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setItemForm(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />Tạo mã vật tư</button></footer></form></div>}
+      {receiveForm && <div className="fixed inset-0 z-[88] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6">
+        <button type="button" aria-label="Đóng phiếu nhập kho" onClick={() => setReceiveForm(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
+        <form onSubmit={submitReceiveForm} className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)]">
+          <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
+            <div><p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Phiếu nhập kho nhiều vật tư</p><h2 className="mt-1 text-lg font-black text-slate-900">Thêm vật tư vào kho</h2><p className="mt-1 text-[9px] text-slate-500">Vật tư đã chọn được giữ cố định; bạn có thể bổ sung thêm mã khác vào cùng phiếu.</p></div>
+            <button type="button" onClick={() => setReceiveForm(null)} aria-label="Đóng" className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button>
+          </header>
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
+            {formError && <div className="rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700">{formError}</div>}
+            <section>
+              <div className="mb-3 flex items-center justify-between"><div><h3 className="text-[10px] font-black text-slate-800">Vật tư trong phiếu</h3><p className="mt-1 text-[8px] text-slate-400">{receiveForm.receiveLines.length} vật tư đã được thêm</p></div><span className="rounded-full bg-violet-50 px-3 py-1.5 text-[8px] font-black text-violet-700">Không đổi sai vật tư</span></div>
+              <div className="space-y-3">
+                {receiveForm.receiveLines.map((line, index) => {
+                  const item = items.find((candidate) => itemKey(candidate) === line.itemKey);
+                  if (!item) return null;
+                  return <article key={line.itemKey} className={`rounded-2xl border p-4 ${line.locked ? 'border-violet-200 bg-violet-50/40' : 'border-slate-200 bg-white'}`}>
+                    <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${categoryMeta[item.category].badge}`}><PackageOpen className="h-4 w-4" /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-black text-slate-800">{item.name}</p>{line.locked && <span className="rounded-full bg-violet-100 px-2 py-1 text-[7px] font-black text-violet-700">Vật tư đã chọn</span>}</div><p className="mt-1 text-[8px] text-slate-400">{item.id} · {item.variant} · {branchLabels[item.branch]}</p></div></div>{!line.locked && <button type="button" onClick={() => setReceiveForm((current) => current ? { ...current, receiveLines: current.receiveLines.filter((candidate) => candidate.itemKey !== line.itemKey) } : current)} aria-label={`Xóa ${item.name} khỏi phiếu`} className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-400 shadow-sm"><X className="h-3.5 w-3.5" /></button>}</div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-4"><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số lượng ({item.unit}) *</span><input type="number" min="1" step="1" autoFocus={index === 0} value={line.quantity} onChange={(event) => setReceiveForm((current) => current ? { ...current, receiveLines: current.receiveLines.map((candidate) => candidate.itemKey === line.itemKey ? { ...candidate, quantity: event.target.value } : candidate) } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đơn giá nhập</span><input type="number" min="0" value={line.unitCost} onChange={(event) => setReceiveForm((current) => current ? { ...current, receiveLines: current.receiveLines.map((candidate) => candidate.itemKey === line.itemKey ? { ...candidate, unitCost: event.target.value } : candidate) } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã lô</span><input value={line.lot} onChange={(event) => setReceiveForm((current) => current ? { ...current, receiveLines: current.receiveLines.map((candidate) => candidate.itemKey === line.itemKey ? { ...candidate, lot: event.target.value } : candidate) } : current)} className={inputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Hạn dùng</span><input type="date" value={line.expiry} onChange={(event) => setReceiveForm((current) => current ? { ...current, receiveLines: current.receiveLines.map((candidate) => candidate.itemKey === line.itemKey ? { ...candidate, expiry: event.target.value } : candidate) } : current)} className={inputClass} /></label></div>
+                  </article>;
+                })}
+                {!receiveForm.receiveLines.length && <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-[9px] font-bold text-slate-500">Chọn một vật tư bên dưới để bắt đầu phiếu nhập.</div>}
+              </div>
+            </section>
+            <section className="rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-4"><p className="text-[9px] font-black text-slate-800">Thêm vật tư khác</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><BeautifulSelect value={receiveForm.addItemKey} onChange={(event) => setReceiveForm((current) => current ? { ...current, addItemKey: event.target.value } : current)} className={inputClass}><option value="">Chọn vật tư cần thêm</option>{scopedItems.filter((item) => !receiveForm.receiveLines.some((line) => line.itemKey === itemKey(item))).map((item) => <option key={itemKey(item)} value={itemKey(item)}>{item.id} · {item.name} · {branchLabels[item.branch]}</option>)}</BeautifulSelect><button type="button" disabled={!receiveForm.addItemKey} onClick={() => { const item = items.find((candidate) => itemKey(candidate) === receiveForm.addItemKey); if (!item) return; setReceiveForm((current) => current ? { ...current, addItemKey: '', receiveLines: [...current.receiveLines, receiveLineFromItem(item)] } : current); setFormError(''); }} className="flex h-11 shrink-0 items-center justify-center gap-2 border border-violet-200 bg-white px-4 text-[9px] font-black text-violet-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-4 w-4" />Thêm vào phiếu</button></div></section>
+            <div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mã chứng từ</span><input value={receiveForm.reference} onChange={(event) => setReceiveForm((current) => current ? { ...current, reference: event.target.value } : current)} className={inputClass} placeholder="Tự tạo nếu để trống" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghi chú chung</span><input value={receiveForm.reason} onChange={(event) => setReceiveForm((current) => current ? { ...current, reason: event.target.value } : current)} className={inputClass} placeholder="Số PO hoặc ghi chú nhận hàng" /></label></div>
+          </div>
+          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><p className="hidden text-[8px] font-bold text-slate-500 sm:block">{receiveForm.receiveLines.length} vật tư · {receiveForm.receiveLines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0)} đơn vị</p><div className="ml-auto flex gap-2"><button type="button" onClick={() => setReceiveForm(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><CheckCircle2 className="h-4 w-4" />Xác nhận nhập kho</button></div></footer>
+        </form>
+      </div>}
     </div>
   );
 }
