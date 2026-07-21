@@ -199,7 +199,7 @@ function readStorage<T>(key: string, fallback: T): T {
   }
 }
 
-function Modal({ title, description, onClose, children, wide = false }: { title: string; description: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+function Modal({ title, description, onClose, children, wide = false, workspace = false }: { title: string; description: string; onClose: () => void; children: ReactNode; wide?: boolean; workspace?: boolean }) {
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -212,17 +212,17 @@ function Modal({ title, description, onClose, children, wide = false }: { title:
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center ${workspace ? 'p-2 sm:p-4' : 'p-4'}`} role="dialog" aria-modal="true" aria-label={title}>
       <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 cursor-default bg-slate-950/55 backdrop-blur-sm" />
-      <div className={`relative max-h-[92vh] w-full overflow-y-auto rounded-[26px] border border-brand-outline bg-brand-surface p-4 shadow-2xl sm:p-6 ${wide ? 'max-w-[1500px]' : 'max-w-lg'}`}>
-        <div className="mb-5 flex items-start justify-between gap-4">
+      <div className={`relative w-full border border-brand-outline bg-brand-surface shadow-2xl ${workspace ? 'flex h-[calc(100dvh-1rem)] max-w-[1600px] flex-col overflow-hidden rounded-2xl p-3 sm:h-[calc(100dvh-2rem)] sm:p-5' : `max-h-[92vh] overflow-y-auto rounded-[26px] p-4 sm:p-6 ${wide ? 'max-w-[1500px]' : 'max-w-lg'}`}`}>
+        <div className={`${workspace ? 'mb-3 shrink-0 sm:mb-4' : 'mb-5'} flex items-start justify-between gap-4`}>
           <div>
             <h2 className="text-lg font-black tracking-tight text-brand-text">{title}</h2>
             <p className="mt-1 text-xs leading-5 text-brand-text-muted">{description}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-xl border border-brand-outline p-2 text-brand-text-muted hover:bg-brand-surface-high" aria-label="Đóng hộp thoại"><X className="h-4 w-4" /></button>
         </div>
-        {children}
+        <div className={workspace ? 'min-h-0 flex-1' : undefined}>{children}</div>
       </div>
     </div>
   );
@@ -556,13 +556,14 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
       {paymentAppointment && (
         <Modal
           wide
+          workspace
           title="Tạo hóa đơn & thanh toán"
           description={`${paymentAppointment.customer} · ${paymentAppointment.phone} · ${branchName}`}
           onClose={() => setPaymentAppointment(null)}
         >
-          <form onSubmit={submitPayment} className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(350px,1fr)]">
-            <section className="min-w-0 overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface-high/25">
-              <div className="border-b border-brand-outline p-4 sm:p-5">
+          <form onSubmit={submitPayment} className="grid h-full min-h-0 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,2fr)_minmax(350px,1fr)] lg:overflow-hidden">
+            <section className="min-w-0 overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface-high/25 lg:flex lg:min-h-0 lg:flex-col">
+              <div className="shrink-0 border-b border-brand-outline p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="text-sm font-black text-brand-text">Chọn dịch vụ hoặc sản phẩm</h3>
@@ -579,7 +580,7 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
                 </div>
               </div>
 
-              <div className="grid max-h-[58vh] gap-3 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
+              <div className="grid gap-3 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5 lg:min-h-0 lg:flex-1 xl:grid-cols-3">
                 {filteredCatalog.map((item, index) => {
                   const count = invoiceLines.filter((line) => line.type === invoiceCatalogTab && line.name === item.name).reduce((sum, line) => sum + line.quantity, 0);
                   return (
@@ -596,8 +597,8 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
               </div>
             </section>
 
-            <aside className="min-w-0 space-y-3 lg:sticky lg:top-0 lg:self-start">
-              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm">
+            <aside className="min-w-0 space-y-3 lg:flex lg:min-h-0 lg:flex-col lg:gap-3 lg:space-y-0 lg:overflow-hidden">
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
                 <div className="flex items-center gap-3 border-b border-brand-outline pb-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 font-black text-emerald-800">{paymentAppointment.customer.split(' ').slice(-2).map((part) => part[0]).join('')}</div>
                   <div className="min-w-0"><p className="truncate text-xs font-black text-brand-text">{paymentAppointment.customer}</p><p className="mt-1 text-[9px] text-brand-text-muted">{paymentAppointment.phone} · {paymentAppointment.id}</p></div>
@@ -605,7 +606,7 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
                 </div>
 
                 <div className="mt-3 flex items-center justify-between"><h3 className="text-xs font-black text-brand-text">Chi tiết hóa đơn</h3><span className="text-[9px] font-bold text-brand-text-muted">{invoiceLines.length} dòng</span></div>
-                <div className="mt-3 max-h-[27vh] space-y-2 overflow-y-auto pr-1">
+                <div className="mt-3 max-h-[27vh] space-y-2 overflow-y-auto pr-1 lg:min-h-0 lg:max-h-none lg:flex-1">
                   {invoiceLines.map((line, index) => (
                     <div key={line.id} className="rounded-xl border border-brand-outline bg-brand-surface-high/40 p-3">
                       <div className="flex items-start gap-2">
@@ -624,11 +625,11 @@ export default function ReceptionistPortal({ account, onLogout }: ReceptionistPo
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm">
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm lg:shrink-0">
                 <div className="space-y-2.5 text-[10px]"><div className="flex justify-between text-brand-text-muted"><span>Tạm tính</span><strong className="text-brand-text">{money(invoiceSubtotal)}</strong></div><div className="flex justify-between text-brand-text-muted"><span>Tiền cọc</span><strong className="text-emerald-700">- {money(paymentAppointment.deposit)}</strong></div><div className="grid grid-cols-[1fr_115px] items-center gap-2"><span className="text-brand-text-muted">Giảm giá</span><input type="number" min="0" step="1000" value={paymentForm.discount} onChange={(event) => setPaymentForm({ ...paymentForm, discount: event.target.value })} className="reception-input h-8 min-h-8 py-1 text-right text-[9px]" /></div><div className="grid grid-cols-[1fr_115px] items-center gap-2"><span className="text-brand-text-muted">Tiền tip</span><input type="number" min="0" step="1000" value={paymentForm.tip} onChange={(event) => setPaymentForm({ ...paymentForm, tip: event.target.value })} className="reception-input h-8 min-h-8 py-1 text-right text-[9px]" /></div><div className="flex items-end justify-between border-t border-brand-outline pt-3"><span className="text-xs font-black text-brand-text">Tổng thanh toán</span><strong className="text-xl font-black tracking-tight text-emerald-700">{money(invoiceTotal)}</strong></div></div>
               </div>
 
-              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm">
+              <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm lg:shrink-0">
                 <p className="mb-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-brand-text-muted">Phương thức thanh toán</p>
                 <div className="grid grid-cols-3 gap-2">{Object.entries(methodMeta).map(([value, meta]) => { const Icon = meta.icon; return <button key={value} type="button" onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[8px] font-bold ${paymentForm.method === value ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-brand-outline text-brand-text-muted'}`}><Icon className="h-4 w-4" />{meta.label}</button>; })}</div>
                 {paymentForm.method !== 'CASH' && <input value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className="reception-input mt-3" placeholder="Mã giao dịch *" />}
