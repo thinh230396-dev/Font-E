@@ -137,6 +137,327 @@ const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')}đ`;
 const marginPercent = (service: Pick<SalonService, 'price' | 'cost'>) => service.price ? Math.round((service.price - service.cost) / service.price * 100) : 0;
 const emptyForm = (branch: string): ServiceFormState => ({ name: '', category: 'MANICURE', description: '', duration: '60', bufferTime: '10', requiredSkill: 'Nail Technician', taxRate: '8', price: '', memberPrice: '', cost: '', deposit: '0', commissionRate: '15', status: 'DRAFT', onlineBooking: false, branchQ1: branch === 'Q1' || branch === 'ALL', branchQ3: branch !== 'Q1', notes: '' });
 
+interface ServiceDetailDrawerProps {
+  service: SalonService;
+  canManage: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onToggleOnlineBooking: () => void;
+  onToggleStatus: () => void;
+}
+
+function ServiceDetailDrawer({
+  service,
+  canManage,
+  onClose,
+  onEdit,
+  onToggleOnlineBooking,
+  onToggleStatus,
+}: ServiceDetailDrawerProps) {
+  const CategoryIcon = categoryMeta[service.category].icon;
+  const grossProfit = Math.max(0, service.price - service.cost);
+  const memberSaving = Math.max(0, service.price - service.memberPrice);
+  const totalSlotTime = service.duration + service.bufferTime;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/50 backdrop-blur-[2px]">
+      <button
+        type="button"
+        aria-label="Đóng chi tiết dịch vụ"
+        onClick={onClose}
+        className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="service-detail-title"
+        className="relative flex h-full w-full max-w-[640px] flex-col overflow-hidden border-l border-slate-200 bg-slate-50 shadow-2xl"
+      >
+        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-[8px] font-black uppercase tracking-[0.14em] text-violet-600">
+              Chi tiết dịch vụ
+            </p>
+            <p className="mt-1 text-[8px] text-slate-400">
+              {service.id} · {categoryMeta[service.category].label}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Đóng"
+            className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          <section className="bg-gradient-to-br from-[#18142d] via-[#241b42] to-[#33225b] px-5 py-6 text-white sm:px-6">
+            <div className="flex items-start gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-violet-200 ring-1 ring-white/15">
+                <CategoryIcon className="h-6 w-6" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[7px] font-bold text-violet-100 ring-1 ring-white/15">
+                    {categoryMeta[service.category].label}
+                  </span>
+                  <span className={`rounded-full px-2.5 py-1 text-[7px] font-bold ring-1 ${statusMeta[service.status].badge}`}>
+                    {statusMeta[service.status].label}
+                  </span>
+                  <span className={`rounded-full px-2.5 py-1 text-[7px] font-bold ring-1 ${service.onlineBooking ? 'bg-emerald-400/15 text-emerald-200 ring-emerald-300/25' : 'bg-white/10 text-slate-300 ring-white/15'}`}>
+                    {service.onlineBooking ? 'Có đặt online' : 'Đặt tại quầy'}
+                  </span>
+                </div>
+                <h2
+                  id="service-detail-title"
+                  className="mt-3 text-xl font-black tracking-[-0.025em] sm:text-2xl"
+                >
+                  {service.name}
+                </h2>
+                <p className="mt-2 max-w-xl text-[9px] leading-5 text-slate-300">
+                  {service.description}
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[8px] font-bold text-slate-400">Giá niêm yết</p>
+                <p className="mt-1 text-3xl font-black tracking-tight">
+                  {formatCurrency(service.price)}
+                </p>
+              </div>
+              <div className="rounded-xl bg-white/[0.07] px-4 py-3 sm:text-right">
+                <p className="text-[7px] font-bold text-slate-400">Giá thành viên</p>
+                <p className="mt-1 text-sm font-black text-violet-200">
+                  {formatCurrency(service.memberPrice)}
+                </p>
+                {memberSaving > 0 && (
+                  <p className="mt-1 text-[7px] text-emerald-300">
+                    Tiết kiệm {formatCurrency(memberSaving)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <div className="space-y-5 p-5 sm:p-6">
+            <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                {
+                  label: 'Tổng thời gian',
+                  value: `${totalSlotTime} phút`,
+                  detail: `${service.duration} phút làm · ${service.bufferTime} phút vệ sinh`,
+                  icon: Clock3,
+                  tone: 'bg-blue-50 text-blue-600',
+                },
+                {
+                  label: 'Lượt đặt',
+                  value: service.bookings.toLocaleString('vi-VN'),
+                  detail: 'Trong kỳ hiện tại',
+                  icon: CalendarCheck2,
+                  tone: 'bg-violet-50 text-violet-600',
+                },
+                {
+                  label: 'Doanh thu',
+                  value: `${(service.revenue / 1_000_000).toLocaleString('vi-VN')}tr`,
+                  detail: 'Doanh thu ghi nhận',
+                  icon: TrendingUp,
+                  tone: 'bg-emerald-50 text-emerald-600',
+                },
+                {
+                  label: 'Đánh giá',
+                  value: service.rating ? service.rating.toFixed(1) : '—',
+                  detail: service.rating ? 'Điểm trung bình' : 'Chưa có đánh giá',
+                  icon: Star,
+                  tone: 'bg-amber-50 text-amber-600',
+                },
+              ].map(({ label, value, detail, icon: Icon, tone }) => (
+                <article key={label} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+                  <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tone}`}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <p className="mt-3 text-[7px] font-bold text-slate-400">{label}</p>
+                  <p className="mt-1 text-[11px] font-black text-slate-900">{value}</p>
+                  <p className="mt-1 text-[7px] leading-4 text-slate-400">{detail}</p>
+                </article>
+              ))}
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-start justify-between border-b border-slate-100 px-4 py-4">
+                <div>
+                  <h3 className="text-[10px] font-black text-slate-900">Giá & lợi nhuận</h3>
+                  <p className="mt-1 text-[8px] text-slate-400">Cấu trúc tài chính trên mỗi lượt dịch vụ</p>
+                </div>
+                <CircleDollarSign className="h-4.5 w-4.5 text-emerald-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3">
+                {[
+                  { label: 'Chi phí trực tiếp', value: formatCurrency(service.cost), tone: 'text-slate-900' },
+                  { label: 'Lãi gộp dự kiến', value: formatCurrency(grossProfit), tone: 'text-emerald-600' },
+                  { label: 'Biên lợi nhuận', value: `${marginPercent(service)}%`, tone: 'text-emerald-600' },
+                  { label: 'Hoa hồng', value: `${service.commissionRate}%`, tone: 'text-violet-600' },
+                  { label: 'Tiền đặt cọc', value: service.deposit ? formatCurrency(service.deposit) : 'Không yêu cầu', tone: 'text-slate-900' },
+                  { label: 'Thuế VAT', value: `${service.taxRate}%`, tone: 'text-slate-900' },
+                ].map((item) => (
+                  <div key={item.label} className="bg-white p-4">
+                    <p className="text-[7px] font-bold text-slate-400">{item.label}</p>
+                    <p className={`mt-1.5 text-[10px] font-black ${item.tone}`}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-[10px] font-black text-slate-900">Vận hành & phân phối</h3>
+                  <p className="mt-1 text-[8px] text-slate-400">Nhân sự, chi nhánh và kênh nhận lịch</p>
+                </div>
+                <Store className="h-4.5 w-4.5 text-violet-500" />
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
+                  <div className="flex items-center gap-2">
+                    <UsersRound className="h-4 w-4 text-violet-500" />
+                    <p className="text-[8px] font-black text-slate-700">Nhân sự đủ điều kiện</p>
+                  </div>
+                  <p className="mt-2 text-lg font-black text-slate-900">{service.staffCount} người</p>
+                  <p className="mt-1 text-[8px] leading-4 text-slate-500">{service.requiredSkill}</p>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
+                  <div className="flex items-center gap-2">
+                    <Store className="h-4 w-4 text-blue-500" />
+                    <p className="text-[8px] font-black text-slate-700">Chi nhánh áp dụng</p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {service.branches.map((branch) => (
+                      <span key={branch} className="rounded-full bg-white px-2.5 py-1 text-[7px] font-bold text-slate-600 ring-1 ring-slate-200">
+                        {branchLabels[branch]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50 p-3.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${service.onlineBooking ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
+                    {service.onlineBooking ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[8px] font-black text-slate-700">Đặt lịch trực tuyến</p>
+                    <p className="mt-1 text-[7px] leading-4 text-slate-400">
+                      {service.onlineBooking ? 'Khách có thể đặt dịch vụ trên trang công khai.' : 'Chỉ nhận lịch tại quầy hoặc qua điện thoại.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onToggleOnlineBooking}
+                  disabled={!canManage}
+                  aria-label="Bật hoặc tắt đặt lịch online"
+                  aria-pressed={service.onlineBooking}
+                  className={`relative h-7 w-12 min-h-0 shrink-0 rounded-full border-0 p-0 shadow-none ${service.onlineBooking ? 'bg-violet-600' : 'bg-slate-300'}`}
+                >
+                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${service.onlineBooking ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+            </section>
+
+            {service.addOns.length > 0 && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-fuchsia-500" />
+                  <h3 className="text-[10px] font-black text-slate-900">Dịch vụ thêm gợi ý</h3>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {service.addOns.map((item) => (
+                    <div key={item} className="flex items-start gap-2 rounded-xl bg-fuchsia-50 p-3 text-[8px] font-bold leading-4 text-fuchsia-700">
+                      <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-[10px] font-black text-slate-900">Lịch sử thay đổi giá</h3>
+                  <p className="mt-1 text-[8px] text-slate-400">Các lần điều chỉnh gần nhất</p>
+                </div>
+                <ReceiptText className="h-4.5 w-4.5 text-violet-500" />
+              </div>
+              <div className="mt-3 space-y-2">
+                {service.priceHistory.length ? (
+                  service.priceHistory.map((item) => (
+                    <article key={`${item.date}-${item.newPrice}`} className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3.5">
+                      <span className="flex h-10 w-14 shrink-0 items-center justify-center rounded-lg bg-white px-1 text-center text-[7px] font-black text-violet-600 shadow-sm ring-1 ring-slate-100">
+                        {item.date}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-800">
+                          {formatCurrency(item.oldPrice)} <ArrowRight className="mx-1 inline h-3 w-3 text-slate-400" /> {formatCurrency(item.newPrice)}
+                        </p>
+                        <p className="mt-1 text-[8px] leading-4 text-slate-500">{item.reason}</p>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="rounded-xl bg-slate-50 px-4 py-6 text-center">
+                    <ReceiptText className="mx-auto h-5 w-5 text-slate-300" />
+                    <p className="mt-2 text-[8px] text-slate-400">Chưa có lịch sử điều chỉnh giá.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <BadgePercent className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <div>
+                  <h3 className="text-[8px] font-black uppercase tracking-wide text-amber-800">Lưu ý vận hành</h3>
+                  <p className="mt-2 text-[9px] leading-5 text-amber-800/80">
+                    {service.notes || 'Chưa có lưu ý cho dịch vụ này.'}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <footer className="border-t border-slate-200 bg-white p-4 sm:px-6">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={onEdit}
+              disabled={!canManage}
+              className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-32"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Chỉnh sửa
+            </button>
+            <button
+              type="button"
+              onClick={onToggleStatus}
+              disabled={!canManage}
+              className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+            >
+              {service.status === 'ACTIVE' ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {service.status === 'ACTIVE' ? 'Ẩn dịch vụ' : 'Mở bán dịch vụ'}
+            </button>
+          </div>
+        </footer>
+      </aside>
+    </div>
+  );
+}
+
 export default function TenantAdminServices({
   searchQuery,
   onSearchQueryChange,
@@ -177,6 +498,22 @@ export default function TenantAdminServices({
       // Local storage is optional; the page remains usable when it is unavailable.
     }
   }, [services, storageKey]);
+
+  useEffect(() => {
+    if (!selectedService && !formMode) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (formMode) setFormMode(null);
+      else setSelectedService(null);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [formMode, selectedService]);
 
   const canManage = accessMode === 'full';
   const requireManage = () => {
@@ -257,7 +594,29 @@ export default function TenantAdminServices({
 
       <section className="grid gap-5 lg:grid-cols-3"><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Dịch vụ bán chạy</h2><p className="mt-1 text-[8px] text-slate-400">Theo lượt đặt tháng 07/2026</p></div><TrendingUp className="h-4.5 w-4.5 text-emerald-500" /></div><div className="mt-3 space-y-1">{[...branchServices].sort((a, b) => b.bookings - a.bookings).slice(0, 4).map((service, index) => <button key={service.id} type="button" onClick={() => setSelectedService(service)} className="flex h-auto w-full items-center gap-3 border-0 bg-transparent px-0 py-2.5 text-left shadow-none"><span className={`flex h-7 w-7 items-center justify-center rounded-lg text-[8px] font-black ${index === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-black text-slate-700">{service.name}</span><span className="mt-1 block text-[8px] text-slate-400">{service.bookings} lượt · {formatCurrency(service.price)}</span></span><span className="text-[8px] font-black text-slate-800">{(service.revenue / 1_000_000).toLocaleString('vi-VN')}tr</span></button>)}</div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Hiệu quả đặt online</h2><p className="mt-1 text-[8px] text-slate-400">Tỷ lệ chuyển đổi trang đặt lịch</p></div><CalendarCheck2 className="h-4.5 w-4.5 text-violet-500" /></div><div className="mt-4 grid grid-cols-3 gap-3"><div><p className="text-[7px] text-slate-400">Hiển thị</p><p className="mt-1 text-lg font-black text-slate-900">{branchServices.filter((service) => service.onlineBooking).length}</p></div><div><p className="text-[7px] text-slate-400">Chuyển đổi</p><p className="mt-1 text-lg font-black text-slate-900">18,6%</p></div><div><p className="text-[7px] text-slate-400">Doanh thu</p><p className="mt-1 text-lg font-black text-emerald-600">42%</p></div></div><div className="mt-4 rounded-xl bg-violet-50 p-3"><p className="text-[8px] font-black text-violet-800">Gợi ý</p><p className="mt-1 text-[8px] leading-4 text-violet-600">Mở đặt online cho “Nail Art cô dâu” sau bước tư vấn có thể tăng 4–6 lịch mỗi tháng.</p></div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Cấu trúc giá</h2><p className="mt-1 text-[8px] text-slate-400">Chính sách chung đang áp dụng</p></div><WalletCards className="h-4.5 w-4.5 text-amber-500" /></div><div className="mt-4 space-y-3">{[{ label: 'Ưu đãi thành viên', value: '10%', detail: 'Trên giá niêm yết' }, { label: 'Hoa hồng trung bình', value: '15,8%', detail: 'Theo doanh thu dịch vụ' }, { label: 'Tỷ lệ đặt cọc', value: '28%', detail: 'Trên giá dịch vụ TB' }].map((item) => <div key={item.label} className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><div><p className="text-[8px] font-black text-slate-700">{item.label}</p><p className="mt-1 text-[7px] text-slate-400">{item.detail}</p></div><span className="text-[11px] font-black text-violet-700">{item.value}</span></div>)}</div></article></section>
 
-      {selectedService && <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"><button type="button" aria-label="Đóng chi tiết dịch vụ" onClick={() => setSelectedService(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[510px] flex-col overflow-hidden bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div className="flex min-w-0 items-center gap-3">{(() => { const Icon = categoryMeta[selectedService.category].icon; return <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${categoryMeta[selectedService.category].badge}`}><Icon className="h-5 w-5" /></span>; })()}<div className="min-w-0"><div className="flex items-center gap-2"><h2 className="truncate text-base font-black text-slate-900">{selectedService.name}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${statusMeta[selectedService.status].badge}`}>{statusMeta[selectedService.status].label}</span></div><p className="mt-1 text-[8px] text-slate-400">{selectedService.id} · {categoryMeta[selectedService.category].label}</p></div></div><button type="button" onClick={() => setSelectedService(null)} aria-label="Đóng" className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="flex-1 overflow-y-auto p-5 sm:p-6"><p className="text-[9px] leading-5 text-slate-600">{selectedService.description}</p><div className="mt-5 grid grid-cols-4 gap-2"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[7px] text-slate-400">Thời lượng</p><p className="mt-1 text-[11px] font-black text-slate-900">{selectedService.duration} phút</p><p className="mt-1 text-[7px] text-slate-400">+{selectedService.bufferTime} phút vệ sinh</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[7px] text-slate-400">Lượt đặt</p><p className="mt-1 text-[11px] font-black text-slate-900">{selectedService.bookings}</p></div><div className="rounded-xl bg-violet-50 p-3"><p className="text-[7px] text-violet-400">Doanh thu</p><p className="mt-1 truncate text-[11px] font-black text-violet-700">{(selectedService.revenue / 1_000_000).toLocaleString('vi-VN')}tr</p></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-[7px] text-amber-500">Đánh giá</p><p className="mt-1 flex items-center gap-1 text-[11px] font-black text-amber-700"><Star className="h-3 w-3 fill-amber-400" />{selectedService.rating || '—'}</p></div></div><div className="mt-5 rounded-2xl bg-slate-950 p-5 text-white"><div className="flex items-start justify-between"><div><p className="text-[8px] text-slate-400">Giá niêm yết</p><p className="mt-1 text-2xl font-black">{formatCurrency(selectedService.price)}</p><p className="mt-1 text-[8px] text-violet-300">Thành viên {formatCurrency(selectedService.memberPrice)} · Đã gồm VAT {selectedService.taxRate}%</p></div><CircleDollarSign className="h-5 w-5 text-violet-300" /></div><div className="mt-5 grid grid-cols-3 gap-3"><div><p className="text-[7px] text-slate-500">Chi phí trực tiếp</p><p className="mt-1 text-[10px] font-black">{formatCurrency(selectedService.cost)}</p></div><div><p className="text-[7px] text-slate-500">Lãi gộp</p><p className="mt-1 text-[10px] font-black text-emerald-300">{marginPercent(selectedService)}%</p></div><div><p className="text-[7px] text-slate-500">Hoa hồng</p><p className="mt-1 text-[10px] font-black">{selectedService.commissionRate}%</p></div></div></div><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-xl border border-slate-200 p-3"><p className="text-[7px] font-bold text-slate-400">Tiền đặt cọc</p><p className="mt-1 text-[11px] font-black text-slate-800">{formatCurrency(selectedService.deposit)}</p></div><div className="rounded-xl border border-slate-200 p-3"><p className="text-[7px] font-bold text-slate-400">Nhân viên có thể làm</p><p className="mt-1 text-[11px] font-black text-slate-800">{selectedService.staffCount} người</p><p className="mt-1 text-[7px] leading-4 text-slate-400">{selectedService.requiredSkill}</p></div></div><div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center justify-between"><div><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Phạm vi cung cấp</p><p className="mt-2 text-[9px] font-bold text-slate-700">{selectedService.branches.map((branch) => `Chi nhánh ${branchLabels[branch]}`).join(' · ')}</p></div><Store className="h-4 w-4 text-violet-500" /></div><div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3"><div className="flex items-center gap-2">{selectedService.onlineBooking ? <Eye className="h-4 w-4 text-emerald-500" /> : <EyeOff className="h-4 w-4 text-slate-400" />}<div><p className="text-[8px] font-black text-slate-700">Đặt lịch trực tuyến</p><p className="mt-1 text-[7px] text-slate-400">{selectedService.onlineBooking ? 'Đang hiển thị trên trang công khai' : 'Chỉ nhận đặt tại quầy hoặc qua điện thoại'}</p></div></div><button type="button" onClick={() => updateService(selectedService.id, { onlineBooking: !selectedService.onlineBooking })} disabled={!canManage} aria-label="Bật hoặc tắt đặt lịch online" className={`relative h-6 w-11 min-h-0 rounded-full border-0 p-0 shadow-none ${selectedService.onlineBooking ? 'bg-violet-600' : 'bg-slate-300'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${selectedService.onlineBooking ? 'left-6' : 'left-1'}`} /></button></div></div>{selectedService.addOns.length > 0 && <div className="mt-5"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Dịch vụ thêm gợi ý</p><div className="mt-2 space-y-2">{selectedService.addOns.map((item) => <div key={item} className="flex items-center gap-2 rounded-xl bg-fuchsia-50 p-3 text-[8px] font-bold text-fuchsia-700"><Plus className="h-3.5 w-3.5" />{item}</div>)}</div></div>}<div className="mt-5"><div className="flex items-center justify-between"><div><h3 className="text-[10px] font-black text-slate-800">Lịch sử thay đổi giá</h3><p className="mt-1 text-[8px] text-slate-400">Theo dõi các lần điều chỉnh gần nhất</p></div><ReceiptText className="h-4 w-4 text-violet-500" /></div><div className="mt-3 divide-y divide-slate-100 rounded-2xl border border-slate-200">{selectedService.priceHistory.length ? selectedService.priceHistory.map((item) => <div key={`${item.date}-${item.newPrice}`} className="p-3.5"><div className="flex items-start justify-between gap-3"><div><p className="text-[9px] font-black text-slate-700">{formatCurrency(item.oldPrice)} → {formatCurrency(item.newPrice)}</p><p className="mt-1 text-[8px] text-slate-400">{item.reason}</p></div><span className="shrink-0 text-[7px] font-bold text-slate-400">{item.date}</span></div></div>) : <div className="p-6 text-center text-[8px] text-slate-400">Chưa có lịch sử điều chỉnh giá.</div>}</div></div><div className="mt-5 rounded-2xl bg-slate-50 p-4"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Lưu ý vận hành</p><p className="mt-2 text-[9px] leading-5 text-slate-600">{selectedService.notes || 'Chưa có lưu ý cho dịch vụ này.'}</p></div></div><div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><div className="flex gap-2"><button type="button" onClick={() => openEdit(selectedService)} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button><button type="button" onClick={() => { const next = selectedService.status === 'ACTIVE' ? 'HIDDEN' : 'ACTIVE'; updateService(selectedService.id, { status: next }); setNotice(next === 'ACTIVE' ? `Đã mở bán ${selectedService.name}.` : `Đã ẩn ${selectedService.name}.`); }} disabled={!canManage} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none">{selectedService.status === 'ACTIVE' ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}{selectedService.status === 'ACTIVE' ? 'Ẩn dịch vụ' : 'Mở bán dịch vụ'}</button></div></div></aside></div>}
+      {selectedService && (
+        <ServiceDetailDrawer
+          service={selectedService}
+          canManage={canManage}
+          onClose={() => setSelectedService(null)}
+          onEdit={() => openEdit(selectedService)}
+          onToggleOnlineBooking={() =>
+            updateService(selectedService.id, {
+              onlineBooking: !selectedService.onlineBooking,
+            })
+          }
+          onToggleStatus={() => {
+            const next =
+              selectedService.status === 'ACTIVE' ? 'HIDDEN' : 'ACTIVE';
+            updateService(selectedService.id, { status: next });
+            setNotice(
+              next === 'ACTIVE'
+                ? `Đã mở bán ${selectedService.name}.`
+                : `Đã ẩn ${selectedService.name}.`,
+            );
+          }}
+        />
+      )}
 
       {formMode && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setFormMode(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitService} className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><h2 className="text-base font-black text-slate-900">{formMode === 'CREATE' ? 'Thêm dịch vụ mới' : `Chỉnh sửa ${selectedService?.id}`}</h2><p className="mt-1 text-[9px] text-slate-500">Thiết lập thông tin, giá, chi phí và kênh phân phối.</p></div><button type="button" onClick={() => setFormMode(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="space-y-5 p-5 sm:p-6">{formError && <div className="rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700">{formError}</div>}<fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><Sparkles className="h-3.5 w-3.5" /></span>Thông tin dịch vụ</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên dịch vụ *</span><input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nail Art Premium" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nhóm dịch vụ</span><BeautifulSelect value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as ServiceCategory }))} className={inputClass}>{Object.entries(categoryMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label></div><label className="mt-3 block"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mô tả dịch vụ *</span><textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Mô tả quy trình và giá trị của dịch vụ..." /></label><div className="mt-3 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kỹ năng bắt buộc</span><input value={form.requiredSkill} onChange={(event) => setForm((current) => ({ ...current, requiredSkill: event.target.value }))} className={inputClass} placeholder="Nail Technician · Gel Polish" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Thời gian vệ sinh sau lượt</span><input type="number" min="0" step="5" value={form.bufferTime} onChange={(event) => setForm((current) => ({ ...current, bufferTime: event.target.value }))} className={inputClass} /></label></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CircleDollarSign className="h-3.5 w-3.5" /></span>Giá & chi phí</legend><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Thời lượng (phút) *</span><input type="number" min="15" step="15" value={form.duration} onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Giá niêm yết *</span><input type="number" min="0" step="10000" value={form.price} onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))} className={inputClass} placeholder="0" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Giá thành viên</span><input type="number" min="0" step="10000" value={form.memberPrice} onChange={(event) => setForm((current) => ({ ...current, memberPrice: event.target.value }))} className={inputClass} placeholder="0" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi phí vật tư</span><input type="number" min="0" step="10000" value={form.cost} onChange={(event) => setForm((current) => ({ ...current, cost: event.target.value }))} className={inputClass} placeholder="0" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tiền đặt cọc</span><input type="number" min="0" step="10000" value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Hoa hồng (%)</span><input type="number" min="0" max="100" value={form.commissionRate} onChange={(event) => setForm((current) => ({ ...current, commissionRate: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Thuế suất VAT (%)</span><input type="number" min="0" max="100" value={form.taxRate} onChange={(event) => setForm((current) => ({ ...current, taxRate: event.target.value }))} className={inputClass} /></label></div>{Number(form.price) > 0 && <div className="mt-3 grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-3"><div><p className="text-[7px] text-slate-400">Lãi gộp dự kiến</p><p className="mt-1 text-[10px] font-black text-slate-800">{formatCurrency(Math.max(0, Number(form.price) - Number(form.cost || 0)))}</p></div><div><p className="text-[7px] text-slate-400">Biên lợi nhuận</p><p className="mt-1 text-[10px] font-black text-emerald-600">{Math.round((Number(form.price) - Number(form.cost || 0)) / Number(form.price) * 100)}%</p></div><div><p className="text-[7px] text-slate-400">Hoa hồng/lượt</p><p className="mt-1 text-[10px] font-black text-violet-600">{formatCurrency(Math.round(Number(form.price) * Number(form.commissionRate || 0) / 100))}</p></div></div>}</fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Store className="h-3.5 w-3.5" /></span>Phân phối & trạng thái</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Trạng thái</span><BeautifulSelect value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as ServiceStatus }))} className={inputClass}>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label><label className="flex items-center gap-3 self-end rounded-xl border border-slate-200 bg-slate-50 p-3"><input type="checkbox" checked={form.onlineBooking} onChange={(event) => setForm((current) => ({ ...current, onlineBooking: event.target.checked }))} className="h-4 w-4 accent-violet-600" /><span><span className="block text-[9px] font-bold text-slate-700">Cho phép đặt online</span><span className="mt-1 block text-[7px] text-slate-400">Hiển thị trên trang công khai</span></span></label></div><div className="mt-3 grid grid-cols-2 gap-3"><label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"><input type="checkbox" checked={form.branchQ3} onChange={(event) => setForm((current) => ({ ...current, branchQ3: event.target.checked }))} className="h-4 w-4 accent-violet-600" /><span className="text-[9px] font-bold text-slate-700">Chi nhánh Quận 3</span></label><label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"><input type="checkbox" checked={form.branchQ1} onChange={(event) => setForm((current) => ({ ...current, branchQ1: event.target.checked }))} className="h-4 w-4 accent-violet-600" /><span className="text-[9px] font-bold text-slate-700">Chi nhánh Quận 1</span></label></div><label className="mt-3 block"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Lưu ý vận hành</span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Điều kiện áp dụng, phụ thu, lưu ý khi tư vấn..." /></label></fieldset></div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setFormMode(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Sparkles className="h-4 w-4" />{formMode === 'CREATE' ? 'Tạo dịch vụ' : 'Lưu thay đổi'}</button></div></form></div>}
     </div>
