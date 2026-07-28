@@ -2203,13 +2203,13 @@ html[data-theme="dark"] .role-shell--superadmin {
 
 /* Tenant Admin UI standard — aligned with README.md */
 .role-shell--tenant {
-  --ta-color-primary: #7c3aed;
-  --ta-color-primary-hover: #6d28d9;
-  --ta-color-primary-subtle: #f5f3ff;
-  --ta-color-accent: #c026d3;
+  --ta-color-primary: #f43f78;
+  --ta-color-primary-hover: #e11d62;
+  --ta-color-primary-subtle: #fff1f6;
+  --ta-color-accent: #fb7185;
   --ta-color-surface: #ffffff;
-  --ta-color-surface-muted: #f8fafc;
-  --ta-color-border: #e2e8f0;
+  --ta-color-surface-muted: #fff8fb;
+  --ta-color-border: #f4dfe7;
   --ta-color-text: #0f172a;
   --ta-color-text-secondary: #64748b;
   --ta-radius-control: 0.5rem;
@@ -2221,8 +2221,9 @@ html[data-theme="dark"] .role-shell--superadmin {
   --ta-easing: cubic-bezier(0.2, 0, 0, 1);
   min-width: 0;
   background:
-    radial-gradient(circle at 86% -8%, rgb(124 58 237 / 0.07), transparent 34rem),
-    #f5f7fb;
+    radial-gradient(circle at 84% -10%, rgb(244 63 120 / 0.09), transparent 34rem),
+    radial-gradient(circle at 12% 28%, rgb(255 178 123 / 0.06), transparent 28rem),
+    #fff8fb;
   font-size: 0.875rem;
 }
 
@@ -2230,7 +2231,8 @@ html[data-theme="dark"] .role-shell--superadmin {
   height: 4.25rem;
   min-height: 4.25rem;
   background-color: rgb(255 255 255 / 0.96) !important;
-  border-bottom-color: var(--ta-color-border) !important;
+  border-bottom-color: #f8e7ed !important;
+  box-shadow: 0 8px 26px rgb(190 24 93 / 0.035) !important;
 }
 
 /* Desktop overlay contract:
@@ -2289,9 +2291,52 @@ html[data-theme="dark"] .role-shell--superadmin {
 
 .role-shell--tenant .role-sidebar {
   background:
-    radial-gradient(circle at 20% 0%, rgb(124 58 237 / 0.26), transparent 18rem),
-    linear-gradient(180deg, #111625 0%, #0d1220 58%, #090e19 100%) !important;
-  border-right-color: rgb(148 163 184 / 0.16);
+    radial-gradient(circle at 14% 0%, rgb(244 63 120 / 0.12), transparent 17rem),
+    linear-gradient(180deg, #fff9fb 0%, #ffffff 52%, #fff7fa 100%) !important;
+  border-right: 1px solid #f7e5eb !important;
+  color: #334155 !important;
+  box-shadow: 16px 0 42px rgb(190 24 93 / 0.055) !important;
+}
+
+.role-shell--tenant .role-sidebar > div:first-child {
+  border-bottom-color: #f8e4eb !important;
+}
+
+.role-shell--tenant .role-sidebar nav button[aria-current="page"] {
+  color: #fff !important;
+  background: linear-gradient(135deg, #fb7185 0%, #f43f78 58%, #ec4899 100%) !important;
+  box-shadow: 0 10px 24px rgb(244 63 120 / 0.25) !important;
+}
+
+.role-shell--tenant .role-sidebar nav button[aria-current="page"] svg,
+.role-shell--tenant .role-sidebar nav button[aria-current="page"] span {
+  color: #fff !important;
+}
+
+.role-shell--tenant .role-sidebar nav button:not([aria-current="page"]) {
+  color: #64748b !important;
+}
+
+.role-shell--tenant .role-sidebar nav button:not([aria-current="page"]):hover {
+  color: #be185d !important;
+  background: #fff1f6 !important;
+}
+
+.role-shell--tenant .role-sidebar > button.m-3 {
+  border-color: #f7dce6 !important;
+  background: #fff !important;
+}
+
+.role-shell--tenant .role-sidebar > button.m-3 :is(.text-slate-300, .text-slate-400, .text-slate-500) {
+  color: #64748b !important;
+}
+
+.role-shell--tenant .role-sidebar > button.m-3 :is(.text-violet-300, .text-violet-200) {
+  color: #f43f78 !important;
+}
+
+.role-shell--tenant .role-sidebar > div:last-child {
+  border-top-color: #f8e4eb !important;
 }
 
 .role-shell--tenant .tenant-admin-main {
@@ -2398,7 +2443,7 @@ html[data-theme="dark"] .role-shell--superadmin {
 .role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger):focus,
 .role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger):focus-visible {
   border-color: var(--ta-color-primary) !important;
-  box-shadow: 0 0 0 4px rgb(124 58 237 / 0.14) !important;
+  box-shadow: 0 0 0 4px rgb(244 63 120 / 0.14) !important;
 }
 
 .role-shell--tenant button {
@@ -2453,8 +2498,95 @@ html[data-theme="dark"] .role-shell--superadmin {
 }
 
 .role-shell--tenant :is(button, a):focus-visible {
-  outline: 3px solid rgb(124 58 237 / 0.28);
+  outline: 3px solid rgb(244 63 120 / 0.28);
   outline-offset: 2px;
+}
+
+/* Tenant Admin pink salon palette. Other pages retain their structure. */
+.role-shell--tenant :is(.bg-violet-600, .bg-violet-500) {
+  background-color: #f43f78 !important;
+}
+
+.role-shell--tenant :is(.bg-violet-50, .bg-fuchsia-50) {
+  background-color: #fff1f6 !important;
+}
+
+.role-shell--tenant :is(.text-violet-700, .text-violet-600, .text-violet-500, .text-fuchsia-700, .text-fuchsia-600) {
+  color: #e11d62 !important;
+}
+
+.role-shell--tenant :is(.border-violet-700, .border-violet-600, .border-violet-500, .border-violet-400, .border-violet-300, .border-violet-200, .border-violet-100) {
+  border-color: #f8c8d8 !important;
+}
+
+.role-shell--tenant .tenant-primary-button {
+  color: #fff !important;
+  border-color: #f43f78 !important;
+  background: linear-gradient(135deg, #fb7185 0%, #f43f78 55%, #ec4899 100%) !important;
+  box-shadow: 0 12px 24px rgb(244 63 120 / 0.22) !important;
+}
+
+.role-shell--tenant .tenant-primary-button:hover {
+  background: linear-gradient(135deg, #f85f78 0%, #e11d62 100%) !important;
+  transform: translateY(-1px);
+}
+
+.role-shell--tenant .tenant-soft-button,
+.role-shell--tenant .tenant-link-button {
+  color: #e11d62 !important;
+  border-color: #f8d5e1 !important;
+  background-color: #fff7fa !important;
+}
+
+.role-shell--tenant .tenant-overview-stat,
+.role-shell--tenant .tenant-dashboard-card {
+  border-color: #f8e4eb !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 12px 36px rgb(190 24 93 / 0.055) !important;
+}
+
+.role-shell--tenant .tenant-overview-stat:hover,
+.role-shell--tenant .tenant-dashboard-card:hover {
+  border-color: #f7c6d7 !important;
+}
+
+.tenant-stat--pink {
+  color: #fff;
+  background: linear-gradient(135deg, #fb7185, #f43f78);
+  box-shadow: 0 10px 24px rgb(244 63 120 / 0.25);
+}
+
+.tenant-stat--purple {
+  color: #b936c5;
+  background: #f8e8fb;
+}
+
+.tenant-stat--orange {
+  color: #f0642b;
+  background: #fff0e7;
+}
+
+.tenant-stat--blue {
+  color: #4278db;
+  background: #edf3ff;
+}
+
+.tenant-revenue-chart {
+  background:
+    linear-gradient(to bottom, transparent 24%, #f8edf1 25%, transparent 26%),
+    linear-gradient(to bottom, transparent 49%, #f8edf1 50%, transparent 51%),
+    linear-gradient(to bottom, transparent 74%, #f8edf1 75%, transparent 76%);
+}
+
+.tenant-service-donut {
+  background: conic-gradient(
+    #f43f78 0 45.2%,
+    #c85acb 45.2% 68.8%,
+    #f08aa4 68.8% 84.6%,
+    #ffb27b 84.6% 94.3%,
+    #d58ce0 94.3% 100%
+  );
+  box-shadow: inset 0 0 0 1px rgb(244 63 120 / 0.08);
 }
 
 .role-shell--tenant .role-main table {
