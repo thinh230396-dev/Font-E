@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertTriangle,
   BadgeCheck,
@@ -409,12 +410,12 @@ export default function TenantAdminCustomers({
   const isReceptionist = roleLabel.toLowerCase().startsWith('receptionist');
   const assignedBranch = selectedBranch === 'Q1' ? 'Q1' : 'Q3';
   const [customers, setCustomers] = useState<TenantCustomer[]>(() => {
-    if (typeof window === 'undefined') return seed;
+    if (typeof window === 'undefined') return getTenantAdminInitialData(null, seed);
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? (JSON.parse(stored) as TenantCustomer[]) : seed;
+      return getTenantAdminInitialData(stored ? (JSON.parse(stored) as TenantCustomer[]) : null, seed);
     } catch {
-      return seed;
+      return getTenantAdminInitialData(null, seed);
     }
   });
   const [appointments, setAppointments] = useState<LinkedAppointment[]>([]);

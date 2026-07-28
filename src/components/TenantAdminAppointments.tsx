@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   ArrowRight,
   CalendarCheck2,
@@ -281,12 +282,12 @@ export default function TenantAdminAppointments({
   const storageKey = `tenant-admin-appointments-v2:${tenantName}`;
   const initialDate = toIsoDate(new Date());
   const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
-    if (typeof window === 'undefined') return appointmentSeed;
+    if (typeof window === 'undefined') return getTenantAdminInitialData(null, appointmentSeed);
     try {
       const stored = window.localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) as TenantAppointment[] : appointmentSeed;
+      return getTenantAdminInitialData(stored ? JSON.parse(stored) as TenantAppointment[] : null, appointmentSeed);
     } catch {
-      return appointmentSeed;
+      return getTenantAdminInitialData(null, appointmentSeed);
     }
   });
   const [selectedDate, setSelectedDate] = useState(initialDate);

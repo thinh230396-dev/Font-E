@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { getTenantAdminInitialData } from "../utils/mockDataReset";
 import {
   Archive,
   ArrowRight,
@@ -660,13 +661,13 @@ export default function TenantAdminStaff({
   const storageKey = `tenant-admin-staff-v2:${tenantName}`;
   const [staff, setStaff] = useState<StaffMember[]>(() => {
     if (typeof window === "undefined")
-      return normalizeStaffPermissions(staffSeed);
+      return normalizeStaffPermissions(getTenantAdminInitialData(null, staffSeed));
     try {
       const stored = localStorage.getItem(storageKey);
-      const members = stored ? (JSON.parse(stored) as StaffMember[]) : staffSeed;
+      const members = getTenantAdminInitialData(stored ? (JSON.parse(stored) as StaffMember[]) : null, staffSeed);
       return normalizeStaffPermissions(members);
     } catch {
-      return normalizeStaffPermissions(staffSeed);
+      return normalizeStaffPermissions(getTenantAdminInitialData(null, staffSeed));
     }
   });
   const [roleFilter, setRoleFilter] = useState<"ALL" | StaffRole>("ALL");

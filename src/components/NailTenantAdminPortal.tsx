@@ -64,6 +64,7 @@ import {
   getTenantPageAccess, getTenantPageCapabilityKey, getTenantUsagePercent,
   isTenantPackageUpgradeCandidate, isUnlimitedTenantLimit, type TenantPageAccess
 } from '../utils/tenantAdminEntitlements';
+import { setTenantAdminDataMode } from '../utils/mockDataReset';
 import type { DemoAccount } from '../auth/demoAccounts';
 import BeautifulSelect from './BeautifulSelect';
 import BranchCallDialog from './BranchCallDialog';
@@ -235,6 +236,7 @@ interface OverviewPageProps {
   branch: string;
   ownerName: string;
   tenantName: string;
+  tenant?: Tenant;
   planName: string;
   branchCount: number;
   branchLimit: number;
@@ -243,7 +245,7 @@ interface OverviewPageProps {
   onNavigate: (page: NailPageId) => void;
   onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription'>) => void;
 }
-function OverviewPage({ branch, ownerName, tenantName, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
+function OverviewPage({ branch, ownerName, tenantName, tenant, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
   const [revenueRange, setRevenueRange] = useState<OverviewRevenueRange>(7);
   const branchName = branch === 'ALL' ? 'Tất cả chi nhánh' : branch === 'Q1' ? 'Chi nhánh Quận 1' : branch === 'Q3' ? 'Chi nhánh Quận 3' : `Chi nhánh ${branch}`;
   const ownerShortName = ownerName.trim().split(/\s+/).pop() || ownerName;
@@ -251,6 +253,61 @@ function OverviewPage({ branch, ownerName, tenantName, planName, branchCount, br
   const staffQuota = formatTenantQuota(staffCount, staffLimit, 'staff');
   const branchAtLimit = !isUnlimitedTenantLimit(branchLimit, 'branches') && branchCount >= branchLimit;
   const staffAtLimit = !isUnlimitedTenantLimit(staffLimit, 'staff') && staffCount >= staffLimit;
+
+  if (tenant) {
+    const liveStats: NailModuleConfig['stats'] = [
+      { label: 'Doanh thu tháng', value: formatPlanMoney(tenant.monthlyRevenue || 0, tenant.currency || 'VND'), detail: 'Dữ liệu tổng hợp của tenant', tone: 'emerald' },
+      { label: 'Lịch hẹn hôm nay', value: '0', detail: 'Chưa có lịch hẹn được ghi nhận', tone: 'blue' },
+      { label: 'Chi nhánh', value: String(branchCount), detail: `Hạn mức ${branchQuota}`, tone: 'violet' },
+      { label: 'Nhân sự', value: String(staffCount), detail: `Hạn mức ${staffQuota}`, tone: 'amber' }
+    ];
+
+    return (
+      <div className="space-y-5">
+        <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Dữ liệu đang đồng bộ theo tenant</div>
+            <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Chào anh {ownerShortName}</h1>
+            <p className="mt-2 text-[11px] text-slate-500">Tổng quan vận hành {tenantName} · {branchName}</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={() => onNavigate('reports')} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"><Download className="h-4 w-4" />Xuất báo cáo</button>
+            <button type="button" onClick={() => onQuickCreate('appointments')} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />Tạo lịch hẹn</button>
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-4 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-fuchsia-50 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-lg shadow-violet-200"><BadgePercent className="h-5 w-5" /></span>
+            <div><p className="text-[10px] font-black text-slate-900">Gói {planName} đang được áp dụng</p><p className="mt-1 text-[8px] leading-5 text-slate-500">Dữ liệu gói, chi nhánh và hóa đơn được dùng chung cho mọi tài khoản quản trị của tenant.</p></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span className={`rounded-xl border px-3 py-2 text-[8px] font-black ${branchAtLimit ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-700'}`}>Chi nhánh {branchQuota}</span>
+            <span className={`rounded-xl border px-3 py-2 text-[8px] font-black ${staffAtLimit ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-700'}`}>Nhân sự {staffQuota}</span>
+            <button type="button" onClick={() => onNavigate('subscription')} className="flex h-9 items-center gap-1.5 border border-violet-200 bg-white px-3 text-[8px] font-black text-violet-700 shadow-sm">Xem quyền gói<ArrowRight className="h-3.5 w-3.5" /></button>
+          </div>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{liveStats.map((stat, index) => <StatCard key={stat.label} stat={stat} index={index} />)}</section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><BarChart3 className="h-5 w-5" /></span><div><h2 className="text-sm font-black text-slate-900">Doanh số theo ngày</h2><p className="mt-1 text-[9px] text-slate-500">Doanh thu thực nhận · {branchName}</p></div></div>
+            <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Lọc khoảng thời gian doanh số">
+              {overviewRevenueRangeOptions.map((option) => <button key={option.value} type="button" onClick={() => setRevenueRange(option.value)} aria-pressed={revenueRange === option.value} className={`h-8 min-h-0 border-0 px-3 text-[8px] font-black shadow-none ${revenueRange === option.value ? 'bg-white text-violet-700 shadow-sm ring-1 ring-slate-200' : 'bg-transparent text-slate-500'}`}>{option.label}</button>)}
+            </div>
+          </div>
+          <div className="flex min-h-64 flex-col items-center justify-center px-6 py-12 text-center"><BarChart3 className="h-9 w-9 text-slate-300" /><p className="mt-3 text-[11px] font-black text-slate-700">Chưa có doanh số theo ngày</p><p className="mt-1 max-w-md text-[9px] leading-5 text-slate-400">Biểu đồ sẽ tự động hiển thị khi tenant phát sinh giao dịch thật. Không sử dụng số liệu mẫu.</p></div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><h2 className="text-sm font-black text-slate-900">Lịch hẹn đang diễn ra</h2><p className="mt-1 text-[9px] text-slate-500">Luồng phục vụ tại {branchName.toLocaleLowerCase('vi')}</p></div><button type="button" onClick={() => onNavigate('appointments')} className="flex h-8 w-fit items-center gap-1 border-0 bg-transparent px-0 text-[8px] font-black text-violet-600 shadow-none sm:px-2">Xem lịch đầy đủ<ArrowRight className="h-3.5 w-3.5" /></button></div>
+          <div className="flex min-h-44 flex-col items-center justify-center px-6 py-10 text-center"><CalendarClock className="h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-700">Chưa có lịch hẹn đang diễn ra</p><p className="mt-1 text-[8px] text-slate-400">Lịch hẹn mới sẽ xuất hiện tại đây sau khi được tạo.</p></div>
+        </section>
+      </div>
+    );
+  }
+
   const revenueBranchFactor = branch === 'ALL' ? 1.72 : branch === 'Q1' ? 0.72 : 1;
   const visibleRevenue = overviewDailyRevenue.slice(-revenueRange).map((value, index) => ({
     day: 31 - revenueRange + index,
@@ -969,6 +1026,8 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
   );
 }
 export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, onUpdateTenant, onLogout }: NailTenantAdminPortalProps) {
+  const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
+  setTenantAdminDataMode(tenant ? 'live' : 'demo');
   const currentPackage = useMemo(
     () => normalizeSubscriptionPackage(subscriptionPackage || FALLBACK_SUBSCRIPTION_PACKAGE),
     [subscriptionPackage]
@@ -1014,20 +1073,23 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [rowsByPage, setRowsByPage] = useState<Partial<Record<NailPageId, NailRow[]>>>(() => {
     const initialRows = Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [
       id,
-      config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
+      tenant
+        ? []
+        : config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
     ])) as Partial<Record<NailPageId, NailRow[]>>;
     if (tenant) {
       initialRows.branches = normalizeTenantBranches(tenant).map(branchToNailRow);
     }
     return initialRows;
   });
-  const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
   const accountInitials = account.displayName.trim().split(/\s+/).slice(-2).map((part) => part.charAt(0).toUpperCase()).join('') || 'NB';
   const branchLimit = currentPackage.maxSalons;
   const staffLimit = currentPackage.maxStaff;
-  const branchRows = rowsByPage.branches || nailModuleConfigs.branches.rows;
+  const branchRows = rowsByPage.branches || (tenant ? [] : nailModuleConfigs.branches.rows);
   const currentConfig = activePage === 'overview' || activePage === 'subscription' ? null : nailModuleConfigs[activePage];
-  const currentRows = activePage === 'overview' || activePage === 'subscription' ? [] : rowsByPage[activePage] || currentConfig?.rows || [];
+  const currentRows = activePage === 'overview' || activePage === 'subscription'
+    ? []
+    : rowsByPage[activePage] || (tenant ? [] : currentConfig?.rows) || [];
   const scopedRows = activePage === 'branches' || branch === 'ALL' ? currentRows : currentRows.filter((row) => row.branchCode === branch);
   const branchScopeLabel = activePage === 'branches' || branch === 'ALL' ? 'Toàn tenant' : branchRows.find((row) => row.branchCode === branch)?.title || 'Chi nhánh ' + branch;
   const currentAccessMode = getTenantPageAccess(currentPackage, activePage, normalizedAvailablePackages);
@@ -1488,7 +1550,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           {readOnlyReason && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100"><LockKeyhole className="h-4 w-4" /></span><div><p className="text-[9px] font-black">Chế độ chỉ đọc đang được áp dụng</p><p className="mt-1 text-[8px] leading-5">{readOnlyReason}</p></div></div>}
           <div className="mb-4 sm:hidden"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label="Chọn phạm vi chi nhánh trên di động" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả chi nhánh</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
           {activePage === 'overview' ? (
-            <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
+            <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} tenant={tenant} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
           ) : activePage === 'subscription' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải trung tâm gói đăng ký...</div>}>
               <TenantAdminSubscription

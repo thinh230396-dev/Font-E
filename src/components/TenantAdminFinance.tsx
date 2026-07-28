@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -160,10 +161,10 @@ const branchName = (branch: BranchCode | 'ALL') => branch === 'ALL' ? 'Toàn ten
 
 export default function TenantAdminFinance({ searchQuery, onSearchQueryChange, selectedBranch, tenantName = 'Lumière Nail Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason, onNotify }: TenantAdminFinanceProps) {
   const storageKey = `tenant-admin-finance-v1:${tenantName}`;
-  const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => { try { const value = localStorage.getItem(`${storageKey}:transactions`); return value ? JSON.parse(value) : transactionSeed; } catch { return transactionSeed; } });
-  const [cashbooks] = useState<Cashbook[]>(cashbookSeed);
-  const [debts, setDebts] = useState<DebtItem[]>(debtSeed);
-  const [budgets] = useState<BudgetItem[]>(budgetSeed);
+  const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => { try { const value = localStorage.getItem(`${storageKey}:transactions`); return getTenantAdminInitialData(value ? JSON.parse(value) : null, transactionSeed); } catch { return getTenantAdminInitialData(null, transactionSeed); } });
+  const [cashbooks] = useState<Cashbook[]>(() => getTenantAdminInitialData(null, cashbookSeed));
+  const [debts, setDebts] = useState<DebtItem[]>(() => getTenantAdminInitialData(null, debtSeed));
+  const [budgets] = useState<BudgetItem[]>(() => getTenantAdminInitialData(null, budgetSeed));
   const [tab, setTab] = useState<FinanceTab>('OVERVIEW');
   const [period, setPeriod] = useState('MONTH');
   const [typeFilter, setTypeFilter] = useState('ALL');

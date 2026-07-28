@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { getTenantAdminInitialData } from "../utils/mockDataReset";
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -555,9 +556,9 @@ export default function TenantAdminInventory({
   const [items, setItems] = useState<InventoryItem[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(storageKey) || "null");
-      return Array.isArray(parsed) && parsed.length ? parsed : inventorySeed;
+      return getTenantAdminInitialData(Array.isArray(parsed) ? parsed : null, inventorySeed);
     } catch {
-      return inventorySeed;
+      return getTenantAdminInitialData(null, inventorySeed);
     }
   });
   const [category, setCategory] = useState<"ALL" | InventoryCategory>("ALL");

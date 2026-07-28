@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertTriangle, Award, BadgePercent, BarChart3, CalendarClock, Check, ChevronRight, Copy, Download,
   Gift, Layers3, Pause, Play, Plus, Search, ShieldCheck, Sparkles, Star, Target,
@@ -52,7 +53,7 @@ const seed: LoyaltyProgram[] = [
 
 export default function TenantAdminLoyalty({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify }: TenantAdminLoyaltyProps) {
   const storageKey = `tenant-admin-loyalty-v1:${tenantName}`;
-  const [programs, setPrograms] = useState<LoyaltyProgram[]>(() => { if (typeof window === 'undefined') return seed; try { const stored = localStorage.getItem(storageKey); return stored ? JSON.parse(stored) as LoyaltyProgram[] : seed; } catch { return seed; } });
+  const [programs, setPrograms] = useState<LoyaltyProgram[]>(() => { if (typeof window === 'undefined') return getTenantAdminInitialData(null, seed); try { const stored = localStorage.getItem(storageKey); return getTenantAdminInitialData(stored ? JSON.parse(stored) as LoyaltyProgram[] : null, seed); } catch { return getTenantAdminInitialData(null, seed); } });
   const [typeFilter, setTypeFilter] = useState<'ALL' | ProgramType>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ProgramStatus>('ALL');
   const [selected, setSelected] = useState<LoyaltyProgram | null>(null);

@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react';
+import { getTenantAdminInitialData, isTenantAdminLiveDataMode } from '../utils/mockDataReset';
 import {
   ArrowDownRight,
   ArrowRight,
@@ -69,7 +70,7 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
   const [compare, setCompare] = useState('PREVIOUS');
   const [groupFilter, setGroupFilter] = useState('ALL');
   const [favoriteOnly, setFavoriteOnly] = useState(false);
-  const [schedules, setSchedules] = useState<ReportSchedule[]>(scheduleSeed);
+  const [schedules, setSchedules] = useState<ReportSchedule[]>(() => getTenantAdminInitialData(null, scheduleSeed));
   const [builderOpen, setBuilderOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [metricOpen, setMetricOpen] = useState<string | null>(null);
@@ -79,11 +80,11 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
   const [scheduleForm, setScheduleForm] = useState({ name: '', frequency: 'WEEKLY' as ScheduleFrequency, time: '08:00', recipients: '', format: 'PDF', branch: 'ALL' as BranchCode | 'ALL' });
   const canManage = accessMode === 'full';
   const requireManage = () => { if (canManage) return true; const message = readOnlyReason || 'Gói hiện tại chỉ cho phép xem báo cáo cơ bản.'; setNotice(message); onNotify?.(message); return false; };
-  const filteredTemplates = useMemo(() => { const query = searchQuery.trim().toLocaleLowerCase('vi'); return templates.filter((item) => groupFilter === 'ALL' || item.group === groupFilter).filter((item) => !favoriteOnly || item.favorite).filter((item) => !query || `${item.id} ${item.name} ${item.group} ${item.description}`.toLocaleLowerCase('vi').includes(query)); }, [favoriteOnly, groupFilter, searchQuery]);
-  const revenue = selectedBranch === 'Q1' ? 468600000 : selectedBranch === 'Q3' ? 672400000 : 1141000000;
-  const bookings = selectedBranch === 'Q1' ? 612 : selectedBranch === 'Q3' ? 846 : 1458;
+  const filteredTemplates = useMemo(() => { const query = searchQuery.trim().toLocaleLowerCase('vi'); return getTenantAdminInitialData(null, templates).filter((item) => groupFilter === 'ALL' || item.group === groupFilter).filter((item) => !favoriteOnly || item.favorite).filter((item) => !query || `${item.id} ${item.name} ${item.group} ${item.description}`.toLocaleLowerCase('vi').includes(query)); }, [favoriteOnly, groupFilter, searchQuery]);
+  const revenue = isTenantAdminLiveDataMode() ? 0 : selectedBranch === 'Q1' ? 468600000 : selectedBranch === 'Q3' ? 672400000 : 1141000000;
+  const bookings = isTenantAdminLiveDataMode() ? 0 : selectedBranch === 'Q1' ? 612 : selectedBranch === 'Q3' ? 846 : 1458;
   const averageTicket = Math.round(revenue / bookings / 10000) * 10000;
-  const newCustomers = selectedBranch === 'Q1' ? 126 : selectedBranch === 'Q3' ? 168 : 294;
+  const newCustomers = isTenantAdminLiveDataMode() ? 0 : selectedBranch === 'Q1' ? 126 : selectedBranch === 'Q3' ? 168 : 294;
   const exportReport = (name = 'Báo cáo điều hành') => { const rows = [['Chỉ số', 'Giá trị', 'So sánh'], ['Doanh thu', revenue, '+16,8%'], ['Lịch hoàn tất', bookings, '+12,4%'], ['Giá trị trung bình', averageTicket, '+3,9%'], ['Khách mới', newCustomers, '+18,2%']]; const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n'); const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); link.download = `${name.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')}.csv`; link.click(); URL.revokeObjectURL(link.href); setNotice(`Đã xuất ${name}.`); };
   const submitBuilder = (event: FormEvent) => { event.preventDefault(); if (!requireManage()) return; if (!builder.name.trim() || builder.metrics.length === 0) { setFormError('Vui lòng nhập tên và chọn ít nhất một chỉ số.'); return; } setBuilderOpen(false); setNotice(`Đã tạo báo cáo tùy chỉnh “${builder.name}”.`); };
   const submitSchedule = (event: FormEvent) => { event.preventDefault(); if (!requireManage()) return; const recipients = scheduleForm.recipients.split(',').map((item) => item.trim()).filter(Boolean); if (!scheduleForm.name.trim() || recipients.length === 0) { setFormError('Vui lòng nhập tên lịch gửi và ít nhất một email nhận báo cáo.'); return; } const created: ReportSchedule = { id: `SCH-${String(schedules.length + 1).padStart(2, '0')}`, name: scheduleForm.name.trim(), frequency: scheduleForm.frequency, time: scheduleForm.time, recipients, format: scheduleForm.format, branch: scheduleForm.branch, nextRun: scheduleForm.frequency === 'DAILY' ? `21/07/2026 · ${scheduleForm.time}` : scheduleForm.frequency === 'WEEKLY' ? `27/07/2026 · ${scheduleForm.time}` : `01/08/2026 · ${scheduleForm.time}`, active: true }; setSchedules((current) => [created, ...current]); setScheduleOpen(false); setNotice(`Đã tạo lịch gửi “${created.name}”.`); };
@@ -91,6 +92,13 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
   const switchTab = (next: ReportTab) => { setTab(next); onSearchQueryChange(''); };
   const lineValues = [42, 50, 47, 58, 55, 66, 61, 74, 68, 82, 77, 91, 84, 96];
   const previousValues = [39, 43, 45, 49, 51, 55, 58, 62, 64, 68, 71, 74, 76, 80];
+
+  if (isTenantAdminLiveDataMode()) {
+    return <div className="space-y-5">
+      <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div><div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-violet-600"><BarChart3 className="h-4 w-4" />Phân tích điều hành</div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Báo cáo</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Báo cáo của {tenantName} sẽ được tổng hợp từ giao dịch, lịch hẹn và dữ liệu vận hành thật.</p></div></section>
+      <section className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm"><FileBarChart className="h-12 w-12 text-slate-300" /><h2 className="mt-4 text-base font-black text-slate-800">Chưa có dữ liệu để lập báo cáo</h2><p className="mt-2 max-w-lg text-xs leading-6 text-slate-500">Các số liệu mẫu đã được loại bỏ. Báo cáo sẽ xuất hiện sau khi tenant có lịch hẹn hoàn tất, thanh toán hoặc dữ liệu vận hành thực tế.</p></section>
+    </div>;
+  }
 
   return <div className="space-y-5">
     {(notice || accessMode !== 'full') && <div className="flex items-start justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-800"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm"><Check className="h-4 w-4" /></span><div><p className="text-xs font-black">Trung tâm báo cáo</p><p className="mt-1 text-xs leading-5">{notice || readOnlyReason || 'Bạn đang xem báo cáo ở chế độ giới hạn theo quyền của gói.'}</p></div></div>{notice && <button type="button" onClick={() => setNotice('')} aria-label="Đóng thông báo" className="flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-violet-500 shadow-none"><X className="h-4 w-4" /></button>}</div>}

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   ArrowRight,
   BarChart3,
@@ -141,9 +142,9 @@ const branchName = (branch: BranchCode | 'ALL') => branch === 'ALL' ? 'Tất c�
 
 export default function TenantAdminOnlineBooking({ searchQuery, onSearchQueryChange, selectedBranch, tenantName = 'Lumière Nail Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason, onNotify }: TenantAdminOnlineBookingProps) {
   const storageKey = `tenant-admin-online-booking-v1:${tenantName}`;
-  const [channels, setChannels] = useState<BookingChannel[]>(() => { try { const value = localStorage.getItem(`${storageKey}:channels`); return value ? JSON.parse(value) : channelsSeed; } catch { return channelsSeed; } });
-  const [services, setServices] = useState<PublicService[]>(() => { try { const value = localStorage.getItem(`${storageKey}:services`); return value ? JSON.parse(value) : servicesSeed; } catch { return servicesSeed; } });
-  const [appointments, setAppointments] = useState<OnlineAppointment[]>(appointmentsSeed);
+  const [channels, setChannels] = useState<BookingChannel[]>(() => { try { const value = localStorage.getItem(`${storageKey}:channels`); return getTenantAdminInitialData(value ? JSON.parse(value) : null, channelsSeed); } catch { return getTenantAdminInitialData(null, channelsSeed); } });
+  const [services, setServices] = useState<PublicService[]>(() => { try { const value = localStorage.getItem(`${storageKey}:services`); return getTenantAdminInitialData(value ? JSON.parse(value) : null, servicesSeed); } catch { return getTenantAdminInitialData(null, servicesSeed); } });
+  const [appointments, setAppointments] = useState<OnlineAppointment[]>(() => getTenantAdminInitialData(null, appointmentsSeed));
   const [tab, setTab] = useState<BookingTab>('OVERVIEW');
   const [period, setPeriod] = useState('30D');
   const [statusFilter, setStatusFilter] = useState('ALL');

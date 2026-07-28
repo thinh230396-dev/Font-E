@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertTriangle,
   Archive,
@@ -86,9 +87,9 @@ const branchName = (branch: BranchCode | 'ALL') => branch === 'ALL' ? 'Toàn ten
 
 export default function TenantAdminSanitation({ searchQuery, onSearchQueryChange, selectedBranch, tenantName = 'Lumière Nail Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason, onNotify }: TenantAdminSanitationProps) {
   const storageKey = `tenant-admin-sanitation-v1:${tenantName}`;
-  const [checklists, setChecklists] = useState<ChecklistItem[]>(() => { try { const value = localStorage.getItem(`${storageKey}:checklists`); return value ? JSON.parse(value) : checklistSeed; } catch { return checklistSeed; } });
-  const [batches, setBatches] = useState<SterilizationBatch[]>(() => { try { const value = localStorage.getItem(`${storageKey}:batches`); return value ? JSON.parse(value) : batchSeed; } catch { return batchSeed; } });
-  const [incidents, setIncidents] = useState<SafetyIncident[]>(() => { try { const value = localStorage.getItem(`${storageKey}:incidents`); return value ? JSON.parse(value) : incidentSeed; } catch { return incidentSeed; } });
+  const [checklists, setChecklists] = useState<ChecklistItem[]>(() => { try { const value = localStorage.getItem(`${storageKey}:checklists`); return getTenantAdminInitialData(value ? JSON.parse(value) : null, checklistSeed); } catch { return getTenantAdminInitialData(null, checklistSeed); } });
+  const [batches, setBatches] = useState<SterilizationBatch[]>(() => { try { const value = localStorage.getItem(`${storageKey}:batches`); return getTenantAdminInitialData(value ? JSON.parse(value) : null, batchSeed); } catch { return getTenantAdminInitialData(null, batchSeed); } });
+  const [incidents, setIncidents] = useState<SafetyIncident[]>(() => { try { const value = localStorage.getItem(`${storageKey}:incidents`); return getTenantAdminInitialData(value ? JSON.parse(value) : null, incidentSeed); } catch { return getTenantAdminInitialData(null, incidentSeed); } });
   const [tab, setTab] = useState<SafetyTab>('OVERVIEW');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [filterOpen, setFilterOpen] = useState(false);
@@ -109,7 +110,7 @@ export default function TenantAdminSanitation({ searchQuery, onSearchQueryChange
   const scopedChecklists = useMemo(() => checklists.filter((item) => selectedBranch === 'ALL' || item.branch === selectedBranch), [checklists, selectedBranch]);
   const scopedBatches = useMemo(() => batches.filter((item) => selectedBranch === 'ALL' || item.branch === selectedBranch), [batches, selectedBranch]);
   const scopedIncidents = useMemo(() => incidents.filter((item) => selectedBranch === 'ALL' || item.branch === selectedBranch), [incidents, selectedBranch]);
-  const scopedCertificates = useMemo(() => certificateSeed.filter((item) => selectedBranch === 'ALL' || item.branch === 'ALL' || item.branch === selectedBranch), [selectedBranch]);
+  const scopedCertificates = useMemo(() => getTenantAdminInitialData(null, certificateSeed).filter((item) => selectedBranch === 'ALL' || item.branch === 'ALL' || item.branch === selectedBranch), [selectedBranch]);
   const filteredChecklists = useMemo(() => { const query = searchQuery.trim().toLocaleLowerCase('vi'); return scopedChecklists.filter((item) => statusFilter === 'ALL' || item.status === statusFilter).filter((item) => !query || `${item.id} ${item.title} ${item.area} ${item.assignee}`.toLocaleLowerCase('vi').includes(query)); }, [scopedChecklists, searchQuery, statusFilter]);
   const filteredBatches = useMemo(() => { const query = searchQuery.trim().toLocaleLowerCase('vi'); return scopedBatches.filter((item) => statusFilter === 'ALL' || item.status === statusFilter).filter((item) => !query || `${item.id} ${item.machine} ${item.operator} ${item.indicator}`.toLocaleLowerCase('vi').includes(query)); }, [scopedBatches, searchQuery, statusFilter]);
   const filteredIncidents = useMemo(() => { const query = searchQuery.trim().toLocaleLowerCase('vi'); return scopedIncidents.filter((item) => statusFilter === 'ALL' || item.status === statusFilter).filter((item) => !query || `${item.id} ${item.title} ${item.category} ${item.area} ${item.owner}`.toLocaleLowerCase('vi').includes(query)); }, [scopedIncidents, searchQuery, statusFilter]);

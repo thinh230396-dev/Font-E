@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, Banknote, Check, ChevronRight,
   CircleDollarSign, Clock3, CreditCard, Download, FileText, Landmark, LockKeyhole,
@@ -60,7 +61,7 @@ const seed: PaymentRecord[] = [
 
 export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, branchLocked = false, tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify }: TenantAdminPaymentsProps) {
   const storageKey = `tenant-admin-payments-v1:${tenantName}`;
-  const [records, setRecords] = useState<PaymentRecord[]>(() => { if (typeof window === 'undefined') return seed; try { const stored = localStorage.getItem(storageKey); return stored ? JSON.parse(stored) as PaymentRecord[] : seed; } catch { return seed; } });
+  const [records, setRecords] = useState<PaymentRecord[]>(() => { if (typeof window === 'undefined') return getTenantAdminInitialData(null, seed); try { const stored = localStorage.getItem(storageKey); return getTenantAdminInitialData(stored ? JSON.parse(stored) as PaymentRecord[] : null, seed); } catch { return getTenantAdminInitialData(null, seed); } });
   const [tab, setTab] = useState<'ALL' | PaymentStatus>('ALL');
   const [methodFilter, setMethodFilter] = useState<'ALL' | PaymentMethod>('ALL');
   const [selected, setSelected] = useState<PaymentRecord | null>(null);

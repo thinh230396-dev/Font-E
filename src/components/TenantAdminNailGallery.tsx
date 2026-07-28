@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   ArrowUpRight,
   BarChart3,
@@ -164,10 +165,10 @@ export default function TenantAdminNailGallery({
   const designStorageKey = `tenant-admin-nail-designs-v1:${tenantName}`;
   const colorStorageKey = `tenant-admin-nail-colors-v1:${tenantName}`;
   const [designs, setDesigns] = useState<NailDesign[]>(() => {
-    try { const value = localStorage.getItem(designStorageKey); return value ? JSON.parse(value) : designSeed; } catch { return designSeed; }
+    try { const value = localStorage.getItem(designStorageKey); return getTenantAdminInitialData(value ? JSON.parse(value) : null, designSeed); } catch { return getTenantAdminInitialData(null, designSeed); }
   });
   const [colors, setColors] = useState<PolishColor[]>(() => {
-    try { const value = localStorage.getItem(colorStorageKey); return value ? JSON.parse(value) : colorSeed; } catch { return colorSeed; }
+    try { const value = localStorage.getItem(colorStorageKey); return getTenantAdminInitialData(value ? JSON.parse(value) : null, colorSeed); } catch { return getTenantAdminInitialData(null, colorSeed); }
   });
   const [tab, setTab] = useState<LibraryTab>('DESIGNS');
   const [viewMode, setViewMode] = useState<ViewMode>('GRID');

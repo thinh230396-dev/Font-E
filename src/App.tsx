@@ -39,6 +39,32 @@ import { authenticateDemoAccount, getDemoAccountByRole, type DemoAccount, type P
 
 const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v2';
 
+const normalizeAccountIdentity = (value?: string) => (
+  (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+);
+
+const getEmailIdentity = (email?: string) => normalizeAccountIdentity(email?.split('@')[0]);
+
+const tenantMatchesAdminIdentity = (tenant: Tenant, admin: TenantAdminAccount) => {
+  const adminIdentities = new Set([
+    normalizeAccountIdentity(admin.name),
+    normalizeAccountIdentity(admin.username),
+    getEmailIdentity(admin.email)
+  ].filter(Boolean));
+  const tenantIdentities = [
+    normalizeAccountIdentity(tenant.adminName),
+    normalizeAccountIdentity(tenant.adminUsername),
+    getEmailIdentity(tenant.adminEmail)
+  ].filter(Boolean);
+
+  return tenantIdentities.some((identity) => adminIdentities.has(identity));
+};
+
 const loadAlertsWithOneTimeMocks = (): SystemAlert[] => {
   const savedAlerts = loadLocalStorageData<SystemAlert[]>('alerts', []);
   const mocksWereSeeded = loadLocalStorageData<boolean>(ALERTS_MOCK_SEED_KEY, false);
@@ -293,9 +319,26 @@ export default function App() {
       return matchesIdentifier && tenant.adminTempPassword === password && tenant.status !== 'SUSPENDED';
     });
     const managedAdminTenant = managedAdmin
-      ? tenants.find((tenant) => managedAdmin.tenantIds.includes(tenant.id) || tenant.tenantAdminId === managedAdmin.id || tenant.adminEmail.trim().toLowerCase() === managedAdmin.email.trim().toLowerCase())
+      ? tenants.find((tenant) => (
+          managedAdmin.tenantIds.includes(tenant.id)
+          || tenant.tenantAdminId === managedAdmin.id
+          || tenant.adminEmail.trim().toLowerCase() === managedAdmin.email.trim().toLowerCase()
+          || tenantMatchesAdminIdentity(tenant, managedAdmin)
+        ))
       : undefined;
     const authenticatedTenant = managedTenant || managedAdminTenant;
+    if (managedAdmin && managedAdminTenant && !managedAdmin.tenantIds.includes(managedAdminTenant.id)) {
+      setTenantAdmins((current) => current.map((admin) => (
+        admin.id === managedAdmin.id
+          ? {
+              ...admin,
+              tenantIds: [...new Set([...admin.tenantIds, managedAdminTenant.id])],
+              tenantCount: new Set([...admin.tenantIds, managedAdminTenant.id]).size,
+              tenantName: managedAdminTenant.name
+            }
+          : admin
+      )));
+    }
     const managedAccount: DemoAccount | null = managedAdmin
       ? { email: managedAdmin.email, password, role: 'TENANT_ADMIN', displayName: managedAdmin.name, tenantName: managedAdminTenant?.name || managedAdmin.tenantName }
       : managedTenant
@@ -1434,19 +1477,31 @@ export default function App() {
   }
 
   const defaultTenantAccount = getDemoAccountByRole('TENANT_ADMIN');
-  const targetOwnerName = 'nguyễn văn boss';
+  const targetOwnerIdentity = normalizeAccountIdentity('NguyenVanBoss');
   const storedTenantId = localStorage.getItem('salonsys_tenant_id') || sessionStorage.getItem('salonsys_tenant_id') || '';
   const storedTenantEmail = (localStorage.getItem('salonsys_tenant_admin_email') || sessionStorage.getItem('salonsys_tenant_admin_email') || '').trim().toLowerCase();
   const sessionTenant = tenants.find((tenant) => tenant.id === storedTenantId)
     || tenants.find((tenant) => tenant.adminEmail.trim().toLowerCase() === storedTenantEmail);
   const sessionAdmin = tenantAdmins.find((admin) => admin.email.trim().toLowerCase() === storedTenantEmail);
-  const fallbackAdmin = tenantAdmins.find((admin) => admin.name.trim().toLowerCase() === targetOwnerName);
+  const fallbackAdmin = tenantAdmins.find((admin) => (
+    normalizeAccountIdentity(admin.name) === targetOwnerIdentity
+    || normalizeAccountIdentity(admin.username) === targetOwnerIdentity
+    || getEmailIdentity(admin.email) === targetOwnerIdentity
+  ));
   const targetAdmin = sessionAdmin
     || tenantAdmins.find((admin) => Boolean(sessionTenant) && (admin.tenantIds.includes(sessionTenant!.id) || sessionTenant!.tenantAdminId === admin.id))
     || (!sessionTenant ? fallbackAdmin : undefined);
   const targetTenant = sessionTenant
-    || tenants.find((tenant) => targetAdmin?.tenantIds.includes(tenant.id) || tenant.tenantAdminId === targetAdmin?.id)
-    || tenants.find((tenant) => tenant.adminName.trim().toLowerCase() === targetOwnerName);
+    || tenants.find((tenant) => Boolean(targetAdmin) && (
+      targetAdmin!.tenantIds.includes(tenant.id)
+      || tenant.tenantAdminId === targetAdmin!.id
+      || tenantMatchesAdminIdentity(tenant, targetAdmin!)
+    ))
+    || tenants.find((tenant) => (
+      normalizeAccountIdentity(tenant.adminName) === targetOwnerIdentity
+      || normalizeAccountIdentity(tenant.adminUsername) === targetOwnerIdentity
+      || getEmailIdentity(tenant.adminEmail) === targetOwnerIdentity
+    ));
   const tenantPortalAccount: DemoAccount = {
     ...defaultTenantAccount,
     displayName: targetAdmin?.name || targetTenant?.adminName || defaultTenantAccount.displayName,

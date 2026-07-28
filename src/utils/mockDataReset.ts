@@ -15,6 +15,32 @@ const SYSTEM_MOCK_STORAGE_KEYS = [
   'salonsys_system_settings',
 ];
 
+let tenantAdminDataMode: 'demo' | 'live' = 'demo';
+
+export const setTenantAdminDataMode = (mode: 'demo' | 'live') => {
+  tenantAdminDataMode = mode;
+};
+
+export const isTenantAdminLiveDataMode = () => tenantAdminDataMode === 'live';
+
+const getRecordIdentity = (value: unknown) => {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  return String(record.id || record.code || record.key || record.slug || '');
+};
+
+export const getTenantAdminInitialData = <T>(
+  stored: T[] | null | undefined,
+  mockSeed: T[]
+): T[] => {
+  if (tenantAdminDataMode === 'demo') return stored || mockSeed;
+  if (!stored) return [];
+
+  const mockIdentities = new Set(mockSeed.map(getRecordIdentity).filter(Boolean));
+  if (mockIdentities.size === 0) return stored;
+  return stored.filter((item) => !mockIdentities.has(getRecordIdentity(item)));
+};
+
 export const getTenantMockStorageKeys = (tenantName: string) => {
   const tenantBaseKeys = [
     `tenant-admin-appointments-v2:${tenantName}`,
