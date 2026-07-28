@@ -897,27 +897,45 @@ export default function TenantDetailModal({
 
         const remainingDays = billingCycle === 'yearly' ? 365 : 30;
 
-        const updatedFields: any = {
-          packageName: payload,
-          plan: payload,
-          subscriptionPlan: payload,
-          billingCycle: billingCycle,
-          effectiveDate: effectiveDate,
-          planStartDate: new Date().toISOString().slice(0, 10),
-          daysRemaining: remainingDays,
-          paymentStatus: invoiceStatus,
-          subscriptionPackageId: nextPackage?.id,
-          subscriptionPackageVersion: nextPackage?.version || 1,
-          subscriptionPrice: selectedPrice,
-          subscriptionCurrency: nextPackage?.currency || 'USD',
-          subscriptionStartedAt: new Date().toISOString().slice(0, 10),
-          subscriptionRenewsAt: getExpirationDateIso(remainingDays),
-          allowOnlineBooking: hasSubscriptionCapability(packages, { packageName: payload, subscriptionPackageId: nextPackage?.id }, 'online_booking')
-            ? tenant.allowOnlineBooking
-            : false,
-        };
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const scheduledEffectiveAt = tenant.subscriptionRenewsAt || tenant.trialEndDate || getExpirationDateIso(Math.max(0, tenant.daysRemaining || 0));
+        const updatedFields: Partial<Tenant> = effectiveDate === 'next_cycle'
+          ? {
+              effectiveDate,
+              pendingSubscriptionChange: {
+                requestId: invId,
+                packageId: nextPackage?.id || payload,
+                packageName: payload,
+                packageVersion: nextPackage?.version || 1,
+                billingCycle,
+                price: selectedPrice,
+                currency: nextPackage?.currency || 'USD',
+                effectiveAt: scheduledEffectiveAt,
+                requestedAt: new Date().toISOString()
+              }
+            }
+          : {
+              packageName: payload,
+              plan: payload,
+              subscriptionPlan: payload,
+              billingCycle,
+              effectiveDate,
+              planStartDate: todayIso,
+              daysRemaining: remainingDays,
+              paymentStatus: invoiceStatus,
+              subscriptionPackageId: nextPackage?.id,
+              subscriptionPackageVersion: nextPackage?.version || 1,
+              subscriptionPrice: selectedPrice,
+              subscriptionCurrency: nextPackage?.currency || 'USD',
+              subscriptionStartedAt: todayIso,
+              subscriptionRenewsAt: getExpirationDateIso(remainingDays),
+              pendingSubscriptionChange: undefined,
+              allowOnlineBooking: hasSubscriptionCapability(packages, { packageName: payload, subscriptionPackageId: nextPackage?.id }, 'online_booking')
+                ? tenant.allowOnlineBooking
+                : false,
+            };
 
-        if (invoiceStatus === 'PAID') {
+        if (invoiceStatus === 'PAID' && effectiveDate === 'immediate') {
           updatedFields.status = 'ACTIVE';
         }
 
@@ -931,8 +949,10 @@ export default function TenantDetailModal({
           packageId: nextPackage?.id,
           packageVersion: nextPackage?.version || 1,
           billingCycle: billingCycle,
-          servicePeriod: `Đổi gói sang ${payload} (${durationText})`,
-          dueDate: getExpirationDateIso(remainingDays),
+          servicePeriod: effectiveDate === 'next_cycle'
+            ? `Chuyển sang ${payload} từ ${scheduledEffectiveAt}`
+            : `Đổi gói sang ${payload} (${durationText})`,
+          dueDate: effectiveDate === 'next_cycle' ? scheduledEffectiveAt : getExpirationDateIso(remainingDays),
           amount: changeAmount,
           currency: changeCurrency,
           status: invoiceStatus === 'PAID' ? 'Đã thanh toán' : 'Đang chờ',
@@ -968,7 +988,9 @@ export default function TenantDetailModal({
           date: nowStr,
           user: 'Superadmin',
           type: 'payment',
-          description: `Đổi gói sang ${payload} (${durationText}). Trạng thái: ${sText} qua ${methodText}${txnInfo}.`
+          description: effectiveDate === 'next_cycle'
+            ? `Đã lên lịch chuyển sang ${payload} từ ${scheduledEffectiveAt}. Trạng thái hóa đơn: ${sText} qua ${methodText}${txnInfo}.`
+            : `Đổi gói sang ${payload} (${durationText}). Trạng thái: ${sText} qua ${methodText}${txnInfo}.`
         };
 
         const currentActivities = tenant.customActivities || [];
@@ -981,7 +1003,9 @@ export default function TenantDetailModal({
           ...prev
         ]);
 
-        triggerToast(`Đã chuyển đổi thành công sang gói ${payload}!`);
+        triggerToast(effectiveDate === 'next_cycle'
+          ? `Đã lên lịch chuyển sang gói ${payload} vào ${scheduledEffectiveAt}.`
+          : `Đã chuyển đổi thành công sang gói ${payload}!`);
       }
     } else if (type === 'branch-status') {
       if (payload?.branchId && payload?.nextStatus) {

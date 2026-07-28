@@ -1,5 +1,6 @@
 const SYSTEM_MOCK_STORAGE_KEYS = [
   'salonsys_tenants',
+  'salonsys_tenants_mock_seed_v1',
   'salonsys_packages',
   'salonsys_alerts',
   'salonsys_alerts_mock_seed_v2',
@@ -15,7 +16,7 @@ const SYSTEM_MOCK_STORAGE_KEYS = [
   'salonsys_system_settings',
 ];
 
-let tenantAdminDataMode: 'demo' | 'live' = 'demo';
+let tenantAdminDataMode: 'demo' | 'live' = 'live';
 
 export const setTenantAdminDataMode = (mode: 'demo' | 'live') => {
   tenantAdminDataMode = mode;

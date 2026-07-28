@@ -15,7 +15,7 @@ import {
 
 interface LoginPageProps {
   systemName: string;
-  onLogin: (identifier: string, password: string, remember: boolean) => boolean;
+  onLogin: (identifier: string, password: string, remember: boolean) => Promise<boolean>;
 }
 
 const roles = [
@@ -48,7 +48,7 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setNotice('');
@@ -75,13 +75,11 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
     }
 
     setIsSubmitting(true);
-    window.setTimeout(() => {
-      const authenticated = onLogin(normalizedIdentifier, password, remember);
-      if (!authenticated) {
-        setError('Tài khoản hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.');
-        setIsSubmitting(false);
-      }
-    }, 650);
+    const authenticated = await onLogin(normalizedIdentifier, password, remember);
+    if (!authenticated) {
+      setError('Tài khoản hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.');
+      setIsSubmitting(false);
+    }
   };
 
   return (

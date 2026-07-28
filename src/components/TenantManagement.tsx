@@ -62,7 +62,7 @@ interface TenantManagementProps {
     decision: 'APPROVED' | 'REJECTED',
     reviewNote: string,
     effectiveDate: 'immediate' | 'next_cycle'
-  ) => void;
+  ) => Promise<boolean>;
 }
 
 export default function TenantManagement({ 

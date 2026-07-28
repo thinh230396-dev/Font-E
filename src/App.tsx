@@ -28,12 +28,21 @@ import { inferPaymentGateway, normalizeInvoicePaymentData } from './utils/invoic
 import { SUPPORT_MOCK_TICKETS } from './mockData/supportTickets';
 import useGlobalModalGuard from './hooks/useGlobalModalGuard';
 import {
+  deletePackageUpgradeRequest,
   fetchPackageUpgradeRequests,
   loadPackageUpgradeRequests,
   persistPackageUpgradeRequest,
   persistPackageUpgradeReview,
   savePackageUpgradeRequests
 } from './utils/packageUpgradeRequests';
+import { resetTenantMockStorage } from './utils/mockDataReset';
+import {
+  deleteManagedAuthAccount,
+  fetchAuthenticatedAccount,
+  loginAccount,
+  logoutAccount,
+  persistManagedAuthAccount
+} from './utils/authApi';
 
 // Import subcomponents
 import Sidebar from './components/Sidebar';
@@ -42,9 +51,10 @@ import LoginPage from './components/LoginPage';
 import TenantAdminPortal from './components/NailTenantAdminPortal';
 import ReceptionistPortal from './components/ReceptionistPortal';
 import type { InterfaceLanguage } from './components/AccountPreferences';
-import { authenticateDemoAccount, getDemoAccountByRole, type DemoAccount, type PortalRole } from './auth/demoAccounts';
+import { getDemoAccountByRole, type DemoAccount, type PortalRole } from './auth/demoAccounts';
 
 const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v2';
+const TENANTS_MOCK_SEED_KEY = 'tenants_mock_seed_v1';
 
 const normalizeAccountIdentity = (value?: string) => (
   (value || '')
@@ -81,6 +91,15 @@ const loadAlertsWithOneTimeMocks = (): SystemAlert[] => {
   saveLocalStorageData(ALERTS_MOCK_SEED_KEY, true);
   const mockIds = new Set(INITIAL_ALERTS.map((alert) => alert.id));
   return [...INITIAL_ALERTS, ...savedAlerts.filter((alert) => !mockIds.has(alert.id))];
+};
+
+const loadTenantsWithOneTimeMocks = (): Tenant[] => {
+  const savedTenants = loadLocalStorageData<Tenant[]>('tenants', []);
+  const mocksWereSeeded = loadLocalStorageData<boolean>(TENANTS_MOCK_SEED_KEY, false);
+  if (mocksWereSeeded) return savedTenants;
+  saveLocalStorageData(TENANTS_MOCK_SEED_KEY, true);
+  const savedIds = new Set(savedTenants.map((tenant) => tenant.id));
+  return [...INITIAL_TENANTS.filter((tenant) => !savedIds.has(tenant.id)), ...savedTenants];
 };
 
 const Overview = lazy(() => import('./components/Overview'));
@@ -199,16 +218,10 @@ const normalizeInvoiceDueDate = (invoice: Invoice) => {
 export default function App() {
   useGlobalModalGuard();
 
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('salonsys_authenticated') === 'true'
-      || sessionStorage.getItem('salonsys_authenticated') === 'true';
-  });
-  const [portalRole, setPortalRole] = useState<PortalRole>(() => {
-    if (typeof window === 'undefined') return 'SUPERADMIN';
-    const savedRole = localStorage.getItem('salonsys_role') || sessionStorage.getItem('salonsys_role');
-    return savedRole === 'TENANT_ADMIN' || savedRole === 'RECEPTIONIST' ? savedRole : 'SUPERADMIN';
-  });
+  const [sessionAccount, setSessionAccount] = useState<DemoAccount | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const isAuthenticated = Boolean(sessionAccount);
+  const portalRole: PortalRole = sessionAccount?.role || 'SUPERADMIN';
   // Mobile sidebar visibility state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
@@ -225,9 +238,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
 
   // Core application states loaded from localStorage
-  const [tenants, setTenants] = useState<Tenant[]>(() => 
-    loadLocalStorageData<Tenant[]>('tenants', INITIAL_TENANTS)
-  );
+  const [tenants, setTenants] = useState<Tenant[]>(loadTenantsWithOneTimeMocks);
   const [packages, setPackages] = useState<SubscriptionPackage[]>(() => 
     loadLocalStorageData<SubscriptionPackage[]>('packages', INITIAL_PACKAGES).map(normalizeSubscriptionPackage)
   );
@@ -274,12 +285,23 @@ export default function App() {
     title: string;
     message: string;
     type: 'success' | 'info' | 'error' | 'warning';
-    showCancel?: boolean;
   } | null>(null);
 
   const triggerConfirm = (title: string, message: string, onConfirm: () => void) => {
     setConfirmDialog({ title, message, onConfirm });
   };
+
+  useEffect(() => {
+    let active = true;
+    void fetchAuthenticatedAccount().then((account) => {
+      if (active) setSessionAccount(account);
+    }).finally(() => {
+      if (active) setAuthChecked(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
@@ -316,76 +338,16 @@ export default function App() {
     document.documentElement.dataset.timezone = systemSettings.general.timezone;
   }, [interfaceLanguage, isAuthenticated, systemSettings.general.systemName, systemSettings.general.timezone]);
 
-  const handleLogin = (identifier: string, password: string, remember: boolean): boolean => {
-    const normalizedIdentifier = identifier.trim().toLowerCase();
-    const managedAdmin = tenantAdmins.find((admin) => {
-      const matchesIdentifier = admin.email.trim().toLowerCase() === normalizedIdentifier || admin.username?.trim().toLowerCase() === normalizedIdentifier;
-      return matchesIdentifier && admin.tempPassword === password && admin.status === 'ACTIVE';
-    });
-    const managedTenant = tenants.find((tenant) => {
-      const matchesIdentifier = tenant.adminEmail.trim().toLowerCase() === normalizedIdentifier || tenant.adminUsername?.trim().toLowerCase() === normalizedIdentifier;
-      return matchesIdentifier && tenant.adminTempPassword === password && tenant.status !== 'SUSPENDED';
-    });
-    const managedAdminTenant = managedAdmin
-      ? tenants.find((tenant) => (
-          managedAdmin.tenantIds.includes(tenant.id)
-          || tenant.tenantAdminId === managedAdmin.id
-          || tenant.adminEmail.trim().toLowerCase() === managedAdmin.email.trim().toLowerCase()
-          || tenantMatchesAdminIdentity(tenant, managedAdmin)
-        ))
-      : undefined;
-    const authenticatedTenant = managedTenant || managedAdminTenant;
-    if (managedAdmin && managedAdminTenant && !managedAdmin.tenantIds.includes(managedAdminTenant.id)) {
-      setTenantAdmins((current) => current.map((admin) => (
-        admin.id === managedAdmin.id
-          ? {
-              ...admin,
-              tenantIds: [...new Set([...admin.tenantIds, managedAdminTenant.id])],
-              tenantCount: new Set([...admin.tenantIds, managedAdminTenant.id]).size,
-              tenantName: managedAdminTenant.name
-            }
-          : admin
-      )));
-    }
-    const managedAccount: DemoAccount | null = managedAdmin
-      ? { email: managedAdmin.email, password, role: 'TENANT_ADMIN', displayName: managedAdmin.name, tenantName: managedAdminTenant?.name || managedAdmin.tenantName }
-      : managedTenant
-        ? { email: managedTenant.adminEmail, password, role: 'TENANT_ADMIN', displayName: managedTenant.adminName, tenantName: managedTenant.name }
-        : null;
-    const account = authenticateDemoAccount(identifier, password) || managedAccount;
+  const handleLogin = async (identifier: string, password: string, remember: boolean): Promise<boolean> => {
+    const account = await loginAccount(identifier, password, remember);
     if (!account) return false;
-
-    const storage = remember ? localStorage : sessionStorage;
-    const otherStorage = remember ? sessionStorage : localStorage;
-    storage.setItem('salonsys_authenticated', 'true');
-    storage.setItem('salonsys_role', account.role);
-    if (account.role === 'TENANT_ADMIN') {
-      storage.setItem('salonsys_tenant_admin_email', account.email);
-      if (authenticatedTenant) storage.setItem('salonsys_tenant_id', authenticatedTenant.id);
-      else storage.removeItem('salonsys_tenant_id');
-    } else {
-      storage.removeItem('salonsys_tenant_admin_email');
-      storage.removeItem('salonsys_tenant_id');
-    }
-    otherStorage.removeItem('salonsys_authenticated');
-    otherStorage.removeItem('salonsys_role');
-    otherStorage.removeItem('salonsys_tenant_admin_email');
-    otherStorage.removeItem('salonsys_tenant_id');
-    setPortalRole(account.role);
-    setIsAuthenticated(true);
+    setSessionAccount(account);
     return true;
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('salonsys_authenticated');
-    sessionStorage.removeItem('salonsys_authenticated');
-    localStorage.removeItem('salonsys_role');
-    sessionStorage.removeItem('salonsys_role');
-    localStorage.removeItem('salonsys_tenant_admin_email');
-    sessionStorage.removeItem('salonsys_tenant_admin_email');
-    localStorage.removeItem('salonsys_tenant_id');
-    sessionStorage.removeItem('salonsys_tenant_id');
-    setIsAuthenticated(false);
+    setSessionAccount(null);
+    void logoutAccount();
   };
 
   // Auto-dismiss toast
@@ -453,14 +415,13 @@ export default function App() {
       if (!active || remoteRequests === null) return;
       setUpgradeRequests((current) => {
         if (remoteRequests.length === 0 && current.length > 0) {
-          current.forEach((request) => { void persistPackageUpgradeRequest(request); });
           return current;
         }
         return remoteRequests;
       });
     });
     return () => { active = false; };
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     saveLocalStorageData('support_tickets', tickets);
@@ -536,6 +497,48 @@ export default function App() {
       });
       return hasChanges ? synchronized : currentPackages;
     });
+  }, [tenants]);
+
+  // Approved changes scheduled for the next cycle remain pending until their
+  // effective date. This prevents tenants from receiving new entitlements early.
+  useEffect(() => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const dueTenantIds = tenants
+      .filter((tenant) => tenant.pendingSubscriptionChange?.effectiveAt
+        && tenant.pendingSubscriptionChange.effectiveAt <= todayIso)
+      .map((tenant) => tenant.id);
+    if (dueTenantIds.length === 0) return;
+
+    setTenants((current) => current.map((tenant) => {
+      const pending = tenant.pendingSubscriptionChange;
+      if (!pending || !dueTenantIds.includes(tenant.id)) return tenant;
+      const cycleDays = getBillingCycleDays(pending.billingCycle);
+      const activity = {
+        date: new Date().toISOString().replace('T', ' ').slice(0, 16),
+        user: 'Hệ thống',
+        type: 'subscription',
+        description: `Đã áp dụng thay đổi theo lịch sang gói ${pending.packageName}.`
+      };
+      return {
+        ...tenant,
+        packageName: pending.packageName,
+        plan: pending.packageName,
+        subscriptionPlan: pending.packageName,
+        subscriptionPackageId: pending.packageId,
+        subscriptionPackageVersion: pending.packageVersion,
+        subscriptionPrice: pending.price,
+        subscriptionCurrency: pending.currency,
+        billingCycle: pending.billingCycle,
+        planStartDate: pending.effectiveAt,
+        subscriptionStartedAt: pending.effectiveAt,
+        subscriptionRenewsAt: getIsoDateAfterDaysFrom(pending.effectiveAt, cycleDays),
+        daysRemaining: cycleDays,
+        effectiveDate: 'immediate',
+        pendingSubscriptionChange: undefined,
+        customActivities: [activity, ...(tenant.customActivities || [])],
+        lastSync: new Date().toISOString()
+      };
+    }));
   }, [tenants]);
 
   // A deprecated package stops accepting new tenants immediately. Existing tenants
@@ -642,6 +645,45 @@ export default function App() {
     )));
   }, [packages, tenants]);
 
+  const syncTenantAuthAccount = (tenant: Tenant) => {
+    if (!tenant.adminEmail || !tenant.adminName) return;
+    void persistManagedAuthAccount({
+      id: tenant.tenantAdminId || tenant.id,
+      email: tenant.adminEmail,
+      username: tenant.adminUsername,
+      password: tenant.adminTempPassword,
+      role: 'TENANT_ADMIN',
+      displayName: tenant.adminName,
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      status: tenant.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE'
+    }).catch((error) => {
+      setToast({
+        message: error instanceof Error ? error.message : 'Không thể đồng bộ tài khoản đăng nhập.',
+        type: 'error'
+      });
+    });
+  };
+
+  const syncAdminAuthAccount = (admin: TenantAdminAccount) => {
+    void persistManagedAuthAccount({
+      id: admin.id,
+      email: admin.email,
+      username: admin.username,
+      password: admin.tempPassword,
+      role: 'TENANT_ADMIN',
+      displayName: admin.name,
+      tenantId: admin.tenantIds[0],
+      tenantName: admin.tenantName,
+      status: admin.status
+    }).catch((error) => {
+      setToast({
+        message: error instanceof Error ? error.message : 'Không thể đồng bộ tài khoản đăng nhập.',
+        type: 'error'
+      });
+    });
+  };
+
   // Handle Tenant CRUD operations
   const handleAddTenant = (newTenantData: Omit<Tenant, 'createdAt' | 'lastLogin'>) => {
     const newId = newTenantData.id.trim().toUpperCase();
@@ -671,6 +713,7 @@ export default function App() {
     };
     
     setTenants([newTenant, ...tenants]);
+    syncTenantAuthAccount(newTenant);
 
     const billingDueDays = newTenant.daysRemaining ?? getBillingCycleDays(newTenant.billingCycle);
 
@@ -710,6 +753,16 @@ export default function App() {
 
   const handleUpdateTenant = (id: string, updatedFields: Partial<Tenant>) => {
     const currentTenant = tenants.find((tenant) => tenant.id === id);
+    if (currentTenant && (
+      updatedFields.adminEmail !== undefined
+      || updatedFields.adminName !== undefined
+      || updatedFields.adminUsername !== undefined
+      || updatedFields.adminTempPassword !== undefined
+      || updatedFields.status !== undefined
+      || updatedFields.tenantAdminId !== undefined
+    )) {
+      syncTenantAuthAccount({ ...currentTenant, ...updatedFields });
+    }
     setTenants(prevTenants => prevTenants.map(t => {
       if (t.id === id) {
         let subscriptionFields: Partial<Tenant> = {};
@@ -813,8 +866,39 @@ export default function App() {
 
   const handleDeleteTenant = (id: string) => {
     const deletedTenant = tenants.find((tenant) => tenant.id === id);
-    setTenants(tenants.filter(t => t.id !== id));
-    setInvoices(invoices.filter(i => i.tenantId !== id));
+    if (!deletedTenant) return;
+    const deletedRequests = upgradeRequests.filter((request) => request.tenantId === id);
+    const remainingTenants = tenants.filter((tenant) => tenant.id !== id);
+    const adminStillUsed = remainingTenants.some((tenant) => (
+      tenant.adminEmail.trim().toLowerCase() === deletedTenant.adminEmail.trim().toLowerCase()
+      || (deletedTenant.tenantAdminId && tenant.tenantAdminId === deletedTenant.tenantAdminId)
+    ));
+
+    setTenants(remainingTenants);
+    setInvoices((current) => current.filter((invoice) => invoice.tenantId !== id));
+    setUpgradeRequests((current) => current.filter((request) => request.tenantId !== id));
+    setAlerts((current) => current.filter((alert) => alert.targetTenantId !== id));
+    setTickets((current) => current.filter((ticket) => ticket.tenantId !== id));
+    setTenantAdmins((current) => current.flatMap((admin) => {
+      if (!admin.tenantIds.includes(id)) return [admin];
+      const tenantIds = admin.tenantIds.filter((tenantId) => tenantId !== id);
+      if (tenantIds.length === 0 && admin.source === 'TENANT') return [];
+      return [{
+        ...admin,
+        tenantIds,
+        tenantCount: tenantIds.length,
+        tenantName: remainingTenants.find((tenant) => tenantIds.includes(tenant.id))?.name || 'Chưa liên kết tiệm'
+      }];
+    }));
+    resetTenantMockStorage(deletedTenant.name);
+    deletedRequests.forEach((request) => {
+      void deletePackageUpgradeRequest(request.id);
+    });
+    if (!adminStillUsed) {
+      void deleteManagedAuthAccount(deletedTenant.tenantAdminId || deletedTenant.adminEmail).catch(() => {
+        // The tenant data has already been removed locally; a later sync can retry account cleanup.
+      });
+    }
     if (deletedTenant) {
       recordAuditLog({
         eventCode: 'TENANT.DELETED',
@@ -833,13 +917,15 @@ export default function App() {
   // Toggle tenant status from overview
   const handleToggleTenantStatusFromOverview = (id: string, newStatus: TenantStatus) => {
     const currentTenant = tenants.find((tenant) => tenant.id === id);
-    setTenants(tenants.map(t => {
-      if (t.id === id) {
-        alert(`Đã cập nhật trạng thái của "${t.name}" thành: ${newStatus}`);
-        return { ...t, status: newStatus };
-      }
-      return t;
-    }));
+    if (!currentTenant || currentTenant.status === newStatus) return;
+    setTenants((current) => current.map((tenant) => (
+      tenant.id === id ? { ...tenant, status: newStatus } : tenant
+    )));
+    setAlertDialog({
+      title: 'Đã cập nhật trạng thái',
+      message: `Tenant "${currentTenant.name}" đã được chuyển sang trạng thái ${newStatus}.`,
+      type: newStatus === 'SUSPENDED' ? 'warning' : 'success'
+    });
     if (currentTenant && currentTenant.status !== newStatus) {
       recordAuditLog({
         eventCode: 'TENANT.STATUS.UPDATED',
@@ -927,8 +1013,7 @@ export default function App() {
     setAlertDialog({
       title: 'Thông báo',
       message: `Đã cập nhật hóa đơn ${id} thành trạng thái: ${newStatus}`,
-      type: 'info',
-      showCancel: true,
+      type: 'info'
     });
     if (currentInvoice && currentInvoice.status !== newStatus) {
       recordAuditLog({
@@ -972,7 +1057,7 @@ export default function App() {
   const handleCreateInvoice = (invoice: Invoice) => {
     if (invoices.some((current) => current.id === invoice.id || current.invoiceCode === invoice.invoiceCode)) {
       alert(`Mã hóa đơn ${invoice.invoiceCode || invoice.id} đã tồn tại.`);
-      return;
+      return false;
     }
     setInvoices((current) => dedupeInvoices([normalizeInvoicePaymentData(normalizeInvoiceDueDate(invoice)), ...current]));
     recordAuditLog({
@@ -982,6 +1067,7 @@ export default function App() {
       severity: 'medium', status: 'success', category: 'BILLING', resource: `Hóa đơn ${invoice.id}`,
       resourceId: invoice.id, method: 'CLIENT /invoices', metadata: { tenantId: invoice.tenantId, amount: invoice.amount, currency: invoice.currency || 'VND' }
     });
+    return true;
   };
 
   // Subscription update pricing/features
@@ -1218,6 +1304,12 @@ export default function App() {
       return current && JSON.stringify(current) !== JSON.stringify(admin);
     });
     setTenantAdmins(nextAdmins);
+    [...added, ...updated].forEach(syncAdminAuthAccount);
+    removed.forEach((admin) => {
+      void deleteManagedAuthAccount(admin.id).catch(() => {
+        // Local removal remains visible while server cleanup can be retried later.
+      });
+    });
 
     if (added.length > 0) {
       const admin = added[0];
@@ -1285,7 +1377,16 @@ export default function App() {
     };
 
     setUpgradeRequests((current) => [request, ...current]);
-    void persistPackageUpgradeRequest(request);
+    void persistPackageUpgradeRequest(request).then((saved) => {
+      if (saved) return;
+      setUpgradeRequests((current) => current.filter((item) => item.id !== request.id));
+      setAlerts((current) => current.filter((alert) => alert.id !== `ALT-${request.id}`));
+      setAlertDialog({
+        title: 'Chưa gửi được yêu cầu',
+        message: 'Máy chủ chưa xác nhận yêu cầu nâng cấp. Vui lòng kiểm tra phiên đăng nhập và thử lại.',
+        type: 'error'
+      });
+    });
     setAlerts((current) => [{
       id: `ALT-${request.id}`,
       title: `Yêu cầu nâng cấp: ${tenant.name}`,
@@ -1311,14 +1412,14 @@ export default function App() {
     });
   };
 
-  const handleReviewUpgradeRequest = (
+  const handleReviewUpgradeRequest = async (
     requestId: string,
     decision: 'APPROVED' | 'REJECTED',
     reviewNote: string,
     effectiveDate: 'immediate' | 'next_cycle'
   ) => {
     const request = upgradeRequests.find((item) => item.id === requestId);
-    if (!request || request.status !== 'PENDING') return;
+    if (!request || request.status !== 'PENDING') return false;
 
     const tenant = tenants.find((item) => item.id === request.tenantId);
     const targetPackage = packages.find((item) => item.id === request.requestedPackageId)
@@ -1329,32 +1430,24 @@ export default function App() {
         message: 'Tenant hoặc gói được yêu cầu không còn tồn tại.',
         type: 'error'
       });
-      return;
+      return false;
     }
 
     const reviewedAt = new Date().toISOString();
     let invoiceId: string | undefined;
+    let invoice: Invoice | undefined;
+    let effectiveStart = reviewedAt.slice(0, 10);
+    let pricing: ReturnType<typeof getSubscriptionPrice> | undefined;
 
     if (decision === 'APPROVED') {
-      const effectiveStart = effectiveDate === 'immediate'
+      effectiveStart = effectiveDate === 'immediate'
         ? reviewedAt.slice(0, 10)
         : tenant.subscriptionRenewsAt || tenant.trialEndDate || reviewedAt.slice(0, 10);
-      const pricing = getSubscriptionPrice(packages, targetPackage.name, request.billingCycle);
-
-      handleUpdateTenant(tenant.id, {
-        packageName: targetPackage.name,
-        plan: targetPackage.name,
-        subscriptionPlan: targetPackage.name,
-        billingCycle: request.billingCycle,
-        effectiveDate,
-        planStartDate: effectiveStart,
-        subscriptionPrice: pricing.price,
-        subscriptionCurrency: pricing.currency
-      });
+      pricing = getSubscriptionPrice(packages, targetPackage.name, request.billingCycle);
 
       invoiceId = `INV-UPG-${Date.now().toString(36).toUpperCase()}`;
       const dueDate = effectiveDate === 'immediate' ? getIsoDateAfterDays(7) : effectiveStart;
-      const invoice: Invoice = normalizeInvoicePaymentData(normalizeInvoiceDueDate({
+      invoice = normalizeInvoicePaymentData(normalizeInvoiceDueDate({
         id: invoiceId,
         invoiceCode: invoiceId,
         tenantId: tenant.id,
@@ -1374,7 +1467,6 @@ export default function App() {
         billingPeriod: effectiveDate === 'immediate' ? 'Nâng cấp áp dụng ngay' : 'Nâng cấp từ chu kỳ tiếp theo',
         issuedBy: 'Super Admin'
       }));
-      setInvoices((current) => dedupeInvoices([invoice, ...current]));
     }
 
     const reviewedRequest: PackageUpgradeRequest = {
@@ -1386,8 +1478,49 @@ export default function App() {
       reviewNote: reviewNote || (decision === 'APPROVED' ? 'Đã xác nhận giá và quyền gói mới.' : 'Yêu cầu chưa được chấp thuận.'),
       invoiceId
     };
+    const persisted = await persistPackageUpgradeReview(reviewedRequest);
+    if (!persisted) {
+      setAlertDialog({
+        title: 'Chưa thể lưu phê duyệt',
+        message: 'Máy chủ chưa xác nhận thao tác. Tenant và hóa đơn chưa bị thay đổi; vui lòng thử lại.',
+        type: 'error'
+      });
+      return false;
+    }
+
+    if (decision === 'APPROVED' && pricing) {
+      if (effectiveDate === 'immediate') {
+        handleUpdateTenant(tenant.id, {
+          packageName: targetPackage.name,
+          plan: targetPackage.name,
+          subscriptionPlan: targetPackage.name,
+          billingCycle: request.billingCycle,
+          effectiveDate,
+          planStartDate: effectiveStart,
+          subscriptionPrice: pricing.price,
+          subscriptionCurrency: pricing.currency,
+          pendingSubscriptionChange: undefined
+        });
+      } else {
+        handleUpdateTenant(tenant.id, {
+          effectiveDate,
+          pendingSubscriptionChange: {
+            requestId: request.id,
+            packageId: targetPackage.id,
+            packageName: targetPackage.name,
+            packageVersion: targetPackage.version || 1,
+            billingCycle: request.billingCycle,
+            price: pricing.price,
+            currency: pricing.currency,
+            effectiveAt: effectiveStart,
+            requestedAt: reviewedAt
+          }
+        });
+      }
+      if (invoice) setInvoices((current) => dedupeInvoices([invoice!, ...current]));
+    }
+
     setUpgradeRequests((current) => current.map((item) => item.id === requestId ? reviewedRequest : item));
-    void persistPackageUpgradeReview(reviewedRequest);
     recordAuditLog({
       eventCode: decision === 'APPROVED' ? 'PACKAGE.UPGRADE.APPROVED' : 'PACKAGE.UPGRADE.REJECTED',
       event: decision === 'APPROVED' ? 'Duyệt yêu cầu nâng cấp' : 'Từ chối yêu cầu nâng cấp',
@@ -1405,10 +1538,13 @@ export default function App() {
     setAlertDialog({
       title: decision === 'APPROVED' ? 'Đã duyệt nâng cấp' : 'Đã từ chối yêu cầu',
       message: decision === 'APPROVED'
-        ? `Tenant "${tenant.name}" đã được cập nhật sang gói ${targetPackage.name}. Hóa đơn ${invoiceId} đã được tạo.`
+        ? effectiveDate === 'immediate'
+          ? `Tenant "${tenant.name}" đã được cập nhật sang gói ${targetPackage.name}. Hóa đơn ${invoiceId} đã được tạo.`
+          : `Đã lên lịch chuyển tenant "${tenant.name}" sang gói ${targetPackage.name} vào ${tenant.subscriptionRenewsAt || tenant.trialEndDate || reviewedAt.slice(0, 10)}. Hóa đơn ${invoiceId} đã được tạo.`
         : `Yêu cầu nâng cấp của tenant "${tenant.name}" đã được từ chối và lưu lý do.`,
       type: decision === 'APPROVED' ? 'success' : 'info'
     });
+    return true;
   };
 
   // Dynamic Badge counts to supply to sidebar
@@ -1608,7 +1744,7 @@ export default function App() {
   const renderAlertDialog = () => {
     if (!alertDialog) return null;
 
-    const { title, message, type, showCancel } = alertDialog;
+    const { title, message, type } = alertDialog;
     
     let iconBg = 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400';
     let icon = <Info className="w-6 h-6" />;
@@ -1645,21 +1781,12 @@ export default function App() {
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-2">
-            {showCancel && (
-              <button
-                type="button"
-                onClick={() => setAlertDialog(null)}
-                className="px-5 py-2 bg-transparent hover:bg-brand-surface-high text-brand-text-muted hover:text-brand-text border border-brand-outline/60 rounded-xl text-xs font-bold transition-colors cursor-pointer w-full sm:w-auto text-center"
-              >
-                Hủy
-              </button>
-            )}
             <button
               type="button"
               onClick={() => setAlertDialog(null)}
               className="px-5 py-2 bg-brand-primary hover:bg-brand-primary/95 text-brand-on-primary rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-md w-full sm:w-auto text-center"
             >
-              Xác nhận
+              Đóng
             </button>
           </div>
         </div>
@@ -1667,14 +1794,22 @@ export default function App() {
     );
   };
 
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-brand-bg text-sm font-semibold text-brand-text-muted">
+        Đang xác minh phiên đăng nhập...
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return <LoginPage systemName={systemSettings.general.systemName} onLogin={handleLogin} />;
   }
 
   const defaultTenantAccount = getDemoAccountByRole('TENANT_ADMIN');
   const targetOwnerIdentity = normalizeAccountIdentity('NguyenVanBoss');
-  const storedTenantId = localStorage.getItem('salonsys_tenant_id') || sessionStorage.getItem('salonsys_tenant_id') || '';
-  const storedTenantEmail = (localStorage.getItem('salonsys_tenant_admin_email') || sessionStorage.getItem('salonsys_tenant_admin_email') || '').trim().toLowerCase();
+  const storedTenantId = sessionAccount?.tenantId || '';
+  const storedTenantEmail = (sessionAccount?.email || '').trim().toLowerCase();
   const sessionTenant = tenants.find((tenant) => tenant.id === storedTenantId)
     || tenants.find((tenant) => tenant.adminEmail.trim().toLowerCase() === storedTenantEmail);
   const sessionAdmin = tenantAdmins.find((admin) => admin.email.trim().toLowerCase() === storedTenantEmail);
@@ -1699,9 +1834,11 @@ export default function App() {
     ));
   const tenantPortalAccount: DemoAccount = {
     ...defaultTenantAccount,
-    displayName: targetAdmin?.name || targetTenant?.adminName || defaultTenantAccount.displayName,
-    email: targetAdmin?.email || targetTenant?.adminEmail || defaultTenantAccount.email,
-    tenantName: targetTenant?.name || targetAdmin?.tenantName || defaultTenantAccount.tenantName
+    ...sessionAccount,
+    displayName: sessionAccount?.displayName || targetAdmin?.name || targetTenant?.adminName || defaultTenantAccount.displayName,
+    email: sessionAccount?.email || targetAdmin?.email || targetTenant?.adminEmail || defaultTenantAccount.email,
+    tenantId: sessionAccount?.tenantId || targetTenant?.id,
+    tenantName: sessionAccount?.tenantName || targetTenant?.name || targetAdmin?.tenantName || defaultTenantAccount.tenantName
   };
   const tenantPortalPackage = targetTenant
     ? getSubscriptionPackageForTenant(packages, targetTenant)
@@ -1730,7 +1867,7 @@ export default function App() {
   if (portalRole === 'RECEPTIONIST') {
     return (
       <ReceptionistPortal
-        account={getDemoAccountByRole('RECEPTIONIST')}
+        account={sessionAccount || getDemoAccountByRole('RECEPTIONIST')}
         themeMode={themeMode}
         onThemeChange={setThemeMode}
         onLogout={handleLogout}

@@ -1,6 +1,52 @@
 import { Tenant, SubscriptionPackage, SystemAlert, Invoice, BackupSnapshot, BackupPolicy, RestoreJob } from './types';
 
-export const INITIAL_TENANTS: Tenant[] = [];
+const initialTenant = (
+  id: string,
+  name: string,
+  packageName: 'Basic' | 'Premium' | 'Enterprise',
+  status: Tenant['status'],
+  monthlyRevenue: number,
+  adminName: string,
+  adminEmail: string,
+  address: string
+): Tenant => ({
+  id,
+  name,
+  adminEmail,
+  packageName,
+  status,
+  monthlyRevenue,
+  createdAt: '2026-01-15',
+  address,
+  phone: '0900000000',
+  contactEmail: adminEmail,
+  country: 'Vietnam',
+  timezone: 'Asia/Ho_Chi_Minh',
+  staffCount: packageName === 'Basic' ? 5 : packageName === 'Premium' ? 14 : 32,
+  adminName,
+  lastLogin: '15/07/2026 18:30',
+  allowOnlineBooking: true,
+  currency: 'VND',
+  defaultLanguage: 'Vietnamese',
+  billingCycle: packageName === 'Enterprise' ? 'yearly' : 'monthly',
+  subscriptionPackageId: packageName === 'Basic' ? 'PKG-1' : packageName === 'Premium' ? 'PKG-2' : 'PKG-3',
+  subscriptionPackageVersion: packageName === 'Basic' ? 2 : 4,
+  subscriptionStartedAt: '2026-07-01',
+  subscriptionRenewsAt: packageName === 'Enterprise' ? '2027-06-30' : '2026-07-31',
+  planStartDate: '2026-07-01',
+  paymentStatus: status === 'OVERDUE' ? 'OVERDUE' : 'PAID'
+});
+
+export const INITIAL_TENANTS: Tenant[] = [
+  initialTenant('TEN-AURORA', 'Aurora Beauty & Spa', 'Enterprise', 'ACTIVE', 128_000_000, 'Trần Minh Anh', 'admin@aurorabeauty.vn', '28 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh'),
+  initialTenant('TEN-LUMIERE', 'Lumière Hair Studio', 'Premium', 'ACTIVE', 86_500_000, 'Nguyễn Văn Boss', 'tenantadmin@lumierehair.vn', '95 Võ Văn Tần, Quận 3, TP. Hồ Chí Minh'),
+  initialTenant('TEN-BLOOM', 'Bloom Salon', 'Premium', 'TRIAL', 52_400_000, 'Vũ Thu Hà', 'ha.vu@bloomsalon.vn', '12 Nguyễn Văn Trỗi, Phú Nhuận, TP. Hồ Chí Minh'),
+  initialTenant('TEN-OASIS', 'Oasis Wellness', 'Premium', 'OVERDUE', 44_800_000, 'Trịnh Bảo Ngọc', 'ngoc.trinh@oasiswellness.vn', '181 Hai Bà Trưng, Quận 1, TP. Hồ Chí Minh'),
+  initialTenant('TEN-MUSE', 'Muse Nail Lab', 'Basic', 'ACTIVE', 31_200_000, 'Đỗ Khánh Linh', 'linh.do@musenail.vn', '43 Lê Văn Sỹ, Quận 3, TP. Hồ Chí Minh'),
+  initialTenant('TEN-MORNING', 'Morning Dew Spa', 'Basic', 'SUSPENDED', 18_600_000, 'Hoàng Ngọc Uyên', 'uyen.hoang@morningdew.vn', '57 Phan Xích Long, Phú Nhuận, TP. Hồ Chí Minh'),
+  initialTenant('TEN-SORA', 'Sora Japanese Salon', 'Premium', 'EXPIRING', 73_900_000, 'Ngô Minh Quang', 'quang.ngo@sorasalon.vn', '8 Thái Văn Lung, Quận 1, TP. Hồ Chí Minh'),
+  initialTenant('TEN-IVORY', 'Ivory Skin Clinic', 'Enterprise', 'ACTIVE', 119_500_000, 'Phạm Thanh Tú', 'tu.pham@ivoryskin.vn', '66 Đồng Khởi, Quận 1, TP. Hồ Chí Minh')
+];
 
 export const INITIAL_PACKAGES: SubscriptionPackage[] = [
   {

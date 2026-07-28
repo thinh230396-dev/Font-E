@@ -89,6 +89,10 @@ export interface Tenant {
   defaultLanguage?: 'Vietnamese' | 'English';
   internalNotes?: string;
   paymentGatewayConfigured?: boolean;
+  billingCompany?: string;
+  billingEmail?: string;
+  billingTaxCode?: string;
+  billingAddress?: string;
   
   // Custom billing and package attributes
   daysRemaining?: number;
@@ -105,6 +109,17 @@ export interface Tenant {
   subscriptionCurrency?: CurrencyCode;
   subscriptionStartedAt?: string;
   subscriptionRenewsAt?: string;
+  pendingSubscriptionChange?: {
+    requestId: string;
+    packageId: string;
+    packageName: SubscriptionPackageName;
+    packageVersion: number;
+    billingCycle: 'monthly' | 'yearly';
+    price: number;
+    currency: CurrencyCode;
+    effectiveAt: string;
+    requestedAt: string;
+  };
   customActivities?: { date: string; user: string; type: string; description: string }[];
   customInvoices?: { id: string; period: string; amount: number; status: string; dueDate: string; type?: string; packageName?: string; duration?: string; createdAt?: string; paymentMethod?: string; transactionCode?: string; notes?: string }[];
   branches?: Branch[];

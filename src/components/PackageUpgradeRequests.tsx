@@ -22,7 +22,7 @@ interface PackageUpgradeRequestsProps {
     decision: 'APPROVED' | 'REJECTED',
     reviewNote: string,
     effectiveDate: 'immediate' | 'next_cycle'
-  ) => void;
+  ) => Promise<boolean>;
 }
 
 const statusMeta: Record<PackageUpgradeRequestStatus, { label: string; className: string; icon: typeof Clock3 }> = {
@@ -53,6 +53,7 @@ export default function PackageUpgradeRequests({ requests, onReview }: PackageUp
   const [effectiveDate, setEffectiveDate] = useState<'immediate' | 'next_cycle'>('next_cycle');
   const [reviewNote, setReviewNote] = useState('');
   const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('vi');
@@ -76,14 +77,16 @@ export default function PackageUpgradeRequests({ requests, onReview }: PackageUp
     setFormError('');
   };
 
-  const submitReview = () => {
+  const submitReview = async () => {
     if (!reviewing) return;
     if (decision === 'REJECTED' && reviewNote.trim().length < 8) {
       setFormError('Vui lòng nhập lý do từ chối tối thiểu 8 ký tự.');
       return;
     }
-    onReview(reviewing.id, decision, reviewNote.trim(), effectiveDate);
-    setReviewing(null);
+    setIsSubmitting(true);
+    const saved = await onReview(reviewing.id, decision, reviewNote.trim(), effectiveDate);
+    setIsSubmitting(false);
+    if (saved) setReviewing(null);
   };
 
   const pendingCount = requests.filter((request) => request.status === 'PENDING').length;
@@ -195,9 +198,9 @@ export default function PackageUpgradeRequests({ requests, onReview }: PackageUp
                 </fieldset>
               )}
               <label><span className="mb-1.5 block text-xs font-black text-slate-700">{decision === 'REJECTED' ? 'Lý do từ chối *' : 'Ghi chú phê duyệt'}</span><textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 outline-none focus:border-violet-400 focus:bg-white" placeholder={decision === 'REJECTED' ? 'Nêu rõ lý do để Tenant Admin biết cần bổ sung gì...' : 'Ghi chú cho bộ phận thanh toán hoặc tenant...'} /></label>
-              {decision === 'APPROVED' && <div className="rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-700">Hệ thống sẽ cập nhật gói của tenant, tạo hóa đơn chờ thanh toán và ghi nhật ký phê duyệt.</div>}
+              {decision === 'APPROVED' && <div className="rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-700">{effectiveDate === 'immediate' ? 'Hệ thống sẽ cập nhật gói ngay, tạo hóa đơn chờ thanh toán và ghi nhật ký phê duyệt.' : 'Hệ thống sẽ tạo hóa đơn và lên lịch áp dụng quyền gói mới khi chu kỳ hiện tại kết thúc.'}</div>}
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 p-5"><button type="button" onClick={() => setReviewing(null)} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600">Hủy</button><button type="button" onClick={submitReview} className={`h-10 rounded-lg px-5 text-xs font-black text-white ${decision === 'APPROVED' ? 'bg-emerald-600' : 'bg-rose-600'}`}>{decision === 'APPROVED' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'}</button></div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 p-5"><button type="button" disabled={isSubmitting} onClick={() => setReviewing(null)} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 disabled:opacity-50">Hủy</button><button type="button" disabled={isSubmitting} onClick={submitReview} className={`h-10 rounded-lg px-5 text-xs font-black text-white disabled:cursor-wait disabled:opacity-60 ${decision === 'APPROVED' ? 'bg-emerald-600' : 'bg-rose-600'}`}>{isSubmitting ? 'Đang lưu...' : decision === 'APPROVED' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'}</button></div>
           </section>
         </div>
       )}

@@ -29,6 +29,7 @@ interface TenantAdminSubscriptionProps {
   roleLabel: string;
   readOnlyReason?: string;
   onNotify: (message: string) => void;
+  onUpdateTenant?: (id: string, updated: Partial<Tenant>) => void;
   pendingRequest?: PackageUpgradeRequest;
   onRequestUpgrade: (
     plan: SubscriptionPackage,
@@ -57,6 +58,24 @@ const date = (value?: string) => {
   }).format(parsed);
 };
 
+const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const downloadFile = (filename: string, content: string, type = 'text/csv;charset=utf-8') => {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+};
+
+const escapeHtml = (value: unknown) => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
+
 const invoiceMeta: Record<Invoice['status'], { label: string; tone: string }> = {
   PAID: { label: 'Đã thanh toán', tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   PENDING: { label: 'Chờ thanh toán', tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
@@ -72,7 +91,7 @@ const capabilityGroups = [
 
 export default function TenantAdminSubscription({
   tenantName, tenant, subscriptionPackage, availablePackages, invoices, branchCount, staffCount,
-  roleLabel, readOnlyReason, onNotify, pendingRequest, onRequestUpgrade
+  roleLabel, readOnlyReason, onNotify, onUpdateTenant, pendingRequest, onRequestUpgrade
 }: TenantAdminSubscriptionProps) {
   const [activeTab, setActiveTab] = useState<SubscriptionTab>('overview');
   const [billingView, setBillingView] = useState<'monthly' | 'yearly'>(tenant?.billingCycle || 'monthly');
@@ -84,6 +103,8 @@ export default function TenantAdminSubscription({
   const [showBillingProfile, setShowBillingProfile] = useState(false);
   const [showInvoiceMenu, setShowInvoiceMenu] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [billingDraft, setBillingDraft] = useState({ company: '', taxCode: '', email: '', address: '' });
+  const [billingError, setBillingError] = useState('');
 
   const current = normalizeSubscriptionPackage(subscriptionPackage);
   const plans = useMemo(() => {
@@ -140,10 +161,116 @@ export default function TenantAdminSubscription({
   const paymentSourceInvoice = invoices.find((invoice) => invoice.paymentMethod);
   const defaultPaymentMethod = paymentSourceInvoice?.paymentMethod || '';
   const billingProfileInvoice = invoices.find((invoice) => invoice.billingCompany || invoice.billingEmail || invoice.taxCode || invoice.billingAddress);
-  const billingCompany = billingProfileInvoice?.billingCompany || tenantName;
-  const billingEmail = billingProfileInvoice?.billingEmail || tenant?.contactEmail || tenant?.adminEmail || '';
-  const billingTaxCode = billingProfileInvoice?.taxCode || '';
-  const billingAddress = billingProfileInvoice?.billingAddress || tenant?.address || '';
+  const billingCompany = tenant?.billingCompany || billingProfileInvoice?.billingCompany || tenantName;
+  const billingEmail = tenant?.billingEmail || billingProfileInvoice?.billingEmail || tenant?.contactEmail || tenant?.adminEmail || '';
+  const billingTaxCode = tenant?.billingTaxCode || billingProfileInvoice?.taxCode || '';
+  const billingAddress = tenant?.billingAddress || billingProfileInvoice?.billingAddress || tenant?.address || '';
+
+  const openBillingProfile = () => {
+    setBillingDraft({ company: billingCompany, taxCode: billingTaxCode, email: billingEmail, address: billingAddress });
+    setBillingError('');
+    setShowBillingProfile(true);
+  };
+
+  const saveBillingProfile = () => {
+    const company = billingDraft.company.trim();
+    const email = billingDraft.email.trim();
+    const address = billingDraft.address.trim();
+    if (!company || !email || !address) {
+      setBillingError('Vui lòng nhập tên đơn vị, email và địa chỉ xuất hóa đơn.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setBillingError('Email nhận hóa đơn chưa đúng định dạng.');
+      return;
+    }
+    if (!tenant || !onUpdateTenant) {
+      setBillingError('Không thể cập nhật hồ sơ thanh toán ở chế độ hiện tại.');
+      return;
+    }
+    onUpdateTenant(tenant.id, {
+      billingCompany: company,
+      billingTaxCode: billingDraft.taxCode.trim(),
+      billingEmail: email,
+      billingAddress: address
+    });
+    setShowBillingProfile(false);
+    onNotify('Đã cập nhật thông tin xuất hóa đơn.');
+  };
+
+  const exportInvoices = () => {
+    if (!filteredInvoices.length) {
+      onNotify('Không có hóa đơn phù hợp để xuất.');
+      return;
+    }
+    const header = ['Mã hóa đơn', 'Gói', 'Kỳ thanh toán', 'Ngày phát hành', 'Hạn thanh toán', 'Số tiền', 'Tiền tệ', 'Trạng thái', 'Mã giao dịch'];
+    const rows = filteredInvoices.map((invoice) => [
+      invoice.invoiceCode || invoice.id,
+      invoice.planName || current.name,
+      invoice.billingPeriod,
+      invoice.createdAt,
+      invoice.dueDate,
+      invoice.amount,
+      invoice.currency || billingCurrency,
+      invoiceMeta[invoice.status].label,
+      invoice.transactionCode || ''
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\n');
+    downloadFile(`hoa-don-${tenantName}-${new Date().toISOString().slice(0, 10)}.csv`, `\uFEFF${csv}`);
+    onNotify(`Đã xuất ${rows.length} hóa đơn theo bộ lọc hiện tại.`);
+  };
+
+  const exportPaymentReport = () => {
+    const rows = invoices.map((invoice) => [
+      invoice.invoiceCode || invoice.id,
+      invoice.status,
+      invoice.amount,
+      invoice.currency || billingCurrency,
+      invoice.paymentMethod || '',
+      invoice.transactionCode || ''
+    ]);
+    const csv = [
+      ['Mã hóa đơn', 'Trạng thái', 'Số tiền', 'Tiền tệ', 'Phương thức', 'Mã giao dịch'],
+      ...rows
+    ].map((row) => row.map(escapeCsv).join(',')).join('\n');
+    downloadFile(`bao-cao-thanh-toan-${tenantName}.csv`, `\uFEFF${csv}`);
+    onNotify('Đã tải báo cáo thanh toán.');
+  };
+
+  const exportAuditHistory = () => {
+    const rows = [
+      [tenant?.subscriptionStartedAt || tenant?.planStartDate || '', `Kích hoạt gói ${current.name}`, 'Super Admin'],
+      [tenant?.pendingSubscriptionChange?.requestedAt || '', tenant?.pendingSubscriptionChange ? `Lên lịch chuyển sang ${tenant.pendingSubscriptionChange.packageName}` : '', roleLabel]
+    ].filter((row) => row[1]);
+    const csv = [['Thời gian', 'Sự kiện', 'Thực hiện bởi'], ...rows]
+      .map((row) => row.map(escapeCsv).join(','))
+      .join('\n');
+    downloadFile(`nhat-ky-goi-${tenantName}.csv`, `\uFEFF${csv}`);
+    onNotify('Đã tải nhật ký đăng ký và thanh toán.');
+  };
+
+  const printInvoice = (invoice: Invoice) => {
+    const popup = window.open('', '_blank', 'noopener,noreferrer,width=900,height=720');
+    if (!popup) {
+      onNotify('Trình duyệt đang chặn cửa sổ bản in. Vui lòng cho phép pop-up và thử lại.');
+      return;
+    }
+    popup.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${escapeHtml(invoice.invoiceCode || invoice.id)}</title><style>body{font-family:Arial,sans-serif;color:#172033;padding:40px;line-height:1.5}h1{font-size:24px}table{width:100%;border-collapse:collapse;margin-top:24px}td{border-bottom:1px solid #ddd;padding:10px 0}td:last-child{text-align:right;font-weight:700}.total{font-size:20px}@media print{button{display:none}}</style></head><body><button onclick="window.print()">In hoặc lưu PDF</button><h1>Hóa đơn ${escapeHtml(invoice.invoiceCode || invoice.id)}</h1><p>${escapeHtml(invoice.tenantName)} · ${escapeHtml(invoice.planName || current.name)}</p><table><tr><td>Kỳ thanh toán</td><td>${escapeHtml(invoice.billingPeriod)}</td></tr><tr><td>Ngày phát hành</td><td>${escapeHtml(date(invoice.createdAt))}</td></tr><tr><td>Hạn thanh toán</td><td>${escapeHtml(date(invoice.dueDate))}</td></tr><tr><td>Trạng thái</td><td>${escapeHtml(invoiceMeta[invoice.status].label)}</td></tr><tr class="total"><td>Tổng tiền</td><td>${escapeHtml(money(invoice.amount, invoice.currency || billingCurrency))}</td></tr></table></body></html>`);
+    popup.document.close();
+    popup.focus();
+  };
+
+  const composeInvoiceEmail = (invoice: Invoice) => {
+    const recipient = invoice.billingEmail || billingEmail;
+    const subject = encodeURIComponent(`Hóa đơn ${invoice.invoiceCode || invoice.id} · ${tenantName}`);
+    const body = encodeURIComponent(`Xin chào,\n\nVui lòng kiểm tra hóa đơn ${invoice.invoiceCode || invoice.id} với tổng giá trị ${money(invoice.amount, invoice.currency || billingCurrency)}.\n\nTrân trọng.`);
+    window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${subject}&body=${body}`;
+  };
+
+  const contactSupport = () => {
+    const subject = encodeURIComponent(`Hỗ trợ gói đăng ký · ${tenantName}`);
+    window.location.href = `mailto:support@salonsys.com?subject=${subject}`;
+  };
 
   const requestPlan = () => {
     if (!selectedPlan) return;
@@ -165,7 +292,7 @@ export default function TenantAdminSubscription({
         <p className="mt-2 max-w-3xl text-[11px] leading-5 text-slate-500">Quản lý gói dịch vụ, hạn mức sử dụng, phương thức thanh toán và hóa đơn của <strong className="text-slate-700">{tenantName}</strong>.</p>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <button type="button" onClick={() => onNotify('Đã tạo yêu cầu hỗ trợ ưu tiên cho bộ phận Subscription.')} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[10px] font-bold text-slate-600 shadow-sm"><Headphones className="h-4 w-4" />Liên hệ hỗ trợ</button>
+        <button type="button" onClick={contactSupport} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[10px] font-bold text-slate-600 shadow-sm"><Headphones className="h-4 w-4" />Liên hệ hỗ trợ</button>
         {upgrade && <button type="button" disabled={!canChangePlan || Boolean(pendingRequest)} onClick={() => setSelectedPlan(upgrade)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-[10px] font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:opacity-50"><Zap className="h-4 w-4" />{pendingRequest ? 'Đang chờ duyệt' : `Nâng lên ${upgrade.name}`}</button>}
       </div>
     </section>
@@ -275,7 +402,7 @@ export default function TenantAdminSubscription({
               <div className="flex items-center justify-between"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><CheckCircle2 className="h-5 w-5" /></span><span className="text-[8px] font-black text-emerald-700">{paidInvoices.length} THÀNH CÔNG</span></div>
               <p className="mt-4 text-[9px] font-bold text-slate-500">Tổng đã thanh toán</p>
               <p className="mt-1 text-xl font-black text-slate-950">{money(paidTotal, billingCurrency)}</p>
-              <button type="button" onClick={() => onNotify('Đã chuẩn bị báo cáo thanh toán theo tenant.')} className="mt-2 flex items-center gap-1 text-[8px] font-black text-emerald-700">Xuất báo cáo<ChevronRight className="h-3 w-3" /></button>
+              <button type="button" onClick={exportPaymentReport} className="mt-2 flex items-center gap-1 text-[8px] font-black text-emerald-700">Xuất báo cáo<ChevronRight className="h-3 w-3" /></button>
             </article>
           </div>
         </div>
@@ -283,7 +410,7 @@ export default function TenantAdminSubscription({
         <div className="mx-5 mb-5 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:mx-6 sm:mb-6 lg:flex-row lg:items-center">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600"><Building2 className="h-5 w-5" /></span>
           <div className="min-w-0 flex-1"><p className="text-[8px] font-bold uppercase tracking-wide text-slate-400">Thông tin xuất hóa đơn</p><p className="mt-1 truncate text-[10px] font-black text-slate-800">{billingCompany}</p><p className="mt-1 truncate text-[8px] text-slate-500">{billingEmail || 'Chưa cập nhật email'}{billingTaxCode ? ` · MST ${billingTaxCode}` : ' · Chưa cập nhật mã số thuế'}</p></div>
-          <button type="button" onClick={() => setShowBillingProfile(true)} className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-[8px] font-black text-slate-600 shadow-sm">Chỉnh sửa hồ sơ</button>
+          <button type="button" onClick={openBillingProfile} className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-[8px] font-black text-slate-600 shadow-sm">Chỉnh sửa hồ sơ</button>
         </div>
       </div>
 
@@ -294,7 +421,7 @@ export default function TenantAdminSubscription({
             <div className="grid gap-2 sm:grid-cols-[minmax(210px,1fr)_180px_auto]">
               <div className="relative"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" /><input value={invoiceQuery} onChange={(event) => setInvoiceQuery(event.target.value)} aria-label="Tìm hóa đơn" placeholder="Mã hóa đơn, giao dịch..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></div>
               <BeautifulSelect value={invoiceStatus} onChange={(event) => setInvoiceStatus(event.target.value as typeof invoiceStatus)} aria-label="Lọc trạng thái hóa đơn" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold text-slate-600"><option value="ALL">Tất cả trạng thái</option><option value="PAID">Đã thanh toán</option><option value="PENDING">Chờ thanh toán</option><option value="OVERDUE">Quá hạn</option><option value="CANCELLED">Đã hủy</option></BeautifulSelect>
-              <button type="button" onClick={() => onNotify('Đã xuất danh sách hóa đơn theo bộ lọc hiện tại.')} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-black text-slate-600"><Download className="h-3.5 w-3.5" />Xuất file</button>
+              <button type="button" onClick={exportInvoices} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-black text-slate-600"><Download className="h-3.5 w-3.5" />Xuất file</button>
             </div>
           </div>
           <div className="mt-4 flex gap-2 overflow-x-auto pb-1">{([
@@ -316,7 +443,7 @@ export default function TenantAdminSubscription({
                 <td className="px-4 py-4"><p className="font-bold text-slate-700">{invoice.paymentMethod || 'Chưa thiết lập'}</p>{invoice.transactionCode && <p className="mt-1 max-w-28 truncate font-mono text-[7px] text-slate-400">{invoice.transactionCode}</p>}</td>
                 <td className="px-4 py-4 font-black text-slate-900">{money(invoice.amount, invoice.currency || billingCurrency)}</td>
                 <td className="px-4 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-[7px] font-bold ring-1 ${invoiceMeta[invoice.status].tone}`}>{invoiceMeta[invoice.status].label}</span></td>
-                <td className="relative px-5 py-4 text-right"><button type="button" onClick={() => setShowInvoiceMenu(showInvoiceMenu === invoice.id ? null : invoice.id)} aria-label={`Thao tác hóa đơn ${invoice.invoiceCode || invoice.id}`} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500"><MoreHorizontal className="h-4 w-4" /></button>{showInvoiceMenu === invoice.id && <div className="absolute right-5 top-12 z-10 w-44 rounded-xl border border-slate-200 bg-white p-1.5 text-left shadow-xl"><button type="button" onClick={() => { setSelectedInvoice(invoice); setShowInvoiceMenu(null); }} className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[8px] font-bold text-slate-600 hover:bg-slate-50"><Eye className="h-3.5 w-3.5" />Xem chi tiết</button><button type="button" onClick={() => { onNotify(`Đang tải hóa đơn ${invoice.invoiceCode || invoice.id}.`); setShowInvoiceMenu(null); }} className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[8px] font-bold text-slate-600 hover:bg-slate-50"><Download className="h-3.5 w-3.5" />Tải PDF</button><button type="button" onClick={() => { onNotify(`Đã gửi lại hóa đơn tới ${invoice.billingEmail || billingEmail || 'email thanh toán'}.`); setShowInvoiceMenu(null); }} className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[8px] font-bold text-slate-600 hover:bg-slate-50"><Mail className="h-3.5 w-3.5" />Gửi lại email</button></div>}</td>
+                <td className="relative px-5 py-4 text-right"><button type="button" onClick={() => setShowInvoiceMenu(showInvoiceMenu === invoice.id ? null : invoice.id)} aria-label={`Thao tác hóa đơn ${invoice.invoiceCode || invoice.id}`} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500"><MoreHorizontal className="h-4 w-4" /></button>{showInvoiceMenu === invoice.id && <div className="absolute right-5 top-12 z-10 w-44 rounded-xl border border-slate-200 bg-white p-1.5 text-left shadow-xl"><button type="button" onClick={() => { setSelectedInvoice(invoice); setShowInvoiceMenu(null); }} className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[8px] font-bold text-slate-600 hover:bg-slate-50"><Eye className="h-3.5 w-3.5" />Xem chi tiết</button><button type="button" onClick={() => { printInvoice(invoice); setShowInvoiceMenu(null); }} className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[8px] font-bold text-slate-600 hover:bg-slate-50"><Download className="h-3.5 w-3.5" />In / lưu PDF</button><button type="button" onClick={() => { composeInvoiceEmail(invoice); setShowInvoiceMenu(null); }} className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[8px] font-bold text-slate-600 hover:bg-slate-50"><Mail className="h-3.5 w-3.5" />Soạn email</button></div>}</td>
               </tr>)}</tbody>
             </table>
           </div>
@@ -331,7 +458,7 @@ export default function TenantAdminSubscription({
       { date: '15/06/2026 · 14:32', title: 'Cập nhật phương thức thanh toán', detail: 'Visa •••• 4242 được đặt làm phương thức mặc định', actor: roleLabel, icon: CreditCard, tone: 'bg-violet-100 text-violet-600' },
       { date: date(tenant?.subscriptionStartedAt || tenant?.planStartDate), title: `Kích hoạt gói ${current.name}`, detail: `Áp dụng phiên bản gói ${tenant?.subscriptionPackageVersion || current.version || 1} và giá khóa cho tenant`, actor: 'Super Admin', icon: PackageCheck, tone: 'bg-slate-100 text-slate-600' }
     ].map((item, index, all) => { const Icon = item.icon; return <div key={item.title} className="flex gap-4"><div className="flex flex-col items-center"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${item.tone}`}><Icon className="h-4 w-4" /></span>{index < all.length - 1 && <span className="h-16 w-px bg-slate-200" />}</div><div className="pb-6"><p className="text-[8px] font-bold text-slate-400">{item.date}</p><p className="mt-1 text-[10px] font-black text-slate-800">{item.title}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{item.detail}</p><p className="mt-2 text-[7px] font-bold text-violet-600">Bởi {item.actor}</p></div></div>; })}</div></div>
-    <aside className="space-y-4"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><ShieldCheck className="h-5 w-5 text-emerald-600" /><h3 className="mt-4 text-sm font-black text-slate-900">Kiểm soát thay đổi</h3><ul className="mt-4 space-y-3 text-[8px] leading-4 text-slate-500"><li className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />Owner gửi yêu cầu thay đổi gói hoặc chu kỳ.</li><li className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />Super Admin xác nhận giá, thời điểm và quyền mới.</li><li className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />Mọi thay đổi đều được ghi lại trong nhật ký.</li></ul></div><button type="button" onClick={() => onNotify('Đã xuất nhật ký đăng ký và thanh toán.')} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[9px] font-black text-slate-600 shadow-sm"><FileText className="h-4 w-4" />Xuất nhật ký kiểm toán</button></aside></section>}
+    <aside className="space-y-4"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><ShieldCheck className="h-5 w-5 text-emerald-600" /><h3 className="mt-4 text-sm font-black text-slate-900">Kiểm soát thay đổi</h3><ul className="mt-4 space-y-3 text-[8px] leading-4 text-slate-500"><li className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />Owner gửi yêu cầu thay đổi gói hoặc chu kỳ.</li><li className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />Super Admin xác nhận giá, thời điểm và quyền mới.</li><li className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />Mọi thay đổi đều được ghi lại trong nhật ký.</li></ul></div><button type="button" onClick={exportAuditHistory} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[9px] font-black text-slate-600 shadow-sm"><FileText className="h-4 w-4" />Xuất nhật ký kiểm toán</button></aside></section>}
 
     {selectedInvoice && <div className="fixed inset-0 z-[100] flex justify-end bg-slate-950/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Chi tiết hóa đơn ${selectedInvoice.invoiceCode || selectedInvoice.id}`}>
       <button type="button" aria-label="Đóng chi tiết hóa đơn" onClick={() => setSelectedInvoice(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
@@ -367,16 +494,53 @@ export default function TenantAdminSubscription({
           {(selectedInvoice.transactionCode || selectedInvoice.paymentGateway) && <div className="rounded-2xl bg-emerald-50 p-4"><div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /><p className="text-[9px] font-black text-emerald-800">Thông tin giao dịch</p></div><p className="mt-2 text-[8px] text-emerald-700">{selectedInvoice.paymentGateway || selectedInvoice.paymentMethod}{selectedInvoice.transactionCode ? ` · ${selectedInvoice.transactionCode}` : ''}{selectedInvoice.paidAt ? ` · ${date(selectedInvoice.paidAt)}` : ''}</p></div>}
         </div>
         <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:justify-end sm:px-6">
-          <button type="button" onClick={() => onNotify(`Đã gửi lại hóa đơn tới ${selectedInvoice.billingEmail || billingEmail || 'email thanh toán'}.`)} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-black text-slate-600"><Mail className="h-4 w-4" />Gửi qua email</button>
-          <button type="button" onClick={() => onNotify(`Đang tải hóa đơn ${selectedInvoice.invoiceCode || selectedInvoice.id}.`)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-[9px] font-black text-white"><Download className="h-4 w-4" />Tải PDF</button>
+          <button type="button" onClick={() => composeInvoiceEmail(selectedInvoice)} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-black text-slate-600"><Mail className="h-4 w-4" />Soạn email</button>
+          <button type="button" onClick={() => printInvoice(selectedInvoice)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-[9px] font-black text-white"><Download className="h-4 w-4" />In / lưu PDF</button>
         </div>
       </section>
     </div>}
 
     {selectedPlan && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Xác nhận thay đổi gói"><section className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="bg-gradient-to-br from-[#171328] to-[#43256e] p-6 text-white"><div className="flex items-start justify-between"><div><p className="text-[8px] font-black uppercase tracking-[0.15em] text-violet-200">Yêu cầu thay đổi gói</p><h2 className="mt-2 text-xl font-black">{current.name} <ArrowRight className="mx-2 inline h-4 w-4" /> {selectedPlan.name}</h2></div><button type="button" onClick={() => setSelectedPlan(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10"><X className="h-4 w-4" /></button></div></div><div className="space-y-4 p-6"><div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-4"><p className="text-[8px] text-slate-400">Giá dự kiến</p><p className="mt-1 text-sm font-black text-slate-900">{money(billingView === 'yearly' ? getYearlyPackagePrice(selectedPlan) : selectedPlan.price, selectedPlan.currency || 'USD')}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-[8px] text-slate-400">Chu kỳ</p><p className="mt-1 text-sm font-black text-slate-900">{billingView === 'yearly' ? 'Hằng năm' : 'Hằng tháng'}</p></div></div><fieldset><legend className="text-[9px] font-black text-slate-700">Thời điểm áp dụng</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">{(['next_cycle', 'immediate'] as const).map((value) => <label key={value} className={`cursor-pointer rounded-2xl border p-4 ${effectiveDate === value ? 'border-violet-400 bg-violet-50' : 'border-slate-200'}`}><input type="radio" className="sr-only" checked={effectiveDate === value} onChange={() => setEffectiveDate(value)} /><p className="text-[9px] font-black text-slate-800">{value === 'next_cycle' ? 'Chu kỳ tiếp theo' : 'Áp dụng ngay'}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{value === 'next_cycle' ? `Từ ${date(renewalDate)}` : 'Có thể phát sinh tiền chênh lệch'}</p></label>)}</div></fieldset><div className="flex gap-2 rounded-xl bg-blue-50 p-3 text-[8px] leading-4 text-blue-700"><Info className="h-4 w-4 shrink-0" />Đây là yêu cầu phê duyệt. Super Admin sẽ xác nhận giá cuối cùng trước khi gói được thay đổi.</div></div><div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => setSelectedPlan(null)} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600">Hủy</button><button type="button" onClick={requestPlan} className="h-11 rounded-xl bg-violet-600 px-5 text-[9px] font-black text-white">Gửi yêu cầu thay đổi</button></div></section></div>}
 
-    {showPayment && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Phương thức thanh toán"><section className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 p-6"><div><p className="text-[8px] font-black uppercase tracking-[0.14em] text-violet-600">Thanh toán bảo mật</p><h2 className="mt-2 text-lg font-black text-slate-900">Phương thức thanh toán</h2><p className="mt-1 text-[9px] text-slate-500">Quản lý phương thức dùng cho gia hạn tự động.</p></div><button type="button" onClick={() => setShowPayment(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><X className="h-4 w-4" /></button></div><div className="p-6">{defaultPaymentMethod ? <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-violet-900 p-5 text-white"><div className="flex items-center justify-between"><Landmark className="h-5 w-5 text-violet-200" /><span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[7px] font-black text-emerald-200">MẶC ĐỊNH</span></div><p className="mt-8 text-base font-black">{defaultPaymentMethod}</p><div className="mt-5 flex justify-between text-[8px] text-slate-300"><span>{tenantName}</span><span>Thanh toán tự động</span></div></div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm"><CreditCard className="h-6 w-6" /></span><p className="mt-4 text-[10px] font-black text-slate-700">Chưa có phương thức thanh toán</p><p className="mt-1 text-[8px] leading-4 text-slate-400">Thêm thẻ hoặc tài khoản thanh toán để chuẩn bị cho kỳ gia hạn tiếp theo.</p></div>}<label className="mt-5 flex items-center justify-between rounded-xl border border-slate-200 p-4"><span><span className="block text-[9px] font-black text-slate-800">Thanh toán tự động</span><span className="mt-1 block text-[8px] text-slate-400">Tự động gia hạn khi đến chu kỳ</span></span><input type="checkbox" defaultChecked={Boolean(defaultPaymentMethod)} disabled={!defaultPaymentMethod} className="h-4 w-4 accent-violet-600 disabled:opacity-40" /></label><button type="button" onClick={() => { setShowPayment(false); onNotify('Đã mở luồng bảo mật để thêm phương thức thanh toán mới.'); }} className="mt-4 h-11 w-full rounded-xl bg-slate-900 text-[9px] font-black text-white">{defaultPaymentMethod ? 'Thay đổi phương thức' : 'Thêm phương thức thanh toán'}</button><p className="mt-3 flex items-center justify-center gap-1.5 text-[7px] text-slate-400"><ShieldCheck className="h-3 w-3" />Thông tin thanh toán được mã hóa và không lưu trực tiếp trên SalonSys.</p></div></section></div>}
+    {showPayment && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Phương thức thanh toán">
+        <section className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div className="flex items-start justify-between border-b border-slate-100 p-6">
+            <div><p className="text-[8px] font-black uppercase tracking-[0.14em] text-violet-600">Thanh toán bảo mật</p><h2 className="mt-2 text-lg font-black text-slate-900">Phương thức thanh toán</h2><p className="mt-1 text-[9px] text-slate-500">Xem phương thức dùng cho gia hạn tự động.</p></div>
+            <button type="button" onClick={() => setShowPayment(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="p-6">
+            {defaultPaymentMethod ? <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-violet-900 p-5 text-white"><div className="flex items-center justify-between"><Landmark className="h-5 w-5 text-violet-200" /><span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[7px] font-black text-emerald-200">MẶC ĐỊNH</span></div><p className="mt-8 text-base font-black">{defaultPaymentMethod}</p><div className="mt-5 flex justify-between text-[8px] text-slate-300"><span>{tenantName}</span><span>Thanh toán tự động</span></div></div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm"><CreditCard className="h-6 w-6" /></span><p className="mt-4 text-[10px] font-black text-slate-700">Chưa có phương thức thanh toán</p><p className="mt-1 text-[8px] leading-4 text-slate-400">Phương thức thanh toán cần được cấu hình qua cổng thanh toán của hệ thống.</p></div>}
+            <label className="mt-5 flex items-center justify-between rounded-xl border border-slate-200 p-4"><span><span className="block text-[9px] font-black text-slate-800">Thanh toán tự động</span><span className="mt-1 block text-[8px] text-slate-400">Tự động gia hạn khi đến chu kỳ</span></span><input type="checkbox" checked={Boolean(defaultPaymentMethod)} readOnly disabled className="h-4 w-4 accent-violet-600 disabled:opacity-40" /></label>
+            <p className="mt-4 rounded-xl bg-amber-50 p-3 text-center text-[8px] font-bold leading-4 text-amber-700">Liên hệ quản trị hệ thống để thêm hoặc thay đổi phương thức thanh toán.</p>
+            <button type="button" onClick={() => setShowPayment(false)} className="mt-4 h-11 w-full rounded-xl bg-slate-900 text-[9px] font-black text-white">Đóng</button>
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-[7px] text-slate-400"><ShieldCheck className="h-3 w-3" />SalonSys không lưu trực tiếp thông tin thẻ thanh toán.</p>
+          </div>
+        </section>
+      </div>
+    )}
 
-    {showBillingProfile && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Thông tin xuất hóa đơn"><section className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 p-6"><div><p className="text-[8px] font-black uppercase tracking-[0.14em] text-blue-600">Hồ sơ thanh toán</p><h2 className="mt-2 text-lg font-black text-slate-900">Thông tin xuất hóa đơn</h2><p className="mt-1 text-[9px] text-slate-500">Thông tin này sẽ áp dụng cho các hóa đơn tiếp theo.</p></div><button type="button" onClick={() => setShowBillingProfile(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><X className="h-4 w-4" /></button></div><div className="grid gap-4 p-6 sm:grid-cols-2"><label className="sm:col-span-2"><span className="text-[8px] font-black text-slate-600">Tên doanh nghiệp / hộ kinh doanh</span><input defaultValue={billingCompany} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></label><label><span className="text-[8px] font-black text-slate-600">Mã số thuế</span><input defaultValue={billingTaxCode} placeholder="Nhập mã số thuế" className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></label><label><span className="text-[8px] font-black text-slate-600">Email nhận hóa đơn</span><input type="email" defaultValue={billingEmail} placeholder="billing@doanhnghiep.vn" className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></label><label className="sm:col-span-2"><span className="text-[8px] font-black text-slate-600">Địa chỉ xuất hóa đơn</span><input defaultValue={billingAddress} placeholder="Nhập địa chỉ đầy đủ" className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></label><div className="flex gap-2 rounded-xl bg-blue-50 p-3 text-[8px] leading-4 text-blue-700 sm:col-span-2"><Info className="h-4 w-4 shrink-0" />Hóa đơn đã phát hành sẽ giữ nguyên thông tin tại thời điểm phát hành.</div></div><div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowBillingProfile(false)} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600">Hủy</button><button type="button" onClick={() => { setShowBillingProfile(false); onNotify('Đã cập nhật thông tin xuất hóa đơn.'); }} className="h-11 rounded-xl bg-violet-600 px-5 text-[9px] font-black text-white">Lưu thông tin</button></div></section></div>}
+    {showBillingProfile && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Thông tin xuất hóa đơn">
+        <section className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div className="flex items-start justify-between border-b border-slate-100 p-6">
+            <div><p className="text-[8px] font-black uppercase tracking-[0.14em] text-blue-600">Hồ sơ thanh toán</p><h2 className="mt-2 text-lg font-black text-slate-900">Thông tin xuất hóa đơn</h2><p className="mt-1 text-[9px] text-slate-500">Thông tin này sẽ áp dụng cho các hóa đơn tiếp theo.</p></div>
+            <button type="button" onClick={() => setShowBillingProfile(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="grid gap-4 p-6 sm:grid-cols-2">
+            <label className="sm:col-span-2"><span className="text-[8px] font-black text-slate-600">Tên doanh nghiệp / hộ kinh doanh</span><input value={billingDraft.company} onChange={(event) => setBillingDraft((currentDraft) => ({ ...currentDraft, company: event.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></label>
+            <label><span className="text-[8px] font-black text-slate-600">Mã số thuế</span><input value={billingDraft.taxCode} onChange={(event) => setBillingDraft((currentDraft) => ({ ...currentDraft, taxCode: event.target.value }))} placeholder="Nhập mã số thuế" className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></label>
+            <label><span className="text-[8px] font-black text-slate-600">Email nhận hóa đơn</span><input type="email" value={billingDraft.email} onChange={(event) => setBillingDraft((currentDraft) => ({ ...currentDraft, email: event.target.value }))} placeholder="billing@doanhnghiep.vn" className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></label>
+            <label className="sm:col-span-2"><span className="text-[8px] font-black text-slate-600">Địa chỉ xuất hóa đơn</span><input value={billingDraft.address} onChange={(event) => setBillingDraft((currentDraft) => ({ ...currentDraft, address: event.target.value }))} placeholder="Nhập địa chỉ đầy đủ" className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] outline-none focus:border-violet-400 focus:bg-white" /></label>
+            {billingError && <p className="rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700 sm:col-span-2">{billingError}</p>}
+            <div className="flex gap-2 rounded-xl bg-blue-50 p-3 text-[8px] leading-4 text-blue-700 sm:col-span-2"><Info className="h-4 w-4 shrink-0" />Hóa đơn đã phát hành sẽ giữ nguyên thông tin tại thời điểm phát hành.</div>
+          </div>
+          <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end">
+            <button type="button" onClick={() => setShowBillingProfile(false)} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600">Hủy</button>
+            <button type="button" onClick={saveBillingProfile} className="h-11 rounded-xl bg-violet-600 px-5 text-[9px] font-black text-white">Lưu thông tin</button>
+          </div>
+        </section>
+      </div>
+    )}
   </div>;
 }

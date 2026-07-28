@@ -24,7 +24,8 @@ export const savePackageUpgradeRequests = (requests: PackageUpgradeRequest[]) =>
 export const fetchPackageUpgradeRequests = async (): Promise<PackageUpgradeRequest[] | null> => {
   try {
     const response = await fetch('/api/package-upgrade-requests', {
-      headers: { Accept: 'application/json' }
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
     });
     if (!response.ok) return null;
     const payload = await response.json() as { requests?: PackageUpgradeRequest[] };
@@ -36,21 +37,24 @@ export const fetchPackageUpgradeRequests = async (): Promise<PackageUpgradeReque
 
 export const persistPackageUpgradeRequest = async (request: PackageUpgradeRequest) => {
   try {
-    await fetch('/api/package-upgrade-requests', {
+    const response = await fetch('/api/package-upgrade-requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify(request)
     });
+    return response.ok;
   } catch {
-    // Local storage keeps the workflow usable during local development.
+    return false;
   }
 };
 
 export const persistPackageUpgradeReview = async (request: PackageUpgradeRequest) => {
   try {
-    await fetch(`/api/package-upgrade-requests/${encodeURIComponent(request.id)}`, {
+    const response = await fetch(`/api/package-upgrade-requests/${encodeURIComponent(request.id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({
         status: request.status,
         effectiveDate: request.effectiveDate,
@@ -60,7 +64,19 @@ export const persistPackageUpgradeReview = async (request: PackageUpgradeRequest
         invoiceId: request.invoiceId
       })
     });
+    return response.ok;
   } catch {
-    // Local storage keeps the workflow usable during local development.
+    return false;
+  }
+};
+
+export const deletePackageUpgradeRequest = async (requestId: string) => {
+  try {
+    await fetch(`/api/package-upgrade-requests/${encodeURIComponent(requestId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+  } catch {
+    // Local cleanup remains available when the hosted API cannot be reached.
   }
 };

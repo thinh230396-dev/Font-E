@@ -43,7 +43,7 @@ interface BillingAndInvoicesProps {
   invoices: Invoice[];
   onUpdateInvoiceStatus: (id: string, newStatus: Invoice['status'], paymentDetails?: Partial<Invoice>) => void;
   onUpdateInvoice: (id: string, updates: Partial<Invoice>) => void;
-  onCreateInvoice: (invoice: Invoice) => void;
+  onCreateInvoice: (invoice: Invoice) => boolean;
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
   reportCurrency: CurrencyCode;
 }
@@ -415,8 +415,7 @@ export default function BillingAndInvoices({ invoices, onUpdateInvoiceStatus, on
     event.preventDefault();
     const amount = Number(createForm.amount);
     if (!createForm.tenantId.trim() || !createForm.tenantName.trim() || !createForm.billingEmail.trim() || !createForm.description.trim() || !Number.isFinite(amount) || amount <= 0) return;
-    const sequence = Math.floor(1100 + Math.random() * 800);
-    const id = `INV-2026-${sequence}`;
+    const id = createId('INV');
     const now = new Date().toISOString();
     const invoice: Invoice = {
       id, invoiceCode: `SS-${id}`, tenantId: createForm.tenantId.trim().toUpperCase(), tenantName: createForm.tenantName.trim(),
@@ -426,10 +425,10 @@ export default function BillingAndInvoices({ invoices, onUpdateInvoiceStatus, on
       amount, currency: createForm.currency, status: 'PENDING', billingEmail: createForm.billingEmail.trim(),
       reconciliationStatus: 'PENDING', collectionStage: 'NONE', reminderCount: 0, refundStatus: 'NONE',
       issuedBy: 'superadmin@salonsys.vn', note: createForm.note.trim(), paymentAttempts: [],
-      lineItems: [{ id: `LI-${sequence}-1`, description: createForm.description.trim(), quantity: 1, unitPrice: amount, amount, taxRate: 0 }],
+      lineItems: [{ id: `${id}-LI-1`, description: createForm.description.trim(), quantity: 1, unitPrice: amount, amount, taxRate: 0 }],
       activities: [{ id: createId('ACT'), action: 'Tạo hóa đơn thủ công', description: createForm.note.trim() || 'Superadmin phát hành hóa đơn thủ công.', actor: 'superadmin@salonsys.vn', createdAt: now }]
     };
-    onCreateInvoice(invoice);
+    if (!onCreateInvoice(invoice)) return;
     setShowCreateModal(false);
     setActiveTab('invoices');
     setCreateForm({ tenantId: '', tenantName: '', billingEmail: '', planName: 'Premium', type: 'MANUAL_ADJUSTMENT', billingCycle: 'monthly', amount: '', currency: reportCurrency, dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), description: '', note: '' });

@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, lazy, Suspense, useMemo, useState } from 'react';
+import { FormEvent, Fragment, lazy, Suspense, useLayoutEffect, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -1125,13 +1125,17 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [demoMode, setDemoMode] = useState(() => {
     if (typeof window === 'undefined' || !tenant) return true;
     const stored = window.localStorage.getItem(demoStorageKey);
-    return stored === null ? true : stored === 'true';
+    return stored === 'true';
   });
+  const [dataModeReady, setDataModeReady] = useState(false);
   const [demoRevision, setDemoRevision] = useState(0);
   const pendingUpgradeRequest = tenant
     ? upgradeRequests.find((request) => request.tenantId === tenant.id && request.status === 'PENDING')
     : undefined;
-  setTenantAdminDataMode(demoMode || !tenant ? 'demo' : 'live');
+  useLayoutEffect(() => {
+    setTenantAdminDataMode(demoMode || !tenant ? 'demo' : 'live');
+    setDataModeReady(true);
+  }, [demoMode, tenant]);
   const currentPackage = useMemo(
     () => normalizeSubscriptionPackage(subscriptionPackage || FALLBACK_SUBSCRIPTION_PACKAGE),
     [subscriptionPackage]
@@ -1625,6 +1629,13 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     const errors = { ...getRequiredBranchSelectionErrors(formValues), ...branchValidation.errors };
     return { errors, isValid: Object.keys(errors).length === 0 };
   })();
+  if (!dataModeReady) {
+    return (
+      <div className="role-shell role-shell--tenant flex min-h-screen items-center justify-center bg-[#f5f7fb] text-sm font-bold text-slate-500">
+        Đang chuẩn bị dữ liệu tenant...
+      </div>
+    );
+  }
   return (
     <div className="role-shell role-shell--tenant nail-admin min-h-screen bg-[#f5f7fb] text-slate-950">
       <a href="#tenant-admin-main" className="tenant-admin-skip-link">
@@ -1722,6 +1733,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 roleLabel="Owner · Tenant Admin"
                 readOnlyReason={readOnlyReason}
                 onNotify={setToast}
+                onUpdateTenant={onUpdateTenant}
                 pendingRequest={pendingUpgradeRequest}
                 onRequestUpgrade={onRequestUpgrade}
               />
