@@ -718,17 +718,19 @@ function BranchesPage({ rows, searchQuery, activeTab, onSearch, onTab, onSelectR
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#17132b] via-[#211942] to-[#38236b] text-white shadow-[0_20px_55px_rgba(49,31,94,0.2)]">
-        <div className="relative p-6 sm:p-8">
-          <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-violet-400/15 blur-3xl" />
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl"><div className="flex flex-wrap items-center gap-2 text-xs font-bold text-violet-200"><span className="h-2 w-2 rounded-full bg-emerald-400" />Phạm vi quản trị tenant<span className="rounded-full bg-white/10 px-3 py-1 text-[11px] ring-1 ring-white/10">Gói {planName}</span></div><h1 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-4xl">Hệ thống chi nhánh</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Quản lý toàn bộ địa điểm kinh doanh, người phụ trách, nguồn lực, giờ mở cửa và hiệu quả vận hành của chuỗi salon trong một màn hình.</p></div>
-            <div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={onExport} className="flex h-11 items-center justify-center gap-2 border border-white/15 bg-white/10 px-4 text-xs font-bold text-white shadow-none hover:bg-white/15"><Download className="h-4 w-4" />Xuất danh sách</button><button type="button" onClick={onCreate} className="flex h-11 items-center justify-center gap-2 border border-violet-400 bg-violet-500 px-5 text-xs font-black text-white shadow-lg shadow-violet-950/30"><Plus className="h-4 w-4" />Thêm chi nhánh</button></div>
-          </div>
-          <div className="relative mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {[{ label: 'Tổng chi nhánh', value: String(rows.length), detail: unlimited ? 'Không giới hạn theo gói' : `${remaining} vị trí còn lại`, icon: Store }, { label: 'Đang hoạt động', value: String(activeCount), detail: `${Math.max(0, rows.length - activeCount)} chi nhánh chưa hoạt động`, icon: Activity }, { label: 'Tổng nhân sự', value: String(totalStaff), detail: 'Phân bổ trên toàn hệ thống', icon: UsersRound }, { label: 'Doanh thu tháng', value: `${revenue.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`, detail: '+15,6% so với tháng trước', icon: TrendingUp }].map(({ label, value, detail, icon: Icon }) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 backdrop-blur-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold text-slate-400">{label}</p><p className="mt-2 text-2xl font-black">{value}</p><p className="mt-2 text-[11px] text-slate-400">{detail}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-violet-200"><Icon className="h-4 w-4" /></span></div></div>)}
-          </div>
+      <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <h1>Hệ thống chi nhánh</h1>
+          <p>Quản lý địa điểm kinh doanh, người phụ trách và giờ hoạt động.</p>
         </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" onClick={onExport} className="flex h-10 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-none"><Download className="h-4 w-4" />Xuất danh sách</button>
+          <button type="button" onClick={onCreate} className="flex h-10 items-center justify-center gap-2 border border-pink-600 bg-pink-600 px-5 text-xs font-black text-white shadow-none"><Plus className="h-4 w-4" />Thêm chi nhánh</button>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[{ label: 'Tổng chi nhánh', value: String(rows.length), detail: unlimited ? 'Không giới hạn theo gói' : `${remaining} vị trí còn lại`, icon: Store }, { label: 'Đang hoạt động', value: String(activeCount), detail: `${Math.max(0, rows.length - activeCount)} chi nhánh chưa hoạt động`, icon: Activity }, { label: 'Tổng nhân sự', value: String(totalStaff), detail: 'Phân bổ trên toàn hệ thống', icon: UsersRound }, { label: 'Doanh thu tháng', value: `${revenue.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`, detail: '+15,6% so với tháng trước', icon: TrendingUp }].map(({ label, value, detail, icon: Icon }) => <article key={label} className="rounded-2xl border border-pink-100 bg-white p-4 shadow-[0_8px_24px_rgba(190,24,93,0.04)]"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold text-slate-500">{label}</p><p className="mt-2 text-2xl font-black text-slate-950">{value}</p><p className="mt-2 text-[11px] text-slate-400">{detail}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-50 text-pink-600"><Icon className="h-4 w-4" /></span></div></article>)}
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -1677,13 +1679,13 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           </div>
         </header>
 
-        <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
-          {activePage !== 'overview' && <section className={`mb-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center ${demoMode ? 'border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50' : 'border-slate-200 bg-white'}`}>
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${demoMode ? 'bg-violet-600 text-white shadow-lg shadow-violet-200' : 'bg-slate-100 text-slate-500'}`}><Database className="h-5 w-5" /></span>
-            <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-[10px] font-black text-slate-900">{demoMode ? 'Chế độ kiểm thử đang bật' : 'Dữ liệu vận hành thực tế'}</p>{demoMode && <span className="rounded-full bg-white px-2.5 py-1 text-[7px] font-black text-violet-700 ring-1 ring-violet-200">DEMO DATA</span>}</div><p className="mt-1 text-[8px] leading-4 text-slate-500">{demoMode ? 'Đã nạp dữ liệu mẫu cho lịch hẹn, khách hàng, nhân sự, dịch vụ, kho, màu & mẫu Nail, tài chính, vệ sinh, báo cáo và hóa đơn.' : 'Bật dữ liệu demo để thử toàn bộ card, bộ lọc, form và nút thao tác mà không cần nhập thủ công.'}</p></div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <button type="button" onClick={loadDemoData} className="flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-violet-200 bg-white px-4 text-[8px] font-black text-violet-700 shadow-sm hover:bg-violet-50"><RotateCcw className="h-3.5 w-3.5" />{demoMode ? 'Nạp lại dữ liệu demo' : 'Bật dữ liệu demo'}</button>
-              {tenant && demoMode && <button type="button" onClick={clearDemoData} className="flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 bg-white px-4 text-[8px] font-black text-rose-600 shadow-sm hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" />Xóa dữ liệu demo</button>}
+        <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" data-page={activePage} data-compact-access={['stations', 'pos', 'customers', 'loyalty', 'care', 'staff', 'services', 'inventory'].includes(activePage) ? 'true' : undefined} tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+          {activePage !== 'overview' && demoMode && <section className="tenant-demo-strip mb-4 flex flex-col gap-2 rounded-xl border sm:flex-row sm:items-center">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-pink-50 text-pink-600"><Database className="h-4 w-4" /></span>
+            <p className="min-w-0 flex-1 text-[9px] font-bold text-slate-600">Đang hiển thị dữ liệu mẫu</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={loadDemoData} className="flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-pink-200 bg-white px-3 text-[8px] font-bold text-pink-700 shadow-none hover:bg-pink-50"><RotateCcw className="h-3.5 w-3.5" />Nạp lại</button>
+              {tenant && <button type="button" onClick={clearDemoData} className="flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-none hover:bg-slate-50"><Trash2 className="h-3.5 w-3.5" />Tắt dữ liệu mẫu</button>}
             </div>
           </section>}
           {readOnlyReason && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100"><LockKeyhole className="h-4 w-4" /></span><div><p className="text-[9px] font-black">Chế độ chỉ đọc đang được áp dụng</p><p className="mt-1 text-[8px] leading-5">{readOnlyReason}</p></div></div>}

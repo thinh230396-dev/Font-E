@@ -1049,9 +1049,9 @@ export default function TenantAdminInventory({
         </div>
       )}
 
-      <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600">
+          <div className="tenant-page-kicker mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             Dữ liệu kho {tenantName} cập nhật lúc 15:08
           </div>

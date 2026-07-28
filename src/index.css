@@ -2503,6 +2503,128 @@ html[data-theme="dark"] .role-shell--superadmin {
 }
 
 /* Tenant Admin pink salon palette. Other pages retain their structure. */
+.role-shell--tenant .tenant-page-header {
+  padding: 0.25rem 0 1.25rem;
+  border-bottom: 1px solid #f3dbe4;
+}
+
+.role-shell--tenant .tenant-page-header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.5rem, 2vw, 1.875rem);
+  font-weight: 850;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.role-shell--tenant .tenant-page-header h1 + p {
+  max-width: 46rem;
+  margin-top: 0.45rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.role-shell--tenant .tenant-page-kicker {
+  display: none !important;
+}
+
+.role-shell--tenant .tenant-page-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1.25rem;
+  margin-top: 0.8rem;
+  color: #64748b;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.role-shell--tenant .tenant-page-header button {
+  min-height: 2.5rem;
+  box-shadow: none !important;
+}
+
+.role-shell--tenant .tenant-admin-main:not([data-page="overview"]):not([data-page="branches"]):not([data-page="customers"]) > div[class*="space-y-"] > section:first-of-type {
+  padding: 0.25rem 0 1.25rem;
+  border-bottom: 1px solid #f3dbe4;
+}
+
+.role-shell--tenant .tenant-admin-main:not([data-page="overview"]):not([data-page="branches"]):not([data-page="customers"]) > div[class*="space-y-"] > section:first-of-type h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.5rem, 2vw, 1.875rem);
+  font-weight: 850;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.role-shell--tenant .tenant-admin-main:not([data-page="overview"]):not([data-page="branches"]):not([data-page="customers"]) > div[class*="space-y-"] > section:first-of-type h1 + p {
+  max-width: 46rem;
+  margin-top: 0.45rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.role-shell--tenant .tenant-admin-main:not([data-page="overview"]):not([data-page="branches"]):not([data-page="customers"]) > div[class*="space-y-"] > section:first-of-type > div:first-child > div:first-child[class*="mb-2"] {
+  display: none;
+}
+
+.role-shell--tenant .tenant-admin-main:not([data-page="overview"]) > div[class*="space-y-"] > section:first-of-type button {
+  min-height: 2.5rem;
+  box-shadow: none !important;
+}
+
+.role-shell--tenant :is(
+  .tenant-access-strip,
+  .tenant-admin-main[data-compact-access="true"] > div[class*="space-y-"] > section:nth-of-type(2)
+) {
+  min-height: 2.75rem;
+  padding: 0.65rem 0.85rem !important;
+  border-color: #f1e3e8 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.role-shell--tenant :is(
+  .tenant-access-strip,
+  .tenant-admin-main[data-compact-access="true"] > div[class*="space-y-"] > section:nth-of-type(2)
+) > div > span:first-child,
+.role-shell--tenant :is(
+  .tenant-access-strip,
+  .tenant-admin-main[data-compact-access="true"] > div[class*="space-y-"] > section:nth-of-type(2)
+) > div > div > p + p {
+  display: none;
+}
+
+.role-shell--tenant :is(
+  .tenant-access-strip,
+  .tenant-admin-main[data-compact-access="true"] > div[class*="space-y-"] > section:nth-of-type(2)
+) > div > div > p:first-child {
+  color: #64748b;
+  font-size: 0.6875rem !important;
+  font-weight: 700;
+}
+
+.role-shell--tenant :is(
+  .tenant-access-strip,
+  .tenant-admin-main[data-compact-access="true"] > div[class*="space-y-"] > section:nth-of-type(2)
+) > span:last-child {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.625rem !important;
+}
+
+.role-shell--tenant .tenant-demo-strip {
+  padding: 0.6rem 0.75rem;
+  border-color: #f3dbe4;
+  background: #fff;
+}
+
+.role-shell--tenant .tenant-demo-strip button {
+  min-height: 2.25rem;
+  height: 2.25rem;
+}
+
 .role-shell--tenant :is(.bg-violet-600, .bg-violet-500) {
   background-color: #f43f78 !important;
 }
@@ -2642,6 +2764,14 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
 
   .role-shell--tenant .tenant-admin-main {
     padding: 1rem;
+  }
+
+  .role-shell--tenant .tenant-page-header {
+    padding-bottom: 1rem;
+  }
+
+  .role-shell--tenant .tenant-access-strip {
+    align-items: flex-start;
   }
 }
 

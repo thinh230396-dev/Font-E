@@ -455,16 +455,12 @@ export default function TenantAdminAppointments({
   }, [staffPageCount]);
 
   const weekDates = getWeekDates(selectedDate);
-  const totalRevenue = scopedAppointments
-    .filter((appointment) => !['CANCELLED', 'NO_SHOW'].includes(appointment.status))
-    .reduce((sum, appointment) => sum + appointment.price, 0);
   const completedCount = scopedAppointments.filter((appointment) => appointment.status === 'COMPLETED').length;
   const pendingCount = scopedAppointments.filter((appointment) => appointment.status === 'PENDING').length;
   const servingCount = scopedAppointments.filter((appointment) => ['CHECKED_IN', 'IN_SERVICE'].includes(appointment.status)).length;
   const confirmedCount = scopedAppointments.filter((appointment) => appointment.status === 'CONFIRMED').length;
   const cancelledCount = scopedAppointments.filter((appointment) => ['CANCELLED', 'NO_SHOW'].includes(appointment.status)).length;
   const reminderPendingCount = scopedAppointments.filter((appointment) => ['PENDING', 'CONFIRMED'].includes(appointment.status) && !appointment.reminderSent).length;
-  const depositedTotal = scopedAppointments.reduce((sum, item) => sum + item.deposit, 0);
   const bookedMinutes = scopedAppointments.filter((appointment) => !['CANCELLED', 'NO_SHOW'].includes(appointment.status)).reduce((sum, appointment) => sum + appointment.duration, 0);
   const availableStaffCount = staffDirectory.filter((staff) => selectedBranch === 'ALL' || staff.branch === selectedBranch).length;
   const utilizationRate = availableStaffCount ? Math.min(100, Math.round(bookedMinutes / (availableStaffCount * 720) * 100)) : 0;
@@ -695,23 +691,18 @@ export default function TenantAdminAppointments({
 
   return (
     <div className={`space-y-4 ${isReceptionist ? 'appointments-receptionist' : ''}`}>
-      <section className={`relative overflow-hidden rounded-3xl border bg-white shadow-[0_16px_45px_rgba(15,23,42,0.07)] ${isReceptionist ? 'border-emerald-100' : 'border-violet-100'}`}>
-        <div className={`absolute inset-y-0 left-0 w-1.5 ${isReceptionist ? 'bg-emerald-500' : 'bg-violet-600'}`} />
-        <div className="grid gap-5 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <section className="tenant-page-header">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.11em] ${isReceptionist ? 'bg-emerald-50 text-emerald-700' : 'bg-violet-50 text-violet-700'}`}><CalendarCheck2 className="h-3.5 w-3.5" />Bảng điều phối trong ngày</span>
-              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[9px] font-bold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />Đồng bộ {currentTimeLabel}</span>
-            </div>
-            <h1 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950 sm:text-3xl">Lịch hẹn & điều phối khách</h1>
-            <p className="mt-1.5 max-w-2xl text-[12px] leading-5 text-slate-500">Ưu tiên việc cần xử lý, theo dõi tải của từng kỹ thuật viên và cập nhật hành trình khách ngay trên một màn hình.</p>
-            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[10px] font-bold text-slate-500">
+            <h1>Lịch hẹn & điều phối khách</h1>
+            <p>Quản lý lịch hẹn và phân công kỹ thuật viên trong ngày.</p>
+            <div className="tenant-page-meta">
               <span className="inline-flex items-center gap-2"><CalendarDays className={`h-4 w-4 ${isReceptionist ? 'text-emerald-500' : 'text-violet-500'}`} />{formatSelectedDate(selectedDate)}</span>
               <span className="inline-flex items-center gap-2"><Clock3 className={`h-4 w-4 ${isReceptionist ? 'text-emerald-500' : 'text-violet-500'}`} />08:00–20:00</span>
-              <span className="inline-flex items-center gap-2"><CircleDollarSign className={`h-4 w-4 ${isReceptionist ? 'text-emerald-500' : 'text-violet-500'}`} />Dự kiến {formatCurrency(totalRevenue)} · Đã cọc {formatCurrency(depositedTotal)}</span>
+              {!canManage && <span className="inline-flex items-center gap-2 text-amber-600"><ShieldCheck className="h-4 w-4" />Chỉ xem</span>}
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,210px)_auto] lg:grid-cols-1 xl:grid-cols-[210px_auto]">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,210px)_auto]">
             <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-700 shadow-sm">
               <option value="Q3">Chi nhánh Quận 3</option>
               <option value="Q1">Chi nhánh Quận 1</option>
@@ -719,10 +710,6 @@ export default function TenantAdminAppointments({
             </BeautifulSelect>
             <button type="button" onClick={openCreateForm} disabled={!canManage} title={!canManage ? readOnlyReason || 'Bạn chỉ có quyền xem' : undefined} className={`flex h-11 items-center justify-center gap-2 border px-4 text-[11px] font-black text-white shadow-lg disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none ${isReceptionist ? 'border-emerald-700 bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700' : 'border-violet-700 bg-violet-600 shadow-violet-200 hover:bg-violet-700'}`}><Plus className="h-4 w-4" />Tạo lịch hẹn</button>
           </div>
-        </div>
-        <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-2.5 text-[9px] sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span className="inline-flex items-center gap-2 font-bold text-slate-500"><ShieldCheck className={`h-3.5 w-3.5 ${canManage ? 'text-emerald-500' : 'text-amber-500'}`} />{roleLabel} · {canManage ? (branchLocked ? 'Điều chỉnh trong chi nhánh được phân công' : 'Toàn quyền điều phối lịch') : readOnlyReason || 'Chế độ chỉ xem'}</span>
-          <span className="font-semibold text-slate-400">{selectedBranch === 'ALL' ? 'Tất cả chi nhánh' : branchLabels[selectedBranch as BranchCode]}</span>
         </div>
       </section>
 

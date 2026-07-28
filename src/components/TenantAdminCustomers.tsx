@@ -683,24 +683,15 @@ export default function TenantAdminCustomers({
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-3xl bg-[linear-gradient(125deg,#052e2b_0%,#075e54_52%,#0f766e_100%)] p-5 text-white shadow-[0_22px_55px_rgba(6,78,70,0.24)] sm:p-6">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
-        <div className="pointer-events-none absolute bottom-0 right-1/4 h-24 w-48 rounded-full bg-emerald-300/10 blur-2xl" />
-        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="flex flex-wrap items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-emerald-100">
-              <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_0_5px_rgba(110,231,183,0.12)]" />
-              {isReceptionist ? `Quầy lễ tân · ${branchName(selectedBranch)}` : 'Customer 360'}
-              <span className="text-white/30">•</span>
-              <span className="normal-case tracking-normal text-white/65">{tenantName}</span>
-            </div>
-            <h1 className="mt-3 text-2xl font-black tracking-[-0.04em] sm:text-3xl">
+            <h1>
               {isReceptionist ? 'Khách hàng tại quầy' : 'Khách hàng'}
             </h1>
-            <p className="mt-2 max-w-2xl text-[10px] leading-5 text-emerald-50/75">
+            <p>
               {isReceptionist
-                ? 'Tra cứu hồ sơ trước khi check-in, kiểm tra lưu ý an toàn, lịch hẹn, tiền cọc và sở thích phục vụ trong một màn hình.'
-                : 'Quản lý hồ sơ, lịch sử dịch vụ, sở thích Nail, hạng thành viên và cơ hội chăm sóc.'}
+                ? `Tra cứu và cập nhật hồ sơ khách tại ${branchName(selectedBranch)}.`
+                : 'Quản lý hồ sơ, lịch sử dịch vụ và hạng thành viên.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -709,7 +700,7 @@ export default function TenantAdminCustomers({
                 type="button"
                 onClick={exportCustomers}
                 disabled={!canExport}
-                className="flex h-11 items-center gap-2 border border-white/20 bg-white/10 px-4 text-[9px] font-bold text-white shadow-sm backdrop-blur disabled:opacity-50"
+                className="flex h-10 items-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-none disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
                 Xuất danh sách
@@ -719,32 +710,12 @@ export default function TenantAdminCustomers({
               type="button"
               onClick={openCreate}
               disabled={!canManage}
-              className="flex h-11 items-center gap-2 border border-white bg-white px-4 text-[9px] font-black text-emerald-800 shadow-lg disabled:border-white/30 disabled:bg-white/20 disabled:text-white/50"
+              className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 px-4 text-[9px] font-black text-white shadow-none disabled:border-slate-300 disabled:bg-slate-300"
             >
               <Plus className="h-4 w-4" />
               Thêm khách mới
             </button>
           </div>
-        </div>
-        {isReceptionist && (
-          <div className="relative mt-5 grid gap-2 sm:grid-cols-3">
-            {[
-              { icon: Search, label: 'Tra cứu nhanh', text: 'Tên, SĐT hoặc mã khách' },
-              { icon: ShieldCheck, label: 'An toàn phục vụ', text: 'Dị ứng & tình trạng móng' },
-              { icon: CalendarClock, label: 'Đặt lịch tức thì', text: 'Chuyển hồ sơ sang lịch hẹn' },
-            ].map(({ icon: Icon, label, text }) => (
-              <div key={label} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.07] p-3 backdrop-blur">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-emerald-100">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-[8px] font-black text-white">{label}</p>
-                  <p className="mt-1 text-[7px] text-emerald-50/60">{text}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </section>
 
       <section

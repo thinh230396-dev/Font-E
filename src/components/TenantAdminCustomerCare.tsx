@@ -663,9 +663,9 @@ export default function TenantAdminCustomerCare({
 
   return (
     <div className="space-y-5">
-      <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-violet-600">
+          <div className="tenant-page-kicker mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-violet-600">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             CRM đa kênh · Cập nhật 15:12
             <span className="text-slate-300">•</span>
@@ -708,7 +708,7 @@ export default function TenantAdminCustomerCare({
         </div>
       </section>
       <section
-        className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? "border-violet-100 bg-gradient-to-r from-violet-50 to-white" : "border-amber-200 bg-amber-50"}`}
+        className={`tenant-access-strip flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? "border-violet-100 bg-gradient-to-r from-violet-50 to-white" : "border-amber-200 bg-amber-50"}`}
       >
         <div className="flex items-start gap-3">
           <span
