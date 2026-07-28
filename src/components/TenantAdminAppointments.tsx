@@ -743,7 +743,7 @@ export default function TenantAdminAppointments({
         })}
       </section>
 
-      <section className={`isolate overflow-hidden border border-slate-200 bg-white ${isScheduleExpanded ? 'fixed inset-3 z-[60] flex flex-col rounded-3xl shadow-2xl' : 'rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]'}`}>
+      <section className={`isolate overflow-hidden border border-slate-200 bg-white ${isScheduleExpanded ? 'ui-fullscreen-layer fixed inset-0 z-[160] flex flex-col rounded-none shadow-2xl' : 'rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]'}`}>
         <div className="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
             <button type="button" onClick={() => setSelectedDate(addDays(selectedDate, -1))} aria-label="Ngày trước" className="flex h-9 w-9 items-center justify-center border-0 bg-transparent p-0 text-slate-500 shadow-none hover:bg-white"><ChevronLeft className="h-4 w-4" /></button>

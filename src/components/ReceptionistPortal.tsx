@@ -342,7 +342,7 @@ function Modal({ title, description, onClose, children, wide = false, workspace 
   }, [onClose]);
 
   return (
-    <div className={`fixed inset-0 z-[100] flex items-center justify-center ${workspace ? 'p-2 sm:p-4' : 'p-4'}`} role="dialog" aria-modal="true" aria-label={title}>
+    <div className={`fixed inset-0 flex items-center justify-center ${workspace ? 'ui-fullscreen-layer z-[160] p-2 sm:p-4' : 'ui-modal-layer z-[140] p-4'}`} role="dialog" aria-modal="true" aria-label={title}>
       <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 cursor-default bg-slate-950/55 backdrop-blur-sm" />
       <div className={`relative w-full border border-brand-outline bg-brand-surface shadow-2xl ${workspace ? 'flex h-[calc(100dvh-1rem)] max-w-[1600px] flex-col overflow-hidden rounded-2xl p-3 sm:h-[calc(100dvh-2rem)] sm:p-5' : `max-h-[92vh] overflow-y-auto rounded-[26px] p-4 sm:p-6 ${wide ? 'max-w-[1500px]' : 'max-w-lg'}`}`}>
         <div className={`${workspace ? 'mb-3 shrink-0 sm:mb-4' : 'mb-5'} flex items-start justify-between gap-4`}>
