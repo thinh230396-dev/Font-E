@@ -2503,6 +2503,109 @@ html[data-theme="dark"] .role-shell--superadmin {
 }
 
 /* Tenant Admin pink salon palette. Other pages retain their structure. */
+.role-shell--tenant .beautiful-select-trigger {
+  border-color: #f0d7e0 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fff8fb 100%) !important;
+  color: #334155 !important;
+  box-shadow: 0 1px 2px rgb(190 24 93 / 0.035) !important;
+}
+
+.role-shell--tenant .beautiful-select-trigger:not(:disabled):hover {
+  border-color: #f6a9c1 !important;
+  background: #fff7fa !important;
+  box-shadow: 0 5px 16px rgb(190 24 93 / 0.075) !important;
+}
+
+.role-shell--tenant .beautiful-select-trigger:focus-visible,
+.role-shell--tenant .beautiful-select-trigger[aria-expanded="true"] {
+  border-color: #f43f78 !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 4px rgb(244 63 120 / 0.13) !important;
+}
+
+.role-shell--tenant .beautiful-select-arrow {
+  color: #e11d62;
+  border-color: #f3d5df;
+  background: #fff1f6;
+}
+
+.beautiful-select-menu--tenant {
+  --color-brand-primary: #f43f78;
+  --color-brand-surface: #ffffff;
+  --color-brand-surface-high: #fff1f6;
+  --color-brand-surface-lowest: #fff8fb;
+  --color-brand-outline: #f0d7e0;
+  --color-brand-text: #334155;
+  --color-brand-text-muted: #94a3b8;
+  border-color: #f0d7e0 !important;
+  background: linear-gradient(180deg, #fffafb 0%, #ffffff 30%) !important;
+  box-shadow: 0 20px 48px rgb(190 24 93 / 0.14), 0 5px 16px rgb(15 23 42 / 0.08) !important;
+}
+
+.beautiful-select-menu--tenant > .shrink-0 {
+  border-color: #f5e2e9 !important;
+  background: #fffafb;
+}
+
+.beautiful-select-menu--tenant input {
+  color: #334155 !important;
+  border-color: #f0d7e0 !important;
+  background: #fff !important;
+}
+
+.beautiful-select-menu--tenant input:focus {
+  border-color: #f43f78 !important;
+  box-shadow: 0 0 0 3px rgb(244 63 120 / 0.12) !important;
+}
+
+.beautiful-select-menu--tenant .beautiful-select-option {
+  color: #475569 !important;
+}
+
+.beautiful-select-menu--tenant .beautiful-select-option:not(:disabled):hover {
+  background: #fff1f6 !important;
+  color: #be185d !important;
+}
+
+.beautiful-select-menu--tenant .beautiful-select-option[aria-selected="true"] {
+  background: #ffe4ed !important;
+  color: #be185d !important;
+}
+
+.beautiful-select-menu--tenant .beautiful-select-option[aria-selected="true"] > span:last-child {
+  background: #f43f78 !important;
+}
+
+.role-shell--tenant :is(
+  [class~="border-slate-200"],
+  [class~="border-gray-200"]
+) {
+  border-color: #f0dce4 !important;
+}
+
+.role-shell--tenant :is(
+  [class~="border-slate-100"],
+  [class~="border-gray-100"]
+) {
+  border-color: #f7e8ed !important;
+}
+
+.role-shell--tenant :is(
+  [class~="divide-slate-100"],
+  [class~="divide-gray-100"]
+) > :not([hidden]) ~ :not([hidden]) {
+  border-color: #f7e8ed !important;
+}
+
+.role-shell--tenant :is(
+  [class~="bg-slate-50"],
+  [class~="bg-slate-50/60"],
+  [class~="bg-slate-50/70"],
+  [class~="bg-gray-50"]
+) {
+  background-color: #fff8fb !important;
+}
+
 .role-shell--tenant .tenant-page-header {
   padding: 0.25rem 0 1.25rem;
   border-bottom: 1px solid #f3dbe4;

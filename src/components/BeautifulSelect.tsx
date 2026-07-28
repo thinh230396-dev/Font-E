@@ -85,6 +85,7 @@ export default function BeautifulSelect({
   const filteredOptions = query.trim()
     ? options.filter((option) => option.label.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi')))
     : options;
+  const isTenantSelect = Boolean(rootRef.current?.closest('.role-shell--tenant'));
 
   const updateMenuPosition = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
@@ -149,7 +150,7 @@ export default function BeautifulSelect({
       ref={menuRef}
       role="listbox"
       aria-label={selectProps['aria-label'] || name || 'Danh sách lựa chọn'}
-      className="beautiful-select-menu fixed z-[10050] flex flex-col overflow-hidden rounded-xl border border-brand-outline/60 bg-brand-surface shadow-2xl"
+      className={`beautiful-select-menu ${isTenantSelect ? 'beautiful-select-menu--tenant' : ''} fixed z-[10050] flex flex-col overflow-hidden rounded-xl border border-brand-outline/60 bg-brand-surface shadow-2xl`}
       style={menuStyle}
       onKeyDown={(event) => { if (event.key === 'Escape') { setIsOpen(false); buttonRef.current?.focus(); } }}
     >
