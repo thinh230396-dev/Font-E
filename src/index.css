@@ -1,0 +1,4342 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-brand-bg: #f8fafc;
+  --color-brand-surface: #ffffff;
+  --color-brand-surface-high: #f1f5f9;
+  --color-brand-surface-highest: #e2e8f0;
+  --color-brand-surface-lowest: #f8fafc;
+  --color-brand-primary: #7c3aed;
+  --color-brand-on-primary: #ffffff;
+  --color-brand-secondary: #10b981;
+  --color-brand-tertiary: #f59e0b;
+  --color-brand-error: #ef4444;
+  --color-brand-warning: #f97316;
+  --color-brand-outline: #e2e8f0;
+  --color-brand-text: #0f172a;
+  --color-brand-text-muted: #64748b;
+}
+
+:root {
+  --modal-backdrop-color: rgb(15 23 42 / 0.48);
+  --modal-backdrop-filter: blur(8px) saturate(0.72);
+}
+
+html[data-theme="dark"] {
+  --color-brand-bg: #0b1120;
+  --color-brand-surface: #111827;
+  --color-brand-surface-high: #1e293b;
+  --color-brand-surface-highest: #334155;
+  --color-brand-surface-lowest: #020617;
+  --color-brand-primary: #8b5cf6;
+  --color-brand-on-primary: #ffffff;
+  --color-brand-secondary: #34d399;
+  --color-brand-tertiary: #fbbf24;
+  --color-brand-error: #f87171;
+  --color-brand-warning: #fb923c;
+  --color-brand-outline: #334155;
+  --color-brand-text: #f8fafc;
+  --color-brand-text-muted: #94a3b8;
+  --modal-backdrop-color: rgb(6 10 22 / 0.58);
+  --modal-backdrop-filter: blur(8px) saturate(0.68);
+  color-scheme: dark;
+}
+
+/* Base custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-brand-bg);
+  color: var(--color-brand-text);
+  overflow-x: hidden;
+}
+
+html.system-modal-open,
+body.system-modal-open {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+body.system-modal-open {
+  touch-action: none;
+}
+
+body.system-modal-open [role="dialog"],
+body.system-modal-open .fixed.inset-0 {
+  overscroll-behavior: contain;
+}
+
+body.system-modal-open [role="dialog"] *,
+body.system-modal-open .fixed.inset-0 * {
+  touch-action: auto;
+}
+
+/* Superadmin dialogs must own the complete viewport. The backdrop itself is
+   styled by the shared modal treatment below so it remains translucent. */
+body.system-modal-open .role-shell--superadmin .superadmin-main .fixed.inset-0 {
+  z-index: 4000 !important;
+}
+
+/* The tenant header owns the global branch scope. Duplicate page-level scope
+   selectors stay hidden, while branch assignment fields inside modals remain available. */
+.page-branch-filter {
+  display: none !important;
+}
+
+.fixed.inset-0 .page-branch-filter {
+  display: block !important;
+}
+
+@keyframes login-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-login-enter {
+  animation: login-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes profile-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-profile-menu {
+  transform-origin: top right;
+  animation: profile-menu-enter 160ms ease-out both;
+}
+
+.header-profile-trigger,
+.profile-menu-action,
+.profile-menu-logout {
+  transform: none !important;
+}
+
+.profile-menu-action,
+.profile-menu-action:hover,
+.profile-menu-logout,
+.profile-menu-logout:hover {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.account-preference-back,
+.account-preference-back:hover,
+.account-preference-option,
+.account-preference-option:hover,
+.account-theme-option,
+.account-theme-option:hover,
+.account-system-settings,
+.account-system-settings:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.login-showcase::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.13;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.8) 0.8px, transparent 0.8px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom right, black, transparent 72%);
+}
+
+.login-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.login-orb-one {
+  width: 32rem;
+  height: 32rem;
+  right: -14rem;
+  top: -10rem;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.5), rgba(109, 40, 217, 0));
+}
+
+.login-orb-two {
+  width: 28rem;
+  height: 28rem;
+  left: -15rem;
+  bottom: -13rem;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.2), rgba(6, 182, 212, 0));
+}
+
+.login-showcase-glow {
+  position: absolute;
+  right: -12%;
+  bottom: 7%;
+  width: 62%;
+  height: 26%;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.22);
+  filter: blur(70px);
+  transform: rotate(-12deg);
+  pointer-events: none;
+}
+
+.login-role-card {
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.login-role-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.login-role--violet .login-role-icon {
+  background: rgba(167, 139, 250, 0.14);
+  color: #c4b5fd;
+  border: 1px solid rgba(196, 181, 253, 0.16);
+}
+
+.login-role--cyan .login-role-icon {
+  background: rgba(34, 211, 238, 0.12);
+  color: #67e8f9;
+  border: 1px solid rgba(103, 232, 249, 0.15);
+}
+
+.login-role--emerald .login-role-icon {
+  background: rgba(52, 211, 153, 0.12);
+  color: #6ee7b7;
+  border: 1px solid rgba(110, 231, 183, 0.15);
+}
+
+.login-text-button,
+.login-text-button:hover,
+.login-password-toggle,
+.login-password-toggle:hover {
+  transform: none !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.login-password-toggle {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  min-width: 2.25rem !important;
+  padding: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-login-enter {
+    animation: none;
+  }
+
+  .animate-profile-menu {
+    animation: none;
+  }
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Theme normalization
+   The app mostly uses brand tokens, but some shared pages and status badges
+   still use Tailwind semantic colors directly. These mappings keep light/dark
+   mode visually consistent without changing component behavior. */
+html[data-theme="dark"] :is(
+  [class~="bg-white"],
+  [class~="bg-slate-50"],
+  [class~="bg-slate-100"],
+  [class~="bg-gray-50"],
+  [class~="bg-gray-100"]
+) {
+  background-color: var(--color-brand-surface) !important;
+}
+
+html[data-theme="dark"] [class*="bg-brand-surface-high/"],
+html[data-theme="dark"] [class*="bg-brand-surface-lowest/"],
+html[data-theme="dark"] [class*="bg-brand-surface/"] {
+  background-color: color-mix(in srgb, var(--color-brand-surface-high) 68%, transparent) !important;
+}
+
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: var(--color-brand-surface-lowest);
+  color: var(--color-brand-text);
+  border-color: color-mix(in srgb, var(--color-brand-outline) 82%, transparent);
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: color-mix(in srgb, var(--color-brand-text-muted) 82%, transparent);
+}
+
+html[data-theme="dark"] :is(table, thead, tbody, tr, th, td) {
+  border-color: color-mix(in srgb, var(--color-brand-outline) 78%, transparent);
+}
+
+html[data-theme="dark"] :is(thead, [class*="bg-slate-50"], [class*="bg-gray-50"]) {
+  background-color: var(--color-brand-surface-high) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-emerald-50"],
+  [class~="bg-emerald-100"],
+  [class~="bg-emerald-500/10"],
+  [class~="bg-emerald-500/15"],
+  [class~="bg-emerald-500/20"]
+) {
+  background-color: color-mix(in srgb, #10b981 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-blue-50"],
+  [class~="bg-blue-100"],
+  [class~="bg-blue-500/10"],
+  [class~="bg-blue-500/15"],
+  [class~="bg-blue-500/20"]
+) {
+  background-color: color-mix(in srgb, #3b82f6 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-cyan-50"],
+  [class~="bg-cyan-100"],
+  [class~="bg-cyan-500/10"],
+  [class~="bg-cyan-500/15"],
+  [class~="bg-cyan-500/20"]
+) {
+  background-color: color-mix(in srgb, #06b6d4 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-violet-50"],
+  [class~="bg-violet-100"],
+  [class~="bg-violet-500/10"],
+  [class~="bg-violet-500/15"],
+  [class~="bg-violet-500/20"]
+) {
+  background-color: color-mix(in srgb, #8b5cf6 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-amber-50"],
+  [class~="bg-amber-100"],
+  [class~="bg-amber-500/10"],
+  [class~="bg-amber-500/15"],
+  [class~="bg-amber-500/20"]
+) {
+  background-color: color-mix(in srgb, #f59e0b 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-rose-50"],
+  [class~="bg-rose-100"],
+  [class~="bg-red-50"],
+  [class~="bg-red-100"],
+  [class~="bg-rose-500/10"],
+  [class~="bg-rose-500/15"],
+  [class~="bg-red-500/10"],
+  [class~="bg-red-500/15"]
+) {
+  background-color: color-mix(in srgb, #f43f5e 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is([class~="text-emerald-700"], [class~="text-emerald-800"], [class~="text-emerald-900"], [class~="text-emerald-600"]) { color: #6ee7b7 !important; }
+html[data-theme="dark"] :is([class~="text-blue-700"], [class~="text-blue-800"], [class~="text-blue-900"], [class~="text-blue-600"]) { color: #93c5fd !important; }
+html[data-theme="dark"] :is([class~="text-cyan-700"], [class~="text-cyan-800"], [class~="text-cyan-900"], [class~="text-cyan-600"]) { color: #67e8f9 !important; }
+html[data-theme="dark"] :is([class~="text-violet-700"], [class~="text-violet-800"], [class~="text-violet-900"], [class~="text-violet-600"]) { color: #c4b5fd !important; }
+html[data-theme="dark"] :is([class~="text-amber-700"], [class~="text-amber-800"], [class~="text-amber-900"], [class~="text-amber-600"]) { color: #fcd34d !important; }
+html[data-theme="dark"] :is([class~="text-rose-700"], [class~="text-rose-800"], [class~="text-rose-900"], [class~="text-rose-600"], [class~="text-red-700"], [class~="text-red-800"], [class~="text-red-900"], [class~="text-red-600"]) { color: #fda4af !important; }
+html[data-theme="dark"] :is([class~="text-slate-700"], [class~="text-slate-800"], [class~="text-slate-900"], [class~="text-gray-700"], [class~="text-gray-800"], [class~="text-gray-900"]) { color: var(--color-brand-text) !important; }
+
+html[data-theme="dark"] :is([class~="border-emerald-200"], [class~="ring-emerald-100"], [class~="ring-emerald-200"]) { border-color: rgb(16 185 129 / 0.32) !important; --tw-ring-color: rgb(16 185 129 / 0.32) !important; }
+html[data-theme="dark"] :is([class~="border-blue-200"], [class~="ring-blue-100"], [class~="ring-blue-200"]) { border-color: rgb(59 130 246 / 0.32) !important; --tw-ring-color: rgb(59 130 246 / 0.32) !important; }
+html[data-theme="dark"] :is([class~="border-cyan-200"], [class~="ring-cyan-100"], [class~="ring-cyan-200"]) { border-color: rgb(6 182 212 / 0.32) !important; --tw-ring-color: rgb(6 182 212 / 0.32) !important; }
+html[data-theme="dark"] :is([class~="border-violet-200"], [class~="ring-violet-100"], [class~="ring-violet-200"]) { border-color: rgb(139 92 246 / 0.32) !important; --tw-ring-color: rgb(139 92 246 / 0.32) !important; }
+html[data-theme="dark"] :is([class~="border-amber-200"], [class~="ring-amber-100"], [class~="ring-amber-200"]) { border-color: rgb(245 158 11 / 0.34) !important; --tw-ring-color: rgb(245 158 11 / 0.34) !important; }
+html[data-theme="dark"] :is([class~="border-rose-200"], [class~="ring-rose-100"], [class~="ring-rose-200"], [class~="border-red-200"], [class~="ring-red-100"], [class~="ring-red-200"]) { border-color: rgb(244 63 94 / 0.34) !important; --tw-ring-color: rgb(244 63 94 / 0.34) !important; }
+
+html[data-theme="dark"] button:disabled,
+html[data-theme="dark"] [aria-disabled="true"] {
+  opacity: 0.58;
+}
+
+button {
+  min-height: 2.25rem;
+  line-height: 1.2;
+  border-radius: 0.625rem;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  box-shadow: none;
+}
+
+button[class*="text-xs"],
+button[class*="text-[10px]"],
+button[class*="text-[11px]"] {
+  font-size: 0.8125rem;
+}
+
+button[class*="bg-brand-primary"] {
+  background-color: #6d28d9;
+  color: #ffffff;
+  border: 1px solid #5b21b6;
+  box-shadow: 0 8px 18px rgba(109, 40, 217, 0.18);
+}
+
+button[class*="bg-brand-primary"]:not(:disabled):hover {
+  background-color: #5b21b6;
+  border-color: #4c1d95;
+  box-shadow: 0 10px 22px rgba(91, 33, 182, 0.24);
+}
+
+button[class*="bg-brand-surface"],
+button[class*="bg-brand-surface-high"],
+button[class*="bg-brand-surface-highest"] {
+  border-color: #cbd5e1;
+  color: #1e293b;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+button[class*="bg-brand-surface"]:not(:disabled):hover,
+button[class*="bg-brand-surface-high"]:not(:disabled):hover,
+button[class*="bg-brand-surface-highest"]:not(:disabled):hover {
+  background-color: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+html[data-theme="dark"] button[class*="bg-brand-surface"],
+html[data-theme="dark"] button[class*="bg-brand-surface-high"],
+html[data-theme="dark"] button[class*="bg-brand-surface-highest"] {
+  border-color: #475569;
+  color: #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+html[data-theme="dark"] button[class*="bg-brand-surface"]:not(:disabled):hover,
+html[data-theme="dark"] button[class*="bg-brand-surface-high"]:not(:disabled):hover,
+html[data-theme="dark"] button[class*="bg-brand-surface-highest"]:not(:disabled):hover {
+  background-color: #334155;
+  border-color: #64748b;
+}
+
+.support-resolve-button {
+  color: #047857 !important;
+}
+
+.support-resolve-button:not(:disabled):hover {
+  color: #065f46 !important;
+}
+
+html[data-theme="dark"] .support-resolve-button {
+  color: #6ee7b7 !important;
+}
+
+html[data-theme="dark"] .support-resolve-button:not(:disabled):hover {
+  color: #a7f3d0 !important;
+}
+
+button.account-system-settings,
+button.account-system-settings:hover {
+  width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 2.5rem !important;
+  padding: 0.625rem 1rem !important;
+  background-color: var(--color-brand-surface-high) !important;
+  color: var(--color-brand-text) !important;
+  border-color: color-mix(in srgb, var(--color-brand-outline) 70%, transparent) !important;
+}
+
+button.account-preference-back,
+button.account-preference-back:hover {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 1.75rem !important;
+  padding: 0.25rem 0.5rem !important;
+  border: 0 !important;
+  border-radius: 0.5rem !important;
+  background: transparent !important;
+  color: var(--color-brand-text-muted) !important;
+  box-shadow: none !important;
+}
+
+button.account-preference-back:hover {
+  background: color-mix(in srgb, var(--color-brand-primary) 8%, transparent) !important;
+  color: var(--color-brand-primary) !important;
+}
+
+button.account-system-settings:hover {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 40%, transparent) !important;
+  color: var(--color-brand-primary) !important;
+}
+
+@media (min-width: 640px) {
+  button.account-system-settings,
+  button.account-system-settings:hover {
+    width: auto !important;
+    min-width: 11.75rem !important;
+  }
+}
+
+button[class*="brand-error"],
+button[class*="red-"] {
+  border-color: #fca5a5;
+  color: #b91c1c;
+  box-shadow: 0 1px 2px rgba(185, 28, 28, 0.08);
+}
+
+button[class*="brand-error"]:not(:disabled):hover,
+button[class*="red-"]:not(:disabled):hover {
+  background-color: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+button[class*="brand-warning"],
+button[class*="orange-"],
+button[class*="amber-"] {
+  border-color: #fdba74;
+  color: #c2410c;
+  box-shadow: 0 1px 2px rgba(194, 65, 12, 0.08);
+}
+
+button[class*="brand-warning"]:not(:disabled):hover,
+button[class*="orange-"]:not(:disabled):hover,
+button[class*="amber-"]:not(:disabled):hover {
+  background-color: #ffedd5;
+  border-color: #fb923c;
+  color: #9a3412;
+}
+
+/* Login controls are intentionally isolated from the dashboard's generic
+   button rules. An icon inside the submit button must never make it icon-sized. */
+.login-shell button.login-submit,
+.login-shell button.login-submit:has(> svg:only-child) {
+  width: 100% !important;
+  height: 3rem !important;
+  min-width: 100% !important;
+  min-height: 3rem !important;
+  padding: 0 1.25rem !important;
+  border-radius: 0.75rem !important;
+  background: #6d28d9 !important;
+  border: 1px solid #5b21b6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(109, 40, 217, 0.22) !important;
+}
+
+.login-shell button.login-submit:not(:disabled):hover {
+  width: 100% !important;
+  background: #5b21b6 !important;
+  border-color: #4c1d95 !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 14px 28px rgba(91, 33, 182, 0.26) !important;
+}
+
+@media (max-height: 760px) and (min-width: 1024px) {
+  .login-showcase {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .login-left-description,
+  .login-showcase-footer,
+  .login-trust-note,
+  .login-role-strip {
+    display: none;
+  }
+
+  .login-benefits {
+    margin-top: 1.25rem;
+  }
+
+  .login-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-height: 640px) and (min-width: 1024px) {
+  .login-eyebrow,
+  .login-benefits {
+    display: none;
+  }
+}
+
+@layer components {
+  .form-control {
+    @apply w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  }
+
+  .field-hint {
+    @apply text-[9px] text-brand-text-muted mt-1;
+  }
+
+  .modal-footer {
+    @apply px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex justify-end gap-2;
+  }
+
+  .btn-secondary {
+    @apply bg-brand-surface-highest hover:bg-brand-surface-highest/80 border border-brand-outline/30 text-brand-text px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer;
+  }
+
+  .btn-danger {
+    @apply bg-brand-error hover:bg-brand-error/90 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer;
+  }
+}
+
+@keyframes beautiful-select-enter {
+  from { opacity: 0; transform: translateY(-5px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.beautiful-select-trigger {
+  min-height: 2.625rem;
+  padding-right: 0.375rem !important;
+  border-color: color-mix(in srgb, var(--color-brand-outline) 72%, transparent) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-brand-surface) 88%, transparent), var(--color-brand-surface-lowest)) !important;
+  color: var(--color-brand-text) !important;
+  font-family: var(--font-sans);
+  font-weight: 650;
+  line-height: 1.25rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+  transform: none !important;
+}
+
+.beautiful-select-trigger:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 42%, var(--color-brand-outline)) !important;
+  background: color-mix(in srgb, var(--color-brand-primary) 4%, var(--color-brand-surface)) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-brand-primary) 10%, transparent) !important;
+  transform: none !important;
+}
+
+.beautiful-select-trigger:focus-visible,
+.beautiful-select-trigger[aria-expanded="true"] {
+  border-color: var(--color-brand-primary) !important;
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-primary) 15%, transparent), 0 5px 16px color-mix(in srgb, var(--color-brand-primary) 10%, transparent) !important;
+}
+
+.beautiful-select-trigger:disabled {
+  background: var(--color-brand-surface-high) !important;
+  color: var(--color-brand-text-muted) !important;
+}
+
+.beautiful-select-menu {
+  z-index: 10050 !important;
+  pointer-events: auto;
+  isolation: isolate;
+  animation: beautiful-select-enter 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--color-brand-primary) 2.5%, var(--color-brand-surface)), var(--color-brand-surface));
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.18), 0 5px 18px rgba(15, 23, 42, 0.1) !important;
+  transform-origin: top center;
+}
+
+.beautiful-select-option,
+.beautiful-select-option:not(:disabled):hover {
+  min-height: 2.375rem;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.beautiful-select-option:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-brand-primary) 7%, var(--color-brand-surface-high)) !important;
+}
+
+.beautiful-select-option[aria-selected="true"],
+.beautiful-select-option[aria-selected="true"]:not(:disabled):hover {
+  border-color: transparent !important;
+  background: color-mix(in srgb, var(--color-brand-primary) 12%, var(--color-brand-surface)) !important;
+  color: var(--color-brand-primary) !important;
+}
+
+html[data-theme="dark"] .beautiful-select-trigger {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-brand-surface-high) 52%, var(--color-brand-surface)), var(--color-brand-surface-lowest)) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+html[data-theme="dark"] .beautiful-select-menu {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 6px 20px rgba(0, 0, 0, 0.32) !important;
+}
+
+.subscription-menu-item {
+  width: 100%;
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border: 0 !important;
+  border-radius: 0.375rem;
+  background: transparent !important;
+  color: var(--color-brand-text);
+  box-shadow: none !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  transform: none !important;
+}
+
+.subscription-menu-item:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-brand-outline) 45%, transparent) !important;
+  border: 0 !important;
+  color: var(--color-brand-text);
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.subscription-menu-item--danger,
+.subscription-menu-item--danger:not(:disabled):hover {
+  color: var(--color-brand-error);
+}
+
+.subscription-feature-toggle {
+  width: fit-content;
+  min-height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.375rem;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0.25rem;
+  background: transparent !important;
+  color: var(--color-brand-primary);
+  box-shadow: none !important;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transform: none !important;
+}
+
+.subscription-feature-toggle:not(:disabled):hover {
+  border: 0 !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--color-brand-primary) 75%, white);
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Tenant Admin Nail: tăng khả năng đọc trên màn hình desktop độ phân giải cao. */
+.nail-admin .text-\[7px\] {
+  font-size: 0.75rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin .text-\[8px\] {
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin .text-\[9px\] {
+  font-size: 0.875rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin .text-\[10px\] {
+  font-size: 0.9375rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin .text-\[11px\] {
+  font-size: 1rem !important;
+  line-height: 1.45 !important;
+}
+
+.nail-admin h1 {
+  font-size: 2.25rem;
+  line-height: 1.15;
+}
+
+.nail-admin aside nav > button {
+  min-height: 2.75rem;
+}
+
+/* Trường ngày trong trung tâm nhân sự: giữ bố cục ổn định và dễ nhận biết. */
+.nail-admin .staff-date-input {
+  color-scheme: light;
+  font-variant-numeric: tabular-nums;
+}
+
+.nail-admin .staff-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.72;
+  padding: 0.35rem;
+  border-radius: 0.5rem;
+  background-color: #ede9fe;
+}
+
+.nail-admin .staff-date-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background-color: #ddd6fe;
+}
+
+.reception-input {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--color-brand-outline);
+  border-radius: 0.75rem;
+  background: var(--color-brand-surface);
+  padding: 0.7rem 0.85rem;
+  color: var(--color-brand-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.reception-input:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgb(16 185 129 / 0.1);
+}
+
+.reception-input::placeholder {
+  color: var(--color-brand-text-muted);
+  font-weight: 400;
+}
+
+html[data-theme="dark"] .reception-workspace {
+  background: var(--color-brand-bg);
+  color: var(--color-brand-text);
+}
+
+html[data-theme="dark"] .reception-sidebar {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #064e3b 30%, var(--color-brand-surface-lowest)), var(--color-brand-surface-lowest)) !important;
+  background-color: var(--color-brand-surface-lowest) !important;
+  border-right: 1px solid color-mix(in srgb, var(--color-brand-outline) 62%, transparent);
+  color: var(--color-brand-text);
+}
+
+html[data-theme="dark"] .reception-sidebar nav button:not([class*="bg-emerald-400"]) {
+  color: color-mix(in srgb, var(--color-brand-text) 72%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-sidebar nav button:not([class*="bg-emerald-400"]):hover {
+  background: color-mix(in srgb, var(--color-brand-surface-high) 58%, transparent) !important;
+  color: var(--color-brand-text) !important;
+}
+
+html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] {
+  background: color-mix(in srgb, #10b981 72%, #022c22) !important;
+  color: #ecfdf5 !important;
+}
+
+html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] span,
+html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] svg {
+  color: #ecfdf5 !important;
+}
+
+html[data-theme="dark"] .reception-sidebar [class~="bg-white/5"] {
+  background-color: color-mix(in srgb, var(--color-brand-surface-high) 42%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--color-brand-outline) 45%, transparent);
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-white"],
+  [class~="bg-slate-50"],
+  [class~="bg-slate-100"],
+  [class~="bg-gray-50"],
+  [class~="bg-gray-100"]
+) {
+  background-color: var(--color-brand-surface) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-slate-50/40"],
+  [class~="bg-slate-50/50"],
+  [class~="bg-slate-50/60"],
+  [class~="bg-slate-50/70"],
+  [class~="bg-white/40"],
+  [class~="bg-white/50"],
+  [class~="bg-white/60"]
+) {
+  background-color: color-mix(in srgb, var(--color-brand-surface-high) 58%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="from-violet-50"],
+  [class~="from-emerald-50"],
+  [class~="from-blue-50"],
+  [class~="from-slate-50"],
+  [class~="to-white"]
+) {
+  --tw-gradient-from: var(--color-brand-surface-high) !important;
+  --tw-gradient-to: var(--color-brand-surface) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-slate-50"],
+  [class~="border-slate-100"],
+  [class~="border-slate-200"],
+  [class~="border-gray-100"],
+  [class~="border-gray-200"]
+) {
+  border-color: color-mix(in srgb, var(--color-brand-outline) 78%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="divide-slate-50"],
+  [class~="divide-slate-100"],
+  [class~="divide-slate-200"],
+  [class~="divide-gray-100"],
+  [class~="divide-gray-200"]
+) > :not([hidden]) ~ :not([hidden]) {
+  border-color: color-mix(in srgb, var(--color-brand-outline) 68%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-slate-950"],
+  [class~="text-slate-900"],
+  [class~="text-slate-800"],
+  [class~="text-gray-950"],
+  [class~="text-gray-900"],
+  [class~="text-gray-800"]
+) {
+  color: var(--color-brand-text) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-slate-700"],
+  [class~="text-slate-600"],
+  [class~="text-gray-700"],
+  [class~="text-gray-600"]
+) {
+  color: color-mix(in srgb, var(--color-brand-text) 78%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-slate-500"],
+  [class~="text-slate-400"],
+  [class~="text-slate-300"],
+  [class~="text-gray-500"],
+  [class~="text-gray-400"],
+  [class~="text-gray-300"]
+) {
+  color: var(--color-brand-text-muted) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="shadow-sm"],
+  [class*="shadow-[0_10px_30px"],
+  [class*="shadow-[0_20px"]
+) {
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(input, textarea, select, .beautiful-select-trigger) {
+  background: var(--color-brand-surface-lowest) !important;
+  color: var(--color-brand-text) !important;
+  border-color: color-mix(in srgb, var(--color-brand-outline) 82%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(input, textarea, select, .beautiful-select-trigger):focus,
+html[data-theme="dark"] .reception-workspace :is(input, textarea, select, .beautiful-select-trigger):focus-visible {
+  border-color: color-mix(in srgb, var(--color-brand-secondary) 78%, var(--color-brand-outline)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-secondary) 18%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(table, thead, tbody, tr, th, td) {
+  color: var(--color-brand-text);
+  border-color: color-mix(in srgb, var(--color-brand-outline) 72%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-workspace tbody tr:hover,
+html[data-theme="dark"] .reception-workspace [class~="hover:bg-slate-50"]:hover,
+html[data-theme="dark"] .reception-workspace [class~="hover:bg-white"]:hover {
+  background-color: color-mix(in srgb, var(--color-brand-secondary) 8%, var(--color-brand-surface-high)) !important;
+}
+
+html[data-theme="dark"] .reception-workspace button:not([class*="bg-emerald-600"]):not([class*="bg-violet-600"]):not([class*="bg-blue-600"]):not([class*="bg-rose-600"]):not([class*="bg-brand-primary"]) {
+  border-color: color-mix(in srgb, var(--color-brand-outline) 78%, transparent);
+}
+
+html[data-theme="dark"] .reception-workspace button:disabled {
+  background-color: color-mix(in srgb, var(--color-brand-surface-high) 70%, transparent) !important;
+  color: color-mix(in srgb, var(--color-brand-text-muted) 70%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-brand-outline) 48%, transparent) !important;
+  box-shadow: none !important;
+}
+
+/* Receptionist dark mode
+   Use a dedicated, higher-contrast surface scale so operational cards, tables,
+   status panels and dialogs remain visually separated during long desk shifts. */
+html[data-theme="dark"] .reception-workspace {
+  --color-brand-bg: #07111f;
+  --color-brand-surface-lowest: #091424;
+  --color-brand-surface: #101d30;
+  --color-brand-surface-high: #17273d;
+  --color-brand-surface-highest: #223650;
+  --color-brand-outline: #304761;
+  --color-brand-text: #f5f9ff;
+  --color-brand-text-muted: #aebed2;
+  --color-brand-secondary: #4adea6;
+  background:
+    radial-gradient(circle at 78% -12%, rgb(16 185 129 / 0.08), transparent 34rem),
+    #07111f;
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] .reception-workspace main {
+  background:
+    linear-gradient(180deg, rgb(8 21 36 / 0.35), transparent 24rem),
+    transparent;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-white"],
+  [class~="bg-white/95"]
+) {
+  background-color: #101d30 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-slate-50"],
+  [class~="bg-gray-50"],
+  [class~="bg-slate-50/40"],
+  [class~="bg-slate-50/50"],
+  [class~="bg-slate-50/60"],
+  [class~="bg-slate-50/70"],
+  [class~="bg-slate-50/95"],
+  [class~="bg-white/40"],
+  [class~="bg-white/50"],
+  [class~="bg-white/60"]
+) {
+  background-color: #17273d !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-slate-100"],
+  [class~="bg-gray-100"],
+  [class~="bg-slate-100/95"]
+) {
+  background-color: #223650 !important;
+}
+
+html[data-theme="dark"] .reception-workspace [class*="bg-brand-surface/"],
+html[data-theme="dark"] .reception-workspace [class*="bg-brand-surface-high/"],
+html[data-theme="dark"] .reception-workspace [class*="bg-brand-surface-lowest/"] {
+  background-color: color-mix(in srgb, #17273d 88%, transparent) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-emerald-50"],
+  [class~="bg-emerald-100"],
+  [class~="bg-emerald-50/30"],
+  [class~="bg-emerald-50/45"],
+  [class~="bg-emerald-50/60"],
+  [class~="bg-emerald-50/95"],
+  [class~="bg-emerald-500/5"],
+  [class~="bg-emerald-500/10"],
+  [class~="bg-emerald-500/15"]
+) {
+  background-color: color-mix(in srgb, #10b981 17%, #101d30) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-blue-50"],
+  [class~="bg-blue-100"],
+  [class~="bg-blue-50/50"],
+  [class~="bg-blue-50/55"],
+  [class~="bg-blue-50/60"],
+  [class~="bg-blue-50/95"],
+  [class~="bg-blue-500/10"]
+) {
+  background-color: color-mix(in srgb, #3b82f6 18%, #101d30) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-cyan-50"],
+  [class~="bg-cyan-100"],
+  [class~="bg-cyan-50/30"],
+  [class~="bg-cyan-50/55"],
+  [class~="bg-cyan-50/95"]
+) {
+  background-color: color-mix(in srgb, #06b6d4 18%, #101d30) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-violet-50"],
+  [class~="bg-violet-100"],
+  [class~="bg-violet-50/40"],
+  [class~="bg-violet-50/55"],
+  [class~="bg-violet-50/60"],
+  [class~="bg-violet-50/95"]
+) {
+  background-color: color-mix(in srgb, #8b5cf6 18%, #101d30) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-amber-50"],
+  [class~="bg-amber-100"],
+  [class~="bg-amber-50/60"],
+  [class~="bg-amber-50/95"],
+  [class~="bg-amber-500/10"]
+) {
+  background-color: color-mix(in srgb, #f59e0b 18%, #101d30) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-rose-50"],
+  [class~="bg-rose-100"],
+  [class~="bg-red-50"],
+  [class~="bg-red-100"],
+  [class~="bg-rose-50/40"],
+  [class~="bg-rose-50/55"],
+  [class~="bg-rose-50/70"],
+  [class~="bg-rose-50/90"],
+  [class~="bg-rose-500/5"],
+  [class~="bg-rose-500/10"],
+  [class~="bg-rose-500/15"]
+) {
+  background-color: color-mix(in srgb, #f43f5e 18%, #101d30) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="bg-fuchsia-50"],
+  [class~="bg-fuchsia-50/50"],
+  [class~="bg-pink-50"]
+) {
+  background-color: color-mix(in srgb, #d946ef 17%, #101d30) !important;
+}
+
+html[data-theme="dark"] .reception-workspace [class~="bg-orange-50"] {
+  background-color: color-mix(in srgb, #f97316 18%, #101d30) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-slate-950"],
+  [class~="text-slate-900"],
+  [class~="text-slate-800"],
+  [class~="text-gray-950"],
+  [class~="text-gray-900"],
+  [class~="text-gray-800"]
+) {
+  color: #f5f9ff !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-slate-700"],
+  [class~="text-slate-600"],
+  [class~="text-gray-700"],
+  [class~="text-gray-600"]
+) {
+  color: #d5dfeb !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-slate-500"],
+  [class~="text-slate-400"],
+  [class~="text-gray-500"],
+  [class~="text-gray-400"]
+) {
+  color: #aebed2 !important;
+}
+
+html[data-theme="dark"] .reception-workspace [class~="text-slate-300"] {
+  color: #c8d5e4 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-emerald-500"],
+  [class~="text-emerald-600"],
+  [class~="text-emerald-700"],
+  [class~="text-emerald-800"],
+  [class~="text-emerald-900"]
+) {
+  color: #6ee7b7 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-blue-400"],
+  [class~="text-blue-500"],
+  [class~="text-blue-600"],
+  [class~="text-blue-700"],
+  [class~="text-blue-800"],
+  [class~="text-blue-950"]
+) {
+  color: #93c5fd !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-cyan-500"],
+  [class~="text-cyan-600"],
+  [class~="text-cyan-700"],
+  [class~="text-cyan-900"],
+  [class~="text-cyan-950"]
+) {
+  color: #67e8f9 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-violet-300"],
+  [class~="text-violet-500"],
+  [class~="text-violet-600"],
+  [class~="text-violet-700"],
+  [class~="text-violet-800"],
+  [class~="text-violet-900"],
+  [class~="text-violet-950"]
+) {
+  color: #c4b5fd !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-amber-400"],
+  [class~="text-amber-500"],
+  [class~="text-amber-600"],
+  [class~="text-amber-700"],
+  [class~="text-amber-800"],
+  [class~="text-amber-900"],
+  [class~="text-amber-950"]
+) {
+  color: #fcd34d !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-rose-400"],
+  [class~="text-rose-500"],
+  [class~="text-rose-600"],
+  [class~="text-rose-700"],
+  [class~="text-rose-800"],
+  [class~="text-rose-900"],
+  [class~="text-rose-950"]
+) {
+  color: #fda4af !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="text-fuchsia-500"],
+  [class~="text-fuchsia-600"],
+  [class~="text-fuchsia-700"],
+  [class~="text-pink-500"],
+  [class~="text-pink-700"]
+) {
+  color: #f0abfc !important;
+}
+
+html[data-theme="dark"] .reception-workspace [class~="text-orange-700"] {
+  color: #fdba74 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-slate-100"],
+  [class~="border-slate-200"],
+  [class~="border-slate-300"],
+  [class~="border-gray-100"],
+  [class~="border-gray-200"]
+) {
+  border-color: #304761 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-emerald-100"],
+  [class~="border-emerald-200"],
+  [class~="border-emerald-300"],
+  [class~="border-emerald-400"],
+  [class~="ring-emerald-100"],
+  [class~="ring-emerald-200"]
+) {
+  border-color: rgb(52 211 153 / 0.42) !important;
+  --tw-ring-color: rgb(52 211 153 / 0.38) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-blue-100"],
+  [class~="border-blue-200"],
+  [class~="border-blue-300"],
+  [class~="ring-blue-100"],
+  [class~="ring-blue-200"]
+) {
+  border-color: rgb(96 165 250 / 0.42) !important;
+  --tw-ring-color: rgb(96 165 250 / 0.38) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-cyan-200"],
+  [class~="border-cyan-300"],
+  [class~="ring-cyan-100"],
+  [class~="ring-cyan-200"]
+) {
+  border-color: rgb(34 211 238 / 0.42) !important;
+  --tw-ring-color: rgb(34 211 238 / 0.38) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-violet-100"],
+  [class~="border-violet-200"],
+  [class~="border-violet-300"],
+  [class~="ring-violet-100"],
+  [class~="ring-violet-200"]
+) {
+  border-color: rgb(167 139 250 / 0.42) !important;
+  --tw-ring-color: rgb(167 139 250 / 0.38) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-amber-200"],
+  [class~="border-amber-300"],
+  [class~="ring-amber-100"],
+  [class~="ring-amber-200"]
+) {
+  border-color: rgb(251 191 36 / 0.45) !important;
+  --tw-ring-color: rgb(251 191 36 / 0.4) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-rose-200"],
+  [class~="border-rose-300"],
+  [class~="ring-rose-100"],
+  [class~="ring-rose-200"]
+) {
+  border-color: rgb(251 113 133 / 0.45) !important;
+  --tw-ring-color: rgb(251 113 133 / 0.4) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="border-fuchsia-100"],
+  [class~="ring-fuchsia-100"],
+  [class~="ring-fuchsia-200"],
+  [class~="ring-pink-200"]
+) {
+  border-color: rgb(232 121 249 / 0.42) !important;
+  --tw-ring-color: rgb(232 121 249 / 0.38) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="divide-slate-50"],
+  [class~="divide-slate-100"],
+  [class~="divide-slate-200"],
+  [class~="divide-gray-100"],
+  [class~="divide-gray-200"]
+) > :not([hidden]) ~ :not([hidden]) {
+  border-color: #263c56 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  section,
+  article,
+  aside[role="dialog"],
+  form
+)[class*="border"][class*="bg-"] {
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.2);
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  [class~="shadow-sm"],
+  [class~="shadow-lg"],
+  [class~="shadow-xl"],
+  [class~="shadow-2xl"],
+  [class*="shadow-[0_10px"],
+  [class*="shadow-[0_18px"],
+  [class*="shadow-[0_20px"],
+  [class*="shadow-[0_22px"]
+) {
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.34) !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(input, textarea, select, .beautiful-select-trigger) {
+  background: #091424 !important;
+  color: #f5f9ff !important;
+  border-color: #3a526e !important;
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] .reception-workspace :is(input, textarea)::placeholder {
+  color: #8295ad !important;
+  opacity: 1;
+}
+
+html[data-theme="dark"] .reception-workspace :is(input, textarea, select, .beautiful-select-trigger):focus,
+html[data-theme="dark"] .reception-workspace :is(input, textarea, select, .beautiful-select-trigger):focus-visible {
+  border-color: #4adea6 !important;
+  box-shadow: 0 0 0 3px rgb(74 222 166 / 0.18) !important;
+}
+
+html[data-theme="dark"] .reception-workspace .beautiful-select-menu {
+  background: #101d30 !important;
+  border-color: #3a526e !important;
+  box-shadow: 0 22px 52px rgb(0 0 0 / 0.48) !important;
+}
+
+html[data-theme="dark"] .reception-workspace .beautiful-select-option {
+  color: #dbe7f3 !important;
+}
+
+html[data-theme="dark"] .reception-workspace .beautiful-select-option:hover,
+html[data-theme="dark"] .reception-workspace .beautiful-select-option[aria-selected="true"] {
+  background: rgb(52 211 153 / 0.14) !important;
+  color: #a7f3d0 !important;
+}
+
+html[data-theme="dark"] .reception-workspace thead {
+  background: #17273d !important;
+}
+
+html[data-theme="dark"] .reception-workspace tbody tr {
+  background-color: #101d30;
+}
+
+html[data-theme="dark"] .reception-workspace tbody tr:hover,
+html[data-theme="dark"] .reception-workspace [class~="hover:bg-slate-50"]:hover,
+html[data-theme="dark"] .reception-workspace [class~="hover:bg-emerald-50/30"]:hover,
+html[data-theme="dark"] .reception-workspace [class~="hover:bg-brand-surface-high/40"]:hover {
+  background-color: #1a3141 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  button,
+  a
+)[class~="bg-white"][class*="text-emerald-"] {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  border-color: #d1fae5 !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  button,
+  a
+)[class~="bg-white"][class*="text-emerald-"] svg {
+  color: #047857 !important;
+}
+
+html[data-theme="dark"] .reception-workspace [class*="bg-emerald-300"][class*="text-emerald-950"],
+html[data-theme="dark"] .reception-workspace [class*="bg-emerald-400"][class*="text-emerald-950"] {
+  color: #052e2b !important;
+}
+
+html[data-theme="dark"] .reception-workspace :is(
+  button,
+  a
+):focus-visible {
+  outline: 3px solid rgb(74 222 166 / 0.5);
+  outline-offset: 2px;
+}
+
+html[data-theme="dark"] .reception-workspace button:disabled,
+html[data-theme="dark"] .reception-workspace [aria-disabled="true"] {
+  background-color: #1a293e !important;
+  color: #71849c !important;
+  border-color: #2a3e57 !important;
+  opacity: 0.72;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .reception-sidebar {
+  background:
+    radial-gradient(circle at 20% 0%, rgb(16 185 129 / 0.17), transparent 18rem),
+    linear-gradient(180deg, #061b1a 0%, #06131d 58%, #050d17 100%) !important;
+  border-right-color: #203a43 !important;
+  box-shadow: 14px 0 40px rgb(0 0 0 / 0.3) !important;
+}
+
+html[data-theme="dark"] .reception-sidebar nav button:not([class*="bg-emerald-400"]) {
+  color: #c5d8d7 !important;
+}
+
+html[data-theme="dark"] .reception-sidebar nav button:not([class*="bg-emerald-400"]):hover {
+  background: rgb(52 211 153 / 0.11) !important;
+  color: #f0fdfa !important;
+}
+
+html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] {
+  background: #34d399 !important;
+  color: #052e2b !important;
+  box-shadow: 0 12px 26px rgb(0 0 0 / 0.3) !important;
+}
+
+html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] :is(span, svg) {
+  color: #052e2b !important;
+}
+
+html[data-theme="dark"] .reception-workspace header[class*="sticky"][class*="bg-brand-surface"] {
+  background-color: rgb(16 29 48 / 0.96) !important;
+  border-bottom-color: #304761 !important;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.18);
+}
+
+html[data-theme="dark"] .reception-workspace ::-webkit-scrollbar-track {
+  background: #091424;
+}
+
+html[data-theme="dark"] .reception-workspace ::-webkit-scrollbar-thumb {
+  background: #3c526b;
+  border: 2px solid #091424;
+}
+
+html[data-theme="dark"] .reception-workspace ::-webkit-scrollbar-thumb:hover {
+  background: #526c89;
+}
+
+/* Receptionist customer detail: keep every information card readable in both themes. */
+.reception-workspace .reception-customer-detail {
+  background: #f8fafc;
+  border-color: rgb(255 255 255 / 0.82);
+}
+
+.reception-workspace .reception-customer-detail .customer-detail-header {
+  background: linear-gradient(125deg, #e8fff7 0%, #f4fbf8 48%, #ffffff 100%);
+  border-color: #dce9e4;
+}
+
+.reception-workspace .reception-customer-detail .customer-detail-body {
+  background: #f7fafc;
+}
+
+.reception-workspace .reception-customer-detail .customer-detail-card {
+  background: #ffffff;
+  border-color: #dce5ee;
+  box-shadow: 0 8px 22px rgb(15 23 42 / 0.035);
+}
+
+.reception-workspace .reception-customer-detail .customer-detail-stat,
+.reception-workspace .reception-customer-detail .customer-detail-subcard,
+.reception-workspace .reception-customer-detail .customer-detail-empty {
+  background: #eef3f7;
+  border-color: #dce5ee;
+}
+
+.reception-workspace .reception-customer-detail .customer-detail-icon,
+.reception-workspace .reception-customer-detail .customer-detail-amount,
+.reception-workspace .reception-customer-detail .customer-detail-chip {
+  background: #ffffff;
+}
+
+.reception-workspace .reception-customer-detail .customer-detail-footer {
+  background: #eef3f7;
+  border-color: #dce5ee;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail {
+  background: #0d1a2b !important;
+  border-color: #38506b !important;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail .customer-detail-header {
+  background:
+    radial-gradient(circle at 92% 0%, rgb(52 211 153 / 0.16), transparent 18rem),
+    linear-gradient(125deg, #0a302c 0%, #102238 58%, #101d30 100%) !important;
+  border-color: #345069 !important;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail .customer-detail-body {
+  background: #0a1626 !important;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail .customer-detail-card {
+  background: #111f33 !important;
+  border-color: #344b65 !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.18) !important;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail :is(
+  .customer-detail-stat,
+  .customer-detail-subcard,
+  .customer-detail-empty
+) {
+  background: #182a42 !important;
+  border-color: #3a536f !important;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail :is(
+  .customer-detail-icon,
+  .customer-detail-amount,
+  .customer-detail-chip
+) {
+  background: #1c3049 !important;
+  border-color: #45617e !important;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail .customer-detail-highlight {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.025);
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail .customer-detail-safety {
+  background-color: color-mix(in srgb, #f43f5e 13%, #111f33) !important;
+  border-color: rgb(251 113 133 / 0.38) !important;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail .customer-detail-safety.border-emerald-200 {
+  background-color: color-mix(in srgb, #10b981 13%, #111f33) !important;
+  border-color: rgb(52 211 153 / 0.38) !important;
+}
+
+html[data-theme="dark"] .reception-workspace .reception-customer-detail .customer-detail-footer {
+  background: #13243a !important;
+  border-color: #344b65 !important;
+}
+
+/* Superadmin sidebar navigation cards */
+.sidebar-nav-card {
+  min-height: 3rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-brand-outline) 58%, transparent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-brand-surface-high) 64%, transparent), color-mix(in srgb, var(--color-brand-surface) 82%, transparent));
+  color: color-mix(in srgb, var(--color-brand-text) 78%, var(--color-brand-text-muted));
+  box-shadow:
+    0 1px 1px rgb(15 23 42 / 0.02),
+    inset 0 1px 0 rgb(255 255 255 / 0.5);
+  transition:
+    color 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.sidebar-nav-card:hover {
+  transform: translateX(2px);
+  color: var(--color-brand-text);
+  border-color: color-mix(in srgb, var(--color-brand-primary) 22%, var(--color-brand-outline));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-brand-primary) 7%, var(--color-brand-surface-high)), var(--color-brand-surface));
+  box-shadow:
+    0 7px 20px rgb(15 23 42 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.65);
+}
+
+.sidebar-nav-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-brand-primary) 70%, white);
+  outline-offset: 2px;
+}
+
+.sidebar-nav-card--active,
+.sidebar-nav-card--active:hover {
+  color: #fff;
+  border-color: rgb(167 139 250 / 0.48);
+  background:
+    radial-gradient(circle at 92% 0%, rgb(255 255 255 / 0.18), transparent 38%),
+    linear-gradient(112deg, #7c3aed 0%, #6d28d9 52%, #5b21b6 100%);
+  box-shadow:
+    0 9px 22px rgb(109 40 217 / 0.24),
+    inset 0 1px 0 rgb(255 255 255 / 0.2);
+  transform: translateX(0);
+}
+
+.sidebar-nav-icon {
+  color: color-mix(in srgb, var(--color-brand-text-muted) 86%, var(--color-brand-text));
+  border: 1px solid color-mix(in srgb, var(--color-brand-outline) 72%, transparent);
+  background: color-mix(in srgb, var(--color-brand-surface) 78%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5);
+  transition:
+    color 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.sidebar-nav-card:hover .sidebar-nav-icon {
+  color: var(--color-brand-primary);
+  border-color: color-mix(in srgb, var(--color-brand-primary) 26%, var(--color-brand-outline));
+  transform: scale(1.04);
+}
+
+.sidebar-nav-card--active .sidebar-nav-icon,
+.sidebar-nav-card--active:hover .sidebar-nav-icon {
+  color: #fff;
+  border-color: rgb(255 255 255 / 0.2);
+  background: rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
+  transform: none;
+}
+
+.sidebar-nav-accent {
+  position: absolute;
+  inset-block: 0.7rem;
+  left: 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+}
+
+.sidebar-nav-accent--active {
+  background: #ddd6fe;
+  box-shadow: 0 0 12px rgb(221 214 254 / 0.8);
+}
+
+.sidebar-nav-chevron {
+  color: color-mix(in srgb, var(--color-brand-text-muted) 55%, transparent);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.sidebar-nav-card:hover .sidebar-nav-chevron {
+  opacity: 0.8;
+  transform: translateX(0);
+}
+
+.sidebar-nav-badge {
+  min-width: 1.65rem;
+  border: 1px solid currentColor;
+  border-color: color-mix(in srgb, currentColor 24%, transparent);
+  line-height: 1;
+}
+
+.sidebar-nav-card--active .sidebar-nav-badge {
+  color: #fff;
+  border-color: rgb(255 255 255 / 0.2);
+  background: rgb(255 255 255 / 0.16);
+}
+
+.sidebar-nav-notification-dot {
+  position: absolute;
+  right: 0.42rem;
+  top: 0.42rem;
+  width: 0.48rem;
+  height: 0.48rem;
+  border: 2px solid var(--color-brand-surface);
+  border-radius: 999px;
+  background: var(--color-brand-error);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand-error) 18%, transparent);
+}
+
+html[data-theme="dark"] .sidebar-nav-card {
+  border-color: rgb(71 85 105 / 0.38);
+  background: linear-gradient(135deg, rgb(30 41 59 / 0.82), rgb(23 34 52 / 0.92));
+  box-shadow:
+    0 7px 20px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
+html[data-theme="dark"] .sidebar-nav-card:hover {
+  border-color: rgb(139 92 246 / 0.34);
+  background: linear-gradient(135deg, rgb(53 43 86 / 0.88), rgb(30 41 59 / 0.96));
+  box-shadow:
+    0 9px 24px rgb(0 0 0 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+html[data-theme="dark"] .sidebar-nav-card--active,
+html[data-theme="dark"] .sidebar-nav-card--active:hover {
+  border-color: rgb(167 139 250 / 0.46);
+  background:
+    radial-gradient(circle at 92% 0%, rgb(255 255 255 / 0.16), transparent 38%),
+    linear-gradient(112deg, #7c3aed 0%, #6d28d9 52%, #5b21b6 100%) !important;
+  box-shadow:
+    0 10px 24px rgb(76 29 149 / 0.38),
+    inset 0 1px 0 rgb(255 255 255 / 0.18) !important;
+}
+
+html[data-theme="dark"] .sidebar-nav-icon {
+  border-color: rgb(100 116 139 / 0.35);
+  background: rgb(15 23 42 / 0.42);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
+html[data-theme="dark"] .sidebar-nav-card--active .sidebar-nav-icon {
+  border-color: rgb(255 255 255 / 0.2);
+  background: rgb(255 255 255 / 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-nav-card,
+  .sidebar-nav-icon,
+  .sidebar-nav-chevron {
+    transition: none;
+  }
+}
+
+/* Shared role workspace system
+   One visual grammar for Superadmin, Tenant Admin and Receptionist. */
+.role-shell {
+  --role-accent: #7c3aed;
+  --role-accent-strong: #6d28d9;
+  --role-accent-soft: rgb(124 58 237 / 0.1);
+  --role-focus: rgb(124 58 237 / 0.24);
+  --role-card-radius: 1rem;
+  --role-control-radius: 0.75rem;
+  --role-shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 7px 22px rgb(15 23 42 / 0.035);
+  --role-shadow-md: 0 16px 38px rgb(15 23 42 / 0.08);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-kerning: normal;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--role-accent) 7%, transparent), transparent 34rem),
+    var(--color-brand-bg);
+}
+
+.role-shell--tenant {
+  --role-accent: #7c3aed;
+  --role-accent-strong: #6d28d9;
+  --role-accent-soft: rgb(124 58 237 / 0.1);
+  --role-focus: rgb(124 58 237 / 0.24);
+}
+
+.role-shell--reception {
+  --role-accent: #059669;
+  --role-accent-strong: #047857;
+  --role-accent-soft: rgb(5 150 105 / 0.1);
+  --role-focus: rgb(5 150 105 / 0.22);
+}
+
+.role-shell :is(
+  .text-\[7px\],
+  .text-\[8px\]
+) {
+  font-size: 0.75rem !important;
+  line-height: 1.45 !important;
+}
+
+.role-shell :is(
+  .text-\[9px\],
+  .text-\[10px\]
+) {
+  font-size: 0.8125rem !important;
+  line-height: 1.5 !important;
+}
+
+.role-shell :is(
+  .text-\[11px\],
+  .text-\[12px\],
+  .text-xs
+) {
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+.role-shell .text-sm {
+  font-size: 0.9375rem !important;
+  line-height: 1.5 !important;
+}
+
+.role-shell h1 {
+  font-size: clamp(1.625rem, 2vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+}
+
+.role-shell h2 {
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.role-shell h3 {
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+}
+
+.role-shell :is(
+  [class*="font-mono"],
+  .tabular-nums,
+  table,
+  input[type="number"],
+  input[type="date"],
+  input[type="time"]
+) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.role-topbar {
+  min-height: 4.5rem;
+  background-color: color-mix(in srgb, var(--color-brand-surface) 94%, transparent) !important;
+  border-bottom-color: color-mix(in srgb, var(--color-brand-outline) 76%, transparent) !important;
+  box-shadow: 0 1px 0 rgb(15 23 42 / 0.035), 0 10px 30px rgb(15 23 42 / 0.025);
+  backdrop-filter: blur(18px);
+}
+
+.role-sidebar {
+  border-right: 1px solid rgb(148 163 184 / 0.16);
+  box-shadow: 12px 0 36px rgb(15 23 42 / 0.09);
+}
+
+.role-sidebar nav > button {
+  min-height: 2.75rem;
+}
+
+.role-main :is(article, section)[class*="rounded-"][class*="border"] {
+  border-color: color-mix(in srgb, var(--color-brand-outline) 78%, transparent);
+  box-shadow: var(--role-shadow-sm);
+}
+
+.role-main :is(article, section)[class*="rounded-"][class*="border"]:not([role="dialog"]) {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.role-main :is(input, textarea, select, .beautiful-select-trigger) {
+  min-height: 2.625rem;
+  border-radius: var(--role-control-radius);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.role-main :is(input, textarea, select, .beautiful-select-trigger):focus,
+.role-main :is(input, textarea, select, .beautiful-select-trigger):focus-visible {
+  border-color: var(--role-accent) !important;
+  box-shadow: 0 0 0 4px var(--role-focus) !important;
+  outline: none;
+}
+
+.role-shell button {
+  border-radius: var(--role-control-radius);
+  font-family: var(--font-sans);
+  letter-spacing: -0.005em;
+}
+
+.role-shell button:focus-visible,
+.role-shell a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--role-accent) 76%, white);
+  outline-offset: 2px;
+}
+
+.role-main table {
+  font-size: 0.8125rem;
+}
+
+.role-main thead th {
+  color: color-mix(in srgb, var(--color-brand-text-muted) 88%, var(--color-brand-text));
+  font-size: 0.75rem !important;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.035em;
+}
+
+.role-main tbody td {
+  font-size: 0.8125rem !important;
+  line-height: 1.5;
+}
+
+.role-main :is(.rounded-full, [class*="rounded-full"])[class*="text-"] {
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-theme="dark"] .role-shell {
+  --role-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.18), 0 10px 26px rgb(0 0 0 / 0.13);
+  --role-shadow-md: 0 18px 44px rgb(0 0 0 / 0.3);
+}
+
+html[data-theme="dark"] .role-topbar {
+  background-color: color-mix(in srgb, var(--color-brand-surface) 94%, transparent) !important;
+  border-bottom-color: color-mix(in srgb, var(--color-brand-outline) 72%, transparent) !important;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.025), 0 12px 30px rgb(0 0 0 / 0.14);
+}
+
+@media (max-width: 639px) {
+  .role-shell {
+    font-size: 0.8125rem;
+  }
+
+  .role-shell h1 {
+    font-size: 1.5rem;
+  }
+
+  .role-main {
+    padding: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-shell *,
+  .role-shell *::before,
+  .role-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Superadmin UI standard — aligned with README.md */
+.role-shell--superadmin {
+  --sa-color-primary: #7c3aed;
+  --sa-color-primary-hover: #6d28d9;
+  --sa-color-primary-subtle: #f5f3ff;
+  --sa-color-surface: var(--color-brand-surface);
+  --sa-color-surface-muted: var(--color-brand-surface-high);
+  --sa-color-border: color-mix(in srgb, var(--color-brand-outline) 84%, transparent);
+  --sa-color-text: var(--color-brand-text);
+  --sa-color-text-secondary: var(--color-brand-text-muted);
+  --sa-radius-control: 0.5rem;
+  --sa-radius-card: 0.75rem;
+  --sa-shadow-card: 0 1px 3px rgb(15 23 42 / 0.06), 0 8px 22px rgb(15 23 42 / 0.035);
+  --sa-shadow-floating: 0 18px 46px rgb(15 23 42 / 0.14);
+  --sa-duration-fast: 140ms;
+  --sa-duration-normal: 200ms;
+  --sa-easing: cubic-bezier(0.2, 0, 0, 1);
+  min-width: 0;
+  font-size: 0.875rem;
+}
+
+.role-shell--superadmin .role-topbar {
+  height: 4.25rem;
+  min-height: 4.25rem;
+}
+
+.role-shell--superadmin .role-sidebar {
+  background:
+    radial-gradient(circle at 18% 0%, rgb(124 58 237 / 0.08), transparent 17rem),
+    var(--sa-color-surface);
+}
+
+.role-shell--superadmin .superadmin-main {
+  min-width: 0;
+}
+
+.role-shell--superadmin .superadmin-main:focus {
+  outline: none;
+}
+
+.superadmin-skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 0.75rem;
+  z-index: 2000;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--sa-radius-control);
+  background: var(--sa-color-primary);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: var(--sa-shadow-floating);
+  transform: translateY(-180%);
+  transition: transform var(--sa-duration-fast) var(--sa-easing);
+}
+
+.superadmin-skip-link:focus {
+  transform: translateY(0);
+  outline: 3px solid color-mix(in srgb, var(--sa-color-primary) 48%, white);
+  outline-offset: 2px;
+}
+
+.role-shell--superadmin :is(
+  .text-\[9px\],
+  .text-\[10px\]
+) {
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+}
+
+.role-shell--superadmin :is(
+  .text-\[11px\],
+  .text-\[12px\],
+  .text-xs
+) {
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+.role-shell--superadmin .text-sm {
+  font-size: 0.9375rem !important;
+  line-height: 1.5 !important;
+}
+
+.role-shell--superadmin h1 {
+  font-size: clamp(1.625rem, 2vw, 1.75rem);
+  line-height: 1.285;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.role-shell--superadmin h2 {
+  font-size: clamp(1.125rem, 1.5vw, 1.375rem);
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.role-shell--superadmin h3 {
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.role-shell--superadmin .role-main :is(p, li, dd, label) {
+  text-wrap: pretty;
+}
+
+.role-shell--superadmin .role-main :is(
+  article,
+  section
+)[class*="rounded-"][class*="border"] {
+  border-color: var(--sa-color-border);
+  border-radius: var(--sa-radius-card);
+  box-shadow: var(--sa-shadow-card);
+}
+
+.role-shell--superadmin .role-main :is(input, textarea, select, .beautiful-select-trigger) {
+  min-height: 2.625rem;
+  border-color: var(--sa-color-border);
+  border-radius: var(--sa-radius-control);
+  background-color: var(--sa-color-surface);
+  color: var(--sa-color-text);
+  font-size: 0.875rem;
+}
+
+.role-shell--superadmin .role-main :is(input, textarea, select, .beautiful-select-trigger)::placeholder {
+  color: color-mix(in srgb, var(--sa-color-text-secondary) 82%, transparent);
+}
+
+.role-shell--superadmin button {
+  min-height: 2.5rem;
+  border-radius: var(--sa-radius-control);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition:
+    background-color var(--sa-duration-fast) var(--sa-easing),
+    border-color var(--sa-duration-fast) var(--sa-easing),
+    color var(--sa-duration-fast) var(--sa-easing),
+    box-shadow var(--sa-duration-fast) var(--sa-easing),
+    transform var(--sa-duration-fast) var(--sa-easing);
+}
+
+.role-shell--superadmin button[class*="h-7"],
+.role-shell--superadmin button[class*="h-8"],
+.role-shell--superadmin button[class*="h-9"],
+.role-shell--superadmin button[class*="w-7"],
+.role-shell--superadmin button[class*="w-8"],
+.role-shell--superadmin button[class*="w-9"] {
+  min-height: 2.25rem;
+  min-width: 2.25rem;
+}
+
+.role-shell--superadmin :is(button, a):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--sa-color-primary) 48%, transparent);
+  outline-offset: 2px;
+}
+
+.role-shell--superadmin .role-main table {
+  width: 100%;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.role-shell--superadmin .role-main thead th {
+  height: 2.75rem;
+  color: var(--sa-color-text-secondary);
+  font-size: 0.75rem !important;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+.role-shell--superadmin .role-main tbody td {
+  min-height: 2.75rem;
+  font-size: 0.875rem !important;
+  line-height: 1.5;
+}
+
+.role-shell--superadmin .role-main :is(
+  [class*="font-mono"],
+  [class*="text-right"],
+  [class*="justify-end"]
+) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.role-shell--superadmin .role-main [role="dialog"],
+.role-shell--superadmin .role-main + [role="dialog"] {
+  box-shadow: var(--sa-shadow-floating);
+}
+
+html[data-theme="dark"] .role-shell--superadmin {
+  --sa-color-primary-subtle: #2e1065;
+  --sa-shadow-card: 0 1px 3px rgb(0 0 0 / 0.24), 0 10px 26px rgb(0 0 0 / 0.16);
+  --sa-shadow-floating: 0 22px 60px rgb(0 0 0 / 0.48);
+}
+
+@media (max-width: 639px) {
+  .role-shell--superadmin .role-topbar {
+    padding-inline: 1rem;
+  }
+
+  .role-shell--superadmin .superadmin-main {
+    padding: 1rem;
+  }
+}
+
+/* Tenant Admin UI standard — aligned with README.md */
+.role-shell--tenant {
+  --ta-color-primary: #7c3aed;
+  --ta-color-primary-hover: #6d28d9;
+  --ta-color-primary-subtle: #f5f3ff;
+  --ta-color-accent: #c026d3;
+  --ta-color-surface: #ffffff;
+  --ta-color-surface-muted: #f8fafc;
+  --ta-color-border: #e2e8f0;
+  --ta-color-text: #0f172a;
+  --ta-color-text-secondary: #64748b;
+  --ta-radius-control: 0.5rem;
+  --ta-radius-card: 0.75rem;
+  --ta-shadow-card: 0 1px 3px rgb(15 23 42 / 0.055), 0 8px 22px rgb(15 23 42 / 0.035);
+  --ta-shadow-floating: 0 20px 52px rgb(15 23 42 / 0.16);
+  --ta-duration-fast: 140ms;
+  --ta-duration-normal: 200ms;
+  --ta-easing: cubic-bezier(0.2, 0, 0, 1);
+  min-width: 0;
+  background:
+    radial-gradient(circle at 86% -8%, rgb(124 58 237 / 0.07), transparent 34rem),
+    #f5f7fb;
+  font-size: 0.875rem;
+}
+
+.role-shell--tenant .role-topbar {
+  height: 4.25rem;
+  min-height: 4.25rem;
+  background-color: rgb(255 255 255 / 0.96) !important;
+  border-bottom-color: var(--ta-color-border) !important;
+}
+
+.role-shell--tenant .role-sidebar {
+  background:
+    radial-gradient(circle at 20% 0%, rgb(124 58 237 / 0.26), transparent 18rem),
+    linear-gradient(180deg, #111625 0%, #0d1220 58%, #090e19 100%) !important;
+  border-right-color: rgb(148 163 184 / 0.16);
+}
+
+.role-shell--tenant .tenant-admin-main {
+  min-width: 0;
+}
+
+.role-shell--tenant .tenant-admin-main:focus {
+  outline: none;
+}
+
+.tenant-admin-skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 0.75rem;
+  z-index: 2000;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--ta-radius-control);
+  background: var(--ta-color-primary);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: var(--ta-shadow-floating);
+  transform: translateY(-180%);
+  transition: transform var(--ta-duration-fast) var(--ta-easing);
+}
+
+.tenant-admin-skip-link:focus {
+  transform: translateY(0);
+  outline: 3px solid rgb(196 181 253 / 0.8);
+  outline-offset: 2px;
+}
+
+.role-shell--tenant :is(
+  .text-\[7px\],
+  .text-\[8px\]
+) {
+  font-size: 0.75rem !important;
+  line-height: 1.45 !important;
+}
+
+.role-shell--tenant :is(
+  .text-\[9px\],
+  .text-\[10px\]
+) {
+  font-size: 0.8125rem !important;
+  line-height: 1.5 !important;
+}
+
+.role-shell--tenant :is(
+  .text-\[11px\],
+  .text-\[12px\],
+  .text-xs
+) {
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+.role-shell--tenant .text-sm {
+  font-size: 0.9375rem !important;
+  line-height: 1.5 !important;
+}
+
+.role-shell--tenant h1 {
+  font-size: clamp(1.625rem, 2vw, 1.75rem);
+  line-height: 1.285;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.role-shell--tenant h2 {
+  font-size: clamp(1.125rem, 1.5vw, 1.375rem);
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.role-shell--tenant h3 {
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.role-shell--tenant .role-main :is(
+  article,
+  section
+)[class*="rounded-"][class*="border"] {
+  border-color: var(--ta-color-border);
+  border-radius: var(--ta-radius-card);
+  box-shadow: var(--ta-shadow-card);
+}
+
+.role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger) {
+  min-height: 2.625rem;
+  border-color: var(--ta-color-border);
+  border-radius: var(--ta-radius-control);
+  background-color: var(--ta-color-surface);
+  color: var(--ta-color-text);
+  font-size: 0.875rem;
+}
+
+.role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger)::placeholder {
+  color: color-mix(in srgb, var(--ta-color-text-secondary) 82%, transparent);
+}
+
+.role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger):focus,
+.role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger):focus-visible {
+  border-color: var(--ta-color-primary) !important;
+  box-shadow: 0 0 0 4px rgb(124 58 237 / 0.14) !important;
+}
+
+.role-shell--tenant button {
+  min-height: 2.5rem;
+  border-radius: var(--ta-radius-control);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition:
+    background-color var(--ta-duration-fast) var(--ta-easing),
+    border-color var(--ta-duration-fast) var(--ta-easing),
+    color var(--ta-duration-fast) var(--ta-easing),
+    box-shadow var(--ta-duration-fast) var(--ta-easing),
+    transform var(--ta-duration-fast) var(--ta-easing);
+}
+
+.role-shell--tenant button[class*="h-7"],
+.role-shell--tenant button[class*="h-8"],
+.role-shell--tenant button[class*="h-9"],
+.role-shell--tenant button[class*="w-7"],
+.role-shell--tenant button[class*="w-8"],
+.role-shell--tenant button[class*="w-9"] {
+  min-height: 2.25rem;
+  min-width: 2.25rem;
+}
+
+.role-shell--tenant :is(button, a):focus-visible {
+  outline: 3px solid rgb(124 58 237 / 0.28);
+  outline-offset: 2px;
+}
+
+.role-shell--tenant .role-main table {
+  width: 100%;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.role-shell--tenant .role-main thead th {
+  min-height: 2.75rem;
+  color: var(--ta-color-text-secondary);
+  font-size: 0.75rem !important;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+.role-shell--tenant .role-main tbody td {
+  min-height: 2.75rem;
+  font-size: 0.875rem !important;
+  line-height: 1.5;
+}
+
+.role-shell--tenant .role-main :is(
+  [class*="font-mono"],
+  [class*="text-right"],
+  [class*="justify-end"]
+) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+html[data-theme="dark"] .role-shell--tenant {
+  --ta-color-primary-subtle: #2e1065;
+  --ta-color-surface: #111827;
+  --ta-color-surface-muted: #1e293b;
+  --ta-color-border: #334155;
+  --ta-color-text: #f8fafc;
+  --ta-color-text-secondary: #94a3b8;
+  --ta-shadow-card: 0 1px 3px rgb(0 0 0 / 0.24), 0 10px 26px rgb(0 0 0 / 0.16);
+  --ta-shadow-floating: 0 22px 60px rgb(0 0 0 / 0.48);
+  background:
+    radial-gradient(circle at 86% -8%, rgb(124 58 237 / 0.11), transparent 34rem),
+    var(--color-brand-bg);
+}
+
+html[data-theme="dark"] .role-shell--tenant .role-topbar {
+  background-color: rgb(17 24 39 / 0.96) !important;
+}
+
+@media (max-width: 639px) {
+  .role-shell--tenant .role-topbar {
+    padding-inline: 1rem;
+  }
+
+  .role-shell--tenant .tenant-admin-main {
+    padding: 1rem;
+  }
+}
+
+/* Superadmin experience refresh */
+.role-shell--superadmin {
+  --color-brand-bg: #f4f6fb;
+  --color-brand-surface: #ffffff;
+  --color-brand-surface-high: #f3f5fa;
+  --color-brand-surface-highest: #e8ebf3;
+  --color-brand-surface-lowest: #f8f9fc;
+  --color-brand-outline: #dde2ed;
+  --color-brand-text: #182033;
+  --color-brand-text-muted: #6f7788;
+  --color-brand-primary: #7061e8;
+  --color-brand-secondary: #17b890;
+  --color-brand-tertiary: #f4a340;
+  --color-brand-error: #ef6576;
+  --sa-color-primary: #7061e8;
+  --sa-color-primary-hover: #5e4fda;
+  --sa-color-primary-subtle: #f0edff;
+  --sa-radius-card: 1.125rem;
+  --sa-radius-control: 0.75rem;
+  --sa-shadow-card: 0 1px 2px rgb(31 39 65 / 0.03), 0 12px 36px rgb(31 39 65 / 0.055);
+  background:
+    radial-gradient(circle at 82% -8%, rgb(112 97 232 / 0.075), transparent 30rem),
+    var(--color-brand-bg);
+}
+
+.role-shell--superadmin .superadmin-workspace {
+  background:
+    linear-gradient(rgb(112 97 232 / 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(112 97 232 / 0.018) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Sidebar */
+.role-shell--superadmin .sa-sidebar {
+  align-self: flex-start;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  color: #f7f7fb;
+  border-right: 1px solid rgb(255 255 255 / 0.06);
+  background:
+    radial-gradient(circle at 15% 2%, rgb(125 106 245 / 0.26), transparent 18rem),
+    radial-gradient(circle at 100% 74%, rgb(40 197 154 / 0.08), transparent 17rem),
+    linear-gradient(180deg, #17182c 0%, #111323 58%, #0d0f1d 100%);
+  box-shadow: 16px 0 44px rgb(22 24 46 / 0.13);
+}
+
+.sa-sidebar-brand {
+  display: flex;
+  height: 5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(255 255 255 / 0.075);
+  padding: 0 1.25rem;
+}
+
+.role-shell--superadmin .sa-brand-button {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0;
+  color: white;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.role-shell--superadmin .sa-brand-button:hover {
+  transform: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sa-brand-mark {
+  position: relative;
+  display: flex;
+  width: 2.625rem;
+  height: 2.625rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.17);
+  border-radius: 0.875rem;
+  background: linear-gradient(145deg, #897cf3, #5f4ed8);
+  box-shadow: 0 9px 24px rgb(81 63 193 / 0.36), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+
+.sa-brand-mark::after {
+  content: "";
+  position: absolute;
+  width: 2.25rem;
+  height: 0.65rem;
+  left: -1.25rem;
+  top: -0.1rem;
+  background: rgb(255 255 255 / 0.32);
+  filter: blur(6px);
+  transform: rotate(-38deg);
+}
+
+.sa-brand-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.sa-brand-copy strong {
+  max-width: 10rem;
+  overflow: hidden;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-brand-copy small {
+  margin-top: 0.3rem;
+  color: rgb(221 218 244 / 0.55);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.role-shell--superadmin .sa-sidebar-close {
+  display: flex;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: rgb(255 255 255 / 0.62);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(255 255 255 / 0.045);
+}
+
+.sa-sidebar-nav {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.125rem 0.875rem;
+}
+
+.sa-nav-group + .sa-nav-group {
+  margin-top: 1.375rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.sa-nav-group > p {
+  margin: 0 0 0.5rem;
+  padding: 0 0.75rem;
+  color: rgb(203 203 224 / 0.42);
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.role-shell--superadmin .sa-nav-item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 2.875rem;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.38rem 0.55rem;
+  overflow: hidden;
+  color: rgb(223 222 238 / 0.68);
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.role-shell--superadmin .sa-nav-item::before {
+  content: "";
+  position: absolute;
+  width: 3px;
+  height: 1.25rem;
+  left: -1px;
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+}
+
+.role-shell--superadmin .sa-nav-item:hover {
+  color: #f5f4fb;
+  border-color: rgb(255 255 255 / 0.07);
+  background: rgb(255 255 255 / 0.055);
+  box-shadow: none;
+  transform: none;
+}
+
+.role-shell--superadmin .sa-nav-item.is-active {
+  color: #fff;
+  border-color: rgb(151 135 255 / 0.16);
+  background:
+    linear-gradient(90deg, rgb(115 96 231 / 0.28), rgb(115 96 231 / 0.09)),
+    rgb(255 255 255 / 0.035);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.045), 0 8px 20px rgb(0 0 0 / 0.11);
+}
+
+.role-shell--superadmin .sa-nav-item.is-active::before {
+  background: #8f82ff;
+  box-shadow: 0 0 14px rgb(143 130 255 / 0.85);
+}
+
+.sa-nav-icon {
+  display: flex;
+  width: 2.125rem;
+  height: 2.125rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: rgb(214 211 239 / 0.66);
+  border: 1px solid rgb(255 255 255 / 0.065);
+  border-radius: 0.625rem;
+  background: rgb(255 255 255 / 0.035);
+}
+
+.sa-nav-item:hover .sa-nav-icon {
+  color: #fff;
+  background: rgb(255 255 255 / 0.065);
+}
+
+.sa-nav-item.is-active .sa-nav-icon {
+  color: #b8aeff;
+  border-color: rgb(158 144 255 / 0.2);
+  background: rgb(116 97 232 / 0.16);
+}
+
+.sa-nav-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-nav-chevron {
+  color: rgb(255 255 255 / 0.18);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.sa-nav-item:hover .sa-nav-chevron {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.sa-nav-badge {
+  display: inline-flex;
+  min-width: 1.4rem;
+  height: 1.35rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-nav-badge--danger {
+  color: #ff9eaa;
+  border-color: rgb(255 126 143 / 0.16);
+  background: rgb(239 101 118 / 0.12);
+}
+
+.sa-nav-badge--warning {
+  color: #ffc275;
+  border-color: rgb(244 163 64 / 0.17);
+  background: rgb(244 163 64 / 0.12);
+}
+
+.sa-nav-badge--info {
+  color: #9cdccc;
+  border-color: rgb(23 184 144 / 0.16);
+  background: rgb(23 184 144 / 0.11);
+}
+
+.sa-sidebar-footer {
+  flex-shrink: 0;
+  padding: 0.75rem;
+  border-top: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.sa-system-status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(75 218 180 / 0.1);
+  border-radius: 0.75rem;
+  background: rgb(30 190 150 / 0.055);
+}
+
+.sa-system-status-icon {
+  display: flex;
+  width: 1.875rem;
+  height: 1.875rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: #68d9bc;
+  border-radius: 0.6rem;
+  background: rgb(63 201 166 / 0.11);
+}
+
+.sa-system-status > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.sa-system-status strong {
+  color: rgb(246 247 251 / 0.84);
+  font-size: 0.6875rem;
+  font-weight: 750;
+}
+
+.sa-system-status small {
+  margin-top: 0.18rem;
+  color: rgb(201 203 220 / 0.45);
+  font-size: 0.5625rem;
+}
+
+.sa-status-pulse {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 2px solid rgb(23 184 144 / 0.2);
+  border-radius: 999px;
+  background: #36c9a4;
+  box-shadow: 0 0 0 3px rgb(54 201 164 / 0.1);
+}
+
+.role-shell--superadmin .sa-collapse-button {
+  display: flex;
+  width: 100%;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0 0.75rem;
+  color: rgb(219 219 234 / 0.5);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.6875rem;
+}
+
+.role-shell--superadmin .sa-collapse-button:hover {
+  color: rgb(255 255 255 / 0.82);
+  background: rgb(255 255 255 / 0.045);
+  box-shadow: none;
+  transform: none;
+}
+
+@media (min-width: 1024px) {
+  .sa-sidebar.is-collapsed .sa-sidebar-brand {
+    justify-content: center;
+    padding-inline: 0.75rem;
+  }
+
+  .sa-sidebar.is-collapsed :is(
+    .sa-brand-copy,
+    .sa-system-status,
+    .sa-nav-label,
+    .sa-nav-chevron,
+    .sa-collapse-button span
+  ) {
+    display: none !important;
+  }
+
+  .sa-sidebar.is-collapsed .sa-nav-group > p {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .sa-sidebar.is-collapsed .sa-nav-group + .sa-nav-group {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+  }
+
+  .role-shell--superadmin .sa-sidebar.is-collapsed .sa-nav-item {
+    justify-content: center;
+    padding-inline: 0.35rem;
+  }
+
+  .role-shell--superadmin .sa-sidebar.is-collapsed .sa-collapse-button {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .sa-nav-dot {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.45rem;
+    width: 0.45rem;
+    min-width: 0.45rem;
+    height: 0.45rem;
+    padding: 0;
+    overflow: hidden;
+    color: transparent;
+    border: 2px solid #151627;
+    background: #ef6576;
+    box-shadow: 0 0 0 2px rgb(239 101 118 / 0.14);
+  }
+}
+
+/* Top bar */
+.role-shell--superadmin .sa-topbar {
+  height: 4.5rem;
+  min-height: 4.5rem;
+  border-bottom-color: rgb(217 222 234 / 0.78) !important;
+  background: rgb(255 255 255 / 0.82) !important;
+  box-shadow: 0 1px 0 rgb(35 42 65 / 0.025), 0 8px 28px rgb(35 42 65 / 0.025);
+  backdrop-filter: blur(20px) saturate(1.25);
+}
+
+.role-shell--superadmin .sa-global-search input {
+  height: 2.625rem;
+  border-color: #e3e6ef;
+  border-radius: 0.8rem;
+  background: #f7f8fb;
+  box-shadow: inset 0 1px 2px rgb(31 39 65 / 0.025);
+  font-size: 0.75rem;
+}
+
+.role-shell--superadmin .sa-global-search input:focus {
+  border-color: rgb(112 97 232 / 0.45);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgb(112 97 232 / 0.1) !important;
+}
+
+.role-shell--superadmin .sa-search-clear {
+  min-width: 0;
+  min-height: 0;
+  padding: 0.15rem 0.25rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.625rem;
+}
+
+.role-shell--superadmin .sa-topbar > div:last-child > div > button,
+.role-shell--superadmin .header-profile-trigger {
+  border-radius: 0.75rem;
+}
+
+.role-shell--superadmin .header-profile-trigger {
+  padding: 0.3rem 0.45rem;
+}
+
+.role-shell--superadmin .header-profile-trigger > div:first-child {
+  border-radius: 0.65rem;
+}
+
+.role-shell--superadmin :is(.header-profile-menu, [role="menu"]) {
+  border-color: rgb(218 222 233 / 0.9);
+  box-shadow: 0 22px 60px rgb(35 42 65 / 0.17);
+}
+
+.role-shell--superadmin .sa-profile-trigger {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.3rem 0.4rem;
+  color: var(--color-brand-text);
+  border: 1px solid transparent;
+  border-radius: 0.85rem;
+  background: transparent !important;
+  box-shadow: none;
+  text-align: left;
+}
+
+.role-shell--superadmin .sa-profile-trigger:hover {
+  border-color: #e0e4ee;
+  background: #f7f8fb !important;
+  box-shadow: 0 5px 16px rgb(31 39 65 / 0.045);
+  transform: none;
+}
+
+.role-shell--superadmin .sa-profile-trigger.is-open {
+  color: var(--color-brand-text);
+  border-color: rgb(112 97 232 / 0.2);
+  background: rgb(112 97 232 / 0.065) !important;
+  box-shadow: 0 0 0 3px rgb(112 97 232 / 0.06);
+}
+
+.sa-profile-trigger-avatar {
+  position: relative;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex-shrink: 0;
+  overflow: visible;
+  border: 2px solid #fff;
+  border-radius: 0.7rem;
+  background: #e8ebf3;
+  box-shadow: 0 0 0 1px #dce1eb, 0 4px 10px rgb(31 39 65 / 0.1);
+}
+
+.sa-profile-trigger-avatar img {
+  border-radius: 0.55rem;
+}
+
+.sa-profile-online-dot {
+  position: absolute;
+  width: 0.55rem;
+  height: 0.55rem;
+  right: -0.2rem;
+  bottom: -0.15rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #18b98e;
+  box-shadow: 0 0 0 2px rgb(24 185 142 / 0.1);
+}
+
+.sa-profile-trigger-copy {
+  min-width: 7.25rem;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.sa-profile-trigger-copy p {
+  color: var(--color-brand-text);
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.sa-profile-trigger-copy span {
+  margin-top: 0.22rem;
+  color: var(--color-brand-text-muted);
+  font-size: 0.55rem;
+  font-weight: 550;
+}
+
+.sa-profile-chevron {
+  width: 1.65rem;
+  height: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  color: #8b92a1;
+  border: 1px solid #e5e8ef;
+  border-radius: 0.55rem;
+  background: #fff;
+}
+
+.role-shell--superadmin .sa-profile-menu {
+  position: absolute;
+  z-index: 50;
+  width: min(21.5rem, calc(100vw - 2rem));
+  right: 0;
+  margin-top: 0.65rem;
+  overflow: hidden;
+  border: 1px solid rgb(218 222 233 / 0.92);
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 24px 65px rgb(30 36 58 / 0.2), 0 4px 12px rgb(30 36 58 / 0.06);
+}
+
+.sa-profile-menu-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.15rem;
+  color: #fff;
+  background:
+    radial-gradient(circle at 100% 0%, rgb(130 116 239 / 0.38), transparent 12rem),
+    linear-gradient(125deg, #1d2038 0%, #2b294d 58%, #393265 100%);
+}
+
+.sa-profile-menu-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image: radial-gradient(rgb(255 255 255 / 0.9) 0.6px, transparent 0.6px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(105deg, transparent, black);
+}
+
+.sa-profile-menu-glow {
+  position: absolute;
+  width: 7rem;
+  height: 7rem;
+  top: -4.75rem;
+  right: -1.5rem;
+  border: 1px solid rgb(255 255 255 / 0.11);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.35rem rgb(255 255 255 / 0.025), 0 0 0 2.7rem rgb(255 255 255 / 0.016);
+}
+
+.sa-profile-menu-avatar {
+  position: relative;
+  width: 3rem;
+  height: 3rem;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 0.9rem;
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.18);
+}
+
+.sa-profile-menu-avatar img {
+  border-radius: 0.72rem;
+}
+
+.sa-profile-menu-avatar-status {
+  position: absolute;
+  display: flex;
+  width: 1rem;
+  height: 1rem;
+  right: -0.25rem;
+  bottom: -0.2rem;
+  align-items: center;
+  justify-content: center;
+  color: #46d6b2;
+  border: 2px solid #262642;
+  border-radius: 999px;
+  background: #262642;
+}
+
+.sa-profile-online-pill {
+  display: inline-flex;
+  height: 1.25rem;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.42rem;
+  color: #93e8d1;
+  border: 1px solid rgb(94 221 188 / 0.13);
+  border-radius: 999px;
+  background: rgb(53 197 160 / 0.1);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.sa-profile-online-pill > span {
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: #5be0bd;
+  box-shadow: 0 0 0 2px rgb(91 224 189 / 0.1);
+}
+
+.sa-profile-access-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 1rem;
+  padding: 0.7rem;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.055);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
+.sa-profile-access-card > span {
+  display: flex;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: #bcb4ff;
+  border-radius: 0.6rem;
+  background: rgb(139 124 241 / 0.14);
+}
+
+.sa-profile-access-card > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.sa-profile-access-card strong {
+  color: rgb(255 255 255 / 0.9);
+  font-size: 0.64rem;
+  font-weight: 750;
+}
+
+.sa-profile-access-card small {
+  margin-top: 0.18rem;
+  color: rgb(255 255 255 / 0.44);
+  font-size: 0.54rem;
+}
+
+.sa-profile-actions {
+  padding: 0.85rem;
+}
+
+.sa-profile-section-label {
+  margin: 0 0 0.4rem;
+  padding: 0 0.35rem;
+  color: #969dac;
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.role-shell--superadmin .sa-profile-action {
+  display: flex;
+  width: 100%;
+  min-height: 3.6rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem;
+  color: var(--color-brand-text);
+  border: 1px solid transparent !important;
+  border-radius: 0.8rem;
+  background: transparent;
+  box-shadow: none !important;
+  text-align: left;
+}
+
+.role-shell--superadmin .sa-profile-action:hover {
+  border-color: #e8eaf1 !important;
+  background: #f8f9fc;
+  box-shadow: none !important;
+  transform: none;
+}
+
+.sa-profile-action-icon {
+  display: flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+  border-radius: 0.7rem;
+}
+
+.sa-profile-action-icon--violet {
+  color: #6d5ddc;
+  border-color: rgb(112 97 232 / 0.12);
+  background: rgb(112 97 232 / 0.08);
+}
+
+.sa-profile-action-icon--emerald {
+  color: #159978;
+  border-color: rgb(23 184 144 / 0.13);
+  background: rgb(23 184 144 / 0.08);
+}
+
+.sa-profile-action-title,
+.sa-profile-action-note {
+  display: block;
+}
+
+.sa-profile-action-title {
+  color: var(--color-brand-text);
+  font-size: 0.67rem;
+  font-weight: 750;
+}
+
+.sa-profile-action-note {
+  margin-top: 0.22rem;
+  color: var(--color-brand-text-muted);
+  font-size: 0.55rem;
+  font-weight: 500;
+}
+
+.sa-profile-action-arrow {
+  display: flex;
+  width: 1.6rem;
+  height: 1.6rem;
+  align-items: center;
+  justify-content: center;
+  color: #a1a7b4;
+  border-radius: 0.5rem;
+  transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.sa-profile-action:hover .sa-profile-action-arrow {
+  color: #6758da;
+  background: rgb(112 97 232 / 0.07);
+  transform: translateX(2px);
+}
+
+.sa-profile-menu-footer {
+  padding: 0.7rem 0.85rem 0.85rem;
+  border-top: 1px solid #eceef4;
+  background: #fafbfc;
+}
+
+.role-shell--superadmin .sa-profile-logout {
+  display: flex;
+  width: 100%;
+  min-height: 2.7rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0 0.75rem;
+  color: #d94f63;
+  border: 1px solid rgb(239 101 118 / 0.1) !important;
+  border-radius: 0.75rem;
+  background: rgb(239 101 118 / 0.045);
+  box-shadow: none !important;
+  font-size: 0.64rem;
+  font-weight: 750;
+}
+
+.role-shell--superadmin .sa-profile-logout:hover {
+  color: #c93e53;
+  border-color: rgb(239 101 118 / 0.17) !important;
+  background: rgb(239 101 118 / 0.085);
+  box-shadow: none !important;
+  transform: none;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-profile-trigger:hover {
+  border-color: #343a51;
+  background: #1e2338 !important;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-profile-trigger.is-open {
+  border-color: rgb(130 114 239 / 0.28);
+  background: rgb(112 97 232 / 0.11) !important;
+}
+
+html[data-theme="dark"] .sa-profile-trigger-avatar {
+  border-color: #20263a;
+  box-shadow: 0 0 0 1px #3a4058;
+}
+
+html[data-theme="dark"] .sa-profile-online-dot {
+  border-color: #15192b;
+}
+
+html[data-theme="dark"] .sa-profile-chevron {
+  color: #a1a7ba;
+  border-color: #343a51;
+  background: #1e2338;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-profile-menu {
+  border-color: #333950;
+  background: #15192b;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-profile-action:hover {
+  border-color: #30364d !important;
+  background: #1d2236;
+}
+
+html[data-theme="dark"] .sa-profile-menu-footer {
+  border-color: #2b3147;
+  background: #111526;
+}
+
+@media (max-width: 639px) {
+  .role-shell--superadmin .sa-profile-menu {
+    position: fixed;
+    top: 4.4rem;
+    right: 0.75rem;
+    margin-top: 0;
+  }
+}
+
+/* Shared Superadmin content */
+.role-shell--superadmin .superadmin-main {
+  min-width: 0;
+}
+
+/* Shared modal backdrop: neutral charcoal translucency and a soft, muted blur.
+   Legacy modules use several Tailwind background tokens, so all of them map to
+   this single treatment until their markup is migrated to sa-modal-backdrop. */
+body.system-modal-open :is(
+  .sa-modal-backdrop,
+  [class~="fixed"][class~="inset-0"][class~="bg-brand-bg/70"],
+  [class~="fixed"][class~="inset-0"][class~="bg-brand-bg/75"],
+  [class~="fixed"][class~="inset-0"][class~="bg-brand-bg/80"],
+  [class~="fixed"][class~="inset-0"][class~="bg-brand-bg/85"],
+  [class~="fixed"][class~="inset-0"][class~="bg-brand-bg/90"],
+  [class~="fixed"][class~="inset-0"][class~="bg-brand-bg/95"],
+  [class~="fixed"][class~="inset-0"][class~="bg-slate-900/60"],
+  [class~="fixed"][class~="inset-0"][class~="bg-slate-950/45"],
+  [class~="fixed"][class~="inset-0"][class~="bg-slate-950/50"],
+  [class~="fixed"][class~="inset-0"][class~="bg-slate-950/55"],
+  [class~="fixed"][class~="inset-0"][class~="bg-slate-950/60"],
+  [class~="fixed"][class~="inset-0"][class~="bg-slate-950/65"],
+  [class~="fixed"][class~="inset-0"][class~="bg-slate-950/70"]
+) {
+  background: var(--modal-backdrop-color) !important;
+  -webkit-backdrop-filter: var(--modal-backdrop-filter) !important;
+  backdrop-filter: var(--modal-backdrop-filter) !important;
+}
+
+.role-shell--superadmin .role-main :is(article, section)[class*="rounded-"][class*="border"] {
+  border-color: rgb(221 226 237 / 0.9);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgb(31 39 65 / 0.025), 0 12px 34px rgb(31 39 65 / 0.045);
+}
+
+.role-shell--superadmin .role-main button[class*="bg-brand-primary"]:not(.beautiful-select-option) {
+  border-color: transparent;
+  background: linear-gradient(135deg, #7b6cec, #6252d9);
+  box-shadow: 0 7px 16px rgb(93 77 211 / 0.2);
+}
+
+.role-shell--superadmin .role-main button[class*="bg-brand-primary"]:not(.beautiful-select-option):hover {
+  background: linear-gradient(135deg, #6f60e2, #5747ce);
+  box-shadow: 0 9px 20px rgb(93 77 211 / 0.25);
+  transform: translateY(-1px);
+}
+
+.role-shell--superadmin .role-main :is(input, textarea, select, .beautiful-select-trigger) {
+  border-color: #dfe3ed;
+  border-radius: 0.75rem;
+  background-color: #fff;
+}
+
+.role-shell--superadmin .role-main thead {
+  background: #f8f9fc;
+}
+
+.role-shell--superadmin .role-main thead th {
+  color: #81889a;
+  letter-spacing: 0.055em;
+}
+
+.role-shell--superadmin .role-main tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.role-shell--superadmin .role-main tbody tr:hover {
+  background: rgb(112 97 232 / 0.028);
+}
+
+.sa-maintenance-banner {
+  box-shadow: 0 8px 24px rgb(217 143 31 / 0.06);
+}
+
+/* Dashboard */
+.sa-dashboard {
+  animation: sa-dashboard-enter 360ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes sa-dashboard-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.role-shell--superadmin .sa-welcome-panel {
+  position: relative;
+  display: flex;
+  min-height: 10.25rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  overflow: hidden;
+  padding: 1.75rem 2rem;
+  color: #fff;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at 82% 18%, rgb(131 226 206 / 0.18), transparent 18rem),
+    radial-gradient(circle at 5% 120%, rgb(141 123 255 / 0.42), transparent 24rem),
+    linear-gradient(120deg, #1d2039 0%, #29284b 52%, #3d3675 100%);
+  box-shadow: 0 20px 45px rgb(32 29 72 / 0.15);
+}
+
+.sa-welcome-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.15;
+  background-image: radial-gradient(rgb(255 255 255 / 0.75) 0.7px, transparent 0.7px);
+  background-size: 20px 20px;
+  mask-image: linear-gradient(100deg, transparent, black 65%, transparent);
+}
+
+.sa-welcome-glow {
+  position: absolute;
+  width: 16rem;
+  height: 16rem;
+  top: -11rem;
+  right: 16%;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2.5rem rgb(255 255 255 / 0.018), 0 0 0 5rem rgb(255 255 255 / 0.014);
+}
+
+.role-shell--superadmin .sa-welcome-panel h1 {
+  color: #fff;
+  font-size: clamp(1.55rem, 3vw, 2.05rem);
+  font-weight: 750;
+  letter-spacing: -0.045em;
+}
+
+.sa-eyebrow,
+.sa-live-pill {
+  display: inline-flex;
+  height: 1.75rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.65rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.075);
+  color: rgb(255 255 255 / 0.76);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.sa-live-pill {
+  border-color: rgb(93 220 187 / 0.13);
+  background: rgb(54 201 164 / 0.08);
+  color: #9de8d5;
+}
+
+.sa-live-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #55d3b3;
+  box-shadow: 0 0 0 3px rgb(85 211 179 / 0.12);
+}
+
+.role-shell--superadmin .sa-period-select {
+  min-width: 10rem;
+  min-height: 2.55rem;
+  padding: 0.2rem 0.35rem 0.2rem 0.85rem;
+  color: rgb(255 255 255 / 0.88);
+  border-color: rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.085);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.role-shell--superadmin .sa-period-select:hover {
+  border-color: rgb(255 255 255 / 0.2);
+  background: rgb(255 255 255 / 0.12);
+}
+
+.role-shell--superadmin .sa-period-select .beautiful-select-arrow {
+  color: rgb(255 255 255 / 0.72);
+  border-color: rgb(255 255 255 / 0.09);
+  background: rgb(255 255 255 / 0.07);
+}
+
+.role-shell--superadmin .sa-metric-card {
+  position: relative;
+  display: flex;
+  min-height: 8.25rem;
+  align-items: flex-start;
+  gap: 0.9rem;
+  overflow: hidden;
+  padding: 1.15rem;
+  border: 1px solid rgb(219 224 235 / 0.9);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(31 39 65 / 0.025), 0 10px 30px rgb(31 39 65 / 0.04);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.role-shell--superadmin .sa-metric-card::after {
+  content: "";
+  position: absolute;
+  width: 5rem;
+  height: 5rem;
+  top: -2.75rem;
+  right: -2.2rem;
+  border-radius: 50%;
+  background: var(--metric-color);
+  opacity: 0.065;
+}
+
+.role-shell--superadmin .sa-metric-card:hover {
+  border-color: color-mix(in srgb, var(--metric-color) 24%, #dfe3ed);
+  box-shadow: 0 16px 38px rgb(31 39 65 / 0.075);
+  transform: translateY(-2px);
+}
+
+.sa-metric-card--violet { --metric-color: #7061e8; }
+.sa-metric-card--emerald { --metric-color: #17b890; }
+.sa-metric-card--amber { --metric-color: #f4a340; }
+.sa-metric-card--rose { --metric-color: #ef6576; }
+
+.sa-metric-icon {
+  display: flex;
+  width: 2.65rem;
+  height: 2.65rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--metric-color);
+  border: 1px solid color-mix(in srgb, var(--metric-color) 14%, transparent);
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--metric-color) 9%, white);
+}
+
+.sa-metric-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.sa-metric-label {
+  color: var(--color-brand-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.sa-metric-value {
+  margin-top: 0.35rem;
+  overflow: hidden;
+  color: var(--color-brand-text);
+  font-size: clamp(1.25rem, 2vw, 1.55rem);
+  font-weight: 780;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-metric-value span {
+  color: var(--color-brand-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.sa-metric-note {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  font-size: 0.625rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.sa-positive { color: #159675; }
+.sa-warning { color: #cf8123; }
+.sa-danger { color: #d34d61; }
+
+.role-shell--superadmin .sa-panel {
+  min-width: 0;
+  border: 1px solid rgb(219 224 235 / 0.92);
+  border-radius: 1.05rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(31 39 65 / 0.025), 0 12px 34px rgb(31 39 65 / 0.045);
+}
+
+.sa-panel-heading {
+  display: flex;
+  min-height: 4.7rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+}
+
+.role-shell--superadmin .sa-panel-heading h2 {
+  color: var(--color-brand-text);
+  font-size: 0.9rem;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+}
+
+.sa-panel-heading p {
+  margin-top: 0.25rem;
+  color: var(--color-brand-text-muted);
+  font-size: 0.625rem;
+}
+
+.sa-soft-badge,
+.sa-alert-count {
+  display: inline-flex;
+  height: 1.35rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.45rem;
+  color: #7061e8;
+  border: 1px solid rgb(112 97 232 / 0.12);
+  border-radius: 999px;
+  background: rgb(112 97 232 / 0.07);
+  font-size: 0.5625rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sa-alert-count {
+  min-width: 1.35rem;
+  color: #d94f63;
+  border-color: rgb(239 101 118 / 0.15);
+  background: rgb(239 101 118 / 0.08);
+}
+
+.sa-chart-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.sa-chart-summary span {
+  color: var(--color-brand-text-muted);
+  font-size: 0.5625rem;
+}
+
+.sa-chart-summary strong {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  color: #159675;
+  font-size: 0.75rem;
+}
+
+.sa-chart {
+  position: relative;
+  height: 15rem;
+  padding: 1rem 1.25rem 0.85rem;
+  border-top: 1px solid #edf0f5;
+}
+
+.sa-chart-grid {
+  position: absolute;
+  inset: 1.25rem 1.25rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.sa-chart-grid span {
+  width: 100%;
+  border-top: 1px dashed #e8ebf2;
+}
+
+.sa-chart-bars {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100%;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: clamp(0.65rem, 4vw, 2.4rem);
+}
+
+.role-shell--superadmin .sa-chart-column {
+  position: relative;
+  display: flex;
+  width: min(11%, 3.5rem);
+  min-width: 1.75rem;
+  min-height: 0;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0 1.45rem;
+  color: var(--color-brand-text-muted);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.role-shell--superadmin .sa-chart-column:hover,
+.role-shell--superadmin .sa-chart-column:focus-visible {
+  color: #7061e8;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.sa-chart-bar {
+  width: 100%;
+  min-height: 1.5rem;
+  border-radius: 0.65rem 0.65rem 0.28rem 0.28rem;
+  background: linear-gradient(180deg, rgb(112 97 232 / 0.44), rgb(112 97 232 / 0.12));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.36);
+  transition: height 320ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.sa-chart-column.is-active .sa-chart-bar {
+  background: linear-gradient(180deg, #8577ef 0%, #6556dc 100%);
+  box-shadow: 0 9px 22px rgb(99 82 218 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.32);
+}
+
+.sa-chart-label {
+  position: absolute;
+  bottom: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.sa-chart-tooltip {
+  position: absolute;
+  z-index: 5;
+  top: -0.75rem;
+  left: 50%;
+  width: max-content;
+  max-width: 8rem;
+  padding: 0.38rem 0.5rem;
+  color: #fff;
+  border-radius: 0.45rem;
+  background: #26283e;
+  box-shadow: 0 8px 18px rgb(20 22 38 / 0.18);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.sa-chart-column:hover .sa-chart-tooltip,
+.sa-chart-column:focus .sa-chart-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.sa-icon-chip {
+  display: flex;
+  width: 2.15rem;
+  height: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  color: #7061e8;
+  border-radius: 0.7rem;
+  background: rgb(112 97 232 / 0.08);
+}
+
+.sa-health-layout {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 1.15rem;
+  padding: 1.2rem;
+  border-top: 1px solid #edf0f5;
+}
+
+.sa-donut {
+  position: relative;
+  width: 8.25rem;
+  height: 8.25rem;
+  padding: 0.75rem;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(31 39 65 / 0.04);
+}
+
+.sa-donut::after {
+  content: "";
+  position: absolute;
+  inset: 0.7rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(31 39 65 / 0.03), 0 6px 18px rgb(31 39 65 / 0.04);
+}
+
+.sa-donut-center {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.sa-donut-center strong {
+  color: var(--color-brand-text);
+  font-size: 1.55rem;
+  font-weight: 780;
+  letter-spacing: -0.05em;
+}
+
+.sa-donut-center span {
+  color: var(--color-brand-text-muted);
+  font-size: 0.5625rem;
+  font-weight: 650;
+}
+
+.sa-status-list {
+  min-width: 0;
+}
+
+.role-shell--superadmin .sa-status-row {
+  display: flex;
+  width: 100%;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.28rem 0.45rem;
+  color: var(--color-brand-text-muted);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.625rem;
+}
+
+.role-shell--superadmin .sa-status-row:hover,
+.role-shell--superadmin .sa-status-row.is-active {
+  color: var(--color-brand-text);
+  background: #f5f6fa;
+  box-shadow: none;
+  transform: none;
+}
+
+.sa-status-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sa-status-row strong {
+  color: var(--color-brand-text);
+}
+
+.role-shell--superadmin .sa-filter-pill {
+  display: inline-flex;
+  min-height: 1.55rem;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.5rem;
+  color: #7061e8;
+  border: 1px solid rgb(112 97 232 / 0.14);
+  border-radius: 999px;
+  background: rgb(112 97 232 / 0.075);
+  box-shadow: none;
+  font-size: 0.5625rem;
+}
+
+.role-shell--superadmin .sa-text-button {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.4rem;
+  color: #7061e8;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.625rem;
+}
+
+.role-shell--superadmin .sa-text-button:hover {
+  color: #5747ce;
+  background: rgb(112 97 232 / 0.055);
+  box-shadow: none;
+  transform: none;
+}
+
+.sa-tenant-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.role-shell--superadmin .sa-tenant-table thead {
+  background: #f8f9fc;
+}
+
+.role-shell--superadmin .sa-tenant-table th {
+  height: 2.6rem;
+  padding: 0 1rem;
+  color: #858c9d;
+  font-size: 0.6rem !important;
+  font-weight: 750;
+  letter-spacing: 0.055em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.role-shell--superadmin .sa-tenant-table td {
+  height: 4.35rem;
+  padding: 0 1rem;
+  color: var(--color-brand-text-muted);
+  border-top: 1px solid #edf0f5;
+  font-size: 0.6875rem !important;
+  white-space: nowrap;
+}
+
+.role-shell--superadmin .sa-tenant-name {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.role-shell--superadmin .sa-tenant-name:hover {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.sa-tenant-avatar {
+  display: flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: #6657d9;
+  border: 1px solid rgb(112 97 232 / 0.12);
+  border-radius: 0.7rem;
+  background: linear-gradient(145deg, #f3f0ff, #e9e5ff);
+  font-size: 0.625rem;
+  font-weight: 800;
+}
+
+.sa-tenant-name > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.sa-tenant-name strong {
+  max-width: 13rem;
+  overflow: hidden;
+  color: var(--color-brand-text);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+}
+
+.sa-tenant-name small {
+  max-width: 13rem;
+  margin-top: 0.18rem;
+  overflow: hidden;
+  color: var(--color-brand-text-muted);
+  font-size: 0.5625rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.sa-package-pill,
+.sa-status-badge {
+  display: inline-flex;
+  min-height: 1.45rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.5rem;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+}
+
+.sa-package-pill {
+  color: #5e6472;
+  border-color: #e3e6ed;
+  background: #f7f8fa;
+}
+
+.sa-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.role-shell--superadmin .sa-row-actions button,
+.role-shell--superadmin .sa-icon-button {
+  display: flex;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #7b8292;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.role-shell--superadmin .sa-row-actions button:hover,
+.role-shell--superadmin .sa-icon-button:hover {
+  color: #6354d8;
+  border-color: rgb(112 97 232 / 0.12);
+  background: rgb(112 97 232 / 0.065);
+  box-shadow: none;
+  transform: none;
+}
+
+.sa-empty-state,
+.sa-empty-alerts {
+  display: flex;
+  min-height: 10rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: var(--color-brand-text-muted);
+}
+
+.sa-empty-state p {
+  margin-top: 0.5rem;
+  font-size: 0.6875rem;
+}
+
+.role-shell--superadmin .sa-empty-state button {
+  min-height: 1.75rem;
+  margin-top: 0.4rem;
+  padding: 0 0.5rem;
+  color: #7061e8;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.625rem;
+}
+
+.sa-alert-panel {
+  overflow: hidden;
+}
+
+.sa-alert-list {
+  max-height: 23.6rem;
+  overflow-y: auto;
+  border-top: 1px solid #edf0f5;
+}
+
+.role-shell--superadmin .sa-alert-item {
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.9rem 1.15rem;
+  border: 0;
+  border-bottom: 1px solid #edf0f5;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.role-shell--superadmin .sa-alert-item:last-child {
+  border-bottom: 0;
+}
+
+.role-shell--superadmin .sa-alert-item.is-read {
+  opacity: 0.58;
+}
+
+.sa-alert-icon {
+  display: flex;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.6rem;
+}
+
+.sa-alert-item--error .sa-alert-icon {
+  color: #d95063;
+  background: rgb(239 101 118 / 0.09);
+}
+
+.sa-alert-item--warning .sa-alert-icon {
+  color: #cf8123;
+  background: rgb(244 163 64 / 0.1);
+}
+
+.sa-alert-item--info .sa-alert-icon {
+  color: #6657db;
+  background: rgb(112 97 232 / 0.08);
+}
+
+.sa-alert-item strong {
+  display: block;
+  overflow: hidden;
+  color: var(--color-brand-text);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-alert-item p {
+  display: -webkit-box;
+  margin-top: 0.25rem;
+  overflow: hidden;
+  color: var(--color-brand-text-muted);
+  font-size: 0.6rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sa-alert-item time {
+  display: block;
+  margin-top: 0.35rem;
+  color: #9aa0ae;
+  font-size: 0.55rem;
+}
+
+.role-shell--superadmin .sa-alert-item button {
+  display: flex;
+  width: 1.65rem;
+  min-width: 1.65rem;
+  height: 1.65rem;
+  min-height: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #8a91a1;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.role-shell--superadmin .sa-alert-item button:hover {
+  color: #159675;
+  background: rgb(23 184 144 / 0.08);
+  box-shadow: none;
+  transform: none;
+}
+
+.sa-empty-alerts {
+  min-height: 16rem;
+  color: #38a989;
+}
+
+.sa-empty-alerts strong {
+  margin-top: 0.6rem;
+  color: var(--color-brand-text);
+  font-size: 0.75rem;
+}
+
+.sa-empty-alerts p {
+  margin-top: 0.3rem;
+  color: var(--color-brand-text-muted);
+  font-size: 0.625rem;
+}
+
+html[data-theme="dark"] .role-shell--superadmin {
+  --color-brand-bg: #0d1020;
+  --color-brand-surface: #15192b;
+  --color-brand-surface-high: #1e2338;
+  --color-brand-surface-highest: #292f47;
+  --color-brand-surface-lowest: #111526;
+  --color-brand-outline: #2d334b;
+  --color-brand-text: #f4f5fb;
+  --color-brand-text-muted: #989fb2;
+  background: #0d1020;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .superadmin-workspace {
+  background:
+    radial-gradient(circle at 75% -10%, rgb(112 97 232 / 0.1), transparent 30rem),
+    #0d1020;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-topbar {
+  border-bottom-color: rgb(52 59 84 / 0.82) !important;
+  background: rgb(21 25 43 / 0.86) !important;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-global-search input {
+  color: var(--color-brand-text);
+  border-color: #30364e;
+  background: #111526;
+}
+
+html[data-theme="dark"] .role-shell--superadmin :is(.sa-metric-card, .sa-panel) {
+  border-color: #2d334a;
+  background: #15192b;
+  box-shadow: 0 12px 34px rgb(0 0 0 / 0.15);
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-metric-icon {
+  background: color-mix(in srgb, var(--metric-color) 12%, #15192b);
+}
+
+html[data-theme="dark"] .role-shell--superadmin :is(.sa-chart, .sa-health-layout, .sa-alert-list, .sa-panel-heading.border-b) {
+  border-color: #292f46;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-chart-grid span {
+  border-color: #292f46;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-donut::after {
+  background: #15192b;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-status-row:hover,
+html[data-theme="dark"] .role-shell--superadmin .sa-status-row.is-active {
+  background: #1e2338;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-tenant-table thead {
+  background: #111526;
+}
+
+html[data-theme="dark"] .role-shell--superadmin :is(.sa-tenant-table td, .sa-alert-item) {
+  border-color: #292f46;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-tenant-avatar {
+  color: #b7aff8;
+  border-color: rgb(129 113 232 / 0.2);
+  background: #272341;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-package-pill {
+  color: #b0b5c4;
+  border-color: #343a51;
+  background: #1d2235;
+}
+
+@media (max-width: 767px) {
+  .role-shell--superadmin .sa-welcome-panel {
+    min-height: 13rem;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 1.4rem;
+  }
+
+  .role-shell--superadmin .sa-welcome-panel > div:last-child {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .role-shell--superadmin .sa-period-select {
+    width: 100%;
+  }
+
+  .sa-panel-heading {
+    min-height: 4.25rem;
+    padding: 0.9rem 1rem;
+  }
+
+  .sa-health-layout {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .sa-status-list {
+    width: 100%;
+  }
+}
+
+@media (max-width: 479px) {
+  .role-shell--superadmin .sa-metric-card {
+    min-height: 7.5rem;
+  }
+
+  .sa-chart {
+    height: 13rem;
+    padding-inline: 0.75rem;
+  }
+
+  .sa-chart-bars {
+    gap: 0.65rem;
+  }
+
+  .sa-chart-summary {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-dashboard {
+    animation: none;
+  }
+
+  .role-shell--superadmin .sa-metric-card:hover {
+    transform: none;
+  }
+}
