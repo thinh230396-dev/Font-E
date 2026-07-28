@@ -24,6 +24,7 @@ interface TenantAdminOverviewProps {
   branchLimit: number;
   staffCount: number;
   staffLimit: number;
+  onToggleDemo: () => void;
   onNavigate: (page: NailPageId) => void;
   onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription'>) => void;
 }
@@ -84,6 +85,7 @@ export default function TenantAdminOverview({
   branchLimit,
   staffCount,
   staffLimit,
+  onToggleDemo,
   onNavigate,
   onQuickCreate
 }: TenantAdminOverviewProps) {
@@ -125,6 +127,7 @@ export default function TenantAdminOverview({
           <p className="mt-2 text-[10px] capitalize text-slate-400">{today} · {branchName}</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" onClick={onToggleDemo} className="tenant-soft-button flex h-11 items-center justify-center border border-pink-100 bg-white px-4 text-[9px] font-bold text-pink-600 shadow-sm">{demoMode ? 'Tắt dữ liệu mẫu' : 'Xem dữ liệu mẫu'}</button>
           <button type="button" onClick={() => onNavigate('subscription')} className="tenant-soft-button flex h-11 items-center justify-center gap-2 border border-pink-100 bg-white px-4 text-[9px] font-bold text-pink-600 shadow-sm"><BadgePercent className="h-4 w-4" />Gói {planName}</button>
           <button type="button" onClick={() => onQuickCreate('appointments')} className="tenant-primary-button flex h-11 items-center justify-center gap-2 border border-pink-500 bg-pink-500 px-4 text-[10px] font-black text-white shadow-lg shadow-pink-200"><Plus className="h-4 w-4" />Tạo lịch hẹn</button>
         </div>

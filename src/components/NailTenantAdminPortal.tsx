@@ -334,6 +334,7 @@ interface OverviewPageProps {
   tenant?: Tenant;
   demoMode: boolean;
   invoiceCount: number;
+  onToggleDemo: () => void;
   planName: string;
   branchCount: number;
   branchLimit: number;
@@ -342,7 +343,7 @@ interface OverviewPageProps {
   onNavigate: (page: NailPageId) => void;
   onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription'>) => void;
 }
-function OverviewPage({ branch, ownerName, tenantName, tenant, demoMode, invoiceCount, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
+function OverviewPage({ branch, ownerName, tenantName, tenant, demoMode, invoiceCount, onToggleDemo, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
   const [revenueRange, setRevenueRange] = useState<OverviewRevenueRange>(7);
   const branchName = branch === 'ALL' ? 'Tất cả chi nhánh' : branch === 'Q1' ? 'Chi nhánh Quận 1' : branch === 'Q3' ? 'Chi nhánh Quận 3' : `Chi nhánh ${branch}`;
   const ownerShortName = ownerName.trim().split(/\s+/).pop() || ownerName;
@@ -364,6 +365,7 @@ function OverviewPage({ branch, ownerName, tenantName, tenant, demoMode, invoice
         branchLimit={branchLimit}
         staffCount={staffCount}
         staffLimit={staffLimit}
+        onToggleDemo={onToggleDemo}
         onNavigate={onNavigate}
         onQuickCreate={onQuickCreate}
       />
@@ -1687,7 +1689,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           {readOnlyReason && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100"><LockKeyhole className="h-4 w-4" /></span><div><p className="text-[9px] font-black">Chế độ chỉ đọc đang được áp dụng</p><p className="mt-1 text-[8px] leading-5">{readOnlyReason}</p></div></div>}
           <div className="mb-4 sm:hidden"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label="Chọn phạm vi chi nhánh trên di động" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả chi nhánh</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
           {activePage === 'overview' ? (
-            <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} tenant={tenant} demoMode={demoMode} invoiceCount={visibleInvoices.length} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
+            <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} tenant={tenant} demoMode={demoMode} invoiceCount={visibleInvoices.length} onToggleDemo={demoMode ? clearDemoData : loadDemoData} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
           ) : activePage === 'subscription' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải trung tâm gói đăng ký...</div>}>
               <TenantAdminSubscription
