@@ -33,7 +33,17 @@ export const getTenantAdminInitialData = <T>(
   stored: T[] | null | undefined,
   mockSeed: T[]
 ): T[] => {
-  if (tenantAdminDataMode === 'demo') return stored || mockSeed;
+  if (tenantAdminDataMode === 'demo') {
+    if (!stored?.length) return mockSeed;
+    const storedIdentities = new Set(stored.map(getRecordIdentity).filter(Boolean));
+    return [
+      ...mockSeed.filter((item) => {
+        const identity = getRecordIdentity(item);
+        return !identity || !storedIdentities.has(identity);
+      }),
+      ...stored
+    ];
+  }
   if (!stored) return [];
 
   const mockIdentities = new Set(mockSeed.map(getRecordIdentity).filter(Boolean));

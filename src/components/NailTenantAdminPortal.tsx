@@ -18,6 +18,7 @@ import {
   Clock3,
   Copy,
   CreditCard,
+  Database,
   Download,
   LockKeyhole,
   Gift,
@@ -36,6 +37,7 @@ import {
   Phone,
   Plus,
   ReceiptText,
+  RotateCcw,
   Search,
   Settings,
   ShieldCheck,
@@ -44,6 +46,7 @@ import {
   Store,
   Target,
   TrendingUp,
+  Trash2,
   UserRound,
   UserCheck,
   UsersRound,
@@ -162,6 +165,91 @@ const FALLBACK_SUBSCRIPTION_PACKAGE = normalizeSubscriptionPackage({
   maxSalons: 3,
   color: '#7c3aed'
 });
+
+const createDemoInvoices = (tenantName: string, tenantId: string): Invoice[] => [
+  {
+    id: 'DEMO-INV-PAID-001',
+    invoiceCode: 'DEMO-INV-2026-071',
+    tenantId,
+    tenantName,
+    type: 'MONTHLY_SUBSCRIPTION',
+    planName: 'Premium',
+    billingCycle: 'monthly',
+    servicePeriod: '01/07/2026 - 31/07/2026',
+    dueDate: '2026-07-05',
+    amount: 3000000,
+    currency: 'VND',
+    status: 'PAID',
+    paymentMethod: 'Thẻ doanh nghiệp •••• 4242',
+    transactionCode: 'DEMO-TXN-PAID-071',
+    createdAt: '2026-07-01T08:00:00+07:00',
+    paidAt: '2026-07-02T10:15:00+07:00',
+    billingPeriod: 'Tháng 7/2026',
+    billingEmail: 'billing.demo@salonsys.vn',
+    billingCompany: tenantName,
+    billingAddress: '123 Nguyễn Huệ, Phường Sài Gòn, TP.HCM',
+    taxCode: 'DEMO-0312345678',
+    lineItems: [{ id: 'DEMO-LINE-001', description: 'Gói Premium · Tháng 7/2026', quantity: 1, unitPrice: 3000000, amount: 3000000, taxRate: 0 }]
+  },
+  {
+    id: 'DEMO-INV-PENDING-001',
+    invoiceCode: 'DEMO-INV-2026-081',
+    tenantId,
+    tenantName,
+    type: 'MONTHLY_SUBSCRIPTION',
+    planName: 'Premium',
+    billingCycle: 'monthly',
+    servicePeriod: '01/08/2026 - 31/08/2026',
+    dueDate: '2026-08-05',
+    amount: 3000000,
+    currency: 'VND',
+    status: 'PENDING',
+    paymentMethod: 'Thẻ doanh nghiệp •••• 4242',
+    createdAt: '2026-07-28T08:00:00+07:00',
+    billingPeriod: 'Tháng 8/2026',
+    billingEmail: 'billing.demo@salonsys.vn',
+    billingCompany: tenantName,
+    billingAddress: '123 Nguyễn Huệ, Phường Sài Gòn, TP.HCM',
+    taxCode: 'DEMO-0312345678',
+    lineItems: [{ id: 'DEMO-LINE-002', description: 'Gói Premium · Tháng 8/2026', quantity: 1, unitPrice: 3000000, amount: 3000000, taxRate: 0 }]
+  },
+  {
+    id: 'DEMO-INV-OVERDUE-001',
+    invoiceCode: 'DEMO-INV-2026-062',
+    tenantId,
+    tenantName,
+    type: 'MANUAL_ADJUSTMENT',
+    planName: 'Phí bổ sung',
+    dueDate: '2026-06-25',
+    amount: 650000,
+    currency: 'VND',
+    status: 'OVERDUE',
+    paymentMethod: 'Chuyển khoản ngân hàng',
+    createdAt: '2026-06-18T09:30:00+07:00',
+    billingPeriod: 'Điều chỉnh tháng 6/2026',
+    billingEmail: 'billing.demo@salonsys.vn',
+    billingCompany: tenantName,
+    taxCode: 'DEMO-0312345678',
+    lineItems: [{ id: 'DEMO-LINE-003', description: 'Bổ sung 5.000 tin nhắn chăm sóc khách hàng', quantity: 1, unitPrice: 650000, amount: 650000, taxRate: 0 }]
+  },
+  {
+    id: 'DEMO-INV-CANCELLED-001',
+    invoiceCode: 'DEMO-INV-2026-051',
+    tenantId,
+    tenantName,
+    type: 'PLAN_CHANGE',
+    planName: 'Enterprise',
+    dueDate: '2026-05-20',
+    amount: 5000000,
+    currency: 'VND',
+    status: 'CANCELLED',
+    createdAt: '2026-05-15T14:00:00+07:00',
+    billingPeriod: 'Yêu cầu đổi gói tháng 5/2026',
+    billingEmail: 'billing.demo@salonsys.vn',
+    billingCompany: tenantName,
+    taxCode: 'DEMO-0312345678'
+  }
+];
 
 const formatPlanMoney = (value: number, currency = 'VND') => new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -1033,10 +1121,17 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
 }
 export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, upgradeRequests, onRequestUpgrade, onUpdateTenant, onLogout }: NailTenantAdminPortalProps) {
   const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
+  const demoStorageKey = `tenant-admin-demo-mode:${tenantName}`;
+  const [demoMode, setDemoMode] = useState(() => {
+    if (typeof window === 'undefined' || !tenant) return true;
+    const stored = window.localStorage.getItem(demoStorageKey);
+    return stored === null ? true : stored === 'true';
+  });
+  const [demoRevision, setDemoRevision] = useState(0);
   const pendingUpgradeRequest = tenant
     ? upgradeRequests.find((request) => request.tenantId === tenant.id && request.status === 'PENDING')
     : undefined;
-  setTenantAdminDataMode(tenant ? 'live' : 'demo');
+  setTenantAdminDataMode(demoMode || !tenant ? 'demo' : 'live');
   const currentPackage = useMemo(
     () => normalizeSubscriptionPackage(subscriptionPackage || FALLBACK_SUBSCRIPTION_PACKAGE),
     [subscriptionPackage]
@@ -1082,11 +1177,11 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [rowsByPage, setRowsByPage] = useState<Partial<Record<NailPageId, NailRow[]>>>(() => {
     const initialRows = Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [
       id,
-      tenant
-        ? []
-        : config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
+      demoMode || !tenant
+        ? config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
+        : []
     ])) as Partial<Record<NailPageId, NailRow[]>>;
-    if (tenant) {
+    if (tenant && !demoMode) {
       initialRows.branches = normalizeTenantBranches(tenant).map(branchToNailRow);
     }
     return initialRows;
@@ -1098,11 +1193,23 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const currentConfig = activePage === 'overview' || activePage === 'subscription' ? null : nailModuleConfigs[activePage];
   const currentRows = activePage === 'overview' || activePage === 'subscription'
     ? []
-    : rowsByPage[activePage] || (tenant ? [] : currentConfig?.rows) || [];
+    : rowsByPage[activePage] || (demoMode || !tenant ? currentConfig?.rows : []) || [];
+  const demoInvoices = useMemo(
+    () => createDemoInvoices(tenantName, tenant?.id || 'DEMO-TENANT'),
+    [tenant?.id, tenantName]
+  );
+  const visibleInvoices = useMemo(() => {
+    if (!demoMode) return invoices;
+    const demoIds = new Set(demoInvoices.map((invoice) => invoice.id));
+    return [...demoInvoices, ...invoices.filter((invoice) => !demoIds.has(invoice.id))];
+  }, [demoInvoices, demoMode, invoices]);
   const scopedRows = activePage === 'branches' || branch === 'ALL' ? currentRows : currentRows.filter((row) => row.branchCode === branch);
   const branchScopeLabel = activePage === 'branches' || branch === 'ALL' ? 'Toàn tenant' : branchRows.find((row) => row.branchCode === branch)?.title || 'Chi nhánh ' + branch;
-  const currentAccessMode = getTenantPageAccess(currentPackage, activePage, normalizedAvailablePackages);
-  const readOnlyReason = tenant?.status === 'SUSPENDED'
+  const resolvePageAccess = (page: NailPageId) => demoMode
+    ? 'full' as TenantPageAccess
+    : getTenantPageAccess(currentPackage, page, normalizedAvailablePackages);
+  const currentAccessMode = resolvePageAccess(activePage);
+  const readOnlyReason = demoMode ? '' : tenant?.status === 'SUSPENDED'
     ? 'Tenant đang tạm ngưng. Bạn chỉ có thể xem dữ liệu và quản lý thanh toán.'
     : tenant?.status === 'OVERDUE'
       ? 'Gói đang quá hạn thanh toán. Các thao tác thay đổi dữ liệu tạm thời bị khóa.'
@@ -1147,7 +1254,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   };
 
   const navigate = (page: NailPageId) => {
-    if (getTenantPageAccess(currentPackage, page, normalizedAvailablePackages) === 'locked') {
+    if (resolvePageAccess(page) === 'locked') {
       showPageGate(page);
       return false;
     }
@@ -1171,7 +1278,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     nailCondition: string;
     favoriteTechnician: string;
   }) => {
-    const appointmentAccess = getTenantPageAccess(currentPackage, 'appointments', normalizedAvailablePackages);
+    const appointmentAccess = resolvePageAccess('appointments');
     if (appointmentAccess !== 'full') {
       showPageGate('appointments');
       return;
@@ -1197,7 +1304,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
 
   const openCreate = (page?: Exclude<NailPageId, 'overview' | 'subscription'>) => {
     const targetPage = (page || activePage) as NailPageId;
-    const access = getTenantPageAccess(currentPackage, targetPage, normalizedAvailablePackages);
+    const access = resolvePageAccess(targetPage);
     if (access !== 'full') {
       showPageGate(targetPage);
       return;
@@ -1206,11 +1313,11 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       setToast(readOnlyReason);
       return;
     }
-    if (targetPage === 'branches' && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
+    if (!demoMode && targetPage === 'branches' && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + branchLimit + ' chi nhánh. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
-    if (targetPage === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
+    if (!demoMode && targetPage === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + staffLimit + ' nhân sự. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
@@ -1230,7 +1337,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
 
   const exportRows = () => {
     if (!currentConfig) return;
-    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) === 'locked') {
+    if (resolvePageAccess(currentConfig.id) === 'locked') {
       showPageGate(currentConfig.id);
       return;
     }
@@ -1245,6 +1352,37 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     setToast('Đã xuất dữ liệu ' + currentConfig.title + '.');
   };
 
+  const buildDemoRows = () => Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [
+    id,
+    config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
+  ])) as Partial<Record<NailPageId, NailRow[]>>;
+
+  const loadDemoData = () => {
+    window.localStorage.setItem(demoStorageKey, 'true');
+    setTenantAdminDataMode('demo');
+    setDemoMode(true);
+    setRowsByPage(buildDemoRows());
+    setStaffUsage(nailModuleConfigs.staff.rows.length);
+    setDemoRevision((current) => current + 1);
+    setSelectedRow(null);
+    setCreateOpen(false);
+    setToast('Đã nạp lại dữ liệu demo cho toàn bộ trang Tenant Admin. Bạn có thể thử các bộ lọc, form và nút thao tác.');
+  };
+
+  const clearDemoData = () => {
+    window.localStorage.setItem(demoStorageKey, 'false');
+    setTenantAdminDataMode(tenant ? 'live' : 'demo');
+    setDemoMode(!tenant);
+    const liveRows = Object.fromEntries(Object.keys(nailModuleConfigs).map((id) => [id, []])) as Partial<Record<NailPageId, NailRow[]>>;
+    if (tenant) liveRows.branches = normalizeTenantBranches(tenant).map(branchToNailRow);
+    setRowsByPage(liveRows);
+    setStaffUsage(tenant?.staffCount || 0);
+    setDemoRevision((current) => current + 1);
+    setSelectedRow(null);
+    setCreateOpen(false);
+    setToast(tenant ? 'Đã tắt chế độ kiểm thử và loại dữ liệu demo khỏi các trang.' : 'Tài khoản demo luôn cần dữ liệu mẫu để hoạt động.');
+  };
+
   const submitCreate = (event: FormEvent) => {
     event.preventDefault();
     if (!currentConfig) return;
@@ -1252,20 +1390,20 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       setToast(readOnlyReason);
       return;
     }
-    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) !== 'full') {
+    if (resolvePageAccess(currentConfig.id) !== 'full') {
       showPageGate(currentConfig.id);
       return;
     }
-    if (currentConfig.id === 'branches' && !editingRowId && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
+    if (!demoMode && currentConfig.id === 'branches' && !editingRowId && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + branchLimit + ' chi nhánh. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
-    if (currentConfig.id === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
+    if (!demoMode && currentConfig.id === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + staffLimit + ' nhân sự. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
     const fields = currentConfig.formFields;
-    if (currentConfig.id === 'branches' && tenant) {
+    if (currentConfig.id === 'branches' && tenant && !demoMode) {
       const requiredSelectionErrors = getRequiredBranchSelectionErrors(formValues);
       if (Object.keys(requiredSelectionErrors).length > 0) {
         setToast('Vui lòng chọn đủ vai trò trong tenant, mô hình kinh doanh và trạng thái chi nhánh.');
@@ -1408,11 +1546,11 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       setToast(readOnlyReason);
       return;
     }
-    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) !== 'full') {
+    if (resolvePageAccess(currentConfig.id) !== 'full') {
       showPageGate(currentConfig.id);
       return;
     }
-    if (currentConfig.id === 'branches' && tenant) {
+    if (currentConfig.id === 'branches' && tenant && !demoMode) {
       const branchRecord = normalizeTenantBranches(tenant).find((item) => item.id === selectedRow.id);
       if (branchRecord) {
         setEditingRowId(branchRecord.id);
@@ -1512,7 +1650,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
               <p className={`mb-2 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>{group.label}</p>
               <nav className="space-y-1">{group.items.map(({ id, label, icon: Icon, badge }) => {
                 const active = activePage === id;
-                const access = getTenantPageAccess(currentPackage, id, normalizedAvailablePackages);
+                const access = resolvePageAccess(id);
                 const locked = access === 'locked';
                 const limitBadge = id === 'branches'
                   ? branchRows.length + '/' + (isUnlimitedTenantLimit(branchLimit, 'branches') ? '∞' : branchLimit)
@@ -1555,7 +1693,15 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           </div>
         </header>
 
-        <main id="tenant-admin-main" tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+        <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+          <section className={`mb-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center ${demoMode ? 'border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50' : 'border-slate-200 bg-white'}`}>
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${demoMode ? 'bg-violet-600 text-white shadow-lg shadow-violet-200' : 'bg-slate-100 text-slate-500'}`}><Database className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-[10px] font-black text-slate-900">{demoMode ? 'Chế độ kiểm thử đang bật' : 'Dữ liệu vận hành thực tế'}</p>{demoMode && <span className="rounded-full bg-white px-2.5 py-1 text-[7px] font-black text-violet-700 ring-1 ring-violet-200">DEMO DATA</span>}</div><p className="mt-1 text-[8px] leading-4 text-slate-500">{demoMode ? 'Đã nạp dữ liệu mẫu cho lịch hẹn, khách hàng, nhân sự, dịch vụ, kho, màu & mẫu Nail, tài chính, vệ sinh, báo cáo và hóa đơn.' : 'Bật dữ liệu demo để thử toàn bộ card, bộ lọc, form và nút thao tác mà không cần nhập thủ công.'}</p></div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button type="button" onClick={loadDemoData} className="flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-violet-200 bg-white px-4 text-[8px] font-black text-violet-700 shadow-sm hover:bg-violet-50"><RotateCcw className="h-3.5 w-3.5" />{demoMode ? 'Nạp lại dữ liệu demo' : 'Bật dữ liệu demo'}</button>
+              {tenant && demoMode && <button type="button" onClick={clearDemoData} className="flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 bg-white px-4 text-[8px] font-black text-rose-600 shadow-sm hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" />Xóa dữ liệu demo</button>}
+            </div>
+          </section>
           {readOnlyReason && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100"><LockKeyhole className="h-4 w-4" /></span><div><p className="text-[9px] font-black">Chế độ chỉ đọc đang được áp dụng</p><p className="mt-1 text-[8px] leading-5">{readOnlyReason}</p></div></div>}
           <div className="mb-4 sm:hidden"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label="Chọn phạm vi chi nhánh trên di động" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả chi nhánh</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
           {activePage === 'overview' ? (
@@ -1567,7 +1713,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 tenant={tenant}
                 subscriptionPackage={currentPackage}
                 availablePackages={normalizedAvailablePackages}
-                invoices={invoices}
+                invoices={visibleInvoices}
                 branchCount={branchRows.length}
                 staffCount={staffUsage}
                 roleLabel="Owner · Tenant Admin"
