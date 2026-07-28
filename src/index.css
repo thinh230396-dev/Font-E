@@ -2249,6 +2249,22 @@ html[data-theme="dark"] .role-shell--superadmin {
       0 1px 0 rgb(15 23 42 / 0.08),
       0 12px 30px rgb(15 23 42 / 0.08);
   }
+
+  .role-shell--tenant .fixed.inset-0 {
+    top: 4.25rem !important;
+  }
+
+  .role-shell--reception .fixed.inset-0 {
+    top: 4.5rem !important;
+  }
+
+  .role-shell--tenant .fixed.inset-0 > :is(form, section, aside, [role="dialog"]) {
+    max-height: calc(100dvh - 5.25rem) !important;
+  }
+
+  .role-shell--reception .fixed.inset-0 > :is(form, section, aside, [role="dialog"]) {
+    max-height: calc(100dvh - 5.5rem) !important;
+  }
 }
 
 .role-shell--tenant .role-sidebar {
