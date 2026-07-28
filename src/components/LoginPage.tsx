@@ -15,7 +15,7 @@ import {
 
 interface LoginPageProps {
   systemName: string;
-  onLogin: (identifier: string, password: string, remember: boolean) => Promise<boolean>;
+  onLogin: (identifier: string, password: string, remember: boolean) => Promise<string | null>;
 }
 
 const roles = [
@@ -75,9 +75,9 @@ export default function LoginPage({ systemName, onLogin }: LoginPageProps) {
     }
 
     setIsSubmitting(true);
-    const authenticated = await onLogin(normalizedIdentifier, password, remember);
-    if (!authenticated) {
-      setError('Tài khoản hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.');
+    const loginError = await onLogin(normalizedIdentifier, password, remember);
+    if (loginError) {
+      setError(loginError);
       setIsSubmitting(false);
     }
   };

@@ -338,11 +338,11 @@ export default function App() {
     document.documentElement.dataset.timezone = systemSettings.general.timezone;
   }, [interfaceLanguage, isAuthenticated, systemSettings.general.systemName, systemSettings.general.timezone]);
 
-  const handleLogin = async (identifier: string, password: string, remember: boolean): Promise<boolean> => {
-    const account = await loginAccount(identifier, password, remember);
-    if (!account) return false;
-    setSessionAccount(account);
-    return true;
+  const handleLogin = async (identifier: string, password: string, remember: boolean): Promise<string | null> => {
+    const result = await loginAccount(identifier, password, remember);
+    if (!result.account) return result.error || 'Không thể đăng nhập vào hệ thống.';
+    setSessionAccount(result.account);
+    return null;
   };
 
   const handleLogout = () => {

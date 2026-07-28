@@ -5,6 +5,11 @@ interface AuthResponse {
   error?: string;
 }
 
+export interface LoginResult {
+  account: DemoAccount | null;
+  error?: string;
+}
+
 export interface ManagedAuthAccount {
   id: string;
   email: string;
@@ -45,7 +50,7 @@ export const loginAccount = async (
   identifier: string,
   password: string,
   remember: boolean
-): Promise<DemoAccount | null> => {
+): Promise<LoginResult> => {
   try {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
@@ -53,11 +58,16 @@ export const loginAccount = async (
       credentials: 'same-origin',
       body: JSON.stringify({ identifier, password, remember })
     });
-    if (!response.ok) return null;
     const payload = await parseAuthResponse(response);
-    return payload.account || null;
+    if (!response.ok) {
+      return { account: null, error: payload.error || 'Không thể đăng nhập vào hệ thống.' };
+    }
+    return { account: payload.account || null };
   } catch {
-    return null;
+    return {
+      account: null,
+      error: 'Không thể kết nối máy chủ đăng nhập. Vui lòng kiểm tra API và thử lại.'
+    };
   }
 };
 
