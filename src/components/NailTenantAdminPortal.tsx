@@ -792,9 +792,9 @@ function BranchDetailDrawer({ row, tenantName, onClose, onEdit }: BranchDetailDr
   const isOperating = row.badge === 'Đang hoạt động';
 
   return (
-    <div className="ui-drawer-layer fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-[3px] sm:p-6">
+    <div className="ui-modal-layer fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-[3px] sm:p-6">
       <button type="button" aria-label="Đóng hồ sơ chi nhánh" onClick={onClose} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-      <aside role="dialog" aria-modal="true" aria-labelledby="branch-detail-title" className="relative flex h-[calc(100vh-1rem)] w-full max-w-[920px] flex-col overflow-hidden rounded-2xl border border-white/70 bg-[#f6f7fb] shadow-[0_30px_100px_rgba(15,23,42,0.4)] sm:h-auto sm:max-h-[92vh] sm:rounded-[30px]">
+      <aside role="dialog" aria-modal="true" aria-labelledby="branch-detail-title" className="relative flex h-[calc(100dvh-1rem)] w-full max-w-[920px] flex-col overflow-hidden rounded-2xl border border-white/70 bg-[#f6f7fb] shadow-[0_30px_100px_rgba(15,23,42,0.4)] sm:h-[calc(100dvh-3rem)] sm:max-h-[860px] sm:rounded-[30px]">
         <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-7 sm:py-5">
           <div className="flex items-start gap-3 sm:gap-4">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 sm:h-12 sm:w-12"><Store className="h-5 w-5" /></span>
@@ -811,7 +811,7 @@ function BranchDetailDrawer({ row, tenantName, onClose, onEdit }: BranchDetailDr
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-4 sm:p-6">
+        <main className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-4 [scrollbar-gutter:stable] sm:p-6">
           <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#18142e] via-[#251a49] to-[#432777] p-5 text-white shadow-[0_18px_45px_rgba(42,27,83,0.2)] sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
