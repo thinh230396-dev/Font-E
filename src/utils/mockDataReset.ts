@@ -67,6 +67,7 @@ export const getTenantMockStorageKeys = (tenantName: string) => {
     `tenant-admin-loyalty-v1:${tenantName}`,
     `tenant-admin-customer-care-v1:${tenantName}`,
     `tenant-admin-finance-v1:${tenantName}:transactions`,
+    `tenant-admin-finance-v1:${tenantName}:budgets`,
     `tenant-admin-online-booking-v1:${tenantName}:channels`,
     `tenant-admin-online-booking-v1:${tenantName}:services`,
     `tenant-admin-sanitation-v1:${tenantName}:checklists`,
