@@ -216,6 +216,22 @@ const toIsoDate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const getInitialScheduleDate = (appointments: TenantAppointment[], branch: string, referenceDate: string) => {
+  const availableDates = Array.from(new Set(
+    appointments
+      .filter((appointment) => branch === 'ALL' || appointment.branch === branch)
+      .map((appointment) => appointment.date)
+  ));
+  if (!availableDates.length || availableDates.includes(referenceDate)) return referenceDate;
+
+  const referenceTime = toDate(referenceDate).getTime();
+  return availableDates.sort((first, second) => {
+    const firstDistance = Math.abs(toDate(first).getTime() - referenceTime);
+    const secondDistance = Math.abs(toDate(second).getTime() - referenceTime);
+    return firstDistance - secondDistance || second.localeCompare(first);
+  })[0];
+};
+
 const addDays = (date: string, amount: number) => {
   const next = toDate(date);
   next.setDate(next.getDate() + amount);
@@ -280,7 +296,7 @@ export default function TenantAdminAppointments({
   onBookingRequestHandled
 }: TenantAdminAppointmentsProps) {
   const storageKey = `tenant-admin-appointments-v2:${tenantName}`;
-  const initialDate = toIsoDate(new Date());
+  const todayDate = toIsoDate(new Date());
   const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
     if (typeof window === 'undefined') return getTenantAdminInitialData(null, appointmentSeed);
     try {
@@ -290,6 +306,7 @@ export default function TenantAdminAppointments({
       return getTenantAdminInitialData(null, appointmentSeed);
     }
   });
+  const initialDate = getInitialScheduleDate(appointments, selectedBranch, todayDate);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [viewMode, setViewMode] = useState<ViewMode>('SCHEDULE');
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
@@ -836,7 +853,7 @@ export default function TenantAdminAppointments({
                     })}
                   </div>
                 ))}
-                {selectedDate === initialDate && currentMinuteOfDay >= 8 * 60 && currentMinuteOfDay <= 20 * 60 && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (currentMinuteOfDay - 480) / 60 * scheduleHourHeight }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">{currentTimeLabel}</span></div>}
+                {selectedDate === todayDate && currentMinuteOfDay >= 8 * 60 && currentMinuteOfDay <= 20 * 60 && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (currentMinuteOfDay - 480) / 60 * scheduleHourHeight }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">{currentTimeLabel}</span></div>}
               </div>
             </div> : <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center"><UsersRound className="h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-700">Không tìm thấy nhân viên</p><p className="mt-1 text-[8px] text-slate-400">Thử tên khác hoặc xóa tìm kiếm để xem toàn bộ lịch.</p><button type="button" onClick={() => setStaffSearchQuery('')} className="mt-3 border border-slate-200 bg-white px-3 text-[8px] font-bold text-violet-600 shadow-sm">Xóa tìm kiếm</button></div>}
             {!filteredAppointments.length && <div className="absolute inset-x-0 top-80 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không có lịch phù hợp với bộ lọc</p></div>}
