@@ -722,9 +722,9 @@ export default function TenantAdminAppointments({
         ].map(({ filter, label, value, detail, icon: Icon, tone, active }) => {
           const isActive = operationalFilter === filter;
           return (
-            <button key={filter} type="button" aria-pressed={isActive} onClick={() => { setOperationalFilter(filter); setStatusFilter('ALL'); }} className={`group h-auto min-h-[104px] rounded-2xl border bg-white p-4 text-left shadow-[0_8px_26px_rgba(15,23,42,0.045)] transition hover:-translate-y-0.5 hover:shadow-lg ${isActive ? `${active} ring-4` : 'border-slate-200'}`}>
+            <button key={filter} type="button" aria-pressed={isActive} onClick={() => { setOperationalFilter(filter); setStatusFilter('ALL'); }} className={`h-auto min-h-[104px] rounded-2xl border bg-white p-4 text-left shadow-[0_8px_26px_rgba(15,23,42,0.045)] transition hover:-translate-y-0.5 hover:shadow-lg ${isActive ? `${active} ring-4` : 'border-slate-200'}`}>
               <span className="flex items-start justify-between gap-3"><span><span className="block text-[10px] font-black text-slate-600">{label}</span><span className="mt-1 block text-2xl font-black tracking-tight text-slate-950">{value.toLocaleString('vi-VN')}</span></span><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4.5 w-4.5" /></span></span>
-              <span className="mt-2 flex items-center justify-between gap-2 text-[9px] font-semibold text-slate-400"><span>{detail}</span><span className={`shrink-0 font-black ${isActive ? 'text-slate-700' : 'text-slate-300 group-hover:text-slate-500'}`}>{isActive ? 'Đang lọc' : 'Xem'}</span></span>
+              <span className="mt-2 block text-[9px] font-semibold text-slate-400">{detail}</span>
             </button>
           );
         })}
