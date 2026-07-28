@@ -18,6 +18,7 @@ import {
   Clock3,
   Copy,
   CreditCard,
+  Database,
   Download,
   LockKeyhole,
   Gift,
@@ -36,6 +37,7 @@ import {
   Phone,
   Plus,
   ReceiptText,
+  RotateCcw,
   Search,
   Settings,
   ShieldCheck,
@@ -44,13 +46,14 @@ import {
   Store,
   Target,
   TrendingUp,
+  Trash2,
   UserRound,
   UserCheck,
   UsersRound,
   WalletCards,
   X
 } from 'lucide-react';
-import type { Branch, Invoice, SubscriptionPackage, Tenant } from '../types';
+import type { Branch, Invoice, PackageUpgradeRequest, SubscriptionPackage, Tenant } from '../types';
 import { BRANCH_MODEL_OPTIONS, generateBranchCode, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches, validateBranchDraft } from '../utils/branches';
 import {
   formatSubscriptionLimit,
@@ -64,6 +67,7 @@ import {
   getTenantPageAccess, getTenantPageCapabilityKey, getTenantUsagePercent,
   isTenantPackageUpgradeCandidate, isUnlimitedTenantLimit, type TenantPageAccess
 } from '../utils/tenantAdminEntitlements';
+import { setTenantAdminDataMode } from '../utils/mockDataReset';
 import type { DemoAccount } from '../auth/demoAccounts';
 import BeautifulSelect from './BeautifulSelect';
 import BranchCallDialog from './BranchCallDialog';
@@ -93,6 +97,12 @@ interface NailTenantAdminPortalProps {
   subscriptionPackage?: SubscriptionPackage;
   availablePackages: SubscriptionPackage[];
   invoices: Invoice[];
+  upgradeRequests: PackageUpgradeRequest[];
+  onRequestUpgrade: (
+    plan: SubscriptionPackage,
+    billingCycle: 'monthly' | 'yearly',
+    effectiveDate: 'immediate' | 'next_cycle'
+  ) => void;
 }
 
 interface NavItem {
@@ -156,6 +166,91 @@ const FALLBACK_SUBSCRIPTION_PACKAGE = normalizeSubscriptionPackage({
   color: '#7c3aed'
 });
 
+const createDemoInvoices = (tenantName: string, tenantId: string): Invoice[] => [
+  {
+    id: 'DEMO-INV-PAID-001',
+    invoiceCode: 'DEMO-INV-2026-071',
+    tenantId,
+    tenantName,
+    type: 'MONTHLY_SUBSCRIPTION',
+    planName: 'Premium',
+    billingCycle: 'monthly',
+    servicePeriod: '01/07/2026 - 31/07/2026',
+    dueDate: '2026-07-05',
+    amount: 3000000,
+    currency: 'VND',
+    status: 'PAID',
+    paymentMethod: 'Thẻ doanh nghiệp •••• 4242',
+    transactionCode: 'DEMO-TXN-PAID-071',
+    createdAt: '2026-07-01T08:00:00+07:00',
+    paidAt: '2026-07-02T10:15:00+07:00',
+    billingPeriod: 'Tháng 7/2026',
+    billingEmail: 'billing.demo@salonsys.vn',
+    billingCompany: tenantName,
+    billingAddress: '123 Nguyễn Huệ, Phường Sài Gòn, TP.HCM',
+    taxCode: 'DEMO-0312345678',
+    lineItems: [{ id: 'DEMO-LINE-001', description: 'Gói Premium · Tháng 7/2026', quantity: 1, unitPrice: 3000000, amount: 3000000, taxRate: 0 }]
+  },
+  {
+    id: 'DEMO-INV-PENDING-001',
+    invoiceCode: 'DEMO-INV-2026-081',
+    tenantId,
+    tenantName,
+    type: 'MONTHLY_SUBSCRIPTION',
+    planName: 'Premium',
+    billingCycle: 'monthly',
+    servicePeriod: '01/08/2026 - 31/08/2026',
+    dueDate: '2026-08-05',
+    amount: 3000000,
+    currency: 'VND',
+    status: 'PENDING',
+    paymentMethod: 'Thẻ doanh nghiệp •••• 4242',
+    createdAt: '2026-07-28T08:00:00+07:00',
+    billingPeriod: 'Tháng 8/2026',
+    billingEmail: 'billing.demo@salonsys.vn',
+    billingCompany: tenantName,
+    billingAddress: '123 Nguyễn Huệ, Phường Sài Gòn, TP.HCM',
+    taxCode: 'DEMO-0312345678',
+    lineItems: [{ id: 'DEMO-LINE-002', description: 'Gói Premium · Tháng 8/2026', quantity: 1, unitPrice: 3000000, amount: 3000000, taxRate: 0 }]
+  },
+  {
+    id: 'DEMO-INV-OVERDUE-001',
+    invoiceCode: 'DEMO-INV-2026-062',
+    tenantId,
+    tenantName,
+    type: 'MANUAL_ADJUSTMENT',
+    planName: 'Phí bổ sung',
+    dueDate: '2026-06-25',
+    amount: 650000,
+    currency: 'VND',
+    status: 'OVERDUE',
+    paymentMethod: 'Chuyển khoản ngân hàng',
+    createdAt: '2026-06-18T09:30:00+07:00',
+    billingPeriod: 'Điều chỉnh tháng 6/2026',
+    billingEmail: 'billing.demo@salonsys.vn',
+    billingCompany: tenantName,
+    taxCode: 'DEMO-0312345678',
+    lineItems: [{ id: 'DEMO-LINE-003', description: 'Bổ sung 5.000 tin nhắn chăm sóc khách hàng', quantity: 1, unitPrice: 650000, amount: 650000, taxRate: 0 }]
+  },
+  {
+    id: 'DEMO-INV-CANCELLED-001',
+    invoiceCode: 'DEMO-INV-2026-051',
+    tenantId,
+    tenantName,
+    type: 'PLAN_CHANGE',
+    planName: 'Enterprise',
+    dueDate: '2026-05-20',
+    amount: 5000000,
+    currency: 'VND',
+    status: 'CANCELLED',
+    createdAt: '2026-05-15T14:00:00+07:00',
+    billingPeriod: 'Yêu cầu đổi gói tháng 5/2026',
+    billingEmail: 'billing.demo@salonsys.vn',
+    billingCompany: tenantName,
+    taxCode: 'DEMO-0312345678'
+  }
+];
+
 const formatPlanMoney = (value: number, currency = 'VND') => new Intl.NumberFormat('vi-VN', {
   style: 'currency',
   currency,
@@ -193,6 +288,20 @@ const overviewAppointments = [
   { time: '15:00', customer: 'Vũ Khánh Linh', service: 'Acrylic Full Set + Đính đá', tech: 'Thảo Nguyễn', station: 'M-04', amount: '1.680.000đ', status: 'Đã xác nhận', tone: 'blue' as UiTone }
 ];
 
+type OverviewRevenueRange = 7 | 14 | 30;
+
+const overviewDailyRevenue = [
+  12.4, 14.8, 13.6, 16.9, 18.2, 20.4, 17.8, 15.6, 16.4, 18.9,
+  21.2, 19.8, 22.6, 24.1, 20.7, 18.4, 19.6, 23.2, 25.8, 24.6,
+  27.4, 29.1, 26.8, 24.9, 28.6, 31.2, 30.4, 33.8, 29.7, 31.8
+];
+
+const overviewRevenueRangeOptions: Array<{ value: OverviewRevenueRange; label: string }> = [
+  { value: 7, label: '7 ngày' },
+  { value: 14, label: '14 ngày' },
+  { value: 30, label: '30 ngày' }
+];
+
 const overviewStations = [
   { code: 'M-01', label: 'Manicure', tech: 'Thuỳ Dương', until: '14:30', status: 'Đang dùng', tone: 'violet' as UiTone },
   { code: 'M-03', label: 'Manicure', tech: 'Thảo Nguyễn', until: '10:30', status: 'Đang dùng', tone: 'violet' as UiTone },
@@ -221,6 +330,7 @@ interface OverviewPageProps {
   branch: string;
   ownerName: string;
   tenantName: string;
+  tenant?: Tenant;
   planName: string;
   branchCount: number;
   branchLimit: number;
@@ -229,13 +339,80 @@ interface OverviewPageProps {
   onNavigate: (page: NailPageId) => void;
   onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription'>) => void;
 }
-function OverviewPage({ branch, ownerName, tenantName, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
+function OverviewPage({ branch, ownerName, tenantName, tenant, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
+  const [revenueRange, setRevenueRange] = useState<OverviewRevenueRange>(7);
   const branchName = branch === 'ALL' ? 'Tất cả chi nhánh' : branch === 'Q1' ? 'Chi nhánh Quận 1' : branch === 'Q3' ? 'Chi nhánh Quận 3' : `Chi nhánh ${branch}`;
   const ownerShortName = ownerName.trim().split(/\s+/).pop() || ownerName;
   const branchQuota = formatTenantQuota(branchCount, branchLimit, 'branches');
   const staffQuota = formatTenantQuota(staffCount, staffLimit, 'staff');
   const branchAtLimit = !isUnlimitedTenantLimit(branchLimit, 'branches') && branchCount >= branchLimit;
   const staffAtLimit = !isUnlimitedTenantLimit(staffLimit, 'staff') && staffCount >= staffLimit;
+
+  if (tenant) {
+    const liveStats: NailModuleConfig['stats'] = [
+      { label: 'Doanh thu tháng', value: formatPlanMoney(tenant.monthlyRevenue || 0, tenant.currency || 'VND'), detail: 'Dữ liệu tổng hợp của tenant', tone: 'emerald' },
+      { label: 'Lịch hẹn hôm nay', value: '0', detail: 'Chưa có lịch hẹn được ghi nhận', tone: 'blue' },
+      { label: 'Chi nhánh', value: String(branchCount), detail: `Hạn mức ${branchQuota}`, tone: 'violet' },
+      { label: 'Nhân sự', value: String(staffCount), detail: `Hạn mức ${staffQuota}`, tone: 'amber' }
+    ];
+
+    return (
+      <div className="space-y-5">
+        <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Dữ liệu đang đồng bộ theo tenant</div>
+            <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Chào anh {ownerShortName}</h1>
+            <p className="mt-2 text-[11px] text-slate-500">Tổng quan vận hành {tenantName} · {branchName}</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={() => onNavigate('reports')} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"><Download className="h-4 w-4" />Xuất báo cáo</button>
+            <button type="button" onClick={() => onQuickCreate('appointments')} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />Tạo lịch hẹn</button>
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-4 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-fuchsia-50 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-lg shadow-violet-200"><BadgePercent className="h-5 w-5" /></span>
+            <div><p className="text-[10px] font-black text-slate-900">Gói {planName} đang được áp dụng</p><p className="mt-1 text-[8px] leading-5 text-slate-500">Dữ liệu gói, chi nhánh và hóa đơn được dùng chung cho mọi tài khoản quản trị của tenant.</p></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span className={`rounded-xl border px-3 py-2 text-[8px] font-black ${branchAtLimit ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-700'}`}>Chi nhánh {branchQuota}</span>
+            <span className={`rounded-xl border px-3 py-2 text-[8px] font-black ${staffAtLimit ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-700'}`}>Nhân sự {staffQuota}</span>
+            <button type="button" onClick={() => onNavigate('subscription')} className="flex h-9 items-center gap-1.5 border border-violet-200 bg-white px-3 text-[8px] font-black text-violet-700 shadow-sm">Xem quyền gói<ArrowRight className="h-3.5 w-3.5" /></button>
+          </div>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{liveStats.map((stat, index) => <StatCard key={stat.label} stat={stat} index={index} />)}</section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><BarChart3 className="h-5 w-5" /></span><div><h2 className="text-sm font-black text-slate-900">Doanh số theo ngày</h2><p className="mt-1 text-[9px] text-slate-500">Doanh thu thực nhận · {branchName}</p></div></div>
+            <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Lọc khoảng thời gian doanh số">
+              {overviewRevenueRangeOptions.map((option) => <button key={option.value} type="button" onClick={() => setRevenueRange(option.value)} aria-pressed={revenueRange === option.value} className={`h-8 min-h-0 border-0 px-3 text-[8px] font-black shadow-none ${revenueRange === option.value ? 'bg-white text-violet-700 shadow-sm ring-1 ring-slate-200' : 'bg-transparent text-slate-500'}`}>{option.label}</button>)}
+            </div>
+          </div>
+          <div className="flex min-h-64 flex-col items-center justify-center px-6 py-12 text-center"><BarChart3 className="h-9 w-9 text-slate-300" /><p className="mt-3 text-[11px] font-black text-slate-700">Chưa có doanh số theo ngày</p><p className="mt-1 max-w-md text-[9px] leading-5 text-slate-400">Biểu đồ sẽ tự động hiển thị khi tenant phát sinh giao dịch thật. Không sử dụng số liệu mẫu.</p></div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><h2 className="text-sm font-black text-slate-900">Lịch hẹn đang diễn ra</h2><p className="mt-1 text-[9px] text-slate-500">Luồng phục vụ tại {branchName.toLocaleLowerCase('vi')}</p></div><button type="button" onClick={() => onNavigate('appointments')} className="flex h-8 w-fit items-center gap-1 border-0 bg-transparent px-0 text-[8px] font-black text-violet-600 shadow-none sm:px-2">Xem lịch đầy đủ<ArrowRight className="h-3.5 w-3.5" /></button></div>
+          <div className="flex min-h-44 flex-col items-center justify-center px-6 py-10 text-center"><CalendarClock className="h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-700">Chưa có lịch hẹn đang diễn ra</p><p className="mt-1 text-[8px] text-slate-400">Lịch hẹn mới sẽ xuất hiện tại đây sau khi được tạo.</p></div>
+        </section>
+      </div>
+    );
+  }
+
+  const revenueBranchFactor = branch === 'ALL' ? 1.72 : branch === 'Q1' ? 0.72 : 1;
+  const visibleRevenue = overviewDailyRevenue.slice(-revenueRange).map((value, index) => ({
+    day: 31 - revenueRange + index,
+    value: value * revenueBranchFactor
+  }));
+  const revenueChartMax = Math.ceil(Math.max(...visibleRevenue.map((item) => item.value)) / 10) * 10;
+  const revenueTotal = visibleRevenue.reduce((sum, item) => sum + item.value, 0);
+  const revenueAverage = revenueTotal / visibleRevenue.length;
+  const revenuePeak = visibleRevenue.reduce((peak, item) => item.value > peak.value ? item : peak, visibleRevenue[0]);
+  const revenueGrowth = revenueRange === 7 ? 16.8 : revenueRange === 14 ? 14.2 : 18.6;
+  const formatRevenue = (value: number, maximumFractionDigits = 1) => `${value.toLocaleString('vi-VN', { maximumFractionDigits })} triệu`;
   const overviewStats: NailModuleConfig['stats'] = [
     { label: 'Doanh thu hôm nay', value: branch === 'ALL' ? '31,8 triệu' : '18,6 triệu', detail: '+16,8% so với thứ Năm trước', tone: 'emerald' },
     { label: 'Lịch hẹn hôm nay', value: branch === 'ALL' ? '54' : '32', detail: '28 xác nhận · 4 chờ xử lý', tone: 'blue' },
@@ -270,10 +447,65 @@ function OverviewPage({ branch, ownerName, tenantName, planName, branchCount, br
       </section>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{overviewStats.map((stat, index) => <StatCard key={stat.label} stat={stat} index={index} />)}</section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.55fr_0.8fr]">
-        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-6"><div><h2 className="text-sm font-black text-slate-900">Lịch hẹn đang diễn ra</h2><p className="mt-1 text-[9px] text-slate-500">Luồng phục vụ tại {branchName.toLocaleLowerCase('vi')}</p></div><button type="button" onClick={() => onNavigate('appointments')} className="flex h-8 items-center gap-1 border-0 bg-transparent px-2 text-[8px] font-black text-violet-600 shadow-none">Xem lịch đầy đủ<ArrowRight className="h-3.5 w-3.5" /></button></div>
-          <div className="divide-y divide-slate-100">{overviewAppointments.map((appointment) => <button key={`${appointment.time}-${appointment.customer}`} type="button" onClick={() => onNavigate('appointments')} className="grid h-auto w-full gap-3 rounded-none border-0 bg-white px-5 py-3.5 text-left shadow-none hover:bg-slate-50 sm:grid-cols-[54px_1.2fr_1fr_55px_90px] sm:items-center sm:px-6"><div><p className="text-[11px] font-black text-slate-900">{appointment.time}</p><p className="mt-1 text-[7px] text-slate-400">{appointment.station}</p></div><div className="min-w-0"><p className="truncate text-[10px] font-black text-slate-800">{appointment.customer}</p><p className="mt-1 truncate text-[8px] text-slate-400">{appointment.service}</p></div><div><p className="text-[8px] text-slate-400">Kỹ thuật viên</p><p className="mt-1 text-[9px] font-bold text-slate-700">{appointment.tech}</p></div><p className="text-[9px] font-black text-slate-800">{appointment.amount}</p><span className={`w-fit rounded-full px-2.5 py-1 text-[7px] font-bold ring-1 ${toneClasses[appointment.tone].badge}`}>{appointment.status}</span></button>)}</div>
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.8fr)]">
+        <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><BarChart3 className="h-5 w-5" /></span>
+              <div><h2 className="text-sm font-black text-slate-900">Doanh số theo ngày</h2><p className="mt-1 text-[9px] text-slate-500">Doanh thu thực nhận · {branchName}</p></div>
+            </div>
+            <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Lọc khoảng thời gian doanh số">
+              {overviewRevenueRangeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setRevenueRange(option.value)}
+                  aria-pressed={revenueRange === option.value}
+                  className={`h-8 min-h-0 border-0 px-3 text-[8px] font-black shadow-none ${revenueRange === option.value ? 'bg-white text-violet-700 shadow-sm ring-1 ring-slate-200' : 'bg-transparent text-slate-500 hover:text-slate-800'}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4 px-5 pt-5 sm:grid-cols-3 sm:px-6">
+            <div><p className="text-[8px] font-bold uppercase tracking-wide text-slate-400">Tổng doanh số</p><p className="mt-1.5 text-lg font-black text-slate-950">{formatRevenue(revenueTotal)}</p></div>
+            <div><p className="text-[8px] font-bold uppercase tracking-wide text-slate-400">Trung bình/ngày</p><p className="mt-1.5 text-lg font-black text-slate-950">{formatRevenue(revenueAverage)}</p></div>
+            <div><p className="text-[8px] font-bold uppercase tracking-wide text-slate-400">Cao nhất</p><p className="mt-1.5 text-lg font-black text-slate-950">{formatRevenue(revenuePeak.value)}</p><p className="mt-1 text-[7px] font-bold text-slate-400">Ngày {revenuePeak.day.toString().padStart(2, '0')}/07</p></div>
+          </div>
+
+          <div className="mt-5 overflow-x-auto px-3 pb-5 sm:px-5">
+            <div className="grid h-56 min-w-[680px] grid-cols-[40px_1fr] gap-3">
+              <div className="flex flex-col justify-between pb-7 text-right text-[7px] font-semibold text-slate-400">
+                <span>{formatRevenue(revenueChartMax, 0)}</span>
+                <span>{formatRevenue(revenueChartMax * 0.66, 0)}</span>
+                <span>{formatRevenue(revenueChartMax * 0.33, 0)}</span>
+                <span>0</span>
+              </div>
+              <div className="relative flex items-end gap-1.5 border-b border-slate-200 bg-[linear-gradient(to_bottom,transparent_24%,#f1f5f9_25%,transparent_26%,transparent_49%,#f1f5f9_50%,transparent_51%,transparent_74%,#f1f5f9_75%,transparent_76%)] px-1 pb-7">
+                {visibleRevenue.map((item, index) => {
+                  const shouldShowLabel = revenueRange === 7 || index === 0 || index === visibleRevenue.length - 1 || (revenueRange === 14 ? index % 2 === 0 : index % 5 === 0);
+                  return (
+                    <div key={`${item.day}-${item.value}`} className="group relative flex h-full min-w-0 flex-1 items-end justify-center">
+                      <div
+                        className="relative w-full min-w-2 max-w-9 rounded-t-md bg-gradient-to-t from-violet-600 via-violet-500 to-fuchsia-400 shadow-[0_6px_14px_rgba(124,58,237,0.16)] transition-all duration-200 group-hover:from-violet-700 group-hover:to-fuchsia-500"
+                        style={{ height: `${Math.max(8, (item.value / revenueChartMax) * 100)}%` }}
+                      >
+                        <span className="pointer-events-none absolute -top-7 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[7px] font-bold text-white shadow-lg group-hover:block">{formatRevenue(item.value)}</span>
+                      </div>
+                      {shouldShowLabel && <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[7px] font-semibold text-slate-400">{item.day.toString().padStart(2, '0')}/07</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3 text-[8px] sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <span className="flex items-center gap-1.5 font-bold text-emerald-600"><TrendingUp className="h-3.5 w-3.5" />Tăng {revenueGrowth.toLocaleString('vi-VN')}% so với kỳ trước</span>
+            <span className="font-semibold text-slate-400">Đơn vị hiển thị: triệu đồng</span>
+          </div>
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -281,6 +513,29 @@ function OverviewPage({ branch, ownerName, tenantName, planName, branchCount, br
           <div className="mt-4 grid grid-cols-2 gap-2">{overviewStations.map((station) => <button key={station.code} type="button" onClick={() => onNavigate('stations')} className="h-auto min-h-24 border border-slate-100 bg-slate-50 p-3 text-left shadow-none hover:border-violet-200"><div className="flex items-center justify-between"><span className="text-[9px] font-black text-slate-800">{station.code}</span><span className={`h-2 w-2 rounded-full ${toneClasses[station.tone].dot}`} /></div><p className="mt-1 text-[7px] text-slate-400">{station.label}</p><p className="mt-2 truncate text-[8px] font-bold text-slate-600">{station.tech}</p><p className="mt-1 text-[7px] text-slate-400">Đến {station.until}</p></button>)}</div>
           <button type="button" onClick={() => onNavigate('stations')} className="mt-4 flex h-9 w-full items-center justify-center gap-1 border-0 bg-violet-50 text-[8px] font-black text-violet-700 shadow-none">Mở sơ đồ khu vực<ArrowRight className="h-3.5 w-3.5" /></button>
         </article>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div><h2 className="text-sm font-black text-slate-900">Lịch hẹn đang diễn ra</h2><p className="mt-1 text-[9px] text-slate-500">Luồng phục vụ tại {branchName.toLocaleLowerCase('vi')}</p></div>
+          <button type="button" onClick={() => onNavigate('appointments')} className="flex h-8 w-fit items-center gap-1 border-0 bg-transparent px-0 text-[8px] font-black text-violet-600 shadow-none sm:px-2">Xem lịch đầy đủ<ArrowRight className="h-3.5 w-3.5" /></button>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {overviewAppointments.map((appointment) => (
+            <button
+              key={`${appointment.time}-${appointment.customer}`}
+              type="button"
+              onClick={() => onNavigate('appointments')}
+              className="grid h-auto w-full gap-3 rounded-none border-0 bg-white px-5 py-4 text-left shadow-none hover:bg-slate-50 sm:grid-cols-[72px_minmax(0,1.35fr)_minmax(130px,0.8fr)] sm:items-center sm:px-6 lg:grid-cols-[72px_minmax(220px,1.4fr)_minmax(150px,0.8fr)_110px_128px]"
+            >
+              <div><p className="text-[12px] font-black text-slate-900">{appointment.time}</p><p className="mt-1 text-[8px] font-bold text-slate-400">{appointment.station}</p></div>
+              <div className="min-w-0"><p className="truncate text-[10px] font-black text-slate-800">{appointment.customer}</p><p className="mt-1 truncate text-[8px] text-slate-400">{appointment.service}</p></div>
+              <div><p className="text-[8px] text-slate-400">Kỹ thuật viên</p><p className="mt-1 truncate text-[9px] font-bold text-slate-700">{appointment.tech}</p></div>
+              <p className="whitespace-nowrap text-[10px] font-black text-slate-900 sm:col-start-2 lg:col-start-auto lg:text-right">{appointment.amount}</p>
+              <span className={`w-fit max-w-full rounded-full px-3 py-1.5 text-[8px] font-bold leading-4 ring-1 sm:justify-self-end ${toneClasses[appointment.tone].badge}`}>{appointment.status}</span>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
@@ -864,7 +1119,19 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
     </div>
   );
 }
-export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, onUpdateTenant, onLogout }: NailTenantAdminPortalProps) {
+export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, upgradeRequests, onRequestUpgrade, onUpdateTenant, onLogout }: NailTenantAdminPortalProps) {
+  const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
+  const demoStorageKey = `tenant-admin-demo-mode:${tenantName}`;
+  const [demoMode, setDemoMode] = useState(() => {
+    if (typeof window === 'undefined' || !tenant) return true;
+    const stored = window.localStorage.getItem(demoStorageKey);
+    return stored === null ? true : stored === 'true';
+  });
+  const [demoRevision, setDemoRevision] = useState(0);
+  const pendingUpgradeRequest = tenant
+    ? upgradeRequests.find((request) => request.tenantId === tenant.id && request.status === 'PENDING')
+    : undefined;
+  setTenantAdminDataMode(demoMode || !tenant ? 'demo' : 'live');
   const currentPackage = useMemo(
     () => normalizeSubscriptionPackage(subscriptionPackage || FALLBACK_SUBSCRIPTION_PACKAGE),
     [subscriptionPackage]
@@ -910,24 +1177,39 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [rowsByPage, setRowsByPage] = useState<Partial<Record<NailPageId, NailRow[]>>>(() => {
     const initialRows = Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [
       id,
-      config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
+      demoMode || !tenant
+        ? config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
+        : []
     ])) as Partial<Record<NailPageId, NailRow[]>>;
-    if (tenant) {
+    if (tenant && !demoMode) {
       initialRows.branches = normalizeTenantBranches(tenant).map(branchToNailRow);
     }
     return initialRows;
   });
-  const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
   const accountInitials = account.displayName.trim().split(/\s+/).slice(-2).map((part) => part.charAt(0).toUpperCase()).join('') || 'NB';
   const branchLimit = currentPackage.maxSalons;
   const staffLimit = currentPackage.maxStaff;
-  const branchRows = rowsByPage.branches || nailModuleConfigs.branches.rows;
+  const branchRows = rowsByPage.branches || (tenant ? [] : nailModuleConfigs.branches.rows);
   const currentConfig = activePage === 'overview' || activePage === 'subscription' ? null : nailModuleConfigs[activePage];
-  const currentRows = activePage === 'overview' || activePage === 'subscription' ? [] : rowsByPage[activePage] || currentConfig?.rows || [];
+  const currentRows = activePage === 'overview' || activePage === 'subscription'
+    ? []
+    : rowsByPage[activePage] || (demoMode || !tenant ? currentConfig?.rows : []) || [];
+  const demoInvoices = useMemo(
+    () => createDemoInvoices(tenantName, tenant?.id || 'DEMO-TENANT'),
+    [tenant?.id, tenantName]
+  );
+  const visibleInvoices = useMemo(() => {
+    if (!demoMode) return invoices;
+    const demoIds = new Set(demoInvoices.map((invoice) => invoice.id));
+    return [...demoInvoices, ...invoices.filter((invoice) => !demoIds.has(invoice.id))];
+  }, [demoInvoices, demoMode, invoices]);
   const scopedRows = activePage === 'branches' || branch === 'ALL' ? currentRows : currentRows.filter((row) => row.branchCode === branch);
   const branchScopeLabel = activePage === 'branches' || branch === 'ALL' ? 'Toàn tenant' : branchRows.find((row) => row.branchCode === branch)?.title || 'Chi nhánh ' + branch;
-  const currentAccessMode = getTenantPageAccess(currentPackage, activePage, normalizedAvailablePackages);
-  const readOnlyReason = tenant?.status === 'SUSPENDED'
+  const resolvePageAccess = (page: NailPageId) => demoMode
+    ? 'full' as TenantPageAccess
+    : getTenantPageAccess(currentPackage, page, normalizedAvailablePackages);
+  const currentAccessMode = resolvePageAccess(activePage);
+  const readOnlyReason = demoMode ? '' : tenant?.status === 'SUSPENDED'
     ? 'Tenant đang tạm ngưng. Bạn chỉ có thể xem dữ liệu và quản lý thanh toán.'
     : tenant?.status === 'OVERDUE'
       ? 'Gói đang quá hạn thanh toán. Các thao tác thay đổi dữ liệu tạm thời bị khóa.'
@@ -972,7 +1254,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   };
 
   const navigate = (page: NailPageId) => {
-    if (getTenantPageAccess(currentPackage, page, normalizedAvailablePackages) === 'locked') {
+    if (resolvePageAccess(page) === 'locked') {
       showPageGate(page);
       return false;
     }
@@ -996,7 +1278,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     nailCondition: string;
     favoriteTechnician: string;
   }) => {
-    const appointmentAccess = getTenantPageAccess(currentPackage, 'appointments', normalizedAvailablePackages);
+    const appointmentAccess = resolvePageAccess('appointments');
     if (appointmentAccess !== 'full') {
       showPageGate('appointments');
       return;
@@ -1022,7 +1304,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
 
   const openCreate = (page?: Exclude<NailPageId, 'overview' | 'subscription'>) => {
     const targetPage = (page || activePage) as NailPageId;
-    const access = getTenantPageAccess(currentPackage, targetPage, normalizedAvailablePackages);
+    const access = resolvePageAccess(targetPage);
     if (access !== 'full') {
       showPageGate(targetPage);
       return;
@@ -1031,11 +1313,11 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       setToast(readOnlyReason);
       return;
     }
-    if (targetPage === 'branches' && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
+    if (!demoMode && targetPage === 'branches' && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + branchLimit + ' chi nhánh. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
-    if (targetPage === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
+    if (!demoMode && targetPage === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + staffLimit + ' nhân sự. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
@@ -1055,7 +1337,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
 
   const exportRows = () => {
     if (!currentConfig) return;
-    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) === 'locked') {
+    if (resolvePageAccess(currentConfig.id) === 'locked') {
       showPageGate(currentConfig.id);
       return;
     }
@@ -1070,6 +1352,37 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     setToast('Đã xuất dữ liệu ' + currentConfig.title + '.');
   };
 
+  const buildDemoRows = () => Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [
+    id,
+    config.rows.map((row, index) => ({ ...row, branchCode: row.branchCode || (index % 2 === 0 ? 'Q3' : 'Q1') }))
+  ])) as Partial<Record<NailPageId, NailRow[]>>;
+
+  const loadDemoData = () => {
+    window.localStorage.setItem(demoStorageKey, 'true');
+    setTenantAdminDataMode('demo');
+    setDemoMode(true);
+    setRowsByPage(buildDemoRows());
+    setStaffUsage(nailModuleConfigs.staff.rows.length);
+    setDemoRevision((current) => current + 1);
+    setSelectedRow(null);
+    setCreateOpen(false);
+    setToast('Đã nạp lại dữ liệu demo cho toàn bộ trang Tenant Admin. Bạn có thể thử các bộ lọc, form và nút thao tác.');
+  };
+
+  const clearDemoData = () => {
+    window.localStorage.setItem(demoStorageKey, 'false');
+    setTenantAdminDataMode(tenant ? 'live' : 'demo');
+    setDemoMode(!tenant);
+    const liveRows = Object.fromEntries(Object.keys(nailModuleConfigs).map((id) => [id, []])) as Partial<Record<NailPageId, NailRow[]>>;
+    if (tenant) liveRows.branches = normalizeTenantBranches(tenant).map(branchToNailRow);
+    setRowsByPage(liveRows);
+    setStaffUsage(tenant?.staffCount || 0);
+    setDemoRevision((current) => current + 1);
+    setSelectedRow(null);
+    setCreateOpen(false);
+    setToast(tenant ? 'Đã tắt chế độ kiểm thử và loại dữ liệu demo khỏi các trang.' : 'Tài khoản demo luôn cần dữ liệu mẫu để hoạt động.');
+  };
+
   const submitCreate = (event: FormEvent) => {
     event.preventDefault();
     if (!currentConfig) return;
@@ -1077,20 +1390,20 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       setToast(readOnlyReason);
       return;
     }
-    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) !== 'full') {
+    if (resolvePageAccess(currentConfig.id) !== 'full') {
       showPageGate(currentConfig.id);
       return;
     }
-    if (currentConfig.id === 'branches' && !editingRowId && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
+    if (!demoMode && currentConfig.id === 'branches' && !editingRowId && !isUnlimitedTenantLimit(branchLimit, 'branches') && branchRows.length >= branchLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + branchLimit + ' chi nhánh. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
-    if (currentConfig.id === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
+    if (!demoMode && currentConfig.id === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
       setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + staffLimit + ' nhân sự. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
     const fields = currentConfig.formFields;
-    if (currentConfig.id === 'branches' && tenant) {
+    if (currentConfig.id === 'branches' && tenant && !demoMode) {
       const requiredSelectionErrors = getRequiredBranchSelectionErrors(formValues);
       if (Object.keys(requiredSelectionErrors).length > 0) {
         setToast('Vui lòng chọn đủ vai trò trong tenant, mô hình kinh doanh và trạng thái chi nhánh.');
@@ -1233,11 +1546,11 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       setToast(readOnlyReason);
       return;
     }
-    if (getTenantPageAccess(currentPackage, currentConfig.id, normalizedAvailablePackages) !== 'full') {
+    if (resolvePageAccess(currentConfig.id) !== 'full') {
       showPageGate(currentConfig.id);
       return;
     }
-    if (currentConfig.id === 'branches' && tenant) {
+    if (currentConfig.id === 'branches' && tenant && !demoMode) {
       const branchRecord = normalizeTenantBranches(tenant).find((item) => item.id === selectedRow.id);
       if (branchRecord) {
         setEditingRowId(branchRecord.id);
@@ -1313,16 +1626,19 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     return { errors, isValid: Object.keys(errors).length === 0 };
   })();
   return (
-    <div className="nail-admin min-h-screen bg-[#f5f7fb] text-slate-950">
+    <div className="role-shell role-shell--tenant nail-admin min-h-screen bg-[#f5f7fb] text-slate-950">
+      <a href="#tenant-admin-main" className="tenant-admin-skip-link">
+        Bỏ qua điều hướng
+      </a>
       {toast && <div className="fixed right-4 top-24 z-[90] flex max-w-sm items-center gap-3 rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-2xl"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><Check className="h-4 w-4" /></span><p className="text-[9px] font-bold text-slate-700">{toast}</p><button type="button" onClick={() => setToast('')} aria-label="Đóng thông báo" className="ml-2 flex h-7 w-7 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button></div>}
       {sidebarOpen && <button type="button" aria-label="Đóng lớp phủ menu" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-40 min-h-0 rounded-none border-0 bg-slate-950/45 p-0 shadow-none lg:hidden" />}
       {pendingBranchChange && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><section className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="bg-gradient-to-br from-[#19152f] to-[#35245e] p-6 text-white"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Bước xác nhận cuối</p><h2 className="mt-2 text-xl font-black">{pendingBranchChange.isEditing ? 'Xác nhận cập nhật chi nhánh' : 'Xác nhận thêm chi nhánh'}</h2><p className="mt-2 text-xs leading-5 text-slate-300">Dữ liệu sau khi xác nhận sẽ được đồng bộ cho cả Tenant Admin và Super Admin.</p></div><div className="space-y-4 p-6"><div className="rounded-2xl border border-violet-100 bg-violet-50 p-4"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-violet-700">{pendingBranchChange.branch.code}</span><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-violet-700">{getBranchModelLabel(pendingBranchChange.branch.model)}</span>{pendingBranchChange.branch.isPrimary && <span className="rounded-full bg-slate-900 px-2 py-1 text-[10px] font-bold text-white">Chi nhánh chính</span>}</div><p className="mt-2 text-base font-black text-slate-900">{pendingBranchChange.branch.name}</p><p className="mt-1 text-xs text-slate-500">{pendingBranchChange.branch.address}</p></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-400">Quản lý</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.branch.managerName}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-400">Trạng thái</p><p className="mt-1 text-xs font-black text-slate-700">{getBranchStatusLabel(pendingBranchChange.branch.status)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-400">Nguồn lực</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.branch.staffUsed} nhân sự · {pendingBranchChange.branch.stationCount} vị trí</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-400">Hạn mức sau lưu</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.updatedBranches.length} / {isUnlimitedTenantLimit(branchLimit, 'branches') ? 'Không giới hạn' : branchLimit + ' chi nhánh'}</p></div></div></div><div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => { setPendingBranchChange(null); setCreateOpen(true); }} className="h-11 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Quay lại chỉnh sửa</button><button type="button" onClick={confirmTenantBranchChange} className="h-11 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200">{pendingBranchChange.isEditing ? 'Xác nhận cập nhật' : 'Xác nhận thêm chi nhánh'}</button></div></section></div>}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[284px] flex-col bg-[#111625] text-white shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[88px]' : 'lg:w-[284px]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <button type="button" onClick={toggleSidebarCollapsed} aria-label={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} className="absolute -right-3 top-[26px] z-10 hidden h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-[#1b2234] p-0 text-slate-300 shadow-lg transition hover:border-violet-400 hover:bg-violet-600 hover:text-white lg:flex">
+      <aside className={`role-sidebar fixed inset-y-0 left-0 z-50 flex w-[272px] flex-col bg-[#111625] text-white shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-[272px]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <button type="button" onClick={toggleSidebarCollapsed} aria-label={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} className="absolute -right-3 top-[20px] z-10 hidden h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-[#1b2234] p-0 text-slate-300 shadow-lg transition hover:border-violet-400 hover:bg-violet-600 hover:text-white lg:flex">
           {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
         </button>
-        <div className={`flex h-[80px] shrink-0 items-center gap-3 border-b border-white/8 px-5 ${sidebarCollapsed ? 'lg:justify-center lg:px-3' : ''}`}>
+        <div className={`flex h-[68px] shrink-0 items-center gap-3 border-b border-white/8 px-5 ${sidebarCollapsed ? 'lg:justify-center lg:px-3' : ''}`}>
           <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-indigo-600 shadow-lg shadow-violet-950/30"><Sparkles className="h-5 w-5" /><span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-pink-200/80" /></div>
           <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}><p className="truncate text-sm font-black tracking-tight">{tenantName}</p><p className="mt-0.5 truncate text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">Nail · Beauty · Care</p></div>
           <button type="button" onClick={() => setSidebarOpen(false)} aria-label="Đóng menu" className="ml-auto flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none lg:hidden"><X className="h-4 w-4" /></button>
@@ -1334,7 +1650,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
               <p className={`mb-2 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>{group.label}</p>
               <nav className="space-y-1">{group.items.map(({ id, label, icon: Icon, badge }) => {
                 const active = activePage === id;
-                const access = getTenantPageAccess(currentPackage, id, normalizedAvailablePackages);
+                const access = resolvePageAccess(id);
                 const locked = access === 'locked';
                 const limitBadge = id === 'branches'
                   ? branchRows.length + '/' + (isUnlimitedTenantLimit(branchLimit, 'branches') ? '∞' : branchLimit)
@@ -1361,8 +1677,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
         </button>
       </aside>
 
-      <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[88px]' : 'lg:pl-[284px]'}`}>
-        <header className="sticky top-0 z-40 flex h-[80px] items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] sm:px-6 lg:px-8">
+      <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[272px]'}`}>
+        <header className="role-topbar sticky top-0 z-40 flex h-[68px] items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] sm:px-6 lg:px-8">
           <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm lg:hidden"><Menu className="h-5 w-5" /></button>
           <div className="relative max-w-md flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={`Tìm trong ${formatModuleLabel(activePage).toLocaleLowerCase('vi')}...`} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[10px] font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></div>
           <div className="hidden sm:block"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label="Chọn phạm vi chi nhánh" className="h-10 w-52 rounded-xl border border-slate-200 bg-white px-3 text-[8px] font-bold"><option value="ALL">Tất cả chi nhánh</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
@@ -1377,11 +1693,19 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+        <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+          <section className={`mb-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center ${demoMode ? 'border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50' : 'border-slate-200 bg-white'}`}>
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${demoMode ? 'bg-violet-600 text-white shadow-lg shadow-violet-200' : 'bg-slate-100 text-slate-500'}`}><Database className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-[10px] font-black text-slate-900">{demoMode ? 'Chế độ kiểm thử đang bật' : 'Dữ liệu vận hành thực tế'}</p>{demoMode && <span className="rounded-full bg-white px-2.5 py-1 text-[7px] font-black text-violet-700 ring-1 ring-violet-200">DEMO DATA</span>}</div><p className="mt-1 text-[8px] leading-4 text-slate-500">{demoMode ? 'Đã nạp dữ liệu mẫu cho lịch hẹn, khách hàng, nhân sự, dịch vụ, kho, màu & mẫu Nail, tài chính, vệ sinh, báo cáo và hóa đơn.' : 'Bật dữ liệu demo để thử toàn bộ card, bộ lọc, form và nút thao tác mà không cần nhập thủ công.'}</p></div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button type="button" onClick={loadDemoData} className="flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-violet-200 bg-white px-4 text-[8px] font-black text-violet-700 shadow-sm hover:bg-violet-50"><RotateCcw className="h-3.5 w-3.5" />{demoMode ? 'Nạp lại dữ liệu demo' : 'Bật dữ liệu demo'}</button>
+              {tenant && demoMode && <button type="button" onClick={clearDemoData} className="flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 bg-white px-4 text-[8px] font-black text-rose-600 shadow-sm hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" />Xóa dữ liệu demo</button>}
+            </div>
+          </section>
           {readOnlyReason && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100"><LockKeyhole className="h-4 w-4" /></span><div><p className="text-[9px] font-black">Chế độ chỉ đọc đang được áp dụng</p><p className="mt-1 text-[8px] leading-5">{readOnlyReason}</p></div></div>}
           <div className="mb-4 sm:hidden"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label="Chọn phạm vi chi nhánh trên di động" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả chi nhánh</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
           {activePage === 'overview' ? (
-            <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
+            <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} tenant={tenant} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
           ) : activePage === 'subscription' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải trung tâm gói đăng ký...</div>}>
               <TenantAdminSubscription
@@ -1389,12 +1713,14 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 tenant={tenant}
                 subscriptionPackage={currentPackage}
                 availablePackages={normalizedAvailablePackages}
-                invoices={invoices}
+                invoices={visibleInvoices}
                 branchCount={branchRows.length}
                 staffCount={staffUsage}
                 roleLabel="Owner · Tenant Admin"
                 readOnlyReason={readOnlyReason}
                 onNotify={setToast}
+                pendingRequest={pendingUpgradeRequest}
+                onRequestUpgrade={onRequestUpgrade}
               />
             </Suspense>
           ) : activePage === 'branches' ? (

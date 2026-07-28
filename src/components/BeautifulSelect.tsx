@@ -96,7 +96,8 @@ export default function BeautifulSelect({
       left: Math.max(8, Math.min(rect.left, window.innerWidth - Math.max(rect.width, 220) - 8)),
       top: openAbove ? Math.max(8, rect.top - Math.min(estimatedHeight, rect.top - 12) - 8) : rect.bottom + 8,
       width: Math.max(rect.width, 220),
-      maxHeight: openAbove ? Math.max(180, rect.top - 20) : Math.max(180, spaceBelow)
+      maxHeight: openAbove ? Math.max(180, rect.top - 20) : Math.max(180, spaceBelow),
+      zIndex: 10050
     });
   };
 
@@ -148,7 +149,7 @@ export default function BeautifulSelect({
       ref={menuRef}
       role="listbox"
       aria-label={selectProps['aria-label'] || name || 'Danh sách lựa chọn'}
-      className="beautiful-select-menu fixed z-[160] flex flex-col overflow-hidden rounded-xl border border-brand-outline/60 bg-brand-surface shadow-2xl"
+      className="beautiful-select-menu fixed z-[10050] flex flex-col overflow-hidden rounded-xl border border-brand-outline/60 bg-brand-surface shadow-2xl"
       style={menuStyle}
       onKeyDown={(event) => { if (event.key === 'Escape') { setIsOpen(false); buttonRef.current?.focus(); } }}
     >

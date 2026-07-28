@@ -1,18 +1,18 @@
 import { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  Store, 
-  Users, 
-  Package, 
-  Receipt, 
-  BarChart3, 
-  Settings, 
-  ShieldCheck, 
-  HelpCircle, 
-  Database,
-  X,
+import {
+  BarChart3,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Database,
+  Gem,
+  HelpCircle,
+  LayoutDashboard,
+  Package,
+  Receipt,
+  Settings,
+  ShieldCheck,
+  Store,
+  Users,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,12 +25,19 @@ interface SidebarProps {
     overdueInvoices: number;
     unreadAlerts: number;
     openTickets: number;
+    pendingUpgrades: number;
   };
   systemName: string;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen, badgeCounts, systemName }: SidebarProps) {
-  // Collapse state for desktop, persisted in localStorage
+export default function Sidebar({
+  activeTab,
+  setActiveTab,
+  isOpen,
+  setIsOpen,
+  badgeCounts,
+  systemName,
+}: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       return localStorage.getItem('sidebar_collapsed') === 'true';
@@ -40,136 +47,161 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen, ba
   });
 
   const toggleCollapse = () => {
-    setIsCollapsed((prev) => {
-      const next = !prev;
+    setIsCollapsed((current) => {
+      const next = !current;
       try {
         localStorage.setItem('sidebar_collapsed', String(next));
-      } catch {}
+      } catch {
+        // Sidebar preference remains optional if storage is unavailable.
+      }
       return next;
     });
   };
 
-  const menuItems = [
-    { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
-    { id: 'salons', label: 'Quản lý Tenant', icon: Store, badge: badgeCounts.expiringSalons ? `${badgeCounts.expiringSalons} sắp hết hạn` : null, badgeColor: 'bg-brand-warning/20 text-brand-tertiary' },
-    { id: 'admins', label: 'Quản lí Tenant Admin', icon: Users },
-    { id: 'packages', label: 'Gói dịch vụ', icon: Package },
-    { id: 'billing', label: 'Thanh toán & hóa đơn', icon: Receipt, badge: badgeCounts.overdueInvoices ? `${badgeCounts.overdueInvoices} quá hạn` : null, badgeColor: 'bg-brand-error/20 text-brand-error' },
-    { id: 'reports', label: 'Báo cáo hệ thống', icon: BarChart3 },
-    { id: 'settings', label: 'Cấu hình hệ thống', icon: Settings },
-    { id: 'security', label: 'Bảo mật & nhật ký', icon: ShieldCheck, badge: badgeCounts.unreadAlerts ? `${badgeCounts.unreadAlerts}` : null, badgeColor: 'bg-brand-error text-brand-on-primary font-bold' },
-    { id: 'support', label: 'Hỗ trợ', icon: HelpCircle, badge: badgeCounts.openTickets ? `${badgeCounts.openTickets}` : null, badgeColor: 'bg-brand-secondary/20 text-brand-secondary' },
-    { id: 'backup', label: 'Sao lưu dữ liệu', icon: Database }
+  const navigationGroups = [
+    {
+      label: 'Điều hành',
+      items: [
+        { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
+        {
+          id: 'salons',
+          label: 'Quản lý Tenant',
+          icon: Store,
+          badge: badgeCounts.pendingUpgrades + badgeCounts.expiringSalons,
+          badgeTone: 'warning',
+        },
+        { id: 'admins', label: 'Tenant Admin', icon: Users },
+        { id: 'packages', label: 'Gói dịch vụ', icon: Package },
+        {
+          id: 'billing',
+          label: 'Thanh toán & hóa đơn',
+          icon: Receipt,
+          badge: badgeCounts.overdueInvoices,
+          badgeTone: 'danger',
+        },
+        { id: 'reports', label: 'Báo cáo hệ thống', icon: BarChart3 },
+      ],
+    },
+    {
+      label: 'Quản trị',
+      items: [
+        { id: 'settings', label: 'Cấu hình hệ thống', icon: Settings },
+        {
+          id: 'security',
+          label: 'Bảo mật & nhật ký',
+          icon: ShieldCheck,
+          badge: badgeCounts.unreadAlerts,
+          badgeTone: 'danger',
+        },
+        {
+          id: 'support',
+          label: 'Trung tâm hỗ trợ',
+          icon: HelpCircle,
+          badge: badgeCounts.openTickets,
+          badgeTone: 'info',
+        },
+        { id: 'backup', label: 'Sao lưu dữ liệu', icon: Database },
+      ],
+    },
   ];
 
   return (
     <>
-      {/* Mobile Sidebar overlay */}
       {isOpen && (
-        <div 
-          className="fixed inset-0 bg-brand-bg/80 backdrop-blur-sm z-40 lg:hidden"
+        <button
+          type="button"
+          aria-label="Đóng menu điều hướng"
+          className="fixed inset-0 z-40 cursor-default bg-slate-950/55 backdrop-blur-sm lg:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* Sidebar navigation */}
-      <aside className={`
-        fixed inset-y-0 left-0 bg-brand-surface border-r border-brand-outline/40 
-        flex flex-col z-50 transition-all duration-300 ease-in-out
-        lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:shrink-0
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        ${isCollapsed ? 'w-[280px] lg:w-[80px]' : 'w-[280px] lg:w-[280px]'}
-      `}>
-        {/* Sidebar Header */}
-        <div className={`h-20 flex items-center border-b border-brand-outline/40 px-5 ${isCollapsed ? 'justify-between lg:justify-center' : 'justify-between'}`}>
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center shadow-sm shrink-0">
-              <Store className="w-5 h-5 text-brand-on-primary font-bold" />
-            </div>
-            {(!isCollapsed || isOpen) && (
-              <div className="flex flex-col animate-fadeIn leading-tight">
-                <span className="font-sans font-extrabold text-sm tracking-tight text-brand-text">
-                  Superadmin
-                </span>
-                <span className="text-[10px] font-medium text-brand-text-muted mt-0.5">
-                  {systemName}
-                </span>
+      <aside
+        className={`
+          role-sidebar sa-sidebar fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden
+          transition-[width,transform] duration-300 ease-out
+          lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${isCollapsed ? 'is-collapsed w-[280px] lg:w-[88px]' : 'w-[280px]'}
+        `}
+      >
+        <div className="sa-sidebar-brand">
+          <button
+            type="button"
+            className="sa-brand-button"
+            onClick={() => {
+              setActiveTab('overview');
+              setIsOpen(false);
+            }}
+            aria-label="Về trang tổng quan"
+          >
+            <span className="sa-brand-mark"><Gem className="h-5 w-5" /></span>
+            <span className={`sa-brand-copy ${isCollapsed ? 'lg:hidden' : ''}`}>
+              <strong>{systemName}</strong>
+              <small>Superadmin Console</small>
+            </span>
+          </button>
+        </div>
+
+        <nav className="sa-sidebar-nav" aria-label="Điều hướng quản trị">
+          {navigationGroups.map((group) => (
+            <div key={group.label} className="sa-nav-group">
+              <p className={isCollapsed ? 'lg:sr-only' : ''}>{group.label}</p>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setIsOpen(false);
+                      }}
+                      title={isCollapsed ? item.label : undefined}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`sa-nav-item ${isActive ? 'is-active' : ''} ${isCollapsed ? 'lg:justify-center' : ''}`}
+                    >
+                      <span className="sa-nav-icon">
+                        <Icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.3 : 1.9} />
+                      </span>
+                      <span className={`sa-nav-label ${isCollapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
+                      {Boolean(item.badge) && (
+                        <span
+                          className={`sa-nav-badge sa-nav-badge--${item.badgeTone} ${isCollapsed ? 'sa-nav-dot' : ''}`}
+                          aria-label={`${item.badge} mục cần chú ý`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                      {!item.badge && !isCollapsed && <ChevronRight className="sa-nav-chevron h-3.5 w-3.5" />}
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            </div>
+          ))}
+        </nav>
+
+        <div className="sa-sidebar-footer">
+          <div className={`sa-system-status ${isCollapsed ? 'lg:hidden' : ''}`}>
+            <span className="sa-system-status-icon"><ShieldCheck className="h-4 w-4" /></span>
+            <span>
+              <strong>Hệ thống an toàn</strong>
+              <small>Tất cả dịch vụ đang hoạt động</small>
+            </span>
+            <span className="sa-status-pulse" />
           </div>
 
-          {/* Close button for mobile menu */}
-          {isOpen && (
-            <button 
-              className="lg:hidden p-1.5 rounded-lg text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high transition-colors"
-              onClick={() => setIsOpen(false)}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
-        </div>
-
-        {/* Sidebar Links */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  setIsOpen(false); // Close mobile menu after clicking
-                }}
-                title={isCollapsed ? item.label : undefined}
-                className={`
-                  w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl
-                  font-semibold text-sm transition-all duration-200 cursor-pointer group relative
-                  ${isActive 
-                    ? 'bg-brand-primary/10 text-brand-primary' 
-                    : 'text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high/60'
-                  }
-                  ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}
-                `}
-              >
-                <div className={`flex items-center gap-3 min-w-0 ${isCollapsed ? 'lg:justify-center lg:gap-0' : 'flex-1'}`}>
-                  <Icon className={`w-[18px] h-[18px] shrink-0 transition-transform group-hover:scale-105 ${isActive ? 'text-brand-primary' : 'text-brand-text-muted group-hover:text-brand-text'}`} />
-                  <span className={`truncate text-left ${isCollapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
-                </div>
-                
-                {item.badge && isCollapsed && (
-                  <span className="hidden lg:block absolute top-1 right-2 w-2 h-2 rounded-full bg-brand-error animate-pulse" />
-                )}
-
-                {item.badge && (
-                  <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full ${item.badgeColor} font-semibold animate-pulse whitespace-nowrap flex items-center justify-center ${isCollapsed ? 'lg:hidden' : ''}`}>
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="mt-auto p-4 border-t border-brand-outline/40">
           <button
+            type="button"
             onClick={toggleCollapse}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high/60 transition-all cursor-pointer text-xs font-semibold"
+            className={`sa-collapse-button ${isCollapsed ? 'lg:justify-center' : ''}`}
+            aria-label={isCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
           >
-            <div className="flex items-center gap-2.5">
-              {isCollapsed ? (
-                <ChevronRight className="w-4 h-4 text-brand-text-muted" />
-              ) : (
-                <>
-                  <ChevronLeft className="w-4 h-4 text-brand-text-muted" />
-                  <span className="text-brand-text-muted">Thu gọn</span>
-                </>
-              )}
-            </div>
-            {!isCollapsed && (
-              <ChevronLeft className="w-3.5 h-3.5 opacity-40 text-brand-text-muted" />
-            )}
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            <span className={isCollapsed ? 'lg:hidden' : ''}>{isCollapsed ? 'Mở rộng' : 'Thu gọn menu'}</span>
           </button>
         </div>
       </aside>

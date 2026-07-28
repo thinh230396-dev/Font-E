@@ -633,7 +633,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
       </div>
 
       {selectedTicket && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center overscroll-contain bg-brand-bg/70 p-2 backdrop-blur-sm sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTicketId(null); }}>
+        <div className="sa-modal-backdrop fixed inset-0 z-[70] flex items-center justify-center overscroll-contain bg-brand-bg/70 p-2 backdrop-blur-sm sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTicketId(null); }}>
           <aside role="dialog" aria-modal="true" aria-labelledby="ticket-detail-title" className="flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl sm:h-[min(94dvh,940px)]">
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-brand-outline/40 px-5 py-4 sm:px-6">
               <div className="min-w-0">

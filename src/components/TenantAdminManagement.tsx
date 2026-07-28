@@ -878,7 +878,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       </div>
 
       {selectedAdmin && (
-        <div className="fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+        <div className="sa-modal-backdrop fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
           <div className="bg-brand-surface border border-brand-outline rounded-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col">
             <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/45 flex justify-between items-center">
               <div>
@@ -1193,7 +1193,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       )}
 
       {editingAdmin && (
-        <div className="fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+        <div className="sa-modal-backdrop fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
           <form onSubmit={handleEditSubmit} noValidate className="bg-brand-surface border border-brand-outline rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl">
             <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/45 flex justify-between items-center">
               <div>
@@ -1470,7 +1470,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       )}
 
       {showInviteModal && (
-        <div className="fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+        <div className="sa-modal-backdrop fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
           <form onSubmit={handleInviteSubmit} className="bg-brand-surface border border-brand-outline rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl">
             <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/45 flex justify-between items-center">
               <span className="text-sm font-bold text-brand-text">Thêm Tenant Admin</span>

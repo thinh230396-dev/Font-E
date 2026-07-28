@@ -15,13 +15,14 @@ import {
   Search,
   Users
 } from 'lucide-react';
-import { Invoice, SubscriptionPackage, Tenant, TenantStatus } from '../types';
+import type { CurrencyCode, Invoice, SubscriptionPackage, Tenant, TenantStatus } from '../types';
 import { convertMoney, formatMoney } from '../utils/money';
 
 interface SystemReportsProps {
   tenants: Tenant[];
   invoices: Invoice[];
   packages: SubscriptionPackage[];
+  reportCurrency: CurrencyCode;
 }
 
 const ALL = 'ALL';
@@ -57,9 +58,11 @@ const formatDate = (value?: string) => {
   return date ? date.toLocaleDateString('vi-VN') : '—';
 };
 
-const toVnd = (amount: number, currency?: string) => convertMoney(Number(amount || 0), currency, 'VND');
+const toReportCurrency = (amount: number, currency: string | undefined, reportCurrency: CurrencyCode) => (
+  convertMoney(Number(amount || 0), currency, reportCurrency)
+);
 
-export default function SystemReports({ tenants, invoices, packages }: SystemReportsProps) {
+export default function SystemReports({ tenants, invoices, packages, reportCurrency }: SystemReportsProps) {
   const currentYear = new Date().getFullYear();
   const availableYears = useMemo(() => {
     const years = new Set<number>([currentYear]);
@@ -109,7 +112,7 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
   }), [filteredTenantIds, invoices, packageFilter, selectedYear, statusFilter, tenantById]);
 
   const totalTenantRevenueVnd = filteredTenants.reduce((sum, tenant) => (
-    sum + toVnd(tenant.monthlyRevenue, tenant.currency)
+    sum + toReportCurrency(tenant.monthlyRevenue, tenant.currency, reportCurrency)
   ), 0);
   const totalStaff = filteredTenants.reduce((sum, tenant) => sum + Number(tenant.staffCount || 0), 0);
   const totalBranches = filteredTenants.reduce((sum, tenant) => sum + Math.max(tenant.branches?.length || 0, 1), 0);
@@ -142,13 +145,13 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
   const activePackageCount = packages.filter((pkg) => !pkg.status || pkg.status === 'ACTIVE').length;
   const collectedRevenueVnd = filteredInvoices
     .filter((invoice) => invoice.status === 'PAID')
-    .reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0);
+    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
   const billedRevenueVnd = filteredInvoices
     .filter((invoice) => invoice.status !== 'CANCELLED')
-    .reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0);
+    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
   const receivableVnd = filteredInvoices
     .filter((invoice) => invoice.status === 'PENDING' || invoice.status === 'OVERDUE')
-    .reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0);
+    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
   const overdueInvoices = filteredInvoices.filter((invoice) => invoice.status === 'OVERDUE');
   const collectionRate = billedRevenueVnd > 0 ? Math.round((collectedRevenueVnd / billedRevenueVnd) * 100) : 0;
   const billedInvoiceCount = filteredInvoices.filter((invoice) => invoice.status !== 'CANCELLED').length;
@@ -158,7 +161,7 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
     return {
       status,
       count: statusInvoices.length,
-      amountVnd: statusInvoices.reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0)
+      amountVnd: statusInvoices.reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0)
     };
   });
 
@@ -173,13 +176,13 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
       invoiceCount: monthInvoices.length,
       billedVnd: monthInvoices
         .filter((invoice) => invoice.status !== 'CANCELLED')
-        .reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0),
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0),
       collectedVnd: monthInvoices
         .filter((invoice) => invoice.status === 'PAID')
-        .reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0),
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0),
       newTenants: monthTenants.length
     };
-  }), [filteredInvoices, filteredTenants, selectedYear]);
+  }), [filteredInvoices, filteredTenants, reportCurrency, selectedYear]);
 
   const chartMaximum = Math.max(1, ...monthlyReport.flatMap((month) => [month.billedVnd, month.collectedVnd]));
 
@@ -204,13 +207,13 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
     .filter((item) => item.count > 0);
 
   const topTenants = [...filteredTenants]
-    .sort((a, b) => toVnd(b.monthlyRevenue, b.currency) - toVnd(a.monthlyRevenue, a.currency))
+    .sort((a, b) => toReportCurrency(b.monthlyRevenue, b.currency, reportCurrency) - toReportCurrency(a.monthlyRevenue, a.currency, reportCurrency))
     .slice(0, 5);
 
   const tenantRevenueRanking = [...filteredTenants]
-    .sort((a, b) => toVnd(b.monthlyRevenue, b.currency) - toVnd(a.monthlyRevenue, a.currency))
+    .sort((a, b) => toReportCurrency(b.monthlyRevenue, b.currency, reportCurrency) - toReportCurrency(a.monthlyRevenue, a.currency, reportCurrency))
     .slice(0, 10);
-  const maximumTenantRevenue = Math.max(1, ...tenantRevenueRanking.map((tenant) => toVnd(tenant.monthlyRevenue, tenant.currency)));
+  const maximumTenantRevenue = Math.max(1, ...tenantRevenueRanking.map((tenant) => toReportCurrency(tenant.monthlyRevenue, tenant.currency, reportCurrency)));
 
   const adminPackagePerformance = useMemo(() => {
     const packageNames = new Set([
@@ -224,13 +227,13 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
       ) === name);
       const billedVnd = packageInvoices
         .filter((invoice) => invoice.status !== 'CANCELLED')
-        .reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0);
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
       const collectedVnd = packageInvoices
         .filter((invoice) => invoice.status === 'PAID')
-        .reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0);
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
       const debtVnd = packageInvoices
         .filter((invoice) => invoice.status === 'PENDING' || invoice.status === 'OVERDUE')
-        .reduce((sum, invoice) => sum + toVnd(invoice.amount, invoice.currency), 0);
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
       return {
         name,
         color: packages.find((pkg) => pkg.name === name)?.color || '#8b5cf6',
@@ -242,7 +245,7 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
         collectionRate: billedVnd > 0 ? Math.round((collectedVnd / billedVnd) * 100) : 0
       };
     }).filter((item) => item.tenantCount > 0 || item.invoiceCount > 0);
-  }, [filteredInvoices, filteredTenants, packages, tenantById]);
+  }, [filteredInvoices, filteredTenants, packages, reportCurrency, tenantById]);
 
   const invoiceTableRows = useMemo(() => {
     const normalizedSearch = invoiceSearch.trim().toLocaleLowerCase('vi-VN');
@@ -279,10 +282,10 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
     return rows.sort((a, b) => {
       if (tenantSort === 'NAME_ASC') return a.name.localeCompare(b.name, 'vi');
       if (tenantSort === 'STAFF_DESC') return Number(b.staffCount || 0) - Number(a.staffCount || 0);
-      const revenueDifference = toVnd(b.monthlyRevenue, b.currency) - toVnd(a.monthlyRevenue, a.currency);
+      const revenueDifference = toReportCurrency(b.monthlyRevenue, b.currency, reportCurrency) - toReportCurrency(a.monthlyRevenue, a.currency, reportCurrency);
       return tenantSort === 'REVENUE_ASC' ? -revenueDifference : revenueDifference;
     });
-  }, [filteredTenants, tenantSearch, tenantSort]);
+  }, [filteredTenants, reportCurrency, tenantSearch, tenantSort]);
   const tenantPageCount = Math.max(1, Math.ceil(tenantTableRows.length / tenantPageSize));
   const currentTenantPage = Math.min(tenantPage, tenantPageCount);
   const tenantPageStart = (currentTenantPage - 1) * tenantPageSize;
@@ -298,16 +301,16 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
     ];
     const adminRows: Array<Array<string | number>> = [
       ['Năm báo cáo', selectedYear], [], ['TỔNG QUAN SUPERADMIN'],
-      ['Doanh thu hóa đơn đã thu (VND)', collectedRevenueVnd],
-      ['Công nợ phải thu (VND)', receivableVnd],
+      [`Doanh thu hóa đơn đã thu (${reportCurrency})`, collectedRevenueVnd],
+      [`Công nợ phải thu (${reportCurrency})`, receivableVnd],
       ['Tỷ lệ thu tiền', `${collectionRate}%`],
       ['Tổng hóa đơn', filteredInvoices.length],
       [], ['HÓA ĐƠN GÓI DỊCH VỤ'],
-      ['Mã hóa đơn', 'Ngày tạo', 'Tenant', 'Gói', 'Trạng thái', 'Số tiền', 'Tiền tệ', 'Quy đổi VND'],
+      ['Mã hóa đơn', 'Ngày tạo', 'Tenant', 'Gói', 'Trạng thái', 'Số tiền', 'Tiền tệ', `Quy đổi ${reportCurrency}`],
       ...filteredInvoices.map((invoice) => [
         invoice.invoiceCode || invoice.id, formatDate(invoice.createdAt), invoice.tenantName,
         invoice.planName || tenantById.get(invoice.tenantId)?.packageName || '—',
-        invoiceStatusMeta[invoice.status].label, invoice.amount, invoice.currency || 'VND', toVnd(invoice.amount, invoice.currency)
+        invoiceStatusMeta[invoice.status].label, invoice.amount, invoice.currency || 'VND', toReportCurrency(invoice.amount, invoice.currency, reportCurrency)
       ])
     ];
     const tenantRows: Array<Array<string | number>> = [
@@ -318,9 +321,9 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
       ['Chi nhánh đang hoạt động', tenantBranchStats.active],
       ['Chi nhánh ngừng hoạt động', tenantBranchStats.inactive],
       ['Tổng nhân sự', totalStaff],
-      ['Doanh thu vận hành/tháng (VND)', totalTenantRevenueVnd],
-      ['Doanh thu trung bình/tenant (VND)', averageTenantRevenueVnd],
-      ['Doanh thu trung bình/chi nhánh (VND)', revenuePerBranchVnd],
+      [`Doanh thu vận hành/tháng (${reportCurrency})`, totalTenantRevenueVnd],
+      [`Doanh thu trung bình/tenant (${reportCurrency})`, averageTenantRevenueVnd],
+      [`Doanh thu trung bình/chi nhánh (${reportCurrency})`, revenuePerBranchVnd],
       ['Tenant đã bật đặt lịch online', tenantsWithOnlineBooking],
       ['Tenant đã cấu hình thanh toán', tenantsWithPaymentGateway],
       ['Tenant sắp hết hạn trong 30 ngày', tenantsExpiringSoon.length],
@@ -430,14 +433,14 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
         {reportScope === 'ADMIN' ? (
           <>
-            <ReportCard icon={<CircleDollarSign className="w-5 h-5" />} iconClass="bg-emerald-500/10 text-emerald-400" label="Đã thu từ gói dịch vụ" value={formatMoney(collectedRevenueVnd, 'VND')} note={`${collectionRate}% trên tổng giá trị đã lập năm ${selectedYear}`} />
-            <ReportCard icon={<AlertTriangle className="w-5 h-5" />} iconClass="bg-amber-500/10 text-amber-400" label="Công nợ nền tảng" value={formatMoney(receivableVnd, 'VND')} note={`${overdueInvoices.length} hóa đơn đang quá hạn`} />
+            <ReportCard icon={<CircleDollarSign className="w-5 h-5" />} iconClass="bg-emerald-500/10 text-emerald-400" label="Đã thu từ gói dịch vụ" value={formatMoney(collectedRevenueVnd, reportCurrency)} note={`${collectionRate}% trên tổng giá trị đã lập năm ${selectedYear}`} />
+            <ReportCard icon={<AlertTriangle className="w-5 h-5" />} iconClass="bg-amber-500/10 text-amber-400" label="Công nợ nền tảng" value={formatMoney(receivableVnd, reportCurrency)} note={`${overdueInvoices.length} hóa đơn đang quá hạn`} />
             <ReportCard icon={<ReceiptText className="w-5 h-5" />} iconClass="bg-violet-500/10 text-violet-400" label="Hóa đơn gói dịch vụ" value={filteredInvoices.length.toLocaleString('vi-VN')} note={`${filteredInvoices.filter((invoice) => invoice.status === 'PAID').length} hóa đơn đã thanh toán`} />
             <ReportCard icon={<Building2 className="w-5 h-5" />} iconClass="bg-sky-500/10 text-sky-400" label="Tenant nền tảng" value={filteredTenants.length.toLocaleString('vi-VN')} note={`${activeTenants} tenant đang hoạt động`} />
           </>
         ) : (
           <>
-            <ReportCard icon={<CircleDollarSign className="w-5 h-5" />} iconClass="bg-emerald-500/10 text-emerald-400" label="Doanh thu tenant/tháng" value={formatMoney(totalTenantRevenueVnd, 'VND')} note="Tổng doanh thu vận hành, không phải phí gói dịch vụ" />
+            <ReportCard icon={<CircleDollarSign className="w-5 h-5" />} iconClass="bg-emerald-500/10 text-emerald-400" label="Doanh thu tenant/tháng" value={formatMoney(totalTenantRevenueVnd, reportCurrency)} note="Tổng doanh thu vận hành, không phải phí gói dịch vụ" />
             <ReportCard icon={<Users className="w-5 h-5" />} iconClass="bg-sky-500/10 text-sky-400" label="Tổng nhân sự" value={totalStaff.toLocaleString('vi-VN')} note={`Trên ${filteredTenants.length} tenant theo bộ lọc`} />
             <ReportCard icon={<Building2 className="w-5 h-5" />} iconClass="bg-violet-500/10 text-violet-400" label="Tổng chi nhánh" value={totalBranches.toLocaleString('vi-VN')} note="Tính theo quy mô hiện tại của tenant" />
             <ReportCard icon={<Building2 className="w-5 h-5" />} iconClass="bg-amber-500/10 text-amber-400" label="Tenant hoạt động" value={activeTenants.toLocaleString('vi-VN')} note={`${filteredTenants.length - activeTenants} tenant ở trạng thái khác`} />
@@ -464,15 +467,15 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
             </ReportDetailPanel>
 
             <ReportDetailPanel title="Hiệu suất thu phí" icon={<CircleDollarSign className="w-4 h-4" />}>
-              <ReportDetailRow label="Tổng giá trị đã lập" value={formatMoney(billedRevenueVnd, 'VND')} />
-              <ReportDetailRow label="Số tiền đã thu" value={formatMoney(collectedRevenueVnd, 'VND')} tone="success" />
-              <ReportDetailRow label="Giá trị hóa đơn trung bình" value={formatMoney(averageInvoiceVnd, 'VND')} />
+              <ReportDetailRow label="Tổng giá trị đã lập" value={formatMoney(billedRevenueVnd, reportCurrency)} />
+              <ReportDetailRow label="Số tiền đã thu" value={formatMoney(collectedRevenueVnd, reportCurrency)} tone="success" />
+              <ReportDetailRow label="Giá trị hóa đơn trung bình" value={formatMoney(averageInvoiceVnd, reportCurrency)} />
               <ReportDetailRow label="Tỷ lệ thu tiền" value={`${collectionRate}%`} tone={collectionRate >= 80 ? 'success' : collectionRate >= 50 ? 'warning' : 'danger'} />
             </ReportDetailPanel>
 
             <ReportDetailPanel title="Cần Superadmin xử lý" icon={<AlertTriangle className="w-4 h-4" />}>
               <ReportDetailRow label="Hóa đơn quá hạn" value={overdueInvoices.length.toLocaleString('vi-VN')} tone={overdueInvoices.length > 0 ? 'danger' : 'success'} />
-              <ReportDetailRow label="Công nợ chưa thu" value={formatMoney(receivableVnd, 'VND')} tone={receivableVnd > 0 ? 'warning' : 'success'} />
+              <ReportDetailRow label="Công nợ chưa thu" value={formatMoney(receivableVnd, reportCurrency)} tone={receivableVnd > 0 ? 'warning' : 'success'} />
               <ReportDetailRow label="Tenant cần chú ý" value={tenantsNeedingAttention.length.toLocaleString('vi-VN')} tone={tenantsNeedingAttention.length > 0 ? 'warning' : 'success'} />
               <ReportDetailRow label="Tenant đang hoạt động" value={activeTenants.toLocaleString('vi-VN')} tone="success" />
             </ReportDetailPanel>
@@ -488,7 +491,7 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
                     <span className="text-lg font-black text-brand-text">{item.count}</span>
                   </div>
                   <p className="text-[10px] text-brand-text-muted mt-2">Tổng giá trị</p>
-                  <p className="text-[11px] font-bold font-mono text-brand-text mt-0.5">{formatMoney(item.amountVnd, 'VND')}</p>
+                  <p className="text-[11px] font-bold font-mono text-brand-text mt-0.5">{formatMoney(item.amountVnd, reportCurrency)}</p>
                 </div>
               ))}
             </div>
@@ -517,9 +520,9 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
             </ReportDetailPanel>
 
             <ReportDetailPanel title="Hiệu suất vận hành" icon={<CircleDollarSign className="w-4 h-4" />}>
-              <ReportDetailRow label="Doanh thu tháng" value={formatMoney(totalTenantRevenueVnd, 'VND')} tone="success" />
-              <ReportDetailRow label="Trung bình / tenant" value={formatMoney(averageTenantRevenueVnd, 'VND')} />
-              <ReportDetailRow label="Trung bình / chi nhánh" value={formatMoney(revenuePerBranchVnd, 'VND')} />
+              <ReportDetailRow label="Doanh thu tháng" value={formatMoney(totalTenantRevenueVnd, reportCurrency)} tone="success" />
+              <ReportDetailRow label="Trung bình / tenant" value={formatMoney(averageTenantRevenueVnd, reportCurrency)} />
+              <ReportDetailRow label="Trung bình / chi nhánh" value={formatMoney(revenuePerBranchVnd, reportCurrency)} />
               <ReportDetailRow label="Nhân sự trung bình" value={`${averageStaffPerTenant.toLocaleString('vi-VN')} / tenant`} />
             </ReportDetailPanel>
 
@@ -566,7 +569,7 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-5">
             <div>
               <h2 className="font-bold text-sm text-brand-text">Doanh thu hóa đơn theo tháng</h2>
-              <p className="text-[10px] text-brand-text-muted mt-1">So sánh giá trị đã lập và số tiền đã thu, quy đổi về VND.</p>
+              <p className="text-[10px] text-brand-text-muted mt-1">So sánh giá trị đã lập và số tiền đã thu, quy đổi về {reportCurrency}.</p>
             </div>
             <div className="flex items-center gap-4 text-[10px] text-brand-text-muted">
               <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-brand-outline/50" />Đã lập</span>
@@ -589,15 +592,15 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
                     {hoveredMonth === index && (
                       <div className="absolute z-20 bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-44 rounded-lg border border-brand-outline bg-brand-surface-high p-2.5 shadow-xl text-[10px] space-y-1">
                         <p className="font-bold text-brand-text">Tháng {index + 1}/{selectedYear}</p>
-                        <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Đã lập</span><span className="font-mono">{formatMoney(month.billedVnd, 'VND')}</span></p>
-                        <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Đã thu</span><span className="font-mono text-brand-primary">{formatMoney(month.collectedVnd, 'VND')}</span></p>
+                        <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Đã lập</span><span className="font-mono">{formatMoney(month.billedVnd, reportCurrency)}</span></p>
+                        <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Đã thu</span><span className="font-mono text-brand-primary">{formatMoney(month.collectedVnd, reportCurrency)}</span></p>
                         <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Hóa đơn</span><span>{month.invoiceCount}</span></p>
                         <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Tenant mới</span><span>{month.newTenants}</span></p>
                       </div>
                     )}
                     <div className="flex-1 flex items-end justify-center gap-1 px-1 min-h-0">
-                      <div title={`Đã lập: ${formatMoney(month.billedVnd, 'VND')}`} className="w-[38%] max-w-5 rounded-t bg-brand-outline/40 group-hover:bg-brand-outline/60 transition-all" style={{ height: month.billedVnd > 0 ? `${Math.max(3, billedHeight)}%` : '2px' }} />
-                      <div title={`Đã thu: ${formatMoney(month.collectedVnd, 'VND')}`} className="w-[38%] max-w-5 rounded-t bg-brand-primary group-hover:bg-brand-primary/80 transition-all" style={{ height: month.collectedVnd > 0 ? `${Math.max(3, collectedHeight)}%` : '2px' }} />
+                      <div title={`Đã lập: ${formatMoney(month.billedVnd, reportCurrency)}`} className="w-[38%] max-w-5 rounded-t bg-brand-outline/40 group-hover:bg-brand-outline/60 transition-all" style={{ height: month.billedVnd > 0 ? `${Math.max(3, billedHeight)}%` : '2px' }} />
+                      <div title={`Đã thu: ${formatMoney(month.collectedVnd, reportCurrency)}`} className="w-[38%] max-w-5 rounded-t bg-brand-primary group-hover:bg-brand-primary/80 transition-all" style={{ height: month.collectedVnd > 0 ? `${Math.max(3, collectedHeight)}%` : '2px' }} />
                     </div>
                     <div className="h-7 flex items-end justify-center text-[10px] font-bold text-brand-text-muted">{month.label}</div>
                   </div>
@@ -621,7 +624,7 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
             {tenantRevenueRanking.length === 0 ? <EmptyInline text="Chưa có dữ liệu doanh thu tenant phù hợp." /> : (
               <div className="space-y-3.5">
                 {tenantRevenueRanking.map((tenant, index) => {
-                  const revenueVnd = toVnd(tenant.monthlyRevenue, tenant.currency);
+                  const revenueVnd = toReportCurrency(tenant.monthlyRevenue, tenant.currency, reportCurrency);
                   const percent = Math.max(revenueVnd > 0 ? 2 : 0, (revenueVnd / maximumTenantRevenue) * 100);
                   return (
                     <div key={tenant.id} className="grid grid-cols-[minmax(120px,180px)_1fr_auto] items-center gap-3">
@@ -701,8 +704,8 @@ export default function SystemReports({ tenants, invoices, packages }: SystemRep
                         <span className="text-[9px] text-brand-text-muted">{item.tenantCount} tenant · {item.invoiceCount} HĐ</span>
                       </div>
                       <div className="grid grid-cols-2 gap-2 mt-2.5 text-[9px]">
-                        <div><p className="text-brand-text-muted">Đã thu</p><p className="font-bold font-mono text-emerald-400 mt-0.5">{formatMoney(item.collectedVnd, 'VND')}</p></div>
-                        <div className="text-right"><p className="text-brand-text-muted">Công nợ</p><p className="font-bold font-mono text-amber-400 mt-0.5">{formatMoney(item.debtVnd, 'VND')}</p></div>
+                        <div><p className="text-brand-text-muted">Đã thu</p><p className="font-bold font-mono text-emerald-400 mt-0.5">{formatMoney(item.collectedVnd, reportCurrency)}</p></div>
+                        <div className="text-right"><p className="text-brand-text-muted">Công nợ</p><p className="font-bold font-mono text-amber-400 mt-0.5">{formatMoney(item.debtVnd, reportCurrency)}</p></div>
                       </div>
                       <div className="flex items-center gap-2 mt-2.5">
                         <div className="h-1.5 flex-1 rounded-full bg-brand-surface-highest overflow-hidden"><div className="h-full rounded-full" style={{ width: `${item.collectionRate}%`, backgroundColor: item.color }} /></div>

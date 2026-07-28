@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
-  ArrowRight,
   CalendarCheck2,
   CalendarDays,
   Check,
@@ -35,6 +35,7 @@ type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' |
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
 type BranchCode = 'Q1' | 'Q3';
 type ViewMode = 'SCHEDULE' | 'LIST';
+type OperationalFilter = 'ALL' | 'ACTION' | 'IN_SALON' | 'CONFIRMED';
 
 interface TenantAppointment {
   id: string;
@@ -137,23 +138,35 @@ const cancellationReasons = [
 ];
 
 const services = [
-  { name: 'Combo manicure & sơn gel', duration: 75, price: 480_000 },
-  { name: 'Pedicure spa chuyên sâu', duration: 90, price: 650_000 },
-  { name: 'Nail Art Premium', duration: 120, price: 1_200_000 },
-  { name: 'Tháo gel & dưỡng móng', duration: 45, price: 220_000 },
-  { name: 'Đắp gel nối móng', duration: 150, price: 1_350_000 },
-  { name: 'Sơn gel Hàn Quốc', duration: 60, price: 380_000 },
-  { name: 'Dặm gel & sửa form', duration: 60, price: 450_000 }
+  { name: 'Gel Manicure', duration: 60, price: 450_000 },
+  { name: 'Pedicure Spa', duration: 75, price: 550_000 },
+  { name: 'Sơn gel Hàn Quốc', duration: 60, price: 620_000 },
+  { name: 'Nail Art cơ bản', duration: 45, price: 400_000 },
+  { name: 'Nail Art Premium', duration: 120, price: 980_000 },
+  { name: 'Combo Manicure', duration: 75, price: 620_000 },
+  { name: 'Combo VIP', duration: 120, price: 1_650_000 },
+  { name: 'Tháo gel & phục hồi móng', duration: 40, price: 280_000 },
+  { name: 'Đắp bột', duration: 90, price: 850_000 },
+  { name: 'Nối móng Tips', duration: 90, price: 750_000 },
+  { name: 'Đính đá nghệ thuật', duration: 30, price: 250_000 },
+  { name: 'Waxing tay', duration: 30, price: 320_000 }
 ];
 
 const staffDirectory = [
   { name: 'Thảo Nguyễn', branch: 'Q3' as BranchCode, initials: 'TN', role: 'Nail Artist Senior', shift: '08:00–18:00' },
-  { name: 'Minh Khang', branch: 'Q3' as BranchCode, initials: 'MK', role: 'Nail Technician', shift: '09:00–20:00' },
+  { name: 'Minh Châu', branch: 'Q3' as BranchCode, initials: 'MC', role: 'Pedicure Specialist', shift: '08:00–16:00' },
   { name: 'Quốc Bảo', branch: 'Q3' as BranchCode, initials: 'QB', role: 'Pedicure Specialist', shift: '08:00–17:00' },
-  { name: 'Thuỳ Dương', branch: 'Q3' as BranchCode, initials: 'TD', role: 'Nail Technician', shift: '10:00–20:00' },
+  { name: 'Thuỳ Dương', branch: 'Q3' as BranchCode, initials: 'TD', role: 'Gel Nail Technician', shift: '12:00–20:00' },
+  { name: 'An Nhiên', branch: 'Q3' as BranchCode, initials: 'AN', role: 'Nail Art Technician', shift: '12:00–20:00' },
+  { name: 'Khánh Vy', branch: 'Q3' as BranchCode, initials: 'KV', role: 'Extension Specialist', shift: '08:00–20:00' },
   { name: 'Hà My', branch: 'Q1' as BranchCode, initials: 'HM', role: 'Nail Artist Senior', shift: '08:00–18:00' },
   { name: 'Gia Huy', branch: 'Q1' as BranchCode, initials: 'GH', role: 'Nail Technician', shift: '09:00–20:00' }
 ];
+
+const stationDirectory: Record<BranchCode, string[]> = {
+  Q3: ['M-01', 'M-02', 'M-03', 'M-04', 'P-01', 'P-02', 'VIP-01', 'VIP-02'],
+  Q1: ['M-11', 'M-12', 'M-13', 'P-11', 'P-12', 'V-11', 'V-12']
+};
 
 const appointmentSeed: TenantAppointment[] = [
   { id: 'APT-1040', customer: 'Đặng Hải Yến', phone: '0903 114 668', date: '2026-07-16', start: '08:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'COMPLETED', price: 380_000, deposit: 0, note: 'Da tay nhạy cảm, ưu tiên sản phẩm không mùi.', station: 'Bàn M-04', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '15/07/2026 · 18:42' },
@@ -203,6 +216,22 @@ const toIsoDate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const getInitialScheduleDate = (appointments: TenantAppointment[], branch: string, referenceDate: string) => {
+  const availableDates = Array.from(new Set(
+    appointments
+      .filter((appointment) => branch === 'ALL' || appointment.branch === branch)
+      .map((appointment) => appointment.date)
+  ));
+  if (!availableDates.length || availableDates.includes(referenceDate)) return referenceDate;
+
+  const referenceTime = toDate(referenceDate).getTime();
+  return availableDates.sort((first, second) => {
+    const firstDistance = Math.abs(toDate(first).getTime() - referenceTime);
+    const secondDistance = Math.abs(toDate(second).getTime() - referenceTime);
+    return firstDistance - secondDistance || second.localeCompare(first);
+  })[0];
+};
+
 const addDays = (date: string, amount: number) => {
   const next = toDate(date);
   next.setDate(next.getDate() + amount);
@@ -248,7 +277,7 @@ const emptyForm = (date: string, branch: string): AppointmentFormState => ({
   source: 'RECEPTION',
   status: 'PENDING',
   deposit: '0',
-  station: branch === 'Q1' ? 'Bàn M-01' : 'Bàn M-02',
+  station: branch === 'Q1' ? 'M-11' : 'M-01',
   note: ''
 });
 
@@ -267,19 +296,23 @@ export default function TenantAdminAppointments({
   onBookingRequestHandled
 }: TenantAdminAppointmentsProps) {
   const storageKey = `tenant-admin-appointments-v2:${tenantName}`;
+  const todayDate = toIsoDate(new Date());
   const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
-    if (typeof window === 'undefined') return appointmentSeed;
+    if (typeof window === 'undefined') return getTenantAdminInitialData(null, appointmentSeed);
     try {
       const stored = window.localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) as TenantAppointment[] : appointmentSeed;
+      return getTenantAdminInitialData(stored ? JSON.parse(stored) as TenantAppointment[] : null, appointmentSeed);
     } catch {
-      return appointmentSeed;
+      return getTenantAdminInitialData(null, appointmentSeed);
     }
   });
-  const [selectedDate, setSelectedDate] = useState('2026-07-16');
+  const initialDate = getInitialScheduleDate(appointments, selectedBranch, todayDate);
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [didAutoLocateSchedule, setDidAutoLocateSchedule] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('SCHEDULE');
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | AppointmentStatus>('ALL');
+  const [operationalFilter, setOperationalFilter] = useState<OperationalFilter>('ALL');
   const [staffFilter, setStaffFilter] = useState('ALL');
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
   const [staffPage, setStaffPage] = useState(0);
@@ -287,13 +320,17 @@ export default function TenantAdminAppointments({
   const [showFilters, setShowFilters] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<TenantAppointment | null>(null);
   const [formMode, setFormMode] = useState<'CREATE' | 'EDIT' | null>(null);
-  const [form, setForm] = useState<AppointmentFormState>(() => emptyForm('2026-07-16', selectedBranch));
+  const [form, setForm] = useState<AppointmentFormState>(() => emptyForm(initialDate, selectedBranch));
   const [formError, setFormError] = useState('');
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancellationNote, setCancellationNote] = useState('');
   const [cancellationError, setCancellationError] = useState('');
   const canManage = accessMode === 'full' && !readOnlyReason;
+  const isReceptionist = roleLabel.toLowerCase().startsWith('receptionist');
+  const now = new Date();
+  const currentTimeLabel = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const currentMinuteOfDay = now.getHours() * 60 + now.getMinutes();
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(appointments));
@@ -350,26 +387,56 @@ export default function TenantAdminAppointments({
     appointment.date === selectedDate && (selectedBranch === 'ALL' || appointment.branch === selectedBranch)
   )), [appointments, selectedBranch, selectedDate]);
 
+  useEffect(() => {
+    if (didAutoLocateSchedule) return;
+    if (scopedAppointments.length) {
+      setDidAutoLocateSchedule(true);
+      return;
+    }
+    const nearestDate = getInitialScheduleDate(appointments, selectedBranch, selectedDate);
+    if (nearestDate !== selectedDate) setSelectedDate(nearestDate);
+    setDidAutoLocateSchedule(true);
+  }, [appointments, didAutoLocateSchedule, scopedAppointments.length, selectedBranch, selectedDate]);
+
   const filteredAppointments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return scopedAppointments
       .filter((appointment) => statusFilter === 'ALL' || appointment.status === statusFilter)
+      .filter((appointment) => {
+        if (operationalFilter === 'ACTION') return appointment.status === 'PENDING' || (!appointment.reminderSent && ['PENDING', 'CONFIRMED'].includes(appointment.status));
+        if (operationalFilter === 'IN_SALON') return ['CHECKED_IN', 'IN_SERVICE'].includes(appointment.status);
+        if (operationalFilter === 'CONFIRMED') return appointment.status === 'CONFIRMED';
+        return true;
+      })
       .filter((appointment) => staffFilter === 'ALL' || appointment.staff === staffFilter)
       .filter((appointment) => sourceFilter === 'ALL' || appointment.source === sourceFilter)
       .filter((appointment) => !query || `${appointment.id} ${appointment.customer} ${appointment.phone} ${appointment.service} ${appointment.staff}`.toLowerCase().includes(query))
       .sort((first, second) => first.start.localeCompare(second.start));
-  }, [scopedAppointments, searchQuery, sourceFilter, staffFilter, statusFilter]);
+  }, [operationalFilter, scopedAppointments, searchQuery, sourceFilter, staffFilter, statusFilter]);
 
-  const scheduleStaff = useMemo(() => staffDirectory.filter((staff) => (
-    (selectedBranch === 'ALL' || staff.branch === selectedBranch) &&
-    (staffFilter === 'ALL' || staff.name === staffFilter)
-  )), [selectedBranch, staffFilter]);
+  const scheduleStaff = useMemo(() => {
+    const directoryStaff = staffDirectory.filter((staff) => selectedBranch === 'ALL' || staff.branch === selectedBranch);
+    const knownNames = new Set(directoryStaff.map((staff) => staff.name));
+    const appointmentStaff = scopedAppointments.reduce<typeof staffDirectory>((result, appointment) => {
+      if (knownNames.has(appointment.staff) || result.some((staff) => staff.name === appointment.staff)) return result;
+      const initials = appointment.staff.trim().split(/\s+/).slice(-2).map((part) => part.charAt(0).toUpperCase()).join('');
+      result.push({ name: appointment.staff, branch: appointment.branch, initials: initials || 'NV', role: 'Kỹ thuật viên', shift: '08:00–20:00' });
+      return result;
+    }, []);
+    const appointmentCount = new Map<string, number>();
+    scopedAppointments.forEach((appointment) => appointmentCount.set(appointment.staff, (appointmentCount.get(appointment.staff) || 0) + 1));
+    return [...directoryStaff, ...appointmentStaff].sort((first, second) => (
+      (appointmentCount.get(second.name) || 0) - (appointmentCount.get(first.name) || 0)
+      || first.name.localeCompare(second.name, 'vi')
+    ));
+  }, [scopedAppointments, selectedBranch]);
 
   const filteredScheduleStaff = useMemo(() => {
     const query = staffSearchQuery.trim().toLowerCase();
-    if (!query) return scheduleStaff;
-    return scheduleStaff.filter((staff) => `${staff.name} ${staff.role} ${branchLabels[staff.branch]}`.toLowerCase().includes(query));
-  }, [scheduleStaff, staffSearchQuery]);
+    return scheduleStaff
+      .filter((staff) => staffFilter === 'ALL' || staff.name === staffFilter)
+      .filter((staff) => !query || `${staff.name} ${staff.role} ${branchLabels[staff.branch]}`.toLowerCase().includes(query));
+  }, [scheduleStaff, staffFilter, staffSearchQuery]);
 
   const staffPageCount = Math.max(1, Math.ceil(filteredScheduleStaff.length / STAFF_COLUMNS_PER_PAGE));
   const visibleScheduleStaff = useMemo(() => {
@@ -394,7 +461,16 @@ export default function TenantAdminAppointments({
   const completedCount = scopedAppointments.filter((appointment) => appointment.status === 'COMPLETED').length;
   const pendingCount = scopedAppointments.filter((appointment) => appointment.status === 'PENDING').length;
   const servingCount = scopedAppointments.filter((appointment) => ['CHECKED_IN', 'IN_SERVICE'].includes(appointment.status)).length;
-  const activeFilterCount = [statusFilter !== 'ALL', staffFilter !== 'ALL', sourceFilter !== 'ALL'].filter(Boolean).length;
+  const confirmedCount = scopedAppointments.filter((appointment) => appointment.status === 'CONFIRMED').length;
+  const cancelledCount = scopedAppointments.filter((appointment) => ['CANCELLED', 'NO_SHOW'].includes(appointment.status)).length;
+  const reminderPendingCount = scopedAppointments.filter((appointment) => ['PENDING', 'CONFIRMED'].includes(appointment.status) && !appointment.reminderSent).length;
+  const depositedTotal = scopedAppointments.reduce((sum, item) => sum + item.deposit, 0);
+  const bookedMinutes = scopedAppointments.filter((appointment) => !['CANCELLED', 'NO_SHOW'].includes(appointment.status)).reduce((sum, appointment) => sum + appointment.duration, 0);
+  const availableStaffCount = staffDirectory.filter((staff) => selectedBranch === 'ALL' || staff.branch === selectedBranch).length;
+  const utilizationRate = availableStaffCount ? Math.min(100, Math.round(bookedMinutes / (availableStaffCount * 720) * 100)) : 0;
+  const confirmationRate = scopedAppointments.length ? Math.round((scopedAppointments.length - pendingCount) / scopedAppointments.length * 100) : 0;
+  const cancellationRate = scopedAppointments.length ? Math.round(cancelledCount / scopedAppointments.length * 100) : 0;
+  const activeFilterCount = [operationalFilter !== 'ALL', statusFilter !== 'ALL', staffFilter !== 'ALL', sourceFilter !== 'ALL'].filter(Boolean).length;
   const scheduleHourHeight = isScheduleExpanded && typeof window !== 'undefined'
     ? Math.max(42, Math.floor((window.innerHeight - 260) / 12))
     : SCHEDULE_HOUR_HEIGHT;
@@ -404,11 +480,34 @@ export default function TenantAdminAppointments({
   const selectedServiceDuration = selectedServiceDetails.reduce((sum, service) => sum + service.duration, 0);
   const selectedServicePrice = selectedServiceDetails.reduce((sum, service) => sum + service.price, 0);
   const selectedServiceEnd = form.start && selectedServiceDuration ? getEndTime(form.start, selectedServiceDuration) : '--:--';
+  const canEditSelectedAppointment = Boolean(selectedAppointment) && canManage && (
+    !isReceptionist || ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(selectedAppointment!.status)
+  );
 
   const updateAppointment = (id: string, patch: Partial<TenantAppointment>) => {
     if (!requireManageAccess()) return;
     setAppointments((current) => current.map((appointment) => appointment.id === id ? { ...appointment, ...patch } : appointment));
     setSelectedAppointment((current) => current?.id === id ? { ...current, ...patch } : current);
+  };
+
+  const advanceAppointmentStatus = (appointment: TenantAppointment) => {
+    if (!requireManageAccess()) return;
+    const targetStatus = nextStatus[appointment.status];
+    if (!targetStatus) return;
+    if (isReceptionist && appointment.status === 'IN_SERVICE') {
+      onNotify?.('Vui lòng hoàn tất thanh toán tại Bàn lễ tân trước khi kết thúc dịch vụ.');
+      return;
+    }
+    if (targetStatus === 'IN_SERVICE' && (!appointment.staff || !appointment.station)) {
+      onNotify?.('Vui lòng phân công kỹ thuật viên và ghế/phòng trước khi bắt đầu dịch vụ.');
+      return;
+    }
+    const patch: Partial<TenantAppointment> = {
+      status: targetStatus,
+      reminderSent: appointment.reminderSent || targetStatus !== 'PENDING'
+    };
+    updateAppointment(appointment.id, patch);
+    onNotify?.(`${appointment.customer}: ${nextStatusLabel[appointment.status]}.`);
   };
 
   const openCreateForm = () => {
@@ -420,6 +519,10 @@ export default function TenantAdminAppointments({
 
   const openEditForm = (appointment: TenantAppointment) => {
     if (!requireManageAccess()) return;
+    if (isReceptionist && !['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(appointment.status)) {
+      onNotify?.('Receptionist chỉ được sửa lịch trước khi dịch vụ bắt đầu.');
+      return;
+    }
     setForm({
       customerId: appointment.customerId || '',
       customer: appointment.customer,
@@ -432,7 +535,7 @@ export default function TenantAdminAppointments({
       source: appointment.source,
       status: appointment.status,
       deposit: String(appointment.deposit),
-      station: appointment.station || 'Bàn M-01',
+      station: appointment.station || stationDirectory[appointment.branch][0],
       note: appointment.note
     });
     setFormError('');
@@ -484,15 +587,48 @@ export default function TenantAdminAppointments({
       setFormError('Vui lòng nhập đầy đủ khách hàng, số điện thoại, ít nhất một dịch vụ, nhân viên và thời gian.');
       return;
     }
+    const phoneDigits = form.phone.replace(/\D/g, '');
+    if (!/^(?:\+84|0)[0-9\s.-]{8,12}$/.test(form.phone.trim()) || phoneDigits.length < 9) {
+      setFormError('Số điện thoại chưa đúng định dạng Việt Nam.');
+      return;
+    }
 
     const chosenServices = form.services
       .map((name) => services.find((service) => service.name === name))
       .filter((service): service is (typeof services)[number] => Boolean(service));
+    if (!chosenServices.length || chosenServices.length !== form.services.length) {
+      setFormError('Danh sách dịch vụ có mục không còn trong bảng giá. Vui lòng chọn lại dịch vụ.');
+      return;
+    }
     const totalDuration = chosenServices.reduce((sum, service) => sum + service.duration, 0);
     const totalPrice = chosenServices.reduce((sum, service) => sum + service.price, 0);
     const existingId = formMode === 'EDIT' ? selectedAppointment?.id : undefined;
     const startMinute = minutesFromStart(form.start);
     const endMinute = startMinute + totalDuration;
+    if (startMinute < 8 * 60 || endMinute > 20 * 60) {
+      setFormError('Lịch hẹn phải nằm trong giờ hoạt động 08:00–20:00, bao gồm toàn bộ thời lượng dịch vụ.');
+      return;
+    }
+    const assignedStaff = staffDirectory.find((staff) => staff.name === form.staff && staff.branch === form.branch);
+    if (!assignedStaff) {
+      setFormError('Kỹ thuật viên không thuộc chi nhánh đã chọn.');
+      return;
+    }
+    if (!stationDirectory[form.branch].includes(form.station)) {
+      setFormError('Ghế hoặc phòng không thuộc chi nhánh đã chọn.');
+      return;
+    }
+    const duplicateCustomerAppointment = appointments.find((appointment) => (
+      appointment.id !== existingId
+      && appointment.date === form.date
+      && appointment.branch === form.branch
+      && appointment.phone.replace(/\D/g, '') === phoneDigits
+      && !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(appointment.status)
+    ));
+    if (duplicateCustomerAppointment) {
+      setFormError(`Số điện thoại này đã có lịch ${duplicateCustomerAppointment.id} lúc ${duplicateCustomerAppointment.start}. Vui lòng kiểm tra trước khi tạo lịch mới.`);
+      return;
+    }
     const conflictingAppointment = appointments.find((appointment) => {
       if (appointment.id === existingId || appointment.date !== form.date || appointment.branch !== form.branch || ['CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
       const existingStart = minutesFromStart(appointment.start);
@@ -503,11 +639,16 @@ export default function TenantAdminAppointments({
       setFormError(`${conflictingAppointment.staff === form.staff ? 'Kỹ thuật viên' : 'Bàn/ghế'} đang bận với lịch ${conflictingAppointment.id} từ ${conflictingAppointment.start} đến ${getEndTime(conflictingAppointment.start, conflictingAppointment.duration)}.`);
       return;
     }
-    if ((Number(form.deposit) || 0) > totalPrice) {
+    const depositValue = Number(form.deposit);
+    if (!Number.isFinite(depositValue) || depositValue < 0) {
+      setFormError('Tiền đặt cọc không hợp lệ.');
+      return;
+    }
+    if (depositValue > totalPrice) {
       setFormError('Tiền đặt cọc không được lớn hơn tổng giá dịch vụ dự kiến.');
       return;
     }
-    const nextId = existingId || `APT-${Math.max(...appointments.map((appointment) => Number(appointment.id.replace('APT-', '')))) + 1}`;
+    const nextId = existingId || `APT-${Date.now().toString(36).toUpperCase()}`;
     const payload: TenantAppointment = {
       id: nextId,
       customerId: form.customerId || undefined,
@@ -523,12 +664,14 @@ export default function TenantAdminAppointments({
       source: form.source,
       status: form.status,
       price: totalPrice,
-      deposit: Math.max(0, Number(form.deposit) || 0),
+      deposit: depositValue,
       station: form.station,
       reminderSent: form.status !== 'PENDING',
       createdBy: formMode === 'EDIT' && selectedAppointment ? selectedAppointment.createdBy : roleLabel,
       note: form.note.trim(),
-      createdAt: formMode === 'EDIT' && selectedAppointment ? selectedAppointment.createdAt : '16/07/2026 · vừa xong'
+      createdAt: formMode === 'EDIT' && selectedAppointment
+        ? selectedAppointment.createdAt
+        : new Date().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })
     };
 
     if (formMode === 'EDIT') {
@@ -542,6 +685,7 @@ export default function TenantAdminAppointments({
   };
 
   const resetFilters = () => {
+    setOperationalFilter('ALL');
     setStatusFilter('ALL');
     setStaffFilter('ALL');
     setStaffSearchQuery('');
@@ -550,60 +694,74 @@ export default function TenantAdminAppointments({
   };
 
   return (
-    <div className="space-y-5">
-      <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Đồng bộ lúc 14:32 · Dữ liệu theo thời gian thực<span className="text-slate-300">•</span><span className="text-slate-500">{tenantName}</span></div>
-          <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Lịch hẹn</h1>
-          <p className="mt-2 text-[11px] text-slate-500">Điều phối khách, kỹ thuật viên, bàn nail và toàn bộ hành trình phục vụ theo thời gian thực.</p>
+    <div className={`space-y-4 ${isReceptionist ? 'appointments-receptionist' : ''}`}>
+      <section className={`relative overflow-hidden rounded-3xl border bg-white shadow-[0_16px_45px_rgba(15,23,42,0.07)] ${isReceptionist ? 'border-emerald-100' : 'border-violet-100'}`}>
+        <div className={`absolute inset-y-0 left-0 w-1.5 ${isReceptionist ? 'bg-emerald-500' : 'bg-violet-600'}`} />
+        <div className="grid gap-5 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.11em] ${isReceptionist ? 'bg-emerald-50 text-emerald-700' : 'bg-violet-50 text-violet-700'}`}><CalendarCheck2 className="h-3.5 w-3.5" />Bảng điều phối trong ngày</span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[9px] font-bold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />Đồng bộ {currentTimeLabel}</span>
+            </div>
+            <h1 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950 sm:text-3xl">Lịch hẹn & điều phối khách</h1>
+            <p className="mt-1.5 max-w-2xl text-[12px] leading-5 text-slate-500">Ưu tiên việc cần xử lý, theo dõi tải của từng kỹ thuật viên và cập nhật hành trình khách ngay trên một màn hình.</p>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[10px] font-bold text-slate-500">
+              <span className="inline-flex items-center gap-2"><CalendarDays className={`h-4 w-4 ${isReceptionist ? 'text-emerald-500' : 'text-violet-500'}`} />{formatSelectedDate(selectedDate)}</span>
+              <span className="inline-flex items-center gap-2"><Clock3 className={`h-4 w-4 ${isReceptionist ? 'text-emerald-500' : 'text-violet-500'}`} />08:00–20:00</span>
+              <span className="inline-flex items-center gap-2"><CircleDollarSign className={`h-4 w-4 ${isReceptionist ? 'text-emerald-500' : 'text-violet-500'}`} />Dự kiến {formatCurrency(totalRevenue)} · Đã cọc {formatCurrency(depositedTotal)}</span>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,210px)_auto] lg:grid-cols-1 xl:grid-cols-[210px_auto]">
+            <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-700 shadow-sm">
+              <option value="Q3">Chi nhánh Quận 3</option>
+              <option value="Q1">Chi nhánh Quận 1</option>
+              {!branchLocked && <option value="ALL">Tất cả chi nhánh</option>}
+            </BeautifulSelect>
+            <button type="button" onClick={openCreateForm} disabled={!canManage} title={!canManage ? readOnlyReason || 'Bạn chỉ có quyền xem' : undefined} className={`flex h-11 items-center justify-center gap-2 border px-4 text-[11px] font-black text-white shadow-lg disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none ${isReceptionist ? 'border-emerald-700 bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700' : 'border-violet-700 bg-violet-600 shadow-violet-200 hover:bg-violet-700'}`}><Plus className="h-4 w-4" />Tạo lịch hẹn</button>
+          </div>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-700 shadow-sm sm:w-48">
-            <option value="Q3">Chi nhánh Quận 3</option>
-            <option value="Q1">Chi nhánh Quận 1</option>
-            <option value="ALL">Tất cả chi nhánh</option>
-          </BeautifulSelect>
-          <button type="button" onClick={openCreateForm} disabled={!canManage} title={!canManage ? readOnlyReason || 'Bạn chỉ có quyền xem' : undefined} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[11px] font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Tạo lịch hẹn</button>
+        <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-2.5 text-[9px] sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <span className="inline-flex items-center gap-2 font-bold text-slate-500"><ShieldCheck className={`h-3.5 w-3.5 ${canManage ? 'text-emerald-500' : 'text-amber-500'}`} />{roleLabel} · {canManage ? (branchLocked ? 'Điều chỉnh trong chi nhánh được phân công' : 'Toàn quyền điều phối lịch') : readOnlyReason || 'Chế độ chỉ xem'}</span>
+          <span className="font-semibold text-slate-400">{selectedBranch === 'ALL' ? 'Tất cả chi nhánh' : branchLabels[selectedBranch as BranchCode]}</span>
         </div>
       </section>
 
-      <section className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? 'border-violet-100 bg-gradient-to-r from-violet-50 to-white' : 'border-amber-200 bg-amber-50'}`}>
-        <div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? 'bg-violet-600 text-white' : 'bg-amber-100 text-amber-700'}`}><ShieldCheck className="h-4.5 w-4.5" /></span><div><p className="text-[10px] font-black text-slate-800">Phạm vi quyền: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{canManage ? (branchLocked ? 'Được tạo, phân công, đổi trạng thái và thu cọc trong chi nhánh được phân công. Không có quyền xem hoặc điều phối chi nhánh khác.' : 'Toàn quyền tạo, phân công, đổi trạng thái, thu cọc và hủy lịch trong tenant. Mọi thay đổi được lưu theo tenant.') : readOnlyReason || 'Chỉ được xem dữ liệu lịch hẹn theo quyền của gói hiện tại.'}</p></div></div>
-        <span className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-100 text-amber-800 ring-amber-200'}`}>{canManage ? 'Có quyền chỉnh sửa' : 'Chỉ xem'}</span>
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Lọc nhanh theo tình trạng vận hành" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: 'Tổng lịch hẹn', value: scopedAppointments.length, detail: `${completedCount} đã hoàn thành`, icon: CalendarCheck2, tone: 'bg-blue-50 text-blue-600' },
-          { label: 'Chờ xác nhận', value: pendingCount, detail: pendingCount ? 'Cần liên hệ trong 15 phút' : 'Đã xử lý hết', icon: CircleAlert, tone: 'bg-amber-50 text-amber-600' },
-          { label: 'Đang tại salon', value: servingCount, detail: `${scopedAppointments.filter((item) => item.status === 'IN_SERVICE').length} khách đang làm dịch vụ`, icon: UsersRound, tone: 'bg-violet-50 text-violet-600' },
-          { label: 'Doanh thu dự kiến', value: formatCurrency(totalRevenue), detail: `${formatCurrency(scopedAppointments.reduce((sum, item) => sum + item.deposit, 0))} đã đặt cọc`, icon: CircleDollarSign, tone: 'bg-emerald-50 text-emerald-600' }
-        ].map(({ label, value, detail, icon: Icon, tone }) => (
-          <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-            <div className="flex items-start justify-between"><div><p className="text-[9px] font-bold text-slate-500">{label}</p><p className="mt-1.5 text-xl font-black tracking-tight text-slate-950">{typeof value === 'number' ? value.toLocaleString('vi-VN') : value}</p></div><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4.5 w-4.5" /></span></div>
-            <p className="mt-2 text-[8px] font-semibold text-slate-400">{detail}</p>
-          </article>
-        ))}
+          { filter: 'ALL' as OperationalFilter, label: 'Tất cả lịch', value: scopedAppointments.length, detail: `${completedCount} lịch đã hoàn thành`, icon: CalendarCheck2, tone: 'bg-blue-50 text-blue-600', active: 'border-blue-300 ring-blue-100' },
+          { filter: 'ACTION' as OperationalFilter, label: 'Cần xử lý ngay', value: pendingCount, detail: pendingCount ? `${reminderPendingCount} lịch chưa được nhắc` : 'Không còn việc tồn', icon: CircleAlert, tone: 'bg-amber-50 text-amber-600', active: 'border-amber-300 ring-amber-100' },
+          { filter: 'IN_SALON' as OperationalFilter, label: 'Khách đang tại salon', value: servingCount, detail: `${scopedAppointments.filter((item) => item.status === 'IN_SERVICE').length} khách đang làm dịch vụ`, icon: UsersRound, tone: 'bg-violet-50 text-violet-600', active: 'border-violet-300 ring-violet-100' },
+          { filter: 'CONFIRMED' as OperationalFilter, label: 'Đã xác nhận', value: confirmedCount, detail: `${confirmationRate}% lịch đã qua bước xác nhận`, icon: ClipboardCheck, tone: 'bg-emerald-50 text-emerald-600', active: 'border-emerald-300 ring-emerald-100' }
+        ].map(({ filter, label, value, detail, icon: Icon, tone, active }) => {
+          const isActive = operationalFilter === filter;
+          return (
+            <button key={filter} type="button" aria-pressed={isActive} onClick={() => { setOperationalFilter(filter); setStatusFilter('ALL'); }} className={`group h-auto min-h-[104px] rounded-2xl border bg-white p-4 text-left shadow-[0_8px_26px_rgba(15,23,42,0.045)] transition hover:-translate-y-0.5 hover:shadow-lg ${isActive ? `${active} ring-4` : 'border-slate-200'}`}>
+              <span className="flex items-start justify-between gap-3"><span><span className="block text-[10px] font-black text-slate-600">{label}</span><span className="mt-1 block text-2xl font-black tracking-tight text-slate-950">{value.toLocaleString('vi-VN')}</span></span><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4.5 w-4.5" /></span></span>
+              <span className="mt-2 flex items-center justify-between gap-2 text-[9px] font-semibold text-slate-400"><span>{detail}</span><span className={`shrink-0 font-black ${isActive ? 'text-slate-700' : 'text-slate-300 group-hover:text-slate-500'}`}>{isActive ? 'Đang lọc' : 'Xem'}</span></span>
+            </button>
+          );
+        })}
       </section>
 
       <section className={`isolate overflow-hidden border border-slate-200 bg-white ${isScheduleExpanded ? 'fixed inset-3 z-[60] flex flex-col rounded-3xl shadow-2xl' : 'rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]'}`}>
         <div className="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+          <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
             <button type="button" onClick={() => setSelectedDate(addDays(selectedDate, -1))} aria-label="Ngày trước" className="flex h-9 w-9 items-center justify-center border-0 bg-transparent p-0 text-slate-500 shadow-none hover:bg-white"><ChevronLeft className="h-4 w-4" /></button>
-            <button type="button" onClick={() => setSelectedDate('2026-07-16')} className="h-9 border-0 bg-white px-3 text-[9px] font-black text-slate-700 shadow-sm">Hôm nay</button>
+            <button type="button" onClick={() => setSelectedDate(initialDate)} className="h-9 border-0 bg-white px-3 text-[10px] font-black text-slate-700 shadow-sm">Hôm nay</button>
             <button type="button" onClick={() => setSelectedDate(addDays(selectedDate, 1))} aria-label="Ngày sau" className="flex h-9 w-9 items-center justify-center border-0 bg-transparent p-0 text-slate-500 shadow-none hover:bg-white"><ChevronRight className="h-4 w-4" /></button>
-            <span className="ml-2 hidden text-[10px] font-black capitalize text-slate-800 sm:block">{formatSelectedDate(selectedDate)}</span>
+            <span className="ml-2 hidden text-[11px] font-black capitalize text-slate-800 sm:block">{formatSelectedDate(selectedDate)}</span>
+            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} aria-label="Chọn ngày xem lịch" className="ml-1 h-9 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100" />
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative min-w-0 sm:w-72">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm mã lịch, khách, SĐT, dịch vụ..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[10px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
+              <input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm mã lịch, khách, SĐT, dịch vụ..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[11px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
               {searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}
             </div>
-            <button type="button" onClick={() => setShowFilters((value) => !value)} className={`flex h-10 items-center justify-center gap-2 border px-3 text-[9px] font-bold shadow-sm ${showFilters || activeFilterCount ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'}`}><Filter className="h-3.5 w-3.5" />Bộ lọc{activeFilterCount > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[8px] text-white">{activeFilterCount}</span>}</button>
+            <button type="button" onClick={() => setShowFilters((value) => !value)} className={`flex h-10 items-center justify-center gap-2 border px-3 text-[10px] font-bold shadow-sm ${showFilters || activeFilterCount ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'}`}><Filter className="h-3.5 w-3.5" />Bộ lọc{activeFilterCount > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[8px] text-white">{activeFilterCount}</span>}</button>
             <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1">
-              <button type="button" onClick={() => setViewMode('SCHEDULE')} aria-label="Xem lịch ngày" className={`flex h-8 w-9 items-center justify-center border-0 p-0 shadow-none ${viewMode === 'SCHEDULE' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutGrid className="h-3.5 w-3.5" /></button>
-              <button type="button" onClick={() => setViewMode('LIST')} aria-label="Xem danh sách" className={`flex h-8 w-9 items-center justify-center border-0 p-0 shadow-none ${viewMode === 'LIST' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutList className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => setViewMode('SCHEDULE')} aria-label="Xem lịch ngày" className={`flex h-8 items-center justify-center gap-1.5 border-0 px-2.5 text-[9px] font-black shadow-none ${viewMode === 'SCHEDULE' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutGrid className="h-3.5 w-3.5" />Lịch</button>
+              <button type="button" onClick={() => setViewMode('LIST')} aria-label="Xem danh sách" className={`flex h-8 items-center justify-center gap-1.5 border-0 px-2.5 text-[9px] font-black shadow-none ${viewMode === 'LIST' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutList className="h-3.5 w-3.5" />Danh sách</button>
             </div>
             {viewMode === 'SCHEDULE' && <button type="button" onClick={() => { setIsScheduleExpanded((value) => !value); setShowFilters(false); }} className={`flex h-10 items-center justify-center gap-2 border px-3 text-[9px] font-black shadow-sm ${isScheduleExpanded ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'}`}>{isScheduleExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}{isScheduleExpanded ? 'Thu nhỏ' : 'Vừa màn hình'}</button>}
           </div>
@@ -613,12 +771,12 @@ export default function TenantAdminAppointments({
           {weekDates.map((date) => {
             const dayAppointments = appointments.filter((appointment) => appointment.date === date && (selectedBranch === 'ALL' || appointment.branch === selectedBranch));
             const isSelected = date === selectedDate;
-            const isToday = date === '2026-07-16';
+            const isToday = date === initialDate;
             return (
               <button key={date} type="button" onClick={() => setSelectedDate(date)} className={`relative flex h-auto min-h-16 flex-col items-center justify-center rounded-none border-0 bg-transparent px-1 py-2 shadow-none ${isSelected ? 'text-violet-700' : 'text-slate-500 hover:bg-white'}`}>
-                <span className="text-[8px] font-bold uppercase">{toDate(date).toLocaleDateString('vi-VN', { weekday: 'short' })}</span>
-                <span className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-black ${isSelected ? 'bg-violet-600 text-white shadow-md shadow-violet-200' : 'bg-transparent text-slate-700'}`}>{toDate(date).getDate()}</span>
-                <span className="mt-1 text-[7px] font-semibold text-slate-400">{dayAppointments.length} lịch</span>
+                <span className="text-[9px] font-bold uppercase">{toDate(date).toLocaleDateString('vi-VN', { weekday: 'short' })}</span>
+                <span className={`mt-1 flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-black ${isSelected ? 'bg-violet-600 text-white shadow-md shadow-violet-200' : 'bg-transparent text-slate-700'}`}>{toDate(date).getDate()}</span>
+                <span className="mt-1 text-[8px] font-semibold text-slate-400">{dayAppointments.length} lịch</span>
                 {isToday && <span className="absolute bottom-1 h-1 w-1 rounded-full bg-violet-500" />}
               </button>
             );
@@ -627,8 +785,8 @@ export default function TenantAdminAppointments({
 
         {showFilters && (
           <div className="grid gap-3 border-b border-slate-100 bg-violet-50/40 p-4 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
-            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Trạng thái</span><BeautifulSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'ALL' | AppointmentStatus)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả trạng thái</option>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label>
-            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Nhân viên</span><BeautifulSelect value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả nhân viên</option>{staffDirectory.filter((staff) => selectedBranch === 'ALL' || staff.branch === selectedBranch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name}</option>)}</BeautifulSelect></label>
+            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Trạng thái</span><BeautifulSelect value={statusFilter} onChange={(event) => { setOperationalFilter('ALL'); setStatusFilter(event.target.value as 'ALL' | AppointmentStatus); }} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả trạng thái</option>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label>
+            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Nhân viên</span><BeautifulSelect value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả nhân viên</option>{scheduleStaff.map((staff) => <option key={staff.name} value={staff.name}>{staff.name}</option>)}</BeautifulSelect></label>
             <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Nguồn đặt lịch</span><BeautifulSelect value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as 'ALL' | AppointmentSource)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả nguồn</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label>
             <button type="button" onClick={resetFilters} className="self-end border border-slate-200 bg-white px-3 text-[9px] font-bold text-slate-600 shadow-sm">Đặt lại</button>
           </div>
@@ -639,7 +797,7 @@ export default function TenantAdminAppointments({
           <span className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400"><Clock3 className="h-3 w-3" />Chiều cao = thời lượng</span>
           {(['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const).map((status) => {
             const count = status === 'ALL' ? scopedAppointments.length : scopedAppointments.filter((appointment) => appointment.status === status).length;
-            return <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`flex h-7 min-h-0 items-center gap-1.5 border-0 bg-transparent px-0 text-[8px] font-bold shadow-none ${statusFilter === status ? 'text-violet-700' : 'text-slate-500'}`}>{status !== 'ALL' && <span aria-hidden="true" className={`flex h-4 w-4 items-center justify-center rounded text-[7px] font-black text-white ${statusMeta[status].dot}`}>{statusMeta[status].symbol}</span>}{status === 'ALL' ? 'Tất cả' : statusMeta[status].label}<span className={`rounded-full px-1.5 py-0.5 ${statusFilter === status ? 'bg-violet-100' : 'bg-slate-100'}`}>{count}</span></button>;
+            return <button key={status} type="button" onClick={() => { setOperationalFilter('ALL'); setStatusFilter(status); }} className={`flex h-8 min-h-0 items-center gap-1.5 border-0 bg-transparent px-0 text-[9px] font-bold shadow-none ${statusFilter === status && operationalFilter === 'ALL' ? 'text-violet-700' : 'text-slate-500'}`}>{status !== 'ALL' && <span aria-hidden="true" className={`flex h-4 w-4 items-center justify-center rounded text-[7px] font-black text-white ${statusMeta[status].dot}`}>{statusMeta[status].symbol}</span>}{status === 'ALL' ? 'Tất cả' : statusMeta[status].label}<span className={`rounded-full px-1.5 py-0.5 ${statusFilter === status && operationalFilter === 'ALL' ? 'bg-violet-100' : 'bg-slate-100'}`}>{count}</span></button>;
           })}
         </div>
 
@@ -648,11 +806,11 @@ export default function TenantAdminAppointments({
             <div className={`flex flex-col gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between ${isScheduleExpanded ? 'shrink-0' : ''}`}>
               <div className="relative w-full sm:max-w-64">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                <input value={staffSearchQuery} onChange={(event) => setStaffSearchQuery(event.target.value)} aria-label="Tìm nhân viên trên lịch" placeholder="Tìm tên, vai trò, chi nhánh..." className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 text-[9px] font-semibold text-slate-700 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100" />
+                <input value={staffSearchQuery} onChange={(event) => setStaffSearchQuery(event.target.value)} aria-label="Tìm nhân viên trên lịch" placeholder="Tìm tên, vai trò, chi nhánh..." className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 text-[10px] font-semibold text-slate-700 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100" />
                 {staffSearchQuery && <button type="button" onClick={() => setStaffSearchQuery('')} aria-label="Xóa tìm kiếm nhân viên" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none hover:text-slate-700"><X className="h-3.5 w-3.5" /></button>}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="mr-1 text-[8px] font-semibold text-slate-500">Đang xem <strong className="text-slate-800">{visibleStaffStart}–{visibleStaffEnd}</strong> / {filteredScheduleStaff.length} nhân viên</span>
+                <span className="mr-1 text-[9px] font-semibold text-slate-500">Đang xem <strong className="text-slate-800">{visibleStaffStart}–{visibleStaffEnd}</strong> / {filteredScheduleStaff.length} nhân viên</span>
                 {staffPageCount > 1 && <BeautifulSelect value={String(staffPage)} onChange={(event) => setStaffPage(Number(event.target.value))} aria-label="Chọn nhóm nhân viên" className="h-8 min-w-28 rounded-lg border border-slate-200 bg-white px-2 text-[8px] font-bold text-slate-700">{Array.from({ length: staffPageCount }, (_, index) => { const start = index * STAFF_COLUMNS_PER_PAGE + 1; const end = Math.min((index + 1) * STAFF_COLUMNS_PER_PAGE, filteredScheduleStaff.length); return <option key={index} value={index}>Nhóm {index + 1} · {start}–{end}</option>; })}</BeautifulSelect>}
                 <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                   <button type="button" onClick={() => setStaffPage((current) => Math.max(0, current - 1))} disabled={staffPage === 0} aria-label="Nhóm nhân viên trước" className="flex h-8 w-8 items-center justify-center rounded-none border-0 border-r border-slate-200 bg-white p-0 text-slate-600 shadow-none disabled:cursor-not-allowed disabled:text-slate-300"><ChevronLeft className="h-3.5 w-3.5" /></button>
@@ -668,12 +826,12 @@ export default function TenantAdminAppointments({
                   const staffAppointments = scopedAppointments.filter((appointment) => appointment.staff === staff.name && !['CANCELLED', 'NO_SHOW'].includes(appointment.status));
                   const bookedMinutes = staffAppointments.reduce((sum, appointment) => sum + appointment.duration, 0);
                   const utilization = Math.min(100, Math.round(bookedMinutes / 600 * 100));
-                  return <div key={staff.name} className={`flex items-center border-r border-slate-100 last:border-r-0 ${isScheduleExpanded ? 'min-h-14 gap-2 px-2 py-2' : 'min-h-16 gap-2.5 px-3.5 py-3'}`}><span className={`flex shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-700 ${isScheduleExpanded ? 'h-8 w-8 text-[8px]' : 'h-9 w-9 text-[9px]'}`}>{staff.initials}</span><div className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[10px] font-black text-slate-800">{staff.name}</span>{selectedBranch === 'ALL' && <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[7px] font-black text-slate-500">{staff.branch}</span>}</span><p className="mt-0.5 truncate text-[8px] text-slate-400">{staff.role}</p>{!isScheduleExpanded && <p className="mt-0.5 text-[7px] font-semibold text-slate-400">{staff.shift}</p>}</div><span className={`rounded-lg bg-violet-50 font-black text-violet-600 ${isScheduleExpanded ? 'px-1.5 py-1 text-[8px]' : 'px-2 py-1 text-[9px]'}`}>{utilization}%</span></div>;
+                  return <div key={staff.name} className={`flex items-center border-r border-slate-100 last:border-r-0 ${isScheduleExpanded ? 'min-h-14 gap-2 px-2 py-2' : 'min-h-[72px] gap-2.5 px-3.5 py-3'}`}><span className={`flex shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-700 ${isScheduleExpanded ? 'h-8 w-8 text-[9px]' : 'h-10 w-10 text-[10px]'}`}>{staff.initials}</span><div className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[11px] font-black text-slate-800">{staff.name}</span>{selectedBranch === 'ALL' && <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[7px] font-black text-slate-500">{staff.branch}</span>}</span><p className="mt-0.5 truncate text-[9px] text-slate-400">{staff.role}</p>{!isScheduleExpanded && <p className="mt-0.5 text-[8px] font-semibold text-slate-400">{staff.shift}</p>}</div><span className={`rounded-lg bg-violet-50 font-black text-violet-600 ${isScheduleExpanded ? 'px-1.5 py-1 text-[8px]' : 'px-2 py-1 text-[9px]'}`}>{utilization}%</span></div>;
                 })}
               </div>
               <div className="relative grid" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${visibleScheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${visibleScheduleStaff.length}, minmax(220px, 1fr))`, height: scheduleHourHeight * 12 + SCHEDULE_BOTTOM_GUTTER }}>
                 <div className="relative border-r border-slate-200 bg-slate-50/70">
-                  {Array.from({ length: 13 }, (_, index) => 8 + index).map((hour) => <span key={hour} className={`absolute right-2 text-[9px] font-bold text-slate-400 ${hour === 8 ? '' : '-translate-y-1/2'}`} style={{ top: hour === 8 ? 8 : (hour - 8) * scheduleHourHeight }}>{String(hour).padStart(2, '0')}:00</span>)}
+                    {Array.from({ length: 13 }, (_, index) => 8 + index).map((hour) => <span key={hour} className={`absolute right-2 text-[10px] font-bold text-slate-400 ${hour === 8 ? '' : '-translate-y-1/2'}`} style={{ top: hour === 8 ? 8 : (hour - 8) * scheduleHourHeight }}>{String(hour).padStart(2, '0')}:00</span>)}
                 </div>
                 {visibleScheduleStaff.map((staff) => (
                   <div key={staff.name} className="relative border-r border-slate-100 last:border-r-0" style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${scheduleHourHeight - 1}px, #e8edf5 ${scheduleHourHeight}px)` }}>
@@ -696,16 +854,16 @@ export default function TenantAdminAppointments({
                         <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} aria-label={`Xem lịch: ${fullSummary}`} title={fullSummary} className={`group absolute left-1.5 right-1.5 z-10 h-auto overflow-hidden rounded-lg border border-l-[3px] px-2 text-left shadow-sm transition-all hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${isCompact ? 'py-1' : 'py-1.5'} ${['CANCELLED', 'NO_SHOW'].includes(appointment.status) ? 'opacity-70' : ''} ${meta.card}`} style={{ top: top + 2, height }}>
                           {isCompact ? (
                             <span className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0 text-[8px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
-                              <span className={`min-w-0 flex-1 truncate text-[9px] font-black ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
+                              <span className="shrink-0 text-[9px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
+                              <span className={`min-w-0 flex-1 truncate text-[10px] font-black ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
                               {hasConflict && <CircleAlert aria-label="Có xung đột nguồn lực" className="h-3.5 w-3.5 shrink-0 text-rose-600" />}
                               <span aria-label={meta.label} className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[7px] font-black text-white ${meta.dot}`}>{meta.symbol}</span>
                             </span>
                           ) : (
                             <>
-                              <span className="flex items-center justify-between gap-2"><span className="text-[9px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span><span className="flex items-center gap-1.5">{hasConflict && <CircleAlert aria-label="Có xung đột nguồn lực" className="h-3.5 w-3.5 text-rose-600" />}<span aria-label={meta.label} className={`flex h-4 w-4 items-center justify-center rounded text-[7px] font-black text-white ${meta.dot}`}>{meta.symbol}</span></span></span>
-                              <span className={`mt-1 block truncate text-[10px] font-black leading-4 ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
-                              {showService && <span className="block truncate text-[8px] font-medium leading-4 opacity-70">{appointment.service}</span>}
+                              <span className="flex items-center justify-between gap-2"><span className="text-[10px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span><span className="flex items-center gap-1.5">{hasConflict && <CircleAlert aria-label="Có xung đột nguồn lực" className="h-3.5 w-3.5 text-rose-600" />}<span aria-label={meta.label} className={`flex h-4 w-4 items-center justify-center rounded text-[7px] font-black text-white ${meta.dot}`}>{meta.symbol}</span></span></span>
+                              <span className={`mt-1 block truncate text-[11px] font-black leading-4 ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
+                              {showService && <span className="block truncate text-[9px] font-medium leading-4 opacity-70">{appointment.service}</span>}
                               {showOperationalMeta && <span className="mt-1.5 flex items-center justify-between gap-2"><span className="inline-flex min-w-0 truncate rounded-md bg-white/75 px-1.5 py-0.5 text-[7px] font-bold ring-1 ring-black/5">{meta.shortLabel}</span><span className="shrink-0 truncate text-[7px] font-bold opacity-60">{appointment.station || 'Chưa xếp bàn'}</span></span>}
                             </>
                           )}
@@ -714,7 +872,7 @@ export default function TenantAdminAppointments({
                     })}
                   </div>
                 ))}
-                {selectedDate === '2026-07-16' && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (14 * 60 + 32 - 480) / 60 * scheduleHourHeight }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">14:32</span></div>}
+                {selectedDate === todayDate && currentMinuteOfDay >= 8 * 60 && currentMinuteOfDay <= 20 * 60 && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (currentMinuteOfDay - 480) / 60 * scheduleHourHeight }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">{currentTimeLabel}</span></div>}
               </div>
             </div> : <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center"><UsersRound className="h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-700">Không tìm thấy nhân viên</p><p className="mt-1 text-[8px] text-slate-400">Thử tên khác hoặc xóa tìm kiếm để xem toàn bộ lịch.</p><button type="button" onClick={() => setStaffSearchQuery('')} className="mt-3 border border-slate-200 bg-white px-3 text-[8px] font-bold text-violet-600 shadow-sm">Xóa tìm kiếm</button></div>}
             {!filteredAppointments.length && <div className="absolute inset-x-0 top-80 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không có lịch phù hợp với bộ lọc</p></div>}
@@ -723,18 +881,18 @@ export default function TenantAdminAppointments({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1050px] border-collapse text-left">
-              <thead><tr className="border-b border-slate-100 bg-slate-50/70 text-[8px] font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Thời gian</th><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Dịch vụ</th><th className="px-4 py-3">Nhân viên</th><th className="px-4 py-3">Nguồn</th><th className="px-4 py-3">Giá trị</th><th className="px-4 py-3">Trạng thái</th><th className="px-5 py-3 text-right">Thao tác</th></tr></thead>
+              <thead><tr className="border-b border-slate-100 bg-slate-50/70 text-[9px] font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Thời gian</th><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Dịch vụ</th><th className="px-4 py-3">Nhân viên</th><th className="px-4 py-3">Nguồn</th><th className="px-4 py-3">Giá trị</th><th className="px-4 py-3">Trạng thái</th><th className="px-5 py-3 text-right">Thao tác</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredAppointments.map((appointment) => (
-                  <tr key={appointment.id} className="text-[9px] text-slate-600 hover:bg-slate-50/70">
-                    <td className="whitespace-nowrap px-5 py-3.5"><p className="font-black text-slate-900">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</p><p className="mt-1 text-[8px] text-slate-400">{appointment.id} · {appointment.duration} phút</p></td>
-                    <td className="px-4 py-3.5"><p className="font-black text-slate-800">{appointment.customer}{appointment.firstVisit && <span className="ml-1.5 rounded bg-violet-50 px-1.5 py-0.5 text-[7px] text-violet-600">Khách mới</span>}</p><p className="mt-1 text-[8px] text-slate-400">{appointment.phone}</p></td>
+                  <tr key={appointment.id} className="text-[10px] text-slate-600 hover:bg-slate-50/70">
+                    <td className="whitespace-nowrap px-5 py-3.5"><p className="font-black text-slate-900">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</p><p className="mt-1 text-[9px] text-slate-400">{appointment.id} · {appointment.duration} phút</p></td>
+                    <td className="px-4 py-3.5"><p className="font-black text-slate-800">{appointment.customer}{appointment.firstVisit && <span className="ml-1.5 rounded bg-violet-50 px-1.5 py-0.5 text-[8px] text-violet-600">Khách mới</span>}</p><p className="mt-1 text-[9px] text-slate-400">{appointment.phone}</p></td>
                     <td className="px-4 py-3.5 font-semibold text-slate-700">{appointment.service}</td>
-                    <td className="px-4 py-3.5"><p className="font-bold text-slate-700">{appointment.staff}</p><p className="mt-1 text-[8px] text-slate-400">{branchLabels[appointment.branch]}</p></td>
+                    <td className="px-4 py-3.5"><p className="font-bold text-slate-700">{appointment.staff}</p><p className="mt-1 text-[9px] text-slate-400">{branchLabels[appointment.branch]}</p></td>
                     <td className="px-4 py-3.5">{sourceLabels[appointment.source]}</td>
-                    <td className="whitespace-nowrap px-4 py-3.5"><p className="font-black text-slate-800">{formatCurrency(appointment.price)}</p><p className="mt-1 text-[8px] text-slate-400">Cọc {formatCurrency(appointment.deposit)}</p></td>
-                    <td className="px-4 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[appointment.status].badge}`}>{statusMeta[appointment.status].label}</span></td>
-                    <td className="px-5 py-3.5 text-right"><button type="button" onClick={() => setSelectedAppointment(appointment)} className="border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-sm">Chi tiết</button></td>
+                    <td className="whitespace-nowrap px-4 py-3.5"><p className="font-black text-slate-800">{formatCurrency(appointment.price)}</p><p className="mt-1 text-[9px] text-slate-400">Cọc {formatCurrency(appointment.deposit)}</p></td>
+                    <td className="px-4 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[9px] font-bold ring-1 ${statusMeta[appointment.status].badge}`}>{statusMeta[appointment.status].label}</span></td>
+                    <td className="px-5 py-3.5"><div className="flex justify-end gap-2"><button type="button" onClick={() => setSelectedAppointment(appointment)} className="border border-slate-200 bg-white px-3 text-[9px] font-bold text-slate-600 shadow-sm">Chi tiết</button>{nextStatus[appointment.status] && !(isReceptionist && appointment.status === 'IN_SERVICE') && <button type="button" onClick={() => advanceAppointmentStatus(appointment)} disabled={!canManage} className={`flex items-center gap-1.5 border px-3 text-[9px] font-black text-white shadow-sm disabled:border-slate-300 disabled:bg-slate-300 ${isReceptionist ? 'border-emerald-700 bg-emerald-600' : 'border-violet-700 bg-violet-600'}`}><Check className="h-3.5 w-3.5" />{nextStatusLabel[appointment.status]}</button>}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -750,10 +908,20 @@ export default function TenantAdminAppointments({
       </section>
 
       <section className="grid gap-5 lg:grid-cols-3">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Cần xử lý</h2><p className="mt-1 text-[8px] text-slate-400">Lịch chờ xác nhận trong ngày</p></div><span className="flex h-8 min-w-8 items-center justify-center rounded-xl bg-amber-50 px-2 text-[9px] font-black text-amber-700">{pendingCount}</span></div>
-          <div className="mt-3 divide-y divide-slate-100">{scopedAppointments.filter((appointment) => appointment.status === 'PENDING').slice(0, 3).map((appointment) => <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} className="flex h-auto w-full items-center gap-3 rounded-none border-0 bg-transparent px-0 py-3 text-left shadow-none"><span className="flex h-8 w-12 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-[9px] font-black text-amber-700">{appointment.start}</span><span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-black text-slate-700">{appointment.customer}</span><span className="mt-1 block truncate text-[8px] text-slate-400">{appointment.service} · {appointment.phone}</span></span><ArrowRight className="h-3.5 w-3.5 text-slate-300" /></button>)}</div>
-          {!pendingCount && <div className="py-7 text-center"><Check className="mx-auto h-6 w-6 text-emerald-500" /><p className="mt-2 text-[9px] font-bold text-slate-500">Không còn lịch cần xác nhận</p></div>}
+        <article className="rounded-2xl border border-amber-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex items-start justify-between"><div><h2 className="text-sm font-black text-slate-900">Ưu tiên xử lý</h2><p className="mt-1 text-[9px] text-slate-400">Xác nhận nhanh, không cần mở chi tiết</p></div><span className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-amber-50 px-2 text-[10px] font-black text-amber-700">{pendingCount}</span></div>
+          <div className="mt-3 divide-y divide-slate-100">
+            {scopedAppointments.filter((appointment) => appointment.status === 'PENDING').slice(0, 3).map((appointment) => (
+              <div key={appointment.id} className="flex items-center gap-3 py-3">
+                <button type="button" onClick={() => setSelectedAppointment(appointment)} className="flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl border-0 bg-transparent px-0 py-0 text-left shadow-none">
+                  <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-[10px] font-black text-amber-700">{appointment.start}</span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-[10px] font-black text-slate-700">{appointment.customer}</span><span className="mt-1 block truncate text-[9px] text-slate-400">{appointment.service} · {appointment.phone}</span></span>
+                </button>
+                <button type="button" onClick={() => advanceAppointmentStatus(appointment)} disabled={!canManage} aria-label={`Xác nhận lịch của ${appointment.customer}`} className={`flex h-8 shrink-0 items-center gap-1.5 border px-2.5 text-[8px] font-black text-white shadow-sm disabled:border-slate-300 disabled:bg-slate-300 ${isReceptionist ? 'border-emerald-700 bg-emerald-600' : 'border-violet-700 bg-violet-600'}`}><Check className="h-3 w-3" />Xác nhận</button>
+              </div>
+            ))}
+          </div>
+          {!pendingCount && <div className="py-7 text-center"><Check className="mx-auto h-6 w-6 text-emerald-500" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không còn lịch cần xác nhận</p></div>}
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -766,9 +934,13 @@ export default function TenantAdminAppointments({
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Chất lượng vận hành</h2><p className="mt-1 text-[8px] text-slate-400">Chỉ số lịch hẹn tháng 07/2026</p></div><Sparkles className="h-4.5 w-4.5 text-emerald-500" /></div>
-          <div className="mt-4 grid grid-cols-3 gap-3"><div><p className="text-[8px] text-slate-400">Đúng giờ</p><p className="mt-1 text-lg font-black text-slate-900">91%</p></div><div><p className="text-[8px] text-slate-400">Hủy lịch</p><p className="mt-1 text-lg font-black text-slate-900">3,2%</p></div><div><p className="text-[8px] text-slate-400">Lấp đầy</p><p className="mt-1 text-lg font-black text-emerald-600">86%</p></div></div>
-          <div className="mt-4 rounded-xl bg-emerald-50 p-3"><p className="flex items-center gap-2 text-[8px] font-black text-emerald-800"><ClipboardCheck className="h-3.5 w-3.5" />Gợi ý tối ưu lịch</p><p className="mt-1.5 text-[8px] leading-4 text-emerald-700">Khung 12:00–13:30 còn trống 35%. Có thể mở ưu đãi đặt nhanh cho dịch vụ dưới 60 phút.</p></div>
+          <div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Chất lượng vận hành</h2><p className="mt-1 text-[8px] text-slate-400">Tính theo lịch đang chọn</p></div><Sparkles className="h-4.5 w-4.5 text-emerald-500" /></div>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div><p className="text-[8px] text-slate-400">Đã xác nhận</p><p className="mt-1 text-lg font-black text-slate-900">{confirmationRate}%</p></div>
+            <div><p className="text-[8px] text-slate-400">Hủy / vắng</p><p className="mt-1 text-lg font-black text-slate-900">{cancellationRate}%</p></div>
+            <div><p className="text-[8px] text-slate-400">Lấp đầy</p><p className="mt-1 text-lg font-black text-emerald-600">{utilizationRate}%</p></div>
+          </div>
+          <div className="mt-4 rounded-xl bg-emerald-50 p-3"><p className="flex items-center gap-2 text-[8px] font-black text-emerald-800"><ClipboardCheck className="h-3.5 w-3.5" />Tình trạng điều phối</p><p className="mt-1.5 text-[8px] leading-4 text-emerald-700">{pendingCount ? `Còn ${pendingCount} lịch chờ xác nhận và ${reminderPendingCount} lịch chưa gửi nhắc.` : `Tất cả ${confirmedCount + completedCount + servingCount} lịch đang hoạt động đã qua bước xác nhận.`}</p></div>
         </article>
       </section>
 
@@ -783,7 +955,7 @@ export default function TenantAdminAppointments({
                 <div className="space-y-4">
                   <div className="rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 p-5 text-white shadow-lg shadow-slate-200 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold capitalize text-slate-400">{toDate(selectedAppointment.date).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</p><p className="mt-2 text-3xl font-black tracking-tight">{selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)}</p><p className="mt-2 text-[10px] text-slate-400">{selectedAppointment.duration} phút · {branchLabels[selectedAppointment.branch]}</p></div><div className="rounded-xl bg-white/10 px-4 py-3 ring-1 ring-white/10"><p className="text-[8px] font-bold uppercase text-slate-400">Bàn / ghế</p><p className="mt-1 text-[11px] font-black">{selectedAppointment.station || 'Chưa xếp bàn'}</p></div></div></div>
 
-                  <div className="rounded-2xl border border-slate-200 p-4 sm:p-5"><div className="flex items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-[11px] font-black text-violet-700">{selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-slate-900">{selectedAppointment.customer}</p><p className="mt-1 text-[9px] text-slate-400">{selectedAppointment.firstVisit ? 'Khách lần đầu sử dụng dịch vụ' : 'Khách đã có hồ sơ tại salon'}</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><a href={`tel:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-100 text-[9px] font-bold text-slate-700 no-underline"><Phone className="h-4 w-4" />{selectedAppointment.phone}</a><button type="button" onClick={() => onNotify?.(`Đã mở nội dung nhắn tin cho ${selectedAppointment.customer}.`)} className="flex h-10 items-center justify-center gap-2 border-0 bg-violet-50 text-[9px] font-bold text-violet-700 shadow-none"><MessageCircle className="h-4 w-4" />Gửi tin nhắn</button></div></div>
+                  <div className="rounded-2xl border border-slate-200 p-4 sm:p-5"><div className="flex items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-[11px] font-black text-violet-700">{selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-slate-900">{selectedAppointment.customer}</p><p className="mt-1 text-[9px] text-slate-400">{selectedAppointment.firstVisit ? 'Khách lần đầu sử dụng dịch vụ' : 'Khách đã có hồ sơ tại salon'}</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><a href={`tel:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-100 text-[9px] font-bold text-slate-700 no-underline"><Phone className="h-4 w-4" />{selectedAppointment.phone}</a><a href={`sms:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-50 text-[9px] font-bold text-violet-700 no-underline"><MessageCircle className="h-4 w-4" />Gửi tin nhắn</a></div></div>
 
                   <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/50 p-4"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-fuchsia-600 shadow-sm"><Sparkles className="h-4 w-4" /></span><div className="mt-3 flex items-center justify-between gap-2"><p className="text-[8px] font-bold uppercase text-fuchsia-500">Dịch vụ</p><span className="rounded-full bg-white px-2 py-1 text-[7px] font-black text-fuchsia-600 shadow-sm">{selectedAppointment.services?.length || 1} dịch vụ</span></div><div className="mt-2 space-y-1.5">{(selectedAppointment.services?.length ? selectedAppointment.services : [selectedAppointment.service]).map((service, index) => <div key={`${service}-${index}`} className="flex items-start gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-white text-[7px] font-black text-fuchsia-600 shadow-sm">{index + 1}</span><p className="text-[9px] font-bold leading-4 text-slate-800">{service}</p></div>)}</div><p className="mt-2 border-t border-fuchsia-100 pt-2 text-[9px] font-semibold text-slate-500">Tổng {selectedAppointment.duration} phút · {formatCurrency(selectedAppointment.price)}</p></div><div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm"><UserRound className="h-4 w-4" /></span><p className="mt-3 text-[8px] font-bold uppercase text-blue-500">Kỹ thuật viên</p><p className="mt-1 text-[11px] font-black text-slate-900">{selectedAppointment.staff}</p><p className="mt-1 text-[9px] text-slate-500">{staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role}</p></div></div>
                 </div>
@@ -791,7 +963,7 @@ export default function TenantAdminAppointments({
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Thanh toán</p><p className="mt-2 text-2xl font-black text-slate-950">{formatCurrency(selectedAppointment.price)}</p><p className="mt-1 text-[9px] text-slate-400">{sourceLabels[selectedAppointment.source]}</p></div><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><ReceiptText className="h-4 w-4" /></span></div><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-xl bg-emerald-50 p-3"><p className="text-[8px] font-bold text-emerald-600">Đã đặt cọc</p><p className="mt-1 text-[11px] font-black text-emerald-800">{formatCurrency(selectedAppointment.deposit)}</p></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-[8px] font-bold text-amber-600">Còn phải thu</p><p className="mt-1 text-[11px] font-black text-amber-800">{formatCurrency(Math.max(0, selectedAppointment.price - selectedAppointment.deposit))}</p></div></div></div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Ghi chú phục vụ</p><span className={`rounded-full px-2 py-1 text-[7px] font-bold ${selectedAppointment.reminderSent ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{selectedAppointment.reminderSent ? 'Đã nhắc lịch' : 'Chưa nhắc lịch'}</span></div><p className="mt-3 text-[10px] leading-5 text-slate-600">{selectedAppointment.note || 'Chưa có ghi chú cho lịch hẹn này.'}</p></div>
+                  <div className="rounded-2xl bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Ghi chú phục vụ</p>{selectedAppointment.reminderSent ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[7px] font-bold text-emerald-700">Đã nhắc lịch</span> : <button type="button" onClick={() => { updateAppointment(selectedAppointment.id, { reminderSent: true }); onNotify?.(`Đã ghi nhận gửi nhắc lịch cho ${selectedAppointment.customer}.`); }} disabled={!canManage} className="min-h-7 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[7px] font-black text-amber-700 shadow-none disabled:opacity-50">Gửi nhắc lịch</button>}</div><p className="mt-3 text-[10px] leading-5 text-slate-600">{selectedAppointment.note || 'Chưa có ghi chú cho lịch hẹn này.'}</p></div>
 
                   {selectedAppointment.status === 'CANCELLED' && <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-rose-600 shadow-sm"><X className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[8px] font-black uppercase tracking-wide text-rose-600">Thông tin hủy lịch</p>{selectedAppointment.cancelledAt && <span className="text-[7px] font-semibold text-rose-400">{selectedAppointment.cancelledAt}</span>}</div><p className="mt-2 text-[10px] font-black text-rose-900">{selectedAppointment.cancellationReason || 'Chưa ghi nhận lý do'}</p><div className="mt-2 rounded-xl bg-white/80 px-3 py-2.5"><p className="text-[7px] font-bold uppercase text-slate-400">Ghi chú hủy</p><p className="mt-1 text-[9px] leading-4 text-slate-600">{selectedAppointment.cancellationNote || 'Không có ghi chú bổ sung.'}</p></div><p className="mt-2 text-[7px] font-semibold text-rose-500">Thực hiện bởi {selectedAppointment.cancelledBy || roleLabel}</p></div></div></div>}
 
@@ -802,7 +974,22 @@ export default function TenantAdminAppointments({
               </div>
             </div>
 
-            <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div>{!['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(selectedAppointment.status) && <button type="button" onClick={openCancelForm} disabled={!canManage} className="h-10 border-0 bg-transparent px-3 text-[9px] font-bold text-rose-600 shadow-none disabled:text-slate-400">Hủy lịch hẹn</button>}</div><div className="flex gap-2"><button type="button" onClick={() => openEditForm(selectedAppointment)} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button>{nextStatus[selectedAppointment.status] && <button type="button" onClick={() => updateAppointment(selectedAppointment.id, { status: nextStatus[selectedAppointment.status]! })} disabled={!canManage} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none sm:flex-none"><Check className="h-4 w-4" />{nextStatusLabel[selectedAppointment.status]}</button>}</div></footer>
+            <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+              <div>
+                {!['COMPLETED', 'CANCELLED', 'NO_SHOW', ...(isReceptionist ? ['IN_SERVICE' as AppointmentStatus] : [])].includes(selectedAppointment.status) && (
+                  <button type="button" onClick={openCancelForm} disabled={!canManage} className="h-10 border-0 bg-transparent px-3 text-[9px] font-bold text-rose-600 shadow-none disabled:text-slate-400">Hủy lịch hẹn</button>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button type="button" onClick={() => openEditForm(selectedAppointment)} disabled={!canEditSelectedAppointment} title={!canEditSelectedAppointment && isReceptionist ? 'Chỉ được sửa trước khi bắt đầu dịch vụ' : undefined} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button>
+                {nextStatus[selectedAppointment.status] && !(isReceptionist && selectedAppointment.status === 'IN_SERVICE') && (
+                  <button type="button" onClick={() => advanceAppointmentStatus(selectedAppointment)} disabled={!canManage} className={`flex h-11 flex-1 items-center justify-center gap-2 border px-5 text-[9px] font-black text-white shadow-lg disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none sm:flex-none ${isReceptionist ? 'border-emerald-700 bg-emerald-600 shadow-emerald-200' : 'border-violet-700 bg-violet-600 shadow-violet-200'}`}><Check className="h-4 w-4" />{nextStatusLabel[selectedAppointment.status]}</button>
+                )}
+                {isReceptionist && selectedAppointment.status === 'IN_SERVICE' && (
+                  <span className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 text-[9px] font-black text-emerald-700 ring-1 ring-emerald-200"><ReceiptText className="h-4 w-4" />Hoàn tất tại Bàn lễ tân</span>
+                )}
+              </div>
+            </footer>
           </section>
         </div>
       )}
@@ -814,6 +1001,7 @@ export default function TenantAdminAppointments({
             <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600"><CircleAlert className="h-5 w-5" /></span><div><h2 id="cancel-appointment-title" className="text-base font-black text-slate-900">Hủy lịch hẹn</h2><p className="mt-1 text-[9px] leading-4 text-slate-500">Lý do và ghi chú sẽ được lưu trong lịch sử lịch hẹn.</p></div></div><button type="button" onClick={() => setShowCancelForm(false)} aria-label="Đóng" className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header>
             <div className="space-y-5 p-5 sm:p-6">
               <div className="flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[9px] font-black">{selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}</span><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black">{selectedAppointment.customer}</p><p className="mt-1 truncate text-[8px] text-slate-400">{selectedAppointment.id} · {selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)} · {selectedAppointment.service}</p></div></div>
+              {selectedAppointment.deposit > 0 && <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[9px] font-bold leading-4 text-amber-800"><CircleDollarSign className="mt-0.5 h-4 w-4 shrink-0" />Lịch đã nhận cọc {formatCurrency(selectedAppointment.deposit)}. Sau khi hủy, cần xử lý hoàn cọc hoặc ghi chú đối soát tại màn hình Thanh toán.</div>}
               {cancellationError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{cancellationError}</div>}
               <fieldset><legend className="mb-2 text-[9px] font-black text-slate-700">Lý do hủy *</legend><div className="grid gap-2 sm:grid-cols-2">{cancellationReasons.map((reason) => { const isSelected = cancellationReason === reason; return <button key={reason} type="button" aria-pressed={isSelected} onClick={() => { setCancellationReason(reason); setCancellationError(''); }} className={`flex h-auto min-h-11 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[8px] font-bold shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 ${isSelected ? 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-100' : 'border-slate-200 bg-white text-slate-600 hover:border-rose-200 hover:bg-rose-50/40'}`}><span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${isSelected ? 'border-rose-500 bg-rose-500' : 'border-slate-300 bg-white'}`}>{isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}</span>{reason}</button>; })}</div></fieldset>
               <label className="block"><span className="flex items-center justify-between gap-3"><span className="text-[9px] font-black text-slate-700">Ghi chú hủy {cancellationReason === 'Khác' ? '*' : '(không bắt buộc)'}</span><span className="text-[7px] font-semibold text-slate-400">{cancellationNote.length}/500</span></span><textarea value={cancellationNote} maxLength={500} onChange={(event) => { setCancellationNote(event.target.value); setCancellationError(''); }} className="mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" placeholder="Ví dụ: Khách báo bận công tác và sẽ đặt lại vào tuần sau..." /></label>
@@ -831,7 +1019,7 @@ export default function TenantAdminAppointments({
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><h2 className="text-base font-black text-slate-900">{formMode === 'CREATE' ? 'Tạo lịch hẹn mới' : `Chỉnh sửa ${selectedAppointment?.id}`}</h2><p className="mt-1 text-[9px] text-slate-500">Chọn một hoặc nhiều dịch vụ cho khách trong cùng lịch hẹn.</p></div><button type="button" onClick={() => setFormMode(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>
             <div className="space-y-5 p-5 sm:p-6">
               {formError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{formError}</div>}
-              <fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><UserRound className="h-3.5 w-3.5" /></span>Thông tin khách hàng</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên khách hàng *</span><input value={form.customer} onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nguyễn Minh Anh" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số điện thoại *</span><input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className={inputClass} placeholder="09xx xxx xxx" /></label></div>{form.customerId && <div className="mt-3 flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2.5 text-[8px] font-bold text-violet-700"><Check className="h-3.5 w-3.5" />Đã liên kết hồ sơ khách hàng <span className="font-black">{form.customerId}</span></div>}</fieldset>
+              <fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><UserRound className="h-3.5 w-3.5" /></span>Thông tin khách hàng</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên khách hàng *</span><input value={form.customer} onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nguyễn Minh Anh" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số điện thoại *</span><input type="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className={inputClass} placeholder="09xx xxx xxx" /></label></div>{form.customerId && <div className="mt-3 flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2.5 text-[8px] font-bold text-violet-700"><Check className="h-3.5 w-3.5" />Đã liên kết hồ sơ khách hàng <span className="font-black">{form.customerId}</span></div>}</fieldset>
               <fieldset className="border-t border-slate-100 pt-5">
                 <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-3.5 w-3.5" /></span>Dịch vụ & phân công</legend>
                 <div className="flex items-center justify-between gap-3"><div><p className="text-[9px] font-bold text-slate-700">Chọn dịch vụ *</p><p className="mt-0.5 text-[8px] text-slate-400">Có thể chọn nhiều dịch vụ cho cùng một khách</p></div><span className="rounded-full bg-violet-50 px-2.5 py-1 text-[8px] font-black text-violet-700">{form.services.length} đã chọn</span></div>
@@ -842,10 +1030,10 @@ export default function TenantAdminAppointments({
                   })}
                 </div>
                 {selectedServiceDetails.length ? <div className="mt-3 overflow-hidden rounded-2xl border border-violet-100 bg-violet-50/40"><div className="flex items-center justify-between border-b border-violet-100 px-4 py-2.5"><p className="text-[8px] font-black uppercase tracking-wide text-violet-700">Danh sách dịch vụ</p><p className="text-[8px] font-bold text-violet-600">{selectedServiceDuration} phút</p></div><div className="divide-y divide-violet-100/80">{selectedServiceDetails.map((service, index) => <div key={service.name} className="flex items-center gap-3 px-4 py-2.5"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-[8px] font-black text-violet-600 shadow-sm">{index + 1}</span><span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-bold text-slate-700">{service.name}</span><span className="text-[7px] text-slate-400">{service.duration} phút</span></span><span className="shrink-0 text-[8px] font-black text-slate-700">{formatCurrency(service.price)}</span><button type="button" onClick={() => setForm((current) => ({ ...current, services: current.services.filter((name) => name !== service.name) }))} aria-label={`Bỏ dịch vụ ${service.name}`} className="flex h-7 w-7 shrink-0 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none hover:text-rose-600"><X className="h-3.5 w-3.5" /></button></div>)}</div><div className="grid grid-cols-3 gap-px bg-violet-100"><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Tổng dịch vụ</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedServiceDetails.length}</p></div><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Thời lượng</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedServiceDuration} phút</p></div><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Tạm tính</p><p className="mt-1 text-[10px] font-black text-violet-700">{formatCurrency(selectedServicePrice)}</p></div></div></div> : <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-[8px] font-bold text-amber-700">Chọn ít nhất một dịch vụ để tiếp tục.</div>}
-                <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={form.branch} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} onChange={(event) => { const branch = event.target.value as BranchCode; setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn', station: branch === 'Q1' ? 'Bàn M-01' : 'Bàn M-02' })); }} className={inputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kỹ thuật viên phụ trách *</span><BeautifulSelect value={form.staff} onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))} className={inputClass}>{staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Bàn / ghế phục vụ</span><BeautifulSelect value={form.station} onChange={(event) => setForm((current) => ({ ...current, station: event.target.value }))} className={inputClass}>{['Bàn M-01', 'Bàn M-02', 'Bàn M-03', 'Bàn M-04', 'Ghế P-01', 'Ghế P-02', 'Ghế P-03', 'Bàn VIP-01', 'Bàn VIP-02'].map((station) => <option key={station} value={station}>{station}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nguồn đặt lịch</span><BeautifulSelect value={form.source} onChange={(event) => setForm((current) => ({ ...current, source: event.target.value as AppointmentSource }))} className={inputClass}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label></div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={form.branch} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} onChange={(event) => { const branch = event.target.value as BranchCode; setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn', station: stationDirectory[branch][0] })); }} className={inputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kỹ thuật viên phụ trách *</span><BeautifulSelect value={form.staff} onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))} className={inputClass}>{staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghế / phòng phục vụ *</span><BeautifulSelect value={form.station} onChange={(event) => setForm((current) => ({ ...current, station: event.target.value }))} className={inputClass}>{stationDirectory[form.branch].map((station) => <option key={station} value={station}>{station}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nguồn đặt lịch</span><BeautifulSelect value={form.source} onChange={(event) => setForm((current) => ({ ...current, source: event.target.value as AppointmentSource }))} className={inputClass}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label></div>
                 <p className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[8px] leading-4 text-slate-500"><UsersRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" />Nhân viên và bàn/ghế đã chọn được áp dụng cho toàn bộ dịch vụ trong lịch hẹn này.</p>
               </fieldset>
-              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Clock3 className="h-3.5 w-3.5" /></span>Thời gian & trạng thái</legend><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ngày *</span><input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Giờ bắt đầu *</span><input type="time" value={form.start} onChange={(event) => setForm((current) => ({ ...current, start: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Trạng thái</span><BeautifulSelect value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as AppointmentStatus }))} className={inputClass}>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label></div></fieldset>
+              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Clock3 className="h-3.5 w-3.5" /></span>Thời gian & trạng thái</legend><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ngày *</span><input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Giờ bắt đầu *</span><input type="time" value={form.start} onChange={(event) => setForm((current) => ({ ...current, start: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Trạng thái</span><BeautifulSelect value={form.status} disabled={isReceptionist} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as AppointmentStatus }))} className={inputClass}>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect>{isReceptionist && <span className="mt-1 block text-[7px] font-semibold text-slate-400">Đổi trạng thái theo nút nghiệp vụ trong chi tiết lịch.</span>}</label></div></fieldset>
               <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CircleDollarSign className="h-3.5 w-3.5" /></span>Thanh toán & ghi chú</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tiền đặt cọc</span><input type="number" min="0" max={selectedServicePrice || undefined} step="10000" value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} className={inputClass} /></label><div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-100 bg-slate-50"><div className="px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Tổng dự kiến</p><p className="mt-1 text-[12px] font-black text-slate-800">{formatCurrency(selectedServicePrice)}</p></div><div className="border-l border-slate-200 px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Kết thúc</p><p className="mt-1 text-[12px] font-black text-violet-700">{selectedServiceEnd}</p></div></div></div><label className="mt-3 block"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghi chú phục vụ</span><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Mẫu nail, màu sắc, tình trạng móng, dị ứng hoặc yêu cầu riêng..." /></label></fieldset>
             </div>
             <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setFormMode(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" disabled={!form.services.length} className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><CalendarCheck2 className="h-4 w-4" />{formMode === 'CREATE' ? `Lưu ${form.services.length} dịch vụ` : 'Lưu thay đổi'}</button></div>

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   ArrowUpRight,
   BarChart3,
@@ -164,10 +165,10 @@ export default function TenantAdminNailGallery({
   const designStorageKey = `tenant-admin-nail-designs-v1:${tenantName}`;
   const colorStorageKey = `tenant-admin-nail-colors-v1:${tenantName}`;
   const [designs, setDesigns] = useState<NailDesign[]>(() => {
-    try { const value = localStorage.getItem(designStorageKey); return value ? JSON.parse(value) : designSeed; } catch { return designSeed; }
+    try { const value = localStorage.getItem(designStorageKey); return getTenantAdminInitialData(value ? JSON.parse(value) : null, designSeed); } catch { return getTenantAdminInitialData(null, designSeed); }
   });
   const [colors, setColors] = useState<PolishColor[]>(() => {
-    try { const value = localStorage.getItem(colorStorageKey); return value ? JSON.parse(value) : colorSeed; } catch { return colorSeed; }
+    try { const value = localStorage.getItem(colorStorageKey); return getTenantAdminInitialData(value ? JSON.parse(value) : null, colorSeed); } catch { return getTenantAdminInitialData(null, colorSeed); }
   });
   const [tab, setTab] = useState<LibraryTab>('DESIGNS');
   const [viewMode, setViewMode] = useState<ViewMode>('GRID');
@@ -264,7 +265,7 @@ export default function TenantAdminNailGallery({
 
       <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div><div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-violet-600"><Palette className="h-4 w-4" />Danh mục sáng tạo</div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Màu & mẫu Nail</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Quản lý thư viện thiết kế, mã màu, vật liệu, phụ thu và khả năng thực hiện tại từng chi nhánh của {tenantName}.</p></div>
-        <div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={exportLibrary} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm"><Download className="h-4 w-4" />Xuất dữ liệu</button><button type="button" onClick={openColorForm} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-violet-200 bg-white px-4 text-xs font-black text-violet-700 shadow-sm"><Palette className="h-4 w-4" />Thêm màu sơn</button><button type="button" onClick={() => openDesignForm()} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />Thêm mẫu Nail</button></div>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 xl:w-auto"><button type="button" onClick={exportLibrary} className="flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 xl:min-w-[148px]"><Download className="h-4 w-4 shrink-0" /><span>Xuất dữ liệu</span></button><button type="button" onClick={openColorForm} disabled={!canManage} className="flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-violet-200 bg-violet-50 px-4 text-xs font-black text-violet-700 shadow-sm transition hover:border-violet-300 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50 xl:min-w-[158px]"><Palette className="h-4 w-4 shrink-0" /><span>Thêm màu sơn</span></button><button type="button" onClick={() => openDesignForm()} disabled={!canManage} className="flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 xl:min-w-[164px]"><Plus className="h-4 w-4 shrink-0" /><span>Thêm mẫu Nail</span></button></div>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

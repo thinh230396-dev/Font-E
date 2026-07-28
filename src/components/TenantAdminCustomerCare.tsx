@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { getTenantAdminInitialData } from "../utils/mockDataReset";
 import {
   AlertCircle,
   AlertTriangle,
@@ -340,12 +341,12 @@ export default function TenantAdminCustomerCare({
 }: TenantAdminCustomerCareProps) {
   const storageKey = `tenant-admin-customer-care-v1:${tenantName}`;
   const [campaigns, setCampaigns] = useState<CareCampaign[]>(() => {
-    if (typeof window === "undefined") return seed;
+    if (typeof window === "undefined") return getTenantAdminInitialData(null, seed);
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? (JSON.parse(stored) as CareCampaign[]) : seed;
+      return getTenantAdminInitialData(stored ? (JSON.parse(stored) as CareCampaign[]) : null, seed);
     } catch {
-      return seed;
+      return getTenantAdminInitialData(null, seed);
     }
   });
   const [typeFilter, setTypeFilter] = useState<"ALL" | CampaignType>("ALL");

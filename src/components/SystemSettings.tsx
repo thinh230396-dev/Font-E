@@ -139,7 +139,7 @@ export default function SystemSettings() {
     : 'Chưa lưu lần nào';
 
   return (
-    <div className="space-y-5 pb-24">
+    <div className="space-y-5 pb-2">
       <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-brand-text tracking-tight flex items-center gap-2">
@@ -210,7 +210,10 @@ export default function SystemSettings() {
                       <option value="en">English</option>
                     </BeautifulSelect>
                   </Field>
-                  <Field label="Đơn vị tiền tệ">
+                  <Field
+                    label="Tiền tệ báo cáo mặc định"
+                    hint="Dùng để quy đổi và tổng hợp doanh thu, công nợ trên các màn quản trị; đồng thời là giá trị mặc định khi tạo gói hoặc hóa đơn mới."
+                  >
                     <BeautifulSelect className="form-control" value={draft.general.currency} onChange={(event) => updateSection('general', { currency: event.target.value as 'VND' | 'USD' })}>
                       <option value="VND">VND — Việt Nam Đồng</option>
                       <option value="USD">USD — US Dollar</option>
@@ -225,6 +228,15 @@ export default function SystemSettings() {
                       <option value="Europe/London">Europe/London (GMT+0)</option>
                     </BeautifulSelect>
                   </Field>
+                </div>
+                <div className="rounded-lg border border-brand-primary/20 bg-brand-primary/5 p-3 text-[11px] leading-relaxed text-brand-text-muted">
+                  <div className="flex items-start gap-2">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-primary" />
+                    <p>
+                      <strong className="text-brand-text">Không thay đổi giá đã niêm yết:</strong> mỗi gói vẫn có thể dùng VND hoặc USD riêng.
+                      Khi tổng hợp báo cáo, hệ thống mới quy đổi các giá trị đó về <strong className="text-brand-text">{draft.general.currency}</strong>.
+                    </p>
+                  </div>
                 </div>
               </SettingsPanel>
 
@@ -359,13 +371,25 @@ export default function SystemSettings() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 right-0 left-0 lg:left-[280px] z-30 border-t border-brand-outline/35 bg-brand-surface/95 backdrop-blur px-4 sm:px-6 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
-        <div className="max-w-[1500px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div
+        role="region"
+        aria-label="Trạng thái lưu cấu hình"
+        className="system-settings-savebar sticky bottom-4 z-20 rounded-2xl border border-brand-outline/60 bg-brand-surface/95 p-3 shadow-[0_18px_48px_rgba(31,39,65,0.14)] backdrop-blur-xl sm:px-4"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 min-w-0">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${isDirty ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-            <p className="text-[11px] text-brand-text-muted truncate">{isDirty ? 'Bạn có thay đổi chưa được lưu.' : `Cấu hình đã đồng bộ · ${lastUpdated}`}{errorCount > 0 ? ` · ${errorCount} lỗi cần sửa` : ''}</p>
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${isDirty ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+              {isDirty ? <Clock3 className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-brand-text">{isDirty ? 'Có thay đổi chưa được lưu' : 'Cấu hình đã đồng bộ'}</p>
+              <p className="mt-0.5 truncate text-[10px] text-brand-text-muted">
+                {isDirty ? 'Kiểm tra lại trước khi áp dụng cho toàn hệ thống.' : `Cập nhật gần nhất: ${lastUpdated}`}
+                {errorCount > 0 ? ` · ${errorCount} lỗi cần sửa` : ''}
+              </p>
+            </div>
           </div>
-          <button type="button" onClick={handleSave} disabled={!isDirty} className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-brand-primary text-brand-on-primary text-xs font-bold cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed whitespace-nowrap">
+          <button type="button" onClick={handleSave} disabled={!isDirty} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-primary px-4 py-2 text-xs font-bold text-brand-on-primary whitespace-nowrap cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto">
             <Save className="w-4 h-4" /> <span>Lưu tất cả thay đổi</span>
           </button>
         </div>
@@ -373,7 +397,7 @@ export default function SystemSettings() {
 
       {showResetConfirm && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-          <button type="button" aria-label="Đóng xác nhận khôi phục" className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm border-0 cursor-default" onClick={() => setShowResetConfirm(false)} />
+          <button type="button" aria-label="Đóng xác nhận khôi phục" className="sa-modal-backdrop absolute inset-0 bg-slate-950/65 backdrop-blur-sm border-0 cursor-default" onClick={() => setShowResetConfirm(false)} />
           <div role="dialog" aria-modal="true" aria-labelledby="reset-settings-title" className="relative w-full max-w-md rounded-2xl border border-brand-outline/45 bg-brand-surface p-5 shadow-2xl">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5" /></div>

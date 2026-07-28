@@ -13,6 +13,7 @@ import {
   Copy,
   Edit3,
   History,
+  Info,
   Layers,
   MoreVertical,
   PackagePlus,
@@ -24,7 +25,8 @@ import {
   Users,
   X
 } from 'lucide-react';
-import {
+import type {
+  CurrencyCode,
   Invoice,
   SubscriptionLimits,
   SubscriptionPackage,
@@ -45,6 +47,7 @@ interface SubscriptionPackagesProps {
   packages: SubscriptionPackage[];
   tenants: Tenant[];
   invoices: Invoice[];
+  reportCurrency: CurrencyCode;
   onAddPackage: (pkg: Omit<SubscriptionPackage, 'id' | 'activeTenants'>) => void;
   onUpdatePackage: (id: string, updated: Partial<SubscriptionPackage>) => void;
   onDeprecatePackage: (id: string) => void;
@@ -85,7 +88,7 @@ const createCapabilityKey = (label: string) => label
   .replace(/[^a-z0-9]+/g, '_')
   .replace(/^_+|_+$/g, '');
 
-const createPackageDraft = (): SubscriptionPackage => normalizeSubscriptionPackage({
+const createPackageDraft = (reportCurrency: CurrencyCode): SubscriptionPackage => normalizeSubscriptionPackage({
   id: 'NEW-PACKAGE',
   name: '',
   description: '',
@@ -94,7 +97,7 @@ const createPackageDraft = (): SubscriptionPackage => normalizeSubscriptionPacka
   yearlyDiscountPercent: 20,
   setupFee: 0,
   trialDays: 14,
-  currency: 'VND',
+  currency: reportCurrency,
   billingCycle: 'monthly',
   activeTenants: 0,
   status: 'DRAFT',
@@ -115,18 +118,19 @@ const tenantUsesPackage = (tenant: Tenant, pkg: SubscriptionPackage) => (
 
 const getPackageStatus = (pkg: SubscriptionPackage): SubscriptionPackageStatus => pkg.status || 'ACTIVE';
 
-const getMonthlyRecurringValue = (tenant: Tenant, pkg: SubscriptionPackage) => {
+const getMonthlyRecurringValue = (tenant: Tenant, pkg: SubscriptionPackage, reportCurrency: CurrencyCode) => {
   const currency = tenant.subscriptionCurrency || pkg.currency || 'USD';
   const lockedPrice = tenant.subscriptionPrice;
   const price = lockedPrice ?? getSubscriptionPrice([pkg], pkg.name, tenant.billingCycle || 'monthly').price;
   const monthlyPrice = tenant.billingCycle === 'yearly' ? price / 12 : price;
-  return convertMoney(monthlyPrice, currency, 'VND');
+  return convertMoney(monthlyPrice, currency, reportCurrency);
 };
 
 export default function SubscriptionPackages({
   packages,
   tenants,
   invoices,
+  reportCurrency,
   onAddPackage,
   onUpdatePackage,
   onDeprecatePackage,
@@ -178,10 +182,10 @@ export default function SubscriptionPackages({
   const totalActiveTenants = tenants.filter((tenant) => tenant.status !== 'SUSPENDED').length;
   const totalMrr = packages.reduce((sum, pkg) => sum + (tenantsByPackage.get(pkg.id) || [])
     .filter((tenant) => tenant.status !== 'SUSPENDED' && tenant.status !== 'TRIAL')
-    .reduce((packageSum, tenant) => packageSum + getMonthlyRecurringValue(tenant, pkg), 0), 0);
+    .reduce((packageSum, tenant) => packageSum + getMonthlyRecurringValue(tenant, pkg, reportCurrency), 0), 0);
   const collectedRevenue = invoices
     .filter((invoice) => invoice.status === 'PAID')
-    .reduce((sum, invoice) => sum + convertMoney(invoice.amount, invoice.currency, 'VND'), 0);
+    .reduce((sum, invoice) => sum + convertMoney(invoice.amount, invoice.currency, reportCurrency), 0);
 
   const getCompatibleReplacementPackages = (sourcePackage: SubscriptionPackage) => {
     const sourceTenants = tenantsByPackage.get(sourcePackage.id) || [];
@@ -250,7 +254,7 @@ export default function SubscriptionPackages({
           <button onClick={() => setShowComparison(true)} className="px-4 py-2.5 rounded-lg border border-brand-outline/45 bg-brand-surface text-xs font-bold text-brand-text hover:bg-brand-surface-high transition-colors flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap">
             <BarChart3 className="w-4 h-4 text-brand-secondary" /> <span>So sánh gói</span>
           </button>
-          <button onClick={() => setEditor({ mode: 'add', pkg: createPackageDraft() })} className="px-5 py-2.5 rounded-lg bg-brand-primary text-brand-on-primary text-sm font-bold hover:bg-brand-primary/90 transition-colors flex items-center gap-2 cursor-pointer shadow-md shrink-0 whitespace-nowrap">
+          <button onClick={() => setEditor({ mode: 'add', pkg: createPackageDraft(reportCurrency) })} className="px-5 py-2.5 rounded-lg bg-brand-primary text-brand-on-primary text-sm font-bold hover:bg-brand-primary/90 transition-colors flex items-center gap-2 cursor-pointer shadow-md shrink-0 whitespace-nowrap">
             <Plus className="w-4 h-4 stroke-[3]" /> Thêm gói dịch vụ
           </button>
         </div>
@@ -259,8 +263,16 @@ export default function SubscriptionPackages({
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <SummaryCard icon={<PackagePlus className="w-5 h-5" />} label="Gói đang bán" value={String(packages.filter((pkg) => getPackageStatus(pkg) === 'ACTIVE').length)} />
         <SummaryCard icon={<Users className="w-5 h-5" />} label="Tenant đang phục vụ" value={String(totalActiveTenants)} />
-        <SummaryCard icon={<CircleDollarSign className="w-5 h-5" />} label="MRR dự kiến" value={formatMoney(totalMrr, 'VND')} />
-        <SummaryCard icon={<BarChart3 className="w-5 h-5" />} label="Doanh thu đã thu" value={formatMoney(collectedRevenue, 'VND')} />
+        <SummaryCard icon={<CircleDollarSign className="w-5 h-5" />} label={`MRR quy đổi · ${reportCurrency}`} value={formatMoney(totalMrr, reportCurrency)} />
+        <SummaryCard icon={<BarChart3 className="w-5 h-5" />} label={`Đã thu · ${reportCurrency}`} value={formatMoney(collectedRevenue, reportCurrency)} />
+      </div>
+
+      <div className="flex items-start gap-2 rounded-xl border border-brand-primary/20 bg-brand-primary/5 px-4 py-3 text-[11px] leading-relaxed text-brand-text-muted">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-primary" />
+        <p>
+          Các chỉ số tổng hợp được quy đổi về <strong className="text-brand-text">{reportCurrency}</strong> theo cấu hình hệ thống.
+          Giá hiển thị trên từng thẻ gói vẫn là giá niêm yết gốc và không bị thay đổi.
+        </p>
       </div>
 
       <div className="bg-brand-surface border border-brand-outline/35 rounded-xl p-3 flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
@@ -302,7 +314,7 @@ export default function SubscriptionPackages({
             const packageTenants = tenantsByPackage.get(pkg.id) || [];
             const activeCount = packageTenants.filter((tenant) => tenant.status !== 'SUSPENDED').length;
             const trialCount = packageTenants.filter((tenant) => tenant.status === 'TRIAL').length;
-            const packageMrr = packageTenants.filter((tenant) => tenant.status !== 'SUSPENDED' && tenant.status !== 'TRIAL').reduce((sum, tenant) => sum + getMonthlyRecurringValue(tenant, pkg), 0);
+            const packageMrr = packageTenants.filter((tenant) => tenant.status !== 'SUSPENDED' && tenant.status !== 'TRIAL').reduce((sum, tenant) => sum + getMonthlyRecurringValue(tenant, pkg, reportCurrency), 0);
             const displayPrice = billingView === 'yearly' ? getYearlyPackagePrice(pkg) : pkg.price;
             const enabledCapabilities = pkg.capabilities?.filter((capability) => capability.enabled) || [];
             const featuresExpanded = expandedFeaturePackageIds.has(pkg.id);
@@ -391,7 +403,7 @@ export default function SubscriptionPackages({
                   <div className="grid grid-cols-3 gap-2 border-y border-brand-outline/25 py-3">
                     <div><p className="text-[9px] text-brand-text-muted">TENANT</p><p className="text-sm font-black text-brand-text">{activeCount}</p></div>
                     <div><p className="text-[9px] text-brand-text-muted">DÙNG THỬ</p><p className="text-sm font-black text-brand-text">{trialCount}</p></div>
-                    <div><p className="text-[9px] text-brand-text-muted">MRR</p><p className="text-xs font-black text-brand-secondary truncate" title={formatMoney(packageMrr, 'VND')}>{formatMoney(packageMrr, 'VND')}</p></div>
+                    <div><p className="text-[9px] text-brand-text-muted">MRR · {reportCurrency}</p><p className="text-xs font-black text-brand-secondary truncate" title={formatMoney(packageMrr, reportCurrency)}>{formatMoney(packageMrr, reportCurrency)}</p></div>
                   </div>
                   {pkg.retirementRequest && (
                     <div className="rounded-lg border border-brand-warning/25 bg-brand-warning/10 p-3">
@@ -410,13 +422,13 @@ export default function SubscriptionPackages({
         </div>
       )}
 
-      {editor && <PackageEditor editor={editor} onClose={() => setEditor(null)} onSave={(pkg) => { if (editor.mode === 'add') { const { id, activeTenants, ...newPackage } = pkg; void id; void activeTenants; onAddPackage(newPackage); } else { onUpdatePackage(pkg.id, pkg); } setEditor(null); }} />}
+      {editor && <PackageEditor editor={editor} reportCurrency={reportCurrency} onClose={() => setEditor(null)} onSave={(pkg) => { if (editor.mode === 'add') { const { id, activeTenants, ...newPackage } = pkg; void id; void activeTenants; onAddPackage(newPackage); } else { onUpdatePackage(pkg.id, pkg); } setEditor(null); }} />}
       {showComparison && <ComparisonModal packages={packages.filter((pkg) => getPackageStatus(pkg) !== 'ARCHIVED')} onClose={() => setShowComparison(false)} />}
       {historyTarget && <HistoryModal pkg={historyTarget} onClose={() => setHistoryTarget(null)} />}
       {deleteTarget && <ConfirmModal title={`Xóa gói ${deleteTarget.name}?`} description="Gói chưa có tenant sử dụng và sẽ bị xóa vĩnh viễn. Hành động này không ảnh hưởng các hóa đơn lịch sử." confirmLabel="Xóa vĩnh viễn" onClose={() => setDeleteTarget(null)} onConfirm={() => { onDeletePackage(deleteTarget.id); setDeleteTarget(null); }} />}
 
       {retirementTarget && (
-        <div className="fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden">
             <ModalHeader title={`Ngừng đăng ký gói ${retirementTarget.name}`} onClose={() => setRetirementTarget(null)} />
             <div className="p-6 space-y-4">
@@ -463,7 +475,7 @@ function ModalHeader({ title, onClose }: { title: string; onClose: () => void })
   return <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/40 flex items-center justify-between"><h3 className="text-sm font-black text-brand-text">{title}</h3><button type="button" aria-label="Đóng" onClick={onClose} className="p-1 text-brand-text-muted hover:text-brand-text cursor-pointer"><X className="w-5 h-5" /></button></div>;
 }
 
-function PackageEditor({ editor, onClose, onSave }: { editor: EditorState; onClose: () => void; onSave: (pkg: SubscriptionPackage) => void }) {
+function PackageEditor({ editor, reportCurrency, onClose, onSave }: { editor: EditorState; reportCurrency: CurrencyCode; onClose: () => void; onSave: (pkg: SubscriptionPackage) => void }) {
   const [draft, setDraft] = useState(() => normalizeSubscriptionPackage(editor.pkg));
   const [section, setSection] = useState<'general' | 'features' | 'limits'>('general');
   const [showCapabilityForm, setShowCapabilityForm] = useState(false);
@@ -507,7 +519,7 @@ function PackageEditor({ editor, onClose, onSave }: { editor: EditorState; onClo
   const submit = (event: React.FormEvent) => { event.preventDefault(); if (!draft.name.trim()) { alert('Vui lòng nhập tên gói dịch vụ.'); return; } if (draft.price < 0 || getYearlyPackagePrice(draft) < 0) { alert('Giá gói dịch vụ không được nhỏ hơn 0.'); return; } const enabledCapabilities = (draft.capabilities || []).filter((capability) => capability.enabled); onSave({ ...draft, name: draft.name.trim(), description: draft.description?.trim(), features: enabledCapabilities.map((capability) => capability.label) }); };
 
   return (
-    <div className="fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+    <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
       <form onSubmit={submit} className="w-full max-w-5xl max-h-[94vh] bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         <ModalHeader title={editor.mode === 'add' ? 'Tạo gói dịch vụ' : `Cấu hình gói ${editor.pkg.name}`} onClose={onClose} />
         <div className="px-5 pt-4 flex gap-2 overflow-x-auto border-b border-brand-outline/25">{([['general', 'Thông tin & giá'], ['features', 'Feature flags'], ['limits', 'Hạn mức']] as const).map(([key, label]) => <button key={key} type="button" onClick={() => setSection(key)} className={`px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap cursor-pointer ${section === key ? 'border-brand-primary text-brand-primary' : 'border-transparent text-brand-text-muted hover:text-brand-text'}`}>{label}</button>)}</div>
@@ -515,7 +527,14 @@ function PackageEditor({ editor, onClose, onSave }: { editor: EditorState; onClo
           {section === 'general' && <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4"><Field label="Tên gói *" className="md:col-span-2"><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="form-control" placeholder="Ví dụ: Premium Plus" /></Field><Field label="Trạng thái"><BeautifulSelect value={getPackageStatus(draft)} onChange={(event) => setDraft({ ...draft, status: event.target.value as SubscriptionPackageStatus })} className="form-control"><option value="DRAFT">Bản nháp</option><option value="ACTIVE">Đang hoạt động</option><option value="DEPRECATED">Ngừng đăng ký mới</option><option value="ARCHIVED">Đã lưu trữ</option></BeautifulSelect></Field><Field label="Màu nhận diện"><input type="color" value={draft.color} onChange={(event) => setDraft({ ...draft, color: event.target.value })} className="form-control h-9 p-1" /></Field></div>
             <Field label="Mô tả gói"><textarea rows={3} value={draft.description || ''} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className="form-control resize-none" placeholder="Mô tả đối tượng và giá trị của gói..." /></Field>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><Field label="Giá theo tháng"><input type="number" min="0" value={draft.price} onChange={(event) => updateMonthlyPrice(Number(event.target.value))} className="form-control" /></Field><Field label="Giảm giá năm (%)"><input type="number" min="0" max="100" value={draft.yearlyDiscountPercent || 0} onChange={(event) => updateDiscount(Math.min(100, Math.max(0, Number(event.target.value))))} className="form-control" /></Field><Field label="Giá theo năm"><input type="number" min="0" value={getYearlyPackagePrice(draft)} onChange={(event) => setDraft({ ...draft, yearlyPrice: Number(event.target.value) })} className="form-control" /></Field><Field label="Đơn vị tiền"><BeautifulSelect value={draft.currency || 'VND'} onChange={(event) => setDraft({ ...draft, currency: event.target.value as 'USD' | 'VND' })} className="form-control"><option value="VND">VND</option><option value="USD">USD</option></BeautifulSelect></Field></div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><Field label="Giá theo tháng"><input type="number" min="0" value={draft.price} onChange={(event) => updateMonthlyPrice(Number(event.target.value))} className="form-control" /></Field><Field label="Giảm giá năm (%)"><input type="number" min="0" max="100" value={draft.yearlyDiscountPercent || 0} onChange={(event) => updateDiscount(Math.min(100, Math.max(0, Number(event.target.value))))} className="form-control" /></Field><Field label="Giá theo năm"><input type="number" min="0" value={getYearlyPackagePrice(draft)} onChange={(event) => setDraft({ ...draft, yearlyPrice: Number(event.target.value) })} className="form-control" /></Field><Field label="Tiền tệ niêm yết"><BeautifulSelect value={draft.currency || reportCurrency} onChange={(event) => setDraft({ ...draft, currency: event.target.value as CurrencyCode })} className="form-control"><option value="VND">VND — Việt Nam Đồng</option><option value="USD">USD — US Dollar</option></BeautifulSelect></Field></div>
+            <div className="flex items-start gap-2 rounded-xl border border-brand-outline/35 bg-brand-surface-lowest p-3 text-[10px] leading-relaxed text-brand-text-muted">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-primary" />
+              <p>
+                Đây là đồng tiền dùng để bán gói. Thay đổi lựa chọn này <strong className="text-brand-text">không tự quy đổi các con số giá đang nhập</strong>.
+                Báo cáo quản trị vẫn tổng hợp về {reportCurrency}.
+              </p>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><Field label="Phí khởi tạo"><input type="number" min="0" value={draft.setupFee || 0} onChange={(event) => setDraft({ ...draft, setupFee: Number(event.target.value) })} className="form-control" /></Field><Field label="Số ngày dùng thử"><input type="number" min="0" value={draft.trialDays || 0} onChange={(event) => setDraft({ ...draft, trialDays: Number(event.target.value) })} className="form-control" /></Field><Field label="Nhân sự tối đa"><input type="number" min="1" value={draft.maxStaff} onChange={(event) => setDraft({ ...draft, maxStaff: Number(event.target.value) })} className="form-control" /><p className="field-hint">Nhập 999 để không giới hạn</p></Field><Field label="Chi nhánh tối đa"><input type="number" min="1" value={draft.maxSalons} onChange={(event) => setDraft({ ...draft, maxSalons: Number(event.target.value) })} className="form-control" /><p className="field-hint">Nhập 99 để không giới hạn</p></Field></div>
             <label className="flex items-center gap-3 rounded-xl border border-brand-outline/35 bg-brand-surface-lowest p-4 cursor-pointer"><input type="checkbox" checked={draft.isPopular || false} onChange={(event) => setDraft({ ...draft, isPopular: event.target.checked })} /><div><p className="text-xs font-bold text-brand-text">Đánh dấu là gói phổ biến</p><p className="text-[10px] text-brand-text-muted">Hiển thị nhãn nổi bật trên thẻ gói.</p></div></label>
           </div>}
@@ -601,15 +620,15 @@ function PackageEditor({ editor, onClose, onSave }: { editor: EditorState; onClo
 function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) { return <div className={className}><label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">{label}</label>{children}</div>; }
 
 function ComparisonModal({ packages, onClose }: { packages: SubscriptionPackage[]; onClose: () => void }) {
-  return <div className="fixed inset-0 z-50 bg-brand-bg/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"><div className="w-full max-w-7xl max-h-[94vh] bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden flex flex-col"><ModalHeader title="So sánh quyền lợi và hạn mức" onClose={onClose} /><div className="overflow-auto flex-1"><table className="w-full min-w-[850px] text-xs"><thead className="sticky top-0 z-10 bg-brand-surface-highest"><tr><th className="text-left p-4 w-64 text-brand-text-muted">Tiêu chí</th>{packages.map((pkg) => <th key={pkg.id} className="p-4 text-center text-brand-text"><span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: pkg.color }} />{pkg.name}</th>)}</tr></thead><tbody className="divide-y divide-brand-outline/20"><ComparisonRow label="Trạng thái" values={packages.map((pkg) => STATUS_META[getPackageStatus(pkg)].label)} /><ComparisonRow label="Giá tháng" values={packages.map((pkg) => formatMoney(pkg.price, pkg.currency))} /><ComparisonRow label="Giá năm" values={packages.map((pkg) => formatMoney(getYearlyPackagePrice(pkg), pkg.currency))} /><ComparisonRow label="Nhân sự" values={packages.map((pkg) => pkg.maxStaff >= 999 ? 'Không giới hạn' : String(pkg.maxStaff))} /><ComparisonRow label="Chi nhánh" values={packages.map((pkg) => pkg.maxSalons >= 99 ? 'Không giới hạn' : String(pkg.maxSalons))} />{LIMIT_FIELDS.map((field) => <ComparisonRow key={field.key} label={field.label} values={packages.map((pkg) => formatSubscriptionLimit(pkg.limits?.[field.key], field.suffix))} />)}{SUBSCRIPTION_CAPABILITY_CATALOG.map((capability) => <tr key={capability.key}><td className="p-4 text-brand-text">{capability.label}<p className="text-[8px] font-mono text-brand-text-muted">{capability.key}</p></td>{packages.map((pkg) => { const enabled = pkg.capabilities?.some((item) => item.key === capability.key && item.enabled); return <td key={pkg.id} className="p-4 text-center">{enabled ? <Check className="w-4 h-4 text-brand-secondary mx-auto" /> : <span className="text-brand-text-muted">—</span>}</td>; })}</tr>)}</tbody></table></div></div></div>;
+  return <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"><div className="w-full max-w-7xl max-h-[94vh] bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden flex flex-col"><ModalHeader title="So sánh quyền lợi và hạn mức" onClose={onClose} /><div className="overflow-auto flex-1"><table className="w-full min-w-[850px] text-xs"><thead className="sticky top-0 z-10 bg-brand-surface-highest"><tr><th className="text-left p-4 w-64 text-brand-text-muted">Tiêu chí</th>{packages.map((pkg) => <th key={pkg.id} className="p-4 text-center text-brand-text"><span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: pkg.color }} />{pkg.name}</th>)}</tr></thead><tbody className="divide-y divide-brand-outline/20"><ComparisonRow label="Trạng thái" values={packages.map((pkg) => STATUS_META[getPackageStatus(pkg)].label)} /><ComparisonRow label="Giá tháng" values={packages.map((pkg) => formatMoney(pkg.price, pkg.currency))} /><ComparisonRow label="Giá năm" values={packages.map((pkg) => formatMoney(getYearlyPackagePrice(pkg), pkg.currency))} /><ComparisonRow label="Nhân sự" values={packages.map((pkg) => pkg.maxStaff >= 999 ? 'Không giới hạn' : String(pkg.maxStaff))} /><ComparisonRow label="Chi nhánh" values={packages.map((pkg) => pkg.maxSalons >= 99 ? 'Không giới hạn' : String(pkg.maxSalons))} />{LIMIT_FIELDS.map((field) => <ComparisonRow key={field.key} label={field.label} values={packages.map((pkg) => formatSubscriptionLimit(pkg.limits?.[field.key], field.suffix))} />)}{SUBSCRIPTION_CAPABILITY_CATALOG.map((capability) => <tr key={capability.key}><td className="p-4 text-brand-text">{capability.label}<p className="text-[8px] font-mono text-brand-text-muted">{capability.key}</p></td>{packages.map((pkg) => { const enabled = pkg.capabilities?.some((item) => item.key === capability.key && item.enabled); return <td key={pkg.id} className="p-4 text-center">{enabled ? <Check className="w-4 h-4 text-brand-secondary mx-auto" /> : <span className="text-brand-text-muted">—</span>}</td>; })}</tr>)}</tbody></table></div></div></div>;
 }
 
 function ComparisonRow({ label, values }: { label: string; values: string[] }) { return <tr><td className="p-4 font-semibold text-brand-text">{label}</td>{values.map((value, index) => <td key={`${label}-${index}`} className="p-4 text-center text-brand-text-muted">{value}</td>)}</tr>; }
 
 function HistoryModal({ pkg, onClose }: { pkg: SubscriptionPackage; onClose: () => void }) {
-  return <div className="fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4"><div className="w-full max-w-2xl max-h-[88vh] bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden flex flex-col"><ModalHeader title={`Lịch sử giá · ${pkg.name}`} onClose={onClose} /><div className="p-6 overflow-y-auto space-y-3"><div className="rounded-xl border border-brand-secondary/25 bg-brand-secondary/5 p-4 flex items-center justify-between gap-3"><div><p className="text-[10px] text-brand-text-muted">GIÁ HIỆN TẠI · PHIÊN BẢN {pkg.version || 1}</p><p className="text-lg font-black text-brand-text">{formatMoney(pkg.price, pkg.currency)} / tháng</p></div><p className="text-xs font-bold text-brand-secondary">{formatMoney(getYearlyPackagePrice(pkg), pkg.currency)} / năm</p></div>{(pkg.priceHistory || []).length === 0 ? <p className="text-xs text-brand-text-muted text-center py-8">Chưa có lần thay đổi giá nào được ghi nhận.</p> : (pkg.priceHistory || []).map((entry) => <div key={entry.id} className="rounded-xl border border-brand-outline/30 p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-brand-text">{formatMoney(entry.monthlyPrice, entry.currency)} / tháng</p><p className="text-[10px] text-brand-text-muted">Hiệu lực {entry.effectiveFrom}</p></div><p className="text-[10px] text-brand-text-muted mt-2">{formatMoney(entry.yearlyPrice, entry.currency)} / năm · {entry.note}</p></div>)}</div></div></div>;
+  return <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4"><div className="w-full max-w-2xl max-h-[88vh] bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden flex flex-col"><ModalHeader title={`Lịch sử giá · ${pkg.name}`} onClose={onClose} /><div className="p-6 overflow-y-auto space-y-3"><div className="rounded-xl border border-brand-secondary/25 bg-brand-secondary/5 p-4 flex items-center justify-between gap-3"><div><p className="text-[10px] text-brand-text-muted">GIÁ HIỆN TẠI · PHIÊN BẢN {pkg.version || 1}</p><p className="text-lg font-black text-brand-text">{formatMoney(pkg.price, pkg.currency)} / tháng</p></div><p className="text-xs font-bold text-brand-secondary">{formatMoney(getYearlyPackagePrice(pkg), pkg.currency)} / năm</p></div>{(pkg.priceHistory || []).length === 0 ? <p className="text-xs text-brand-text-muted text-center py-8">Chưa có lần thay đổi giá nào được ghi nhận.</p> : (pkg.priceHistory || []).map((entry) => <div key={entry.id} className="rounded-xl border border-brand-outline/30 p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-brand-text">{formatMoney(entry.monthlyPrice, entry.currency)} / tháng</p><p className="text-[10px] text-brand-text-muted">Hiệu lực {entry.effectiveFrom}</p></div><p className="text-[10px] text-brand-text-muted mt-2">{formatMoney(entry.yearlyPrice, entry.currency)} / năm · {entry.note}</p></div>)}</div></div></div>;
 }
 
 function ConfirmModal({ title, description, confirmLabel, onClose, onConfirm }: { title: string; description: string; confirmLabel: string; onClose: () => void; onConfirm: () => void }) {
-  return <div className="fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4"><div className="w-full max-w-md bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden"><ModalHeader title={title} onClose={onClose} /><div className="p-6 flex gap-3"><AlertTriangle className="w-5 h-5 text-brand-warning shrink-0" /><p className="text-xs text-brand-text-muted leading-relaxed">{description}</p></div><div className="modal-footer"><button onClick={onClose} className="btn-secondary">Hủy</button><button onClick={onConfirm} className="btn-danger">{confirmLabel}</button></div></div></div>;
+  return <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4"><div className="w-full max-w-md bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden"><ModalHeader title={title} onClose={onClose} /><div className="p-6 flex gap-3"><AlertTriangle className="w-5 h-5 text-brand-warning shrink-0" /><p className="text-xs text-brand-text-muted leading-relaxed">{description}</p></div><div className="modal-footer"><button onClick={onClose} className="btn-secondary">Hủy</button><button onClick={onConfirm} className="btn-danger">{confirmLabel}</button></div></div></div>;
 }

@@ -98,33 +98,34 @@ export default function Header({
   };
 
   return (
-    <header className="h-16 bg-brand-surface border-b border-brand-outline/40 flex items-center justify-between px-6 sticky top-0 z-30">
+    <header className="role-topbar sa-topbar sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-brand-outline/40 bg-brand-surface px-4 sm:px-6 lg:px-7">
       
       {/* Left side: Hamburger (Mobile) and Search */}
       <div className="flex items-center gap-4 flex-1">
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="lg:hidden p-1.5 rounded text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high transition-colors"
+          className="sa-header-icon lg:hidden p-1.5 rounded text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high transition-colors"
           aria-label="Menu"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="relative max-w-md w-full hidden md:block">
+        <div className="sa-global-search relative hidden w-full max-w-md md:block">
           <Search className="w-4 h-4 text-brand-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input 
             type="text" 
             placeholder="Tìm kiếm tenant, Tenant Admin, gói dịch vụ..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-10 pr-4 py-1.5 text-xs text-brand-text focus:outline-none focus:border-brand-primary placeholder:text-brand-text-muted/60"
+            className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg pl-10 pr-14 py-1.5 text-xs text-brand-text focus:outline-none focus:border-brand-primary placeholder:text-brand-text-muted/60"
           />
           {searchQuery && (
             <button 
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-text text-xs"
+              aria-label="Xóa nội dung tìm kiếm"
+              className="sa-search-clear absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-text text-xs"
             >
-              Clear
+              Xóa
             </button>
           )}
         </div>
@@ -132,7 +133,6 @@ export default function Header({
 
       {/* Right side: Alerts, Help, User Profile */}
       <div className="flex items-center gap-3">
-        
         {/* System Notification Bell */}
         <div className="relative" ref={alertRef}>
           <button 
@@ -316,64 +316,59 @@ export default function Header({
             onClick={() => setShowProfileMenu(!showProfileMenu)}
             aria-haspopup="menu"
             aria-expanded={showProfileMenu}
-            className={`header-profile-trigger flex items-center gap-2.5 rounded-xl border px-2 py-1.5 text-left transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary/20 ${
-              showProfileMenu
-                ? 'border-brand-primary/30 bg-brand-primary/5 shadow-sm'
-                : 'border-transparent hover:border-brand-outline/60 hover:bg-brand-surface-high'
-            }`}
+            className={`header-profile-trigger sa-profile-trigger ${showProfileMenu ? 'is-open' : ''}`}
           >
-            <div className="relative w-8 h-8 rounded-xl bg-brand-surface-highest border border-brand-outline/40 overflow-hidden flex-shrink-0 shadow-inner">
+            <div className="sa-profile-trigger-avatar">
               <img 
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHEacud0tQ8HtS17f0spPnyOekngb2QobaJ8igUCndQJn8kZ61Q4WzGVbd7mT0KUNIKKHOvBj7EjAXWYPvVmqlbAKajxEvmXL18spcUSw6T7hfSUwFvSHE6RMO8gNVMGN4HJrnb9kiCmiNhrg6yCtqT3hkAAARHawmrFL4u_h1AQnguMZGUSPncRN1HPDNvbgsUVotvTGmyTN4bTZ2wTkT1-qEFLUNb4aYPrsG0_0anZ-o5i4TnX4O" 
                 alt="letruongthinhcr145@gmail.com" 
                 className="w-full h-full object-cover" 
                 referrerPolicy="no-referrer"
               />
-              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-brand-surface bg-emerald-500" />
+              <span className="sa-profile-online-dot" />
             </div>
-            <div className="hidden xl:block leading-none min-w-[94px]">
-              <p className="text-[12px] font-bold text-brand-text">Superadmin</p>
-              <p className="text-[9px] text-brand-text-muted mt-1">{isEnglish ? 'Active now' : 'Đang hoạt động'}</p>
+            <div className="sa-profile-trigger-copy hidden xl:flex">
+              <p>Superadmin</p>
+              <span>{isEnglish ? 'System administrator' : 'Quản trị hệ thống'}</span>
             </div>
-            <ChevronDown className={`hidden xl:block h-3.5 w-3.5 text-brand-text-muted transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
+            <span className="sa-profile-chevron hidden xl:flex">
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
+            </span>
           </button>
 
           {showProfileMenu && (
-            <div role="menu" className="header-profile-menu absolute right-0 mt-2.5 w-[304px] bg-brand-surface border border-brand-outline/60 rounded-2xl shadow-[0_20px_55px_rgba(15,23,42,0.18)] z-50 overflow-hidden animate-profile-menu">
-              <div className="p-4 border-b border-brand-outline/40 bg-gradient-to-br from-brand-primary/[0.08] to-transparent">
-                <div className="flex items-center gap-3">
-                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-brand-outline/50 bg-brand-surface-highest shadow-sm">
+            <div role="menu" className="header-profile-menu sa-profile-menu animate-profile-menu">
+              <div className="sa-profile-menu-hero">
+                <div className="sa-profile-menu-glow" aria-hidden="true" />
+                <div className="relative z-10 flex items-center gap-3">
+                  <div className="sa-profile-menu-avatar">
                     <img
                       src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHEacud0tQ8HtS17f0spPnyOekngb2QobaJ8igUCndQJn8kZ61Q4WzGVbd7mT0KUNIKKHOvBj7EjAXWYPvVmqlbAKajxEvmXL18spcUSw6T7hfSUwFvSHE6RMO8gNVMGN4HJrnb9kiCmiNhrg6yCtqT3hkAAARHawmrFL4u_h1AQnguMZGUSPncRN1HPDNvbgsUVotvTGmyTN4bTZ2wTkT1-qEFLUNb4aYPrsG0_0anZ-o5i4TnX4O"
                       alt="Ảnh đại diện Superadmin"
                       className="h-full w-full object-cover"
                       referrerPolicy="no-referrer"
                     />
-                    <CheckCircle2 className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full bg-brand-surface text-emerald-500" fill="currentColor" />
+                    <span className="sa-profile-menu-avatar-status"><CheckCircle2 className="h-3.5 w-3.5" fill="currentColor" /></span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-[13px] font-extrabold text-brand-text">Superadmin</p>
-                      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Online</span>
+                      <p className="truncate text-sm font-extrabold text-white">Superadmin</p>
+                      <span className="sa-profile-online-pill"><span /> Online</span>
                     </div>
-                    <p className="mt-1 truncate text-[10px] text-brand-text-muted">superadmin@salonsys.vn</p>
+                    <p className="mt-1 truncate text-[10px] text-white/55">superadmin@salonsys.vn</p>
+                  </div>
+                </div>
+                <div className="sa-profile-access-card">
+                  <span><Shield className="h-3.5 w-3.5" /></span>
+                  <div>
+                    <strong>{isEnglish ? 'Full system access' : 'Toàn quyền hệ thống'}</strong>
+                    <small>{isEnglish ? 'Superadmin permissions are active' : 'Quyền Superadmin đang hoạt động'}</small>
                   </div>
                 </div>
               </div>
 
-              <div className="px-3 pt-3">
-                <div className="flex items-start gap-3 rounded-xl border border-brand-primary/15 bg-brand-primary/[0.06] p-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
-                    <Shield className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-extrabold text-brand-text">{isEnglish ? 'Superadmin role' : 'Vai trò Superadmin'}</p>
-                    <p className="mt-1 text-[9px] leading-4 text-brand-text-muted">{isEnglish ? 'Full access to the SalonSys platform' : 'Toàn quyền quản trị nền tảng SalonSys'}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-2.5">
+              <div className="sa-profile-actions">
+                <p className="sa-profile-section-label">{isEnglish ? 'Account' : 'Tài khoản'}</p>
                 <button
                   type="button"
                   role="menuitem"
@@ -381,14 +376,14 @@ export default function Header({
                     onOpenAccountSettings();
                     setShowProfileMenu(false);
                   }}
-                  className="profile-menu-action w-full flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left hover:bg-brand-surface-high cursor-pointer"
+                  className="profile-menu-action sa-profile-action"
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-surface-highest text-brand-text-muted"><Settings2 className="h-4 w-4" /></span>
+                  <span className="sa-profile-action-icon sa-profile-action-icon--violet"><Settings2 className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] font-bold text-brand-text">{isEnglish ? 'Interface preferences' : 'Tùy chọn giao diện'}</span>
-                    <span className="mt-0.5 block text-[9px] text-brand-text-muted">{isEnglish ? 'Language and appearance' : 'Ngôn ngữ và chế độ sáng tối'}</span>
+                    <span className="sa-profile-action-title">{isEnglish ? 'Interface preferences' : 'Tùy chọn giao diện'}</span>
+                    <span className="sa-profile-action-note">{isEnglish ? 'Language, theme and display' : 'Ngôn ngữ, giao diện và hiển thị'}</span>
                   </span>
-                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-brand-text-muted/60" />
+                  <span className="sa-profile-action-arrow"><ArrowRight className="h-3.5 w-3.5" /></span>
                 </button>
 
                 <button
@@ -398,18 +393,18 @@ export default function Header({
                     onOpenSecurity();
                     setShowProfileMenu(false);
                   }}
-                  className="profile-menu-action w-full flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left hover:bg-brand-surface-high cursor-pointer"
+                  className="profile-menu-action sa-profile-action"
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-surface-highest text-brand-text-muted"><LockKeyhole className="h-4 w-4" /></span>
+                  <span className="sa-profile-action-icon sa-profile-action-icon--emerald"><LockKeyhole className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] font-bold text-brand-text">{isEnglish ? 'Sign-in security' : 'Bảo mật đăng nhập'}</span>
-                    <span className="mt-0.5 block text-[9px] text-brand-text-muted">{isEnglish ? 'Password and access history' : 'Mật khẩu và lịch sử truy cập'}</span>
+                    <span className="sa-profile-action-title">{isEnglish ? 'Sign-in security' : 'Bảo mật đăng nhập'}</span>
+                    <span className="sa-profile-action-note">{isEnglish ? 'Password and access history' : 'Mật khẩu và lịch sử truy cập'}</span>
                   </span>
-                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-brand-text-muted/60" />
+                  <span className="sa-profile-action-arrow"><ArrowRight className="h-3.5 w-3.5" /></span>
                 </button>
               </div>
 
-              <div className="p-2.5 border-t border-brand-outline/40 bg-brand-surface-lowest/50">
+              <div className="sa-profile-menu-footer">
                 <button
                   type="button"
                   role="menuitem"
@@ -417,7 +412,7 @@ export default function Header({
                     setShowProfileMenu(false);
                     onLogout();
                   }}
-                  className="profile-menu-logout w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[11px] font-bold text-brand-error hover:bg-brand-error/10 rounded-xl cursor-pointer"
+                  className="profile-menu-logout sa-profile-logout"
                 >
                   <LogOut className="w-4 h-4" />
                   {isEnglish ? 'Sign out of this account' : 'Đăng xuất khỏi tài khoản'}

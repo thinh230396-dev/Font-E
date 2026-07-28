@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   ArrowRight,
   BadgePercent,
@@ -474,9 +475,9 @@ export default function TenantAdminServices({
     try {
       const saved = localStorage.getItem(storageKey);
       const parsed = saved ? JSON.parse(saved) : null;
-      return Array.isArray(parsed) && parsed.length ? parsed : serviceSeed;
+      return getTenantAdminInitialData(Array.isArray(parsed) ? parsed : null, serviceSeed);
     } catch {
-      return serviceSeed;
+      return getTenantAdminInitialData(null, serviceSeed);
     }
   });
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | ServiceCategory>('ALL');

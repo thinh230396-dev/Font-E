@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   Activity, AlertTriangle, Armchair, CalendarClock, Check, ChevronRight, CircleAlert,
   Clock3, Grid3X3, LayoutList, MapPin, Pencil, Plus, Search, ShieldCheck, Sparkles,
@@ -94,8 +95,8 @@ export default function TenantAdminStations({
 }: TenantAdminStationsProps) {
   const storageKey = `tenant-admin-stations-v2:${tenantName}`;
   const [stations, setStations] = useState<TenantStation[]>(() => {
-    if (typeof window === 'undefined') return stationSeed;
-    try { const stored = window.localStorage.getItem(storageKey); return stored ? JSON.parse(stored) as TenantStation[] : stationSeed; } catch { return stationSeed; }
+    if (typeof window === 'undefined') return getTenantAdminInitialData(null, stationSeed);
+    try { const stored = window.localStorage.getItem(storageKey); return getTenantAdminInitialData(stored ? JSON.parse(stored) as TenantStation[] : null, stationSeed); } catch { return getTenantAdminInitialData(null, stationSeed); }
   });
   const [areaFilter, setAreaFilter] = useState<'ALL' | StationArea>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | StationStatus>('ALL');
