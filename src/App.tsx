@@ -8,7 +8,7 @@ import {
   INITIAL_ALERTS, 
   INITIAL_INVOICES
 } from './data';
-import { Tenant, SubscriptionPackage, SystemAlert, Invoice, TenantStatus, TenantAdminAccount, Ticket } from './types';
+import { Tenant, SubscriptionPackage, SystemAlert, Invoice, TenantStatus, TenantAdminAccount, Ticket, PackageUpgradeRequest } from './types';
 import { convertMoney, normalizeCurrency } from './utils/money';
 import {
   getSubscriptionPackage,
@@ -27,6 +27,13 @@ import { recordAuditLog } from './utils/auditLogs';
 import { inferPaymentGateway, normalizeInvoicePaymentData } from './utils/invoicePayments';
 import { SUPPORT_MOCK_TICKETS } from './mockData/supportTickets';
 import useGlobalModalGuard from './hooks/useGlobalModalGuard';
+import {
+  fetchPackageUpgradeRequests,
+  loadPackageUpgradeRequests,
+  persistPackageUpgradeRequest,
+  persistPackageUpgradeReview,
+  savePackageUpgradeRequests
+} from './utils/packageUpgradeRequests';
 
 // Import subcomponents
 import Sidebar from './components/Sidebar';
@@ -235,6 +242,7 @@ export default function App() {
   const [tenantAdmins, setTenantAdmins] = useState<TenantAdminAccount[]>(() =>
     loadLocalStorageData<TenantAdminAccount[]>('tenant_admins', [])
   );
+  const [upgradeRequests, setUpgradeRequests] = useState<PackageUpgradeRequest[]>(loadPackageUpgradeRequests);
   const [tickets, setTickets] = useState<Ticket[]>(() => {
     const storedTickets = loadLocalStorageData<Ticket[]>('support_tickets', [])
       .filter((ticket) => !LEGACY_MOCK_SUPPORT_TICKET_IDS.has(ticket.id));
@@ -434,6 +442,25 @@ export default function App() {
   useEffect(() => {
     saveLocalStorageData('tenant_admins', tenantAdmins);
   }, [tenantAdmins]);
+
+  useEffect(() => {
+    savePackageUpgradeRequests(upgradeRequests);
+  }, [upgradeRequests]);
+
+  useEffect(() => {
+    let active = true;
+    void fetchPackageUpgradeRequests().then((remoteRequests) => {
+      if (!active || remoteRequests === null) return;
+      setUpgradeRequests((current) => {
+        if (remoteRequests.length === 0 && current.length > 0) {
+          current.forEach((request) => { void persistPackageUpgradeRequest(request); });
+          return current;
+        }
+        return remoteRequests;
+      });
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     saveLocalStorageData('support_tickets', tickets);
@@ -1219,12 +1246,178 @@ export default function App() {
     }
   };
 
+  const handleRequestPackageUpgrade = (
+    tenant: Tenant,
+    account: DemoAccount,
+    targetPackage: SubscriptionPackage,
+    billingCycle: 'monthly' | 'yearly',
+    effectiveDate: 'immediate' | 'next_cycle'
+  ) => {
+    const existingPending = upgradeRequests.find((request) => request.tenantId === tenant.id && request.status === 'PENDING');
+    if (existingPending) {
+      setAlertDialog({
+        title: 'Yêu cầu đang chờ duyệt',
+        message: `Tenant đã có yêu cầu nâng cấp lên gói ${existingPending.requestedPackageName}. Super Admin sẽ xử lý trong Quản lý Tenant → Yêu cầu nâng cấp.`,
+        type: 'warning'
+      });
+      return;
+    }
+
+    const currentPackage = getSubscriptionPackageForTenant(packages, tenant);
+    const pricing = getSubscriptionPrice(packages, targetPackage.name, billingCycle);
+    const now = new Date();
+    const request: PackageUpgradeRequest = {
+      id: `UPG-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${now.getTime().toString(36).slice(-5).toUpperCase()}`,
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      requestedByName: account.displayName,
+      requestedByEmail: account.email,
+      currentPackageId: currentPackage?.id,
+      currentPackageName: tenant.packageName,
+      requestedPackageId: targetPackage.id,
+      requestedPackageName: targetPackage.name,
+      billingCycle,
+      effectiveDate,
+      quotedAmount: pricing.price,
+      currency: normalizeCurrency(pricing.currency),
+      status: 'PENDING',
+      requestedAt: now.toISOString()
+    };
+
+    setUpgradeRequests((current) => [request, ...current]);
+    void persistPackageUpgradeRequest(request);
+    setAlerts((current) => [{
+      id: `ALT-${request.id}`,
+      title: `Yêu cầu nâng cấp: ${tenant.name}`,
+      description: `${account.displayName} yêu cầu chuyển từ ${tenant.packageName} sang ${targetPackage.name}.`,
+      type: 'info',
+      createdAt: now.toISOString(),
+      isRead: false,
+      targetTenantId: tenant.id
+    }, ...current]);
+    recordAuditLog({
+      eventCode: 'PACKAGE.UPGRADE.REQUESTED',
+      event: 'Tenant Admin gửi yêu cầu nâng cấp',
+      description: `${account.displayName} gửi yêu cầu chuyển tenant "${tenant.name}" từ ${tenant.packageName} sang ${targetPackage.name}.`,
+      severity: 'medium',
+      status: 'success',
+      category: 'PACKAGE',
+      resource: `Tenant ${tenant.name}`,
+      resourceId: tenant.id,
+      method: 'POST /api/package-upgrade-requests',
+      user: account.email,
+      actorRole: 'TENANT_ADMIN',
+      metadata: { requestId: request.id, targetPackage: targetPackage.name, effectiveDate }
+    });
+  };
+
+  const handleReviewUpgradeRequest = (
+    requestId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    reviewNote: string,
+    effectiveDate: 'immediate' | 'next_cycle'
+  ) => {
+    const request = upgradeRequests.find((item) => item.id === requestId);
+    if (!request || request.status !== 'PENDING') return;
+
+    const tenant = tenants.find((item) => item.id === request.tenantId);
+    const targetPackage = packages.find((item) => item.id === request.requestedPackageId)
+      || getSubscriptionPackage(packages, request.requestedPackageName);
+    if (!tenant || !targetPackage) {
+      setAlertDialog({
+        title: 'Không thể xử lý',
+        message: 'Tenant hoặc gói được yêu cầu không còn tồn tại.',
+        type: 'error'
+      });
+      return;
+    }
+
+    const reviewedAt = new Date().toISOString();
+    let invoiceId: string | undefined;
+
+    if (decision === 'APPROVED') {
+      const effectiveStart = effectiveDate === 'immediate'
+        ? reviewedAt.slice(0, 10)
+        : tenant.subscriptionRenewsAt || tenant.trialEndDate || reviewedAt.slice(0, 10);
+      const pricing = getSubscriptionPrice(packages, targetPackage.name, request.billingCycle);
+
+      handleUpdateTenant(tenant.id, {
+        packageName: targetPackage.name,
+        plan: targetPackage.name,
+        subscriptionPlan: targetPackage.name,
+        billingCycle: request.billingCycle,
+        effectiveDate,
+        planStartDate: effectiveStart,
+        subscriptionPrice: pricing.price,
+        subscriptionCurrency: pricing.currency
+      });
+
+      invoiceId = `INV-UPG-${Date.now().toString(36).toUpperCase()}`;
+      const dueDate = effectiveDate === 'immediate' ? getIsoDateAfterDays(7) : effectiveStart;
+      const invoice: Invoice = normalizeInvoicePaymentData(normalizeInvoiceDueDate({
+        id: invoiceId,
+        invoiceCode: invoiceId,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        type: 'PLAN_CHANGE',
+        planName: targetPackage.name,
+        packageId: targetPackage.id,
+        packageVersion: targetPackage.version || 1,
+        billingCycle: request.billingCycle,
+        servicePeriod: effectiveDate === 'immediate' ? `Từ ${effectiveStart}` : `Chu kỳ bắt đầu ${effectiveStart}`,
+        dueDate,
+        amount: pricing.price,
+        currency: normalizeCurrency(pricing.currency),
+        status: 'PENDING',
+        note: `Tạo tự động từ yêu cầu nâng cấp ${request.id}. ${reviewNote}`.trim(),
+        createdAt: reviewedAt.slice(0, 10),
+        billingPeriod: effectiveDate === 'immediate' ? 'Nâng cấp áp dụng ngay' : 'Nâng cấp từ chu kỳ tiếp theo',
+        issuedBy: 'Super Admin'
+      }));
+      setInvoices((current) => dedupeInvoices([invoice, ...current]));
+    }
+
+    const reviewedRequest: PackageUpgradeRequest = {
+      ...request,
+      status: decision,
+      effectiveDate,
+      reviewedAt,
+      reviewedBy: 'Super Admin',
+      reviewNote: reviewNote || (decision === 'APPROVED' ? 'Đã xác nhận giá và quyền gói mới.' : 'Yêu cầu chưa được chấp thuận.'),
+      invoiceId
+    };
+    setUpgradeRequests((current) => current.map((item) => item.id === requestId ? reviewedRequest : item));
+    void persistPackageUpgradeReview(reviewedRequest);
+    recordAuditLog({
+      eventCode: decision === 'APPROVED' ? 'PACKAGE.UPGRADE.APPROVED' : 'PACKAGE.UPGRADE.REJECTED',
+      event: decision === 'APPROVED' ? 'Duyệt yêu cầu nâng cấp' : 'Từ chối yêu cầu nâng cấp',
+      description: decision === 'APPROVED'
+        ? `Super Admin duyệt tenant "${tenant.name}" chuyển sang gói ${targetPackage.name}.`
+        : `Super Admin từ chối yêu cầu chuyển gói của tenant "${tenant.name}".`,
+      severity: 'medium',
+      status: 'success',
+      category: 'PACKAGE',
+      resource: `Yêu cầu ${request.id}`,
+      resourceId: request.id,
+      method: `PATCH /api/package-upgrade-requests/${request.id}`,
+      metadata: { decision, targetPackage: targetPackage.name, invoiceId: invoiceId || '', effectiveDate }
+    });
+    setAlertDialog({
+      title: decision === 'APPROVED' ? 'Đã duyệt nâng cấp' : 'Đã từ chối yêu cầu',
+      message: decision === 'APPROVED'
+        ? `Tenant "${tenant.name}" đã được cập nhật sang gói ${targetPackage.name}. Hóa đơn ${invoiceId} đã được tạo.`
+        : `Yêu cầu nâng cấp của tenant "${tenant.name}" đã được từ chối và lưu lý do.`,
+      type: decision === 'APPROVED' ? 'success' : 'info'
+    });
+  };
+
   // Dynamic Badge counts to supply to sidebar
   const badgeCounts = {
     expiringSalons: tenants.filter(t => t.status === 'EXPIRING').length,
     overdueInvoices: invoices.filter(i => i.status === 'OVERDUE').length,
     unreadAlerts: alerts.filter(a => !a.isRead).length,
-    openTickets: tickets.filter(t => !['RESOLVED', 'CLOSED'].includes(t.status)).length
+    openTickets: tickets.filter(t => !['RESOLVED', 'CLOSED'].includes(t.status)).length,
+    pendingUpgrades: upgradeRequests.filter((request) => request.status === 'PENDING').length
   };
 
   // Render proper sub-component view
@@ -1257,6 +1450,8 @@ export default function App() {
             clearSelectedTenant={() => setSelectedTenantFromOverview(null)}
             searchQuery={searchQuery}
             showConfirm={triggerConfirm}
+            upgradeRequests={upgradeRequests}
+            onReviewUpgradeRequest={handleReviewUpgradeRequest}
           />
         );
       case 'admins':
@@ -1520,6 +1715,12 @@ export default function App() {
         subscriptionPackage={tenantPortalPackage}
         availablePackages={packages}
         invoices={targetTenant ? invoices.filter((invoice) => invoice.tenantId === targetTenant.id) : []}
+        upgradeRequests={targetTenant ? upgradeRequests.filter((request) => request.tenantId === targetTenant.id) : []}
+        onRequestUpgrade={(plan, billingCycle, effectiveDate) => {
+          if (targetTenant) {
+            handleRequestPackageUpgrade(targetTenant, tenantPortalAccount, plan, billingCycle, effectiveDate);
+          }
+        }}
         onUpdateTenant={handleUpdateTenant}
         onLogout={handleLogout}
       />

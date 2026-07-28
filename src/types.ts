@@ -152,6 +152,30 @@ export interface TenantAdminAccount {
   source: 'TENANT' | 'INVITED';
 }
 
+export type PackageUpgradeRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface PackageUpgradeRequest {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  requestedByName: string;
+  requestedByEmail: string;
+  currentPackageId?: string;
+  currentPackageName: SubscriptionPackageName;
+  requestedPackageId: string;
+  requestedPackageName: SubscriptionPackageName;
+  billingCycle: 'monthly' | 'yearly';
+  effectiveDate: 'immediate' | 'next_cycle';
+  quotedAmount: number;
+  currency: CurrencyCode;
+  status: PackageUpgradeRequestStatus;
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewNote?: string;
+  invoiceId?: string;
+}
+
 export interface SubscriptionPackage {
   id: string;
   name: SubscriptionPackageName;

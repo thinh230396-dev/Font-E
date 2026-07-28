@@ -27,10 +27,12 @@ import {
   RefreshCw,
   Shield,
   Sliders,
+  PackageCheck,
 } from 'lucide-react';
-import { Tenant, TenantStatus, SubscriptionPackage, SubscriptionPackageName, TenantAdminAccount } from '../types';
+import { PackageUpgradeRequest, Tenant, TenantStatus, SubscriptionPackage, SubscriptionPackageName, TenantAdminAccount } from '../types';
 import { normalizeBranch } from '../utils/branches';
 import TenantDetailModal from './TenantDetailModal';
+import PackageUpgradeRequests from './PackageUpgradeRequests';
 import { formatMoney } from '../utils/money';
 import {
   getSellablePackages,
@@ -54,6 +56,13 @@ interface TenantManagementProps {
   clearSelectedTenant?: () => void;
   searchQuery: string;
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  upgradeRequests: PackageUpgradeRequest[];
+  onReviewUpgradeRequest: (
+    requestId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    reviewNote: string,
+    effectiveDate: 'immediate' | 'next_cycle'
+  ) => void;
 }
 
 export default function TenantManagement({ 
@@ -66,7 +75,9 @@ export default function TenantManagement({
   selectedTenantFromOverview,
   clearSelectedTenant,
   searchQuery,
-  showConfirm
+  showConfirm,
+  upgradeRequests,
+  onReviewUpgradeRequest
 }: TenantManagementProps) {
 
   const selectablePackages = getSellablePackages(packages);
@@ -117,6 +128,7 @@ export default function TenantManagement({
   const [statusFilter, setStatusFilter] = useState<TenantStatus | 'ALL'>('ALL');
   const [packageFilter, setPackageFilter] = useState<SubscriptionPackageName | 'ALL'>('ALL');
   const [sortBy, setSortBy] = useState<'name' | 'revenue' | 'date'>('name');
+  const [managementView, setManagementView] = useState<'tenants' | 'upgrade_requests'>('tenants');
 
   // Modal / Drawer state
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(selectedTenantFromOverview || null);
@@ -813,6 +825,26 @@ export default function TenantManagement({
     }
   };
 
+  const pendingUpgradeCount = upgradeRequests.filter((request) => request.status === 'PENDING').length;
+  const managementTabs = (
+    <div className="flex w-full gap-1 overflow-x-auto rounded-xl border border-brand-outline/35 bg-brand-surface p-1 shadow-sm sm:w-fit">
+      <button type="button" onClick={() => setManagementView('tenants')} className={`flex h-10 items-center gap-2 rounded-lg border-0 px-4 text-xs font-black shadow-none ${managementView === 'tenants' ? 'bg-brand-primary text-brand-on-primary' : 'bg-transparent text-brand-text-muted hover:text-brand-text'}`}><Store className="h-4 w-4" />Danh sách Tenant</button>
+      <button type="button" onClick={() => setManagementView('upgrade_requests')} className={`flex h-10 items-center gap-2 rounded-lg border-0 px-4 text-xs font-black shadow-none ${managementView === 'upgrade_requests' ? 'bg-brand-primary text-brand-on-primary' : 'bg-transparent text-brand-text-muted hover:text-brand-text'}`}><PackageCheck className="h-4 w-4" />Yêu cầu nâng cấp{pendingUpgradeCount > 0 && <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[9px] ${managementView === 'upgrade_requests' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`}>{pendingUpgradeCount}</span>}</button>
+    </div>
+  );
+
+  if (managementView === 'upgrade_requests') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div><h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-brand-text sm:text-2xl"><Store className="h-6 w-6 text-brand-primary" />Quản lý Tenant / Chuỗi tiệm Nail</h1><p className="mt-1 text-xs text-brand-text-muted">Tiếp nhận và xử lý các yêu cầu nâng cấp gói do Tenant Admin gửi.</p></div>
+          {managementTabs}
+        </div>
+        <PackageUpgradeRequests requests={upgradeRequests} onReview={onReviewUpgradeRequest} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       
@@ -836,6 +868,8 @@ export default function TenantManagement({
           <span>Thêm tenant mới</span>
         </button>
       </div>
+
+      {managementTabs}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-brand-surface border border-brand-outline/35 rounded-xl p-4">

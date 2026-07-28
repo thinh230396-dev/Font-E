@@ -50,7 +50,7 @@ import {
   WalletCards,
   X
 } from 'lucide-react';
-import type { Branch, Invoice, SubscriptionPackage, Tenant } from '../types';
+import type { Branch, Invoice, PackageUpgradeRequest, SubscriptionPackage, Tenant } from '../types';
 import { BRANCH_MODEL_OPTIONS, generateBranchCode, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches, validateBranchDraft } from '../utils/branches';
 import {
   formatSubscriptionLimit,
@@ -94,6 +94,12 @@ interface NailTenantAdminPortalProps {
   subscriptionPackage?: SubscriptionPackage;
   availablePackages: SubscriptionPackage[];
   invoices: Invoice[];
+  upgradeRequests: PackageUpgradeRequest[];
+  onRequestUpgrade: (
+    plan: SubscriptionPackage,
+    billingCycle: 'monthly' | 'yearly',
+    effectiveDate: 'immediate' | 'next_cycle'
+  ) => void;
 }
 
 interface NavItem {
@@ -1025,8 +1031,11 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
     </div>
   );
 }
-export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, onUpdateTenant, onLogout }: NailTenantAdminPortalProps) {
+export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, upgradeRequests, onRequestUpgrade, onUpdateTenant, onLogout }: NailTenantAdminPortalProps) {
   const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
+  const pendingUpgradeRequest = tenant
+    ? upgradeRequests.find((request) => request.tenantId === tenant.id && request.status === 'PENDING')
+    : undefined;
   setTenantAdminDataMode(tenant ? 'live' : 'demo');
   const currentPackage = useMemo(
     () => normalizeSubscriptionPackage(subscriptionPackage || FALLBACK_SUBSCRIPTION_PACKAGE),
@@ -1564,6 +1573,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 roleLabel="Owner · Tenant Admin"
                 readOnlyReason={readOnlyReason}
                 onNotify={setToast}
+                pendingRequest={pendingUpgradeRequest}
+                onRequestUpgrade={onRequestUpgrade}
               />
             </Suspense>
           ) : activePage === 'branches' ? (

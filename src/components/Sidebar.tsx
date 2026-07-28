@@ -25,6 +25,7 @@ interface SidebarProps {
     overdueInvoices: number;
     unreadAlerts: number;
     openTickets: number;
+    pendingUpgrades: number;
   };
   systemName: string;
 }
@@ -66,7 +67,7 @@ export default function Sidebar({
           id: 'salons',
           label: 'Quản lý Tenant',
           icon: Store,
-          badge: badgeCounts.expiringSalons,
+          badge: badgeCounts.pendingUpgrades + badgeCounts.expiringSalons,
           badgeTone: 'warning',
         },
         { id: 'admins', label: 'Tenant Admin', icon: Users },

@@ -5,7 +5,7 @@ import {
   LockKeyhole, Mail, MessageSquareText, MoreHorizontal, PackageCheck, ReceiptText, Search, ShieldCheck,
   Sparkles, Store, UsersRound, WalletCards, X, Zap
 } from 'lucide-react';
-import type { Invoice, SubscriptionPackage, Tenant } from '../types';
+import type { Invoice, PackageUpgradeRequest, SubscriptionPackage, Tenant } from '../types';
 import {
   formatSubscriptionLimit, getTenantLockedSubscriptionPrice, getYearlyPackagePrice,
   normalizeSubscriptionPackage, SUBSCRIPTION_CAPABILITY_CATALOG
@@ -28,6 +28,12 @@ interface TenantAdminSubscriptionProps {
   roleLabel: string;
   readOnlyReason?: string;
   onNotify: (message: string) => void;
+  pendingRequest?: PackageUpgradeRequest;
+  onRequestUpgrade: (
+    plan: SubscriptionPackage,
+    billingCycle: 'monthly' | 'yearly',
+    effectiveDate: 'immediate' | 'next_cycle'
+  ) => void;
 }
 
 const tabs: Array<{ id: SubscriptionTab; label: string; icon: typeof Gauge }> = [
@@ -65,7 +71,7 @@ const capabilityGroups = [
 
 export default function TenantAdminSubscription({
   tenantName, tenant, subscriptionPackage, availablePackages, invoices, branchCount, staffCount,
-  roleLabel, readOnlyReason, onNotify
+  roleLabel, readOnlyReason, onNotify, pendingRequest, onRequestUpgrade
 }: TenantAdminSubscriptionProps) {
   const [activeTab, setActiveTab] = useState<SubscriptionTab>('overview');
   const [billingView, setBillingView] = useState<'monthly' | 'yearly'>(tenant?.billingCycle || 'monthly');
@@ -125,7 +131,13 @@ export default function TenantAdminSubscription({
 
   const requestPlan = () => {
     if (!selectedPlan) return;
-    onNotify(`Đã gửi yêu cầu chuyển sang gói ${selectedPlan.name} từ ${effectiveDate === 'immediate' ? 'hôm nay' : 'chu kỳ kế tiếp'}.`);
+    if (pendingRequest) {
+      onNotify(`Yêu cầu nâng cấp lên gói ${pendingRequest.requestedPackageName} đang chờ Super Admin duyệt.`);
+      setSelectedPlan(null);
+      return;
+    }
+    onRequestUpgrade(selectedPlan, billingView, effectiveDate);
+    onNotify(`Đã gửi yêu cầu chuyển sang gói ${selectedPlan.name}. Super Admin sẽ xem tại Quản lý Tenant → Yêu cầu nâng cấp.`);
     setSelectedPlan(null);
   };
 
@@ -138,9 +150,10 @@ export default function TenantAdminSubscription({
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <button type="button" onClick={() => onNotify('Đã tạo yêu cầu hỗ trợ ưu tiên cho bộ phận Subscription.')} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[10px] font-bold text-slate-600 shadow-sm"><Headphones className="h-4 w-4" />Liên hệ hỗ trợ</button>
-        {upgrade && <button type="button" disabled={!canChangePlan} onClick={() => setSelectedPlan(upgrade)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-[10px] font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:opacity-50"><Zap className="h-4 w-4" />Nâng lên {upgrade.name}</button>}
+        {upgrade && <button type="button" disabled={!canChangePlan || Boolean(pendingRequest)} onClick={() => setSelectedPlan(upgrade)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-[10px] font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:opacity-50"><Zap className="h-4 w-4" />{pendingRequest ? 'Đang chờ duyệt' : `Nâng lên ${upgrade.name}`}</button>}
       </div>
     </section>
+    {pendingRequest && <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><CalendarClock className="h-5 w-5" /></span><div className="flex-1"><p className="text-[10px] font-black text-amber-900">Yêu cầu nâng cấp đang chờ Super Admin duyệt</p><p className="mt-1 text-[9px] leading-5 text-amber-700">{current.name} → {pendingRequest.requestedPackageName} · {pendingRequest.billingCycle === 'yearly' ? 'Hằng năm' : 'Hằng tháng'} · {pendingRequest.effectiveDate === 'immediate' ? 'Áp dụng ngay' : 'Chu kỳ tiếp theo'}</p></div><span className="rounded-full bg-white px-3 py-1.5 text-[9px] font-black text-amber-700 ring-1 ring-amber-200">Chờ duyệt</span></section>}
 
     <section className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
       <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
