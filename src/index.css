@@ -2233,6 +2233,24 @@ html[data-theme="dark"] .role-shell--superadmin {
   border-bottom-color: var(--ta-color-border) !important;
 }
 
+/* Keep the workspace context visible while record details are open.
+   The top bar remains present above desktop overlays, but becomes inert until
+   the active dialog or drawer is closed. */
+@media (min-width: 1024px) {
+  .role-shell--tenant .role-topbar,
+  .role-shell--reception .role-topbar {
+    z-index: 120 !important;
+  }
+
+  .role-shell--tenant:has(.fixed.inset-0) .role-topbar,
+  .role-shell--reception:has(.fixed.inset-0) .role-topbar {
+    pointer-events: none;
+    box-shadow:
+      0 1px 0 rgb(15 23 42 / 0.08),
+      0 12px 30px rgb(15 23 42 / 0.08);
+  }
+}
+
 .role-shell--tenant .role-sidebar {
   background:
     radial-gradient(circle at 20% 0%, rgb(124 58 237 / 0.26), transparent 18rem),
