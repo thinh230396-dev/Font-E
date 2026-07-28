@@ -308,6 +308,7 @@ export default function TenantAdminAppointments({
   });
   const initialDate = getInitialScheduleDate(appointments, selectedBranch, todayDate);
   const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [didAutoLocateSchedule, setDidAutoLocateSchedule] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('SCHEDULE');
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | AppointmentStatus>('ALL');
@@ -385,6 +386,17 @@ export default function TenantAdminAppointments({
     appointment.date === selectedDate && (selectedBranch === 'ALL' || appointment.branch === selectedBranch)
   )), [appointments, selectedBranch, selectedDate]);
 
+  useEffect(() => {
+    if (didAutoLocateSchedule) return;
+    if (scopedAppointments.length) {
+      setDidAutoLocateSchedule(true);
+      return;
+    }
+    const nearestDate = getInitialScheduleDate(appointments, selectedBranch, selectedDate);
+    if (nearestDate !== selectedDate) setSelectedDate(nearestDate);
+    setDidAutoLocateSchedule(true);
+  }, [appointments, didAutoLocateSchedule, scopedAppointments.length, selectedBranch, selectedDate]);
+
   const filteredAppointments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return scopedAppointments
@@ -395,16 +407,29 @@ export default function TenantAdminAppointments({
       .sort((first, second) => first.start.localeCompare(second.start));
   }, [scopedAppointments, searchQuery, sourceFilter, staffFilter, statusFilter]);
 
-  const scheduleStaff = useMemo(() => staffDirectory.filter((staff) => (
-    (selectedBranch === 'ALL' || staff.branch === selectedBranch) &&
-    (staffFilter === 'ALL' || staff.name === staffFilter)
-  )), [selectedBranch, staffFilter]);
+  const scheduleStaff = useMemo(() => {
+    const directoryStaff = staffDirectory.filter((staff) => selectedBranch === 'ALL' || staff.branch === selectedBranch);
+    const knownNames = new Set(directoryStaff.map((staff) => staff.name));
+    const appointmentStaff = scopedAppointments.reduce<typeof staffDirectory>((result, appointment) => {
+      if (knownNames.has(appointment.staff) || result.some((staff) => staff.name === appointment.staff)) return result;
+      const initials = appointment.staff.trim().split(/\s+/).slice(-2).map((part) => part.charAt(0).toUpperCase()).join('');
+      result.push({ name: appointment.staff, branch: appointment.branch, initials: initials || 'NV', role: 'Kỹ thuật viên', shift: '08:00–20:00' });
+      return result;
+    }, []);
+    const appointmentCount = new Map<string, number>();
+    scopedAppointments.forEach((appointment) => appointmentCount.set(appointment.staff, (appointmentCount.get(appointment.staff) || 0) + 1));
+    return [...directoryStaff, ...appointmentStaff].sort((first, second) => (
+      (appointmentCount.get(second.name) || 0) - (appointmentCount.get(first.name) || 0)
+      || first.name.localeCompare(second.name, 'vi')
+    ));
+  }, [scopedAppointments, selectedBranch]);
 
   const filteredScheduleStaff = useMemo(() => {
     const query = staffSearchQuery.trim().toLowerCase();
-    if (!query) return scheduleStaff;
-    return scheduleStaff.filter((staff) => `${staff.name} ${staff.role} ${branchLabels[staff.branch]}`.toLowerCase().includes(query));
-  }, [scheduleStaff, staffSearchQuery]);
+    return scheduleStaff
+      .filter((staff) => staffFilter === 'ALL' || staff.name === staffFilter)
+      .filter((staff) => !query || `${staff.name} ${staff.role} ${branchLabels[staff.branch]}`.toLowerCase().includes(query));
+  }, [scheduleStaff, staffFilter, staffSearchQuery]);
 
   const staffPageCount = Math.max(1, Math.ceil(filteredScheduleStaff.length / STAFF_COLUMNS_PER_PAGE));
   const visibleScheduleStaff = useMemo(() => {
@@ -767,7 +792,7 @@ export default function TenantAdminAppointments({
         {showFilters && (
           <div className="grid gap-3 border-b border-slate-100 bg-violet-50/40 p-4 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
             <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Trạng thái</span><BeautifulSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'ALL' | AppointmentStatus)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả trạng thái</option>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label>
-            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Nhân viên</span><BeautifulSelect value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả nhân viên</option>{staffDirectory.filter((staff) => selectedBranch === 'ALL' || staff.branch === selectedBranch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name}</option>)}</BeautifulSelect></label>
+            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Nhân viên</span><BeautifulSelect value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả nhân viên</option>{scheduleStaff.map((staff) => <option key={staff.name} value={staff.name}>{staff.name}</option>)}</BeautifulSelect></label>
             <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Nguồn đặt lịch</span><BeautifulSelect value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as 'ALL' | AppointmentSource)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả nguồn</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label>
             <button type="button" onClick={resetFilters} className="self-end border border-slate-200 bg-white px-3 text-[9px] font-bold text-slate-600 shadow-sm">Đặt lại</button>
           </div>
