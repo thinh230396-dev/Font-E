@@ -965,7 +965,7 @@ export default function TenantAdminAppointments({
       </section>
 
       {selectedAppointment && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6">
           <button type="button" aria-label="Đóng chi tiết lịch hẹn" onClick={() => setSelectedAppointment(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
           <section role="dialog" aria-modal="true" aria-labelledby="appointment-detail-title" className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/20 bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)]">
             <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-7 sm:py-5"><div><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">{selectedAppointment.id}</span>{selectedAppointment.firstVisit && <span className="rounded-md bg-violet-50 px-2 py-1 text-[8px] font-bold text-violet-600">Khách mới</span>}<span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[selectedAppointment.status].badge}`}>{statusMeta[selectedAppointment.status].label}</span></div><h2 id="appointment-detail-title" className="mt-2 text-xl font-black tracking-tight text-slate-950">Chi tiết lịch hẹn</h2><p className="mt-1 text-[9px] text-slate-400">Tạo lúc {selectedAppointment.createdAt} · {selectedAppointment.createdBy || roleLabel}</p></div><button type="button" onClick={() => setSelectedAppointment(null)} aria-label="Đóng chi tiết lịch hẹn" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm hover:bg-slate-50"><X className="h-4 w-4" /></button></header>
@@ -1015,7 +1015,7 @@ export default function TenantAdminAppointments({
       )}
 
       {showCancelForm && selectedAppointment && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[230] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <button type="button" aria-label="Đóng xác nhận hủy lịch" onClick={() => setShowCancelForm(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
           <form onSubmit={submitCancellation} role="dialog" aria-modal="true" aria-labelledby="cancel-appointment-title" className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
             <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600"><CircleAlert className="h-5 w-5" /></span><div><h2 id="cancel-appointment-title" className="text-base font-black text-slate-900">Hủy lịch hẹn</h2><p className="mt-1 text-[9px] leading-4 text-slate-500">Lý do và ghi chú sẽ được lưu trong lịch sử lịch hẹn.</p></div></div><button type="button" onClick={() => setShowCancelForm(false)} aria-label="Đóng" className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header>
@@ -1033,7 +1033,7 @@ export default function TenantAdminAppointments({
       )}
 
       {formMode && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <button type="button" aria-label="Đóng biểu mẫu" onClick={() => setFormMode(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
           <form onSubmit={submitAppointment} className="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><h2 className="text-base font-black text-slate-900">{formMode === 'CREATE' ? 'Tạo lịch hẹn mới' : `Chỉnh sửa ${selectedAppointment?.id}`}</h2><p className="mt-1 text-[9px] text-slate-500">Chọn một hoặc nhiều dịch vụ cho khách trong cùng lịch hẹn.</p></div><button type="button" onClick={() => setFormMode(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>
