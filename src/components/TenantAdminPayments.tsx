@@ -276,7 +276,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                 <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số điện thoại *</span><input inputMode="tel" value={invoice.phone} onChange={(event) => setInvoice((current) => ({ ...current, phone: event.target.value }))} placeholder="0912 345 678" className={invoiceInputClass} /></label>
                 <label>
                   <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Chi nhánh *</span>
-                  <BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode, category: 'ALL', itemName: '', unitPrice: '', staff: '' }))} className={invoiceInputClass}>
+                  <BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode, category: 'ALL', itemName: '', unitPrice: '', quantity: '1', staff: '' }))} className={invoiceInputClass}>
                     <option value="Q3">Chi nhánh Quận 3</option>
                     <option value="Q1">Chi nhánh Quận 1</option>
                   </BeautifulSelect>
@@ -298,24 +298,25 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                       <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Tìm mã, tên hoặc danh mục dịch vụ..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-[9px] font-semibold outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
                     </div>
                     <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
-                      <button type="button" onClick={() => setInvoice((current) => ({ ...current, category: 'ALL', itemName: '', unitPrice: '' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === 'ALL' ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>Tất cả</button>
-                      {Object.entries(serviceCategoryLabels).map(([value, label]) => <button key={value} type="button" onClick={() => setInvoice((current) => ({ ...current, category: value as ServiceCategory, itemName: '', unitPrice: '' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === value ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{label}</button>)}
+                      <button type="button" onClick={() => setInvoice((current) => ({ ...current, category: 'ALL', itemName: '', unitPrice: '', quantity: '1' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === 'ALL' ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>Tất cả</button>
+                      {Object.entries(serviceCategoryLabels).map(([value, label]) => <button key={value} type="button" onClick={() => setInvoice((current) => ({ ...current, category: value as ServiceCategory, itemName: '', unitPrice: '', quantity: '1' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === value ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{label}</button>)}
                     </div>
                   </div>
                   <div className="max-h-64 overflow-auto">
-                    <table className="w-full min-w-[560px] border-collapse text-left">
-                      <thead className="sticky top-0 z-10 bg-slate-50 text-[7px] font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Dịch vụ</th><th className="px-3 py-2.5">Danh mục</th><th className="px-3 py-2.5 text-right">Đơn giá</th></tr></thead>
+                    <table className="w-full min-w-[650px] border-collapse text-left">
+                      <thead className="sticky top-0 z-10 bg-slate-50 text-[7px] font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Dịch vụ</th><th className="w-24 px-3 py-2.5 text-center">Số lượng</th><th className="px-3 py-2.5">Danh mục</th><th className="px-3 py-2.5 text-right">Đơn giá</th></tr></thead>
                       <tbody className="divide-y divide-slate-100">
                         {availableInvoiceServices.map((service) => {
                           const active = invoice.itemName === service.name;
-                          return <tr key={service.id} onClick={() => setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price) }))} className={`cursor-pointer transition-colors ${active ? 'bg-violet-50' : 'hover:bg-slate-50'}`}>
-                            <td className="px-3 py-3"><button type="button" aria-label={`Chọn dịch vụ ${service.name}`} aria-pressed={active} onClick={(event) => { event.stopPropagation(); setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price) })); }} className={`flex h-5 w-5 items-center justify-center rounded-full border p-0 ${active ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check className="h-3 w-3" /></button></td>
+                          return <tr key={service.id} onClick={() => setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price), quantity: active ? current.quantity : '1' }))} className={`cursor-pointer transition-colors ${active ? 'bg-violet-50' : 'hover:bg-slate-50'}`}>
+                            <td className="px-3 py-3"><button type="button" aria-label={`Chọn dịch vụ ${service.name}`} aria-pressed={active} onClick={(event) => { event.stopPropagation(); setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price), quantity: active ? current.quantity : '1' })); }} className={`flex h-5 w-5 items-center justify-center rounded-full border p-0 ${active ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check className="h-3 w-3" /></button></td>
                             <td className="px-3 py-3"><p className="text-[9px] font-black text-slate-800">{service.name}</p><p className="mt-0.5 text-[7px] font-semibold text-slate-400">{service.id}</p></td>
+                            <td className="px-3 py-3"><input type="number" min="1" step="1" aria-label={`Số lượng ${service.name}`} value={active ? invoice.quantity : '1'} onClick={(event) => event.stopPropagation()} onChange={(event) => setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price), quantity: event.target.value }))} className={`h-8 w-16 rounded-lg border px-2 text-center text-[9px] font-black outline-none focus:ring-4 ${active ? 'border-violet-300 bg-white text-violet-700 focus:border-violet-500 focus:ring-violet-100' : 'border-slate-200 bg-slate-50 text-slate-500 focus:border-violet-400 focus:ring-violet-100'}`} /></td>
                             <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-[7px] font-bold text-slate-600">{serviceCategoryLabels[service.category]}</span></td>
                             <td className="px-3 py-3 text-right text-[9px] font-black text-slate-800">{money(service.price)}</td>
                           </tr>;
                         })}
-                        {!availableInvoiceServices.length && <tr><td colSpan={4} className="px-4 py-10 text-center text-[8px] font-semibold text-slate-400">Không tìm thấy dịch vụ phù hợp.</td></tr>}
+                        {!availableInvoiceServices.length && <tr><td colSpan={5} className="px-4 py-10 text-center text-[8px] font-semibold text-slate-400">Không tìm thấy dịch vụ phù hợp.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -343,11 +344,8 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                   </div>
                 </section>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="grid grid-cols-[100px_1fr] gap-3 sm:col-span-2">
-                  <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số lượng *</span><input type="number" min="1" step="1" value={invoice.quantity} onChange={(event) => setInvoice((current) => ({ ...current, quantity: event.target.value }))} className={invoiceInputClass} /></label>
-                  <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đơn giá *</span><input type="number" min="1" step="1000" value={invoice.unitPrice} onChange={(event) => setInvoice((current) => ({ ...current, unitPrice: event.target.value }))} className={invoiceInputClass} /></label>
-                </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đơn giá dịch vụ đã chọn *</span><input type="number" min="1" step="1000" value={invoice.unitPrice} onChange={(event) => setInvoice((current) => ({ ...current, unitPrice: event.target.value }))} className={invoiceInputClass} /></label>
                 <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Giảm giá</span><input type="number" min="0" step="1000" value={invoice.discount} onChange={(event) => setInvoice((current) => ({ ...current, discount: event.target.value }))} className={invoiceInputClass} /></label>
                 <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label>
               </div>
