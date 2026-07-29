@@ -17,8 +17,17 @@ interface PaymentItem { name: string; quantity: number; amount: number; staff: s
 interface PaymentRecord {
   id: string; appointmentId?: string; customer: string; phone: string; branch: BranchCode;
   createdAt: string; total: number; subtotal: number; discount: number; tip: number; deposit: number;
+  tax?: number; discountCode?: string;
   paid: number; refunded: number; status: PaymentStatus; method?: PaymentMethod; reference?: string;
   cashier: string; source: string; items: PaymentItem[]; note?: string; audit: string[];
+}
+
+interface InvoiceServiceLine {
+  id: string;
+  name: string;
+  category: Exclude<ServiceCategory, 'ALL'>;
+  price: number;
+  quantity: number;
 }
 
 interface TenantAdminPaymentsProps {
@@ -57,6 +66,12 @@ const serviceCategoryLabels: Record<Exclude<ServiceCategory, 'ALL'>, string> = {
   GEL: 'Gel & Sơn gel',
   ACRYLIC: 'Acrylic',
   SPA: 'Spa & Phục hồi'
+};
+
+const discountCodes: Record<string, { label: string; rate: number }> = {
+  MEMBER5: { label: 'Thành viên', rate: 5 },
+  SALON10: { label: 'Ưu đãi salon', rate: 10 },
+  VIP15: { label: 'Khách VIP', rate: 15 }
 };
 
 const invoiceServiceCatalog = [
@@ -104,10 +119,11 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const [formError, setFormError] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceServiceLine[]>([]);
   const [invoice, setInvoice] = useState({
     customer: '', phone: '', branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
     appointmentId: '', category: 'ALL' as ServiceCategory, itemName: '', quantity: '1', unitPrice: '', staff: '',
-    discount: '0', tip: '0', deposit: '0', method: 'CASH' as PaymentMethod,
+    discount: '0', discountCode: '', taxRate: '0', tip: '0', deposit: '0', method: 'CASH' as PaymentMethod,
     reference: '', note: ''
   });
   const [capture, setCapture] = useState({ invoiceId: 'INV-7822', method: 'BANK' as PaymentMethod, amount: '580000', reference: '' });
@@ -135,48 +151,67 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     return staff.branch === invoice.branch
       && (!query || `${staff.name} ${staff.role}`.toLowerCase().includes(query));
   });
-  const invoiceSubtotal = Math.max(0, Number(invoice.quantity) || 0) * Math.max(0, Number(invoice.unitPrice) || 0);
-  const invoiceTotal = Math.max(0, invoiceSubtotal - Math.max(0, Number(invoice.discount) || 0) + Math.max(0, Number(invoice.tip) || 0));
+  const normalizedDiscountCode = invoice.discountCode.trim().toUpperCase();
+  const appliedDiscount = normalizedDiscountCode ? discountCodes[normalizedDiscountCode] : undefined;
+  const invoiceSubtotal = invoiceItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const invoiceDiscount = appliedDiscount ? Math.round(invoiceSubtotal * appliedDiscount.rate / 100) : 0;
+  const invoiceTax = Math.round(Math.max(0, invoiceSubtotal - invoiceDiscount) * Math.max(0, Number(invoice.taxRate) || 0) / 100);
+  const invoiceTotal = Math.max(0, invoiceSubtotal - invoiceDiscount + invoiceTax + Math.max(0, Number(invoice.tip) || 0));
 
   const openCreate = () => {
     if (!requireManage()) return;
     setInvoice({
       customer: '', phone: '', branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
       appointmentId: '', category: 'ALL', itemName: '', quantity: '1', unitPrice: '', staff: '',
-      discount: '0', tip: '0', deposit: '0', method: 'CASH', reference: '', note: ''
+      discount: '0', discountCode: '', taxRate: '0', tip: '0', deposit: '0', method: 'CASH', reference: '', note: ''
     });
+    setInvoiceItems([]);
     setServiceSearch('');
     setStaffSearch('');
     setSelected(null);
     setFormError('');
     setCatalogCreateOpen(true);
   };
+  const toggleInvoiceService = (service: (typeof invoiceServiceCatalog)[number]) => {
+    setInvoiceItems((current) => current.some((item) => item.id === service.id)
+      ? current.filter((item) => item.id !== service.id)
+      : [...current, { id: service.id, name: service.name, category: service.category, price: service.price, quantity: 1 }]);
+  };
+  const updateInvoiceServiceQuantity = (service: (typeof invoiceServiceCatalog)[number], quantity: number) => {
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      setInvoiceItems((current) => current.filter((item) => item.id !== service.id));
+      return;
+    }
+    setInvoiceItems((current) => current.some((item) => item.id === service.id)
+      ? current.map((item) => item.id === service.id ? { ...item, quantity } : item)
+      : [...current, { id: service.id, name: service.name, category: service.category, price: service.price, quantity }]);
+  };
   const submitInvoice = (event: FormEvent) => {
     event.preventDefault();
-    const quantity = Number(invoice.quantity);
-    const unitPrice = Number(invoice.unitPrice);
-    const discount = Number(invoice.discount);
     const tip = Number(invoice.tip);
     const deposit = Number(invoice.deposit);
+    const taxRate = Number(invoice.taxRate);
     const phoneDigits = invoice.phone.replace(/\D/g, '');
-    if (!invoice.customer.trim() || !invoice.phone.trim() || !invoice.itemName.trim() || !invoice.staff.trim()) {
-      setFormError('Vui lòng nhập đầy đủ khách hàng, số điện thoại, dịch vụ và nhân viên phụ trách.');
+    if (!invoice.customer.trim() || !invoice.phone.trim() || !invoiceItems.length || !invoice.staff.trim()) {
+      setFormError('Vui lòng nhập đầy đủ khách hàng, số điện thoại, chọn ít nhất một dịch vụ và nhân viên phụ trách.');
       return;
     }
     if (!/^(?:\+84|0)[0-9\s.-]{8,12}$/.test(invoice.phone.trim()) || phoneDigits.length < 9) {
       setFormError('Số điện thoại chưa đúng định dạng Việt Nam.');
       return;
     }
-    if (!Number.isInteger(quantity) || quantity < 1 || unitPrice <= 0 || discount < 0 || tip < 0 || deposit < 0) {
-      setFormError('Số lượng và các giá trị tiền phải hợp lệ, không được là số âm.');
+    if (invoiceItems.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1) || tip < 0 || deposit < 0 || taxRate < 0 || taxRate > 100) {
+      setFormError('Số lượng dịch vụ, thuế và các giá trị tiền phải hợp lệ.');
       return;
     }
-    const subtotal = quantity * unitPrice;
-    const total = Math.max(0, subtotal - discount + tip);
-    if (discount > subtotal) {
-      setFormError('Giảm giá không được lớn hơn tạm tính của hóa đơn.');
+    if (normalizedDiscountCode && !appliedDiscount) {
+      setFormError('Mã giảm giá không hợp lệ. Có thể dùng MEMBER5, SALON10 hoặc VIP15.');
       return;
     }
+    const subtotal = invoiceSubtotal + invoiceTax;
+    const discount = invoiceDiscount;
+    const tax = invoiceTax;
+    const total = invoiceTotal;
     if (total <= 0) {
       setFormError('Tổng hóa đơn phải lớn hơn 0đ.');
       return;
@@ -201,6 +236,8 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       createdAt,
       subtotal,
       discount,
+      discountCode: normalizedDiscountCode || undefined,
+      tax,
       tip,
       deposit,
       total,
@@ -211,9 +248,16 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       reference: deposit > 0 ? invoice.reference.trim() || `CASH-${Date.now().toString().slice(-6)}` : undefined,
       cashier: roleLabel,
       source: 'Tạo thủ công bởi Tenant Admin',
-      items: [{ name: invoice.itemName.trim(), quantity, amount: subtotal, staff: invoice.staff.trim() }],
+      items: [
+        ...invoiceItems.map((item) => ({ name: item.name, quantity: item.quantity, amount: item.price * item.quantity, staff: invoice.staff.trim() })),
+        ...(tax > 0 ? [{ name: `Thuế VAT ${taxRate}%`, quantity: 1, amount: tax, staff: 'Hệ thống' }] : [])
+      ],
       note: invoice.note.trim() || undefined,
-      audit: [`${createdAt} · ${roleLabel} tạo hóa đơn${deposit > 0 ? ` và ghi nhận đã thu ${money(deposit)}` : ''}`]
+      audit: [
+        `${createdAt} · ${roleLabel} tạo hóa đơn gồm ${invoiceItems.length} dịch vụ${deposit > 0 ? ` và ghi nhận đã thu ${money(deposit)}` : ''}`,
+        ...(normalizedDiscountCode ? [`${createdAt} · Áp dụng mã ${normalizedDiscountCode} giảm ${appliedDiscount?.rate || 0}%`] : []),
+        ...(tax > 0 ? [`${createdAt} · Tính thuế VAT ${taxRate}% tương đương ${money(tax)}`] : [])
+      ]
     };
     setRecords((current) => [newRecord, ...current]);
     setCreateOpen(false);
@@ -276,7 +320,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                 <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số điện thoại *</span><input inputMode="tel" value={invoice.phone} onChange={(event) => setInvoice((current) => ({ ...current, phone: event.target.value }))} placeholder="0912 345 678" className={invoiceInputClass} /></label>
                 <label>
                   <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Chi nhánh *</span>
-                  <BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode, category: 'ALL', itemName: '', unitPrice: '', quantity: '1', staff: '' }))} className={invoiceInputClass}>
+                  <BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => { setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode, category: 'ALL', itemName: '', unitPrice: '', quantity: '1', staff: '' })); setInvoiceItems([]); }} className={invoiceInputClass}>
                     <option value="Q3">Chi nhánh Quận 3</option>
                     <option value="Q1">Chi nhánh Quận 1</option>
                   </BeautifulSelect>
@@ -290,16 +334,16 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                 <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                   <div className="border-b border-slate-100 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div><p className="text-[9px] font-black text-slate-800">Bảng dịch vụ</p><p className="mt-0.5 text-[7px] text-slate-400">{availableInvoiceServices.length} dịch vụ phù hợp · chọn một dòng</p></div>
-                      {invoice.itemName && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-[7px] font-black text-violet-700"><Check className="h-3 w-3" />Đã chọn dịch vụ</span>}
+                      <div><p className="text-[9px] font-black text-slate-800">Bảng dịch vụ</p><p className="mt-0.5 text-[7px] text-slate-400">{availableInvoiceServices.length} dịch vụ phù hợp · có thể chọn nhiều dòng</p></div>
+                      {invoiceItems.length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-[7px] font-black text-violet-700"><Check className="h-3 w-3" />Đã chọn {invoiceItems.length} dịch vụ</span>}
                     </div>
                     <div className="relative mt-3">
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                       <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Tìm mã, tên hoặc danh mục dịch vụ..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-[9px] font-semibold outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
                     </div>
                     <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
-                      <button type="button" onClick={() => setInvoice((current) => ({ ...current, category: 'ALL', itemName: '', unitPrice: '', quantity: '1' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === 'ALL' ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>Tất cả</button>
-                      {Object.entries(serviceCategoryLabels).map(([value, label]) => <button key={value} type="button" onClick={() => setInvoice((current) => ({ ...current, category: value as ServiceCategory, itemName: '', unitPrice: '', quantity: '1' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === value ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{label}</button>)}
+                      <button type="button" onClick={() => setInvoice((current) => ({ ...current, category: 'ALL' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === 'ALL' ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>Tất cả</button>
+                      {Object.entries(serviceCategoryLabels).map(([value, label]) => <button key={value} type="button" onClick={() => setInvoice((current) => ({ ...current, category: value as ServiceCategory }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === value ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{label}</button>)}
                     </div>
                   </div>
                   <div className="max-h-64 overflow-auto">
@@ -307,11 +351,12 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                       <thead className="sticky top-0 z-10 bg-slate-50 text-[7px] font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Dịch vụ</th><th className="w-24 px-3 py-2.5 text-center">Số lượng</th><th className="px-3 py-2.5">Danh mục</th><th className="px-3 py-2.5 text-right">Đơn giá</th></tr></thead>
                       <tbody className="divide-y divide-slate-100">
                         {availableInvoiceServices.map((service) => {
-                          const active = invoice.itemName === service.name;
-                          return <tr key={service.id} onClick={() => setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price), quantity: active ? current.quantity : '1' }))} className={`cursor-pointer transition-colors ${active ? 'bg-violet-50' : 'hover:bg-slate-50'}`}>
-                            <td className="px-3 py-3"><button type="button" aria-label={`Chọn dịch vụ ${service.name}`} aria-pressed={active} onClick={(event) => { event.stopPropagation(); setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price), quantity: active ? current.quantity : '1' })); }} className={`flex h-5 w-5 items-center justify-center rounded-full border p-0 ${active ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check className="h-3 w-3" /></button></td>
+                          const selectedItem = invoiceItems.find((item) => item.id === service.id);
+                          const active = Boolean(selectedItem);
+                          return <tr key={service.id} onClick={() => toggleInvoiceService(service)} className={`cursor-pointer transition-colors ${active ? 'bg-violet-50' : 'hover:bg-slate-50'}`}>
+                            <td className="px-3 py-3"><button type="button" aria-label={`${active ? 'Bỏ chọn' : 'Chọn'} dịch vụ ${service.name}`} aria-pressed={active} onClick={(event) => { event.stopPropagation(); toggleInvoiceService(service); }} className={`flex h-5 w-5 items-center justify-center rounded-md border p-0 ${active ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check className="h-3 w-3" /></button></td>
                             <td className="px-3 py-3"><p className="text-[9px] font-black text-slate-800">{service.name}</p><p className="mt-0.5 text-[7px] font-semibold text-slate-400">{service.id}</p></td>
-                            <td className="px-3 py-3"><input type="number" min="1" step="1" aria-label={`Số lượng ${service.name}`} value={active ? invoice.quantity : '1'} onClick={(event) => event.stopPropagation()} onChange={(event) => setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price), quantity: event.target.value }))} className={`h-8 w-16 rounded-lg border px-2 text-center text-[9px] font-black outline-none focus:ring-4 ${active ? 'border-violet-300 bg-white text-violet-700 focus:border-violet-500 focus:ring-violet-100' : 'border-slate-200 bg-slate-50 text-slate-500 focus:border-violet-400 focus:ring-violet-100'}`} /></td>
+                            <td className="px-3 py-3"><input type="number" min="0" step="1" aria-label={`Số lượng ${service.name}`} value={selectedItem?.quantity || 0} onClick={(event) => event.stopPropagation()} onChange={(event) => updateInvoiceServiceQuantity(service, Number(event.target.value))} className={`h-8 w-16 rounded-lg border px-2 text-center text-[9px] font-black outline-none focus:ring-4 ${active ? 'border-violet-300 bg-white text-violet-700 focus:border-violet-500 focus:ring-violet-100' : 'border-slate-200 bg-slate-50 text-slate-500 focus:border-violet-400 focus:ring-violet-100'}`} /></td>
                             <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-[7px] font-bold text-slate-600">{serviceCategoryLabels[service.category]}</span></td>
                             <td className="px-3 py-3 text-right text-[9px] font-black text-slate-800">{money(service.price)}</td>
                           </tr>;
@@ -345,12 +390,14 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                 </section>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đơn giá dịch vụ đã chọn *</span><input type="number" min="1" step="1000" value={invoice.unitPrice} onChange={(event) => setInvoice((current) => ({ ...current, unitPrice: event.target.value }))} className={invoiceInputClass} /></label>
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Giảm giá</span><input type="number" min="0" step="1000" value={invoice.discount} onChange={(event) => setInvoice((current) => ({ ...current, discount: event.target.value }))} className={invoiceInputClass} /></label>
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giảm giá</span><input value={invoice.discountCode} onChange={(event) => setInvoice((current) => ({ ...current, discountCode: event.target.value.toUpperCase() }))} placeholder="MEMBER5, SALON10, VIP15" className={invoiceInputClass} />{normalizedDiscountCode && <span className={`mt-1 block text-[7px] font-bold ${appliedDiscount ? 'text-emerald-600' : 'text-rose-600'}`}>{appliedDiscount ? `${appliedDiscount.label}: giảm ${appliedDiscount.rate}% (-${money(invoiceDiscount)})` : 'Mã chưa hợp lệ'}</span>}</label>
+                <div><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Thuế VAT</span><div className="grid h-11 grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">{['0', '5', '8', '10'].map((rate) => <button key={rate} type="button" onClick={() => setInvoice((current) => ({ ...current, taxRate: rate }))} className={`min-h-0 rounded-none border-0 border-r border-slate-200 px-1 text-[8px] font-black shadow-none last:border-r-0 ${invoice.taxRate === rate ? 'bg-violet-600 text-white' : 'bg-transparent text-slate-500'}`}>{rate}%</button>)}</div><span className="mt-1 block text-[7px] font-semibold text-slate-400">Tiền thuế: {money(invoiceTax)}</span></div>
                 <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label>
               </div>
-              <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] text-white">
-                <div className="p-4"><p className="text-[8px] font-bold text-slate-400">Tạm tính</p><p className="mt-1 text-base font-black">{money(invoiceSubtotal)}</p></div>
+              <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] text-white sm:grid-cols-4">
+                <div className="p-4"><p className="text-[8px] font-bold text-slate-400">Tạm tính · {invoiceItems.reduce((sum, item) => sum + item.quantity, 0)} lượt</p><p className="mt-1 text-sm font-black">{money(invoiceSubtotal)}</p></div>
+                <div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-slate-400">Giảm giá</p><p className="mt-1 text-sm font-black text-emerald-300">-{money(invoiceDiscount)}</p></div>
+                <div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-slate-400">Thuế + tip</p><p className="mt-1 text-sm font-black">+{money(invoiceTax + Math.max(0, Number(invoice.tip) || 0))}</p></div>
                 <div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-violet-300">Tổng hóa đơn</p><p className="mt-1 text-base font-black">{money(invoiceTotal)}</p></div>
               </div>
             </fieldset>
@@ -365,7 +412,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
             </fieldset>
           </div>
           <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">
-            <p className="hidden text-[8px] font-semibold text-slate-400 sm:block">Giá được tự động điền theo dịch vụ và vẫn có thể điều chỉnh trước khi lưu.</p>
+            <p className="hidden text-[8px] font-semibold text-slate-400 sm:block">Giá lấy từ bảng dịch vụ; giảm giá, thuế và tip được lưu trong chi tiết hóa đơn.</p>
             <div className="ml-auto flex gap-2"><button type="button" onClick={() => setCatalogCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><ReceiptText className="h-4 w-4" />Tạo hóa đơn</button></div>
           </footer>
         </form>
