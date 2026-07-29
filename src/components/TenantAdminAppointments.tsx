@@ -364,7 +364,7 @@ export default function TenantAdminAppointments({
 
   useEffect(() => {
     if (!selectedAppointment && !formMode && !isScheduleExpanded && !showCancelForm) return;
-    const shouldLockBody = Boolean(formMode || isScheduleExpanded || showCancelForm);
+    const shouldLockBody = Boolean(selectedAppointment || formMode || isScheduleExpanded || showCancelForm);
     const previousOverflow = document.body.style.overflow;
     if (shouldLockBody) document.body.style.overflow = 'hidden';
     const handleEscape = (event: KeyboardEvent) => {
@@ -790,7 +790,7 @@ export default function TenantAdminAppointments({
                 </div>
               </div>
             </div>
-            <div ref={scheduleViewportRef} className={`relative bg-white ${selectedAppointment ? 'xl:pr-[360px]' : ''} ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
+            <div ref={scheduleViewportRef} className={`relative bg-white ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
             {visibleScheduleStaff.length ? <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${Math.max(980, 72 + visibleScheduleStaff.length * 230)}px` }}>
               <div className="sticky top-0 z-20 grid border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.05)]" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${visibleScheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${visibleScheduleStaff.length}, minmax(220px, 1fr))` }}>
                 <div className="flex items-center justify-center border-r border-slate-100 text-[9px] font-black text-slate-400">GMT+7</div>
@@ -849,7 +849,7 @@ export default function TenantAdminAppointments({
             </div> : <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center"><UsersRound className="h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-700">Không tìm thấy nhân viên</p><p className="mt-1 text-[8px] text-slate-400">Thử tên khác hoặc xóa tìm kiếm để xem toàn bộ lịch.</p><button type="button" onClick={() => setStaffSearchQuery('')} className="mt-3 border border-slate-200 bg-white px-3 text-[8px] font-bold text-violet-600 shadow-sm">Xóa tìm kiếm</button></div>}
             {!filteredAppointments.length && <div className="absolute inset-x-0 top-80 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không có lịch phù hợp với bộ lọc</p></div>}
             {selectedAppointment && (
-              <aside aria-label="Chi tiết lịch hẹn đang chọn" className="absolute inset-y-0 right-0 z-30 hidden w-[360px] flex-col border-l border-slate-200 bg-white shadow-[-16px_0_32px_rgba(15,23,42,0.08)] xl:flex">
+              <aside aria-label="Chi tiết lịch hẹn đang chọn" className="hidden">
                 <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-4 py-3.5">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2"><span className="text-[8px] font-black uppercase tracking-[0.12em] text-violet-600">{selectedAppointment.id}</span><span className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${statusMeta[selectedAppointment.status].badge}`}>{statusMeta[selectedAppointment.status].label}</span></div>
@@ -965,7 +965,7 @@ export default function TenantAdminAppointments({
       </section>
 
       {selectedAppointment && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6 ${viewMode === 'SCHEDULE' ? 'xl:hidden' : ''}`}>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6">
           <button type="button" aria-label="Đóng chi tiết lịch hẹn" onClick={() => setSelectedAppointment(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
           <section role="dialog" aria-modal="true" aria-labelledby="appointment-detail-title" className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/20 bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)]">
             <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-7 sm:py-5"><div><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">{selectedAppointment.id}</span>{selectedAppointment.firstVisit && <span className="rounded-md bg-violet-50 px-2 py-1 text-[8px] font-bold text-violet-600">Khách mới</span>}<span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[selectedAppointment.status].badge}`}>{statusMeta[selectedAppointment.status].label}</span></div><h2 id="appointment-detail-title" className="mt-2 text-xl font-black tracking-tight text-slate-950">Chi tiết lịch hẹn</h2><p className="mt-1 text-[9px] text-slate-400">Tạo lúc {selectedAppointment.createdAt} · {selectedAppointment.createdBy || roleLabel}</p></div><button type="button" onClick={() => setSelectedAppointment(null)} aria-label="Đóng chi tiết lịch hẹn" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm hover:bg-slate-50"><X className="h-4 w-4" /></button></header>
