@@ -102,6 +102,8 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const [captureOpen, setCaptureOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [formError, setFormError] = useState('');
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [staffSearch, setStaffSearch] = useState('');
   const [invoice, setInvoice] = useState({
     customer: '', phone: '', branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
     appointmentId: '', category: 'ALL' as ServiceCategory, itemName: '', quantity: '1', unitPrice: '', staff: '',
@@ -122,10 +124,17 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const outstanding = scoped.reduce((sum, record) => sum + Math.max(0, record.total - record.paid), 0);
   const refunded = scoped.reduce((sum, record) => sum + record.refunded, 0);
   const netRevenue = collected - refunded;
-  const availableInvoiceServices = invoiceServiceCatalog.filter((service) =>
-    service.branches.includes(invoice.branch) && (invoice.category === 'ALL' || service.category === invoice.category)
-  );
-  const availableInvoiceStaff = invoiceStaffDirectory.filter((staff) => staff.branch === invoice.branch);
+  const availableInvoiceServices = invoiceServiceCatalog.filter((service) => {
+    const query = serviceSearch.trim().toLowerCase();
+    return service.branches.includes(invoice.branch)
+      && (invoice.category === 'ALL' || service.category === invoice.category)
+      && (!query || `${service.id} ${service.name} ${serviceCategoryLabels[service.category]}`.toLowerCase().includes(query));
+  });
+  const availableInvoiceStaff = invoiceStaffDirectory.filter((staff) => {
+    const query = staffSearch.trim().toLowerCase();
+    return staff.branch === invoice.branch
+      && (!query || `${staff.name} ${staff.role}`.toLowerCase().includes(query));
+  });
   const invoiceSubtotal = Math.max(0, Number(invoice.quantity) || 0) * Math.max(0, Number(invoice.unitPrice) || 0);
   const invoiceTotal = Math.max(0, invoiceSubtotal - Math.max(0, Number(invoice.discount) || 0) + Math.max(0, Number(invoice.tip) || 0));
 
@@ -136,6 +145,8 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       appointmentId: '', category: 'ALL', itemName: '', quantity: '1', unitPrice: '', staff: '',
       discount: '0', tip: '0', deposit: '0', method: 'CASH', reference: '', note: ''
     });
+    setServiceSearch('');
+    setStaffSearch('');
     setSelected(null);
     setFormError('');
     setCatalogCreateOpen(true);
@@ -247,7 +258,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     {catalogCreateOpen && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6">
         <button type="button" aria-label="Đóng biểu mẫu tạo hóa đơn" onClick={() => setCatalogCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-        <form onSubmit={submitInvoice} role="dialog" aria-modal="true" aria-labelledby="catalog-create-invoice-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <form onSubmit={submitInvoice} role="dialog" aria-modal="true" aria-labelledby="catalog-create-invoice-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
           <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
             <div>
               <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Tenant Admin · Hóa đơn thủ công</p>
@@ -274,33 +285,66 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
               </div>
             </fieldset>
             <fieldset className="border-t border-slate-100 pt-5">
-              <legend className="mb-3 text-[9px] font-black text-slate-800">Danh mục, dịch vụ & nhân viên</legend>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label>
-                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Danh mục dịch vụ</span>
-                  <BeautifulSelect value={invoice.category} onChange={(event) => setInvoice((current) => ({ ...current, category: event.target.value as ServiceCategory, itemName: '', unitPrice: '' }))} className={invoiceInputClass}>
-                    <option value="ALL">Tất cả danh mục</option>
-                    {Object.entries(serviceCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </BeautifulSelect>
-                </label>
-                <label>
-                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Dịch vụ *</span>
-                  <BeautifulSelect value={invoice.itemName} onChange={(event) => {
-                    const service = invoiceServiceCatalog.find((item) => item.name === event.target.value);
-                    setInvoice((current) => ({ ...current, itemName: event.target.value, unitPrice: service ? String(service.price) : '' }));
-                  }} className={invoiceInputClass}>
-                    <option value="">Chọn dịch vụ</option>
-                    {availableInvoiceServices.map((service) => <option key={service.id} value={service.name}>{serviceCategoryLabels[service.category]} · {service.name} · {money(service.price)}</option>)}
-                  </BeautifulSelect>
-                </label>
-                <label>
-                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Nhân viên phụ trách *</span>
-                  <BeautifulSelect value={invoice.staff} onChange={(event) => setInvoice((current) => ({ ...current, staff: event.target.value }))} className={invoiceInputClass}>
-                    <option value="">Chọn nhân viên</option>
-                    {availableInvoiceStaff.map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}
-                  </BeautifulSelect>
-                </label>
-                <div className="grid grid-cols-[100px_1fr] gap-3">
+              <legend className="mb-3 text-[9px] font-black text-slate-800">Chọn dịch vụ & nhân viên</legend>
+              <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <div className="border-b border-slate-100 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div><p className="text-[9px] font-black text-slate-800">Bảng dịch vụ</p><p className="mt-0.5 text-[7px] text-slate-400">{availableInvoiceServices.length} dịch vụ phù hợp · chọn một dòng</p></div>
+                      {invoice.itemName && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-[7px] font-black text-violet-700"><Check className="h-3 w-3" />Đã chọn dịch vụ</span>}
+                    </div>
+                    <div className="relative mt-3">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                      <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Tìm mã, tên hoặc danh mục dịch vụ..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-[9px] font-semibold outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
+                    </div>
+                    <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+                      <button type="button" onClick={() => setInvoice((current) => ({ ...current, category: 'ALL', itemName: '', unitPrice: '' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === 'ALL' ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>Tất cả</button>
+                      {Object.entries(serviceCategoryLabels).map(([value, label]) => <button key={value} type="button" onClick={() => setInvoice((current) => ({ ...current, category: value as ServiceCategory, itemName: '', unitPrice: '' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === value ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{label}</button>)}
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-auto">
+                    <table className="w-full min-w-[560px] border-collapse text-left">
+                      <thead className="sticky top-0 z-10 bg-slate-50 text-[7px] font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Dịch vụ</th><th className="px-3 py-2.5">Danh mục</th><th className="px-3 py-2.5 text-right">Đơn giá</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {availableInvoiceServices.map((service) => {
+                          const active = invoice.itemName === service.name;
+                          return <tr key={service.id} onClick={() => setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price) }))} className={`cursor-pointer transition-colors ${active ? 'bg-violet-50' : 'hover:bg-slate-50'}`}>
+                            <td className="px-3 py-3"><button type="button" aria-label={`Chọn dịch vụ ${service.name}`} aria-pressed={active} onClick={(event) => { event.stopPropagation(); setInvoice((current) => ({ ...current, itemName: service.name, unitPrice: String(service.price) })); }} className={`flex h-5 w-5 items-center justify-center rounded-full border p-0 ${active ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check className="h-3 w-3" /></button></td>
+                            <td className="px-3 py-3"><p className="text-[9px] font-black text-slate-800">{service.name}</p><p className="mt-0.5 text-[7px] font-semibold text-slate-400">{service.id}</p></td>
+                            <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-[7px] font-bold text-slate-600">{serviceCategoryLabels[service.category]}</span></td>
+                            <td className="px-3 py-3 text-right text-[9px] font-black text-slate-800">{money(service.price)}</td>
+                          </tr>;
+                        })}
+                        {!availableInvoiceServices.length && <tr><td colSpan={4} className="px-4 py-10 text-center text-[8px] font-semibold text-slate-400">Không tìm thấy dịch vụ phù hợp.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <div className="border-b border-slate-100 p-3">
+                    <div className="flex items-center justify-between gap-2"><div><p className="text-[9px] font-black text-slate-800">Bảng nhân viên</p><p className="mt-0.5 text-[7px] text-slate-400">{availableInvoiceStaff.length} nhân viên tại chi nhánh</p></div>{invoice.staff && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[7px] font-black text-emerald-700"><Check className="h-3 w-3" />Đã chọn</span>}</div>
+                    <div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Tìm tên hoặc vai trò nhân viên..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-[9px] font-semibold outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></div>
+                  </div>
+                  <div className="max-h-[313px] overflow-auto">
+                    <table className="w-full min-w-[360px] border-collapse text-left">
+                      <thead className="sticky top-0 z-10 bg-slate-50 text-[7px] font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Nhân viên</th><th className="px-3 py-2.5">Vai trò</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {availableInvoiceStaff.map((staff) => {
+                          const active = invoice.staff === staff.name;
+                          return <tr key={staff.name} onClick={() => setInvoice((current) => ({ ...current, staff: staff.name }))} className={`cursor-pointer transition-colors ${active ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}>
+                            <td className="px-3 py-3"><button type="button" aria-label={`Chọn nhân viên ${staff.name}`} aria-pressed={active} onClick={(event) => { event.stopPropagation(); setInvoice((current) => ({ ...current, staff: staff.name })); }} className={`flex h-5 w-5 items-center justify-center rounded-full border p-0 ${active ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check className="h-3 w-3" /></button></td>
+                            <td className="px-3 py-3"><div className="flex items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[8px] font-black text-slate-700">{staff.name.split(' ').map((part) => part[0]).slice(-2).join('')}</span><div><p className="text-[9px] font-black text-slate-800">{staff.name}</p><p className="mt-0.5 text-[7px] text-slate-400">Chi nhánh {staff.branch}</p></div></div></td>
+                            <td className="px-3 py-3 text-[8px] font-semibold text-slate-500">{staff.role}</td>
+                          </tr>;
+                        })}
+                        {!availableInvoiceStaff.length && <tr><td colSpan={3} className="px-4 py-10 text-center text-[8px] font-semibold text-slate-400">Không tìm thấy nhân viên phù hợp.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-[100px_1fr] gap-3 sm:col-span-2">
                   <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số lượng *</span><input type="number" min="1" step="1" value={invoice.quantity} onChange={(event) => setInvoice((current) => ({ ...current, quantity: event.target.value }))} className={invoiceInputClass} /></label>
                   <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đơn giá *</span><input type="number" min="1" step="1000" value={invoice.unitPrice} onChange={(event) => setInvoice((current) => ({ ...current, unitPrice: event.target.value }))} className={invoiceInputClass} /></label>
                 </div>
