@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   CalendarCheck2,
@@ -205,6 +205,7 @@ const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 p
 // Appointment details remain available in the detail dialog after selecting a card.
 const SCHEDULE_HOUR_HEIGHT = 40;
 const SCHEDULE_BOTTOM_GUTTER = 22;
+const SCHEDULE_EXPANDED_STAFF_HEADER_HEIGHT = 48;
 const STAFF_COLUMNS_PER_PAGE = 6;
 
 const toDate = (date: string) => new Date(`${date}T00:00:00`);
@@ -311,6 +312,8 @@ export default function TenantAdminAppointments({
   const [didAutoLocateSchedule, setDidAutoLocateSchedule] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('SCHEDULE');
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
+  const scheduleViewportRef = useRef<HTMLDivElement | null>(null);
+  const [scheduleViewportHeight, setScheduleViewportHeight] = useState(0);
   const [statusFilter, setStatusFilter] = useState<'ALL' | AppointmentStatus>('ALL');
   const [operationalFilter, setOperationalFilter] = useState<OperationalFilter>('ALL');
   const [staffFilter, setStaffFilter] = useState('ALL');
@@ -377,6 +380,20 @@ export default function TenantAdminAppointments({
       window.removeEventListener('keydown', handleEscape);
     };
   }, [formMode, isScheduleExpanded, selectedAppointment, showCancelForm]);
+
+  useEffect(() => {
+    if (!isScheduleExpanded) {
+      setScheduleViewportHeight(0);
+      return;
+    }
+    const viewport = scheduleViewportRef.current;
+    if (!viewport) return;
+    const measureViewport = () => setScheduleViewportHeight(Math.floor(viewport.getBoundingClientRect().height));
+    measureViewport();
+    const observer = new ResizeObserver(measureViewport);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [isScheduleExpanded]);
 
   const requireManageAccess = () => {
     if (canManage) return true;
@@ -468,8 +485,8 @@ export default function TenantAdminAppointments({
   const confirmationRate = scopedAppointments.length ? Math.round((scopedAppointments.length - pendingCount) / scopedAppointments.length * 100) : 0;
   const cancellationRate = scopedAppointments.length ? Math.round(cancelledCount / scopedAppointments.length * 100) : 0;
   const activeFilterCount = [operationalFilter !== 'ALL', statusFilter !== 'ALL', staffFilter !== 'ALL', sourceFilter !== 'ALL'].filter(Boolean).length;
-  const scheduleHourHeight = isScheduleExpanded && typeof window !== 'undefined'
-    ? Math.max(42, Math.floor((window.innerHeight - 260) / 12))
+  const scheduleHourHeight = isScheduleExpanded && scheduleViewportHeight
+    ? Math.max(24, Math.floor((scheduleViewportHeight - SCHEDULE_EXPANDED_STAFF_HEADER_HEIGHT - SCHEDULE_BOTTOM_GUTTER) / 12))
     : SCHEDULE_HOUR_HEIGHT;
   const selectedServiceDetails = form.services
     .map((name) => services.find((service) => service.name === name))
@@ -773,7 +790,7 @@ export default function TenantAdminAppointments({
                 </div>
               </div>
             </div>
-            <div className={`relative bg-white ${selectedAppointment ? 'xl:pr-[360px]' : ''} ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
+            <div ref={scheduleViewportRef} className={`relative bg-white ${selectedAppointment ? 'xl:pr-[360px]' : ''} ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
             {visibleScheduleStaff.length ? <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${Math.max(980, 72 + visibleScheduleStaff.length * 230)}px` }}>
               <div className="sticky top-0 z-20 grid border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.05)]" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${visibleScheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${visibleScheduleStaff.length}, minmax(220px, 1fr))` }}>
                 <div className="flex items-center justify-center border-r border-slate-100 text-[9px] font-black text-slate-400">GMT+7</div>
