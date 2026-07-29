@@ -124,7 +124,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     customer: '', phone: '', branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
     appointmentId: '', category: 'ALL' as ServiceCategory, itemName: '', quantity: '1', unitPrice: '', staff: '',
     discount: '0', discountCode: '', taxRate: '0', tip: '0', deposit: '0', method: 'CASH' as PaymentMethod,
-    reference: '', note: ''
+    invoiceStatus: 'PENDING' as Extract<PaymentStatus, 'PENDING' | 'PARTIAL' | 'PAID'>, reference: '', note: ''
   });
   const [capture, setCapture] = useState({ invoiceId: 'INV-7822', method: 'BANK' as PaymentMethod, amount: '580000', reference: '' });
   const [refund, setRefund] = useState({ amount: '', reason: '' });
@@ -163,7 +163,8 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     setInvoice({
       customer: '', phone: '', branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
       appointmentId: '', category: 'ALL', itemName: '', quantity: '1', unitPrice: '', staff: '',
-      discount: '0', discountCode: '', taxRate: '0', tip: '0', deposit: '0', method: 'CASH', reference: '', note: ''
+      discount: '0', discountCode: '', taxRate: '0', tip: '0', deposit: '0', method: 'CASH',
+      invoiceStatus: 'PENDING', reference: '', note: ''
     });
     setInvoiceItems([]);
     setServiceSearch('');
@@ -212,15 +213,16 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     const discount = invoiceDiscount;
     const tax = invoiceTax;
     const total = invoiceTotal;
+    const paidAmount = invoice.invoiceStatus === 'PAID' ? total : invoice.invoiceStatus === 'PENDING' ? 0 : deposit;
     if (total <= 0) {
       setFormError('Tổng hóa đơn phải lớn hơn 0đ.');
       return;
     }
-    if (deposit > total) {
-      setFormError(`Số tiền đã thu không được vượt quá tổng hóa đơn ${money(total)}.`);
+    if (invoice.invoiceStatus === 'PARTIAL' && (deposit <= 0 || deposit >= total)) {
+      setFormError(`Hóa đơn thanh toán một phần phải có số tiền đã thu lớn hơn 0đ và nhỏ hơn ${money(total)}.`);
       return;
     }
-    if (deposit > 0 && invoice.method !== 'CASH' && !invoice.reference.trim()) {
+    if (paidAmount > 0 && invoice.method !== 'CASH' && !invoice.reference.trim()) {
       setFormError('Khoản thu điện tử bắt buộc có mã giao dịch để đối soát.');
       return;
     }
@@ -239,13 +241,13 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       discountCode: normalizedDiscountCode || undefined,
       tax,
       tip,
-      deposit,
+      deposit: paidAmount,
       total,
-      paid: deposit,
+      paid: paidAmount,
       refunded: 0,
-      status: deposit >= total ? 'PAID' : deposit > 0 ? 'PARTIAL' : 'PENDING',
-      method: deposit > 0 ? invoice.method : undefined,
-      reference: deposit > 0 ? invoice.reference.trim() || `CASH-${Date.now().toString().slice(-6)}` : undefined,
+      status: invoice.invoiceStatus,
+      method: paidAmount > 0 ? invoice.method : undefined,
+      reference: paidAmount > 0 ? invoice.reference.trim() || `CASH-${Date.now().toString().slice(-6)}` : undefined,
       cashier: roleLabel,
       source: 'Tạo thủ công bởi Tenant Admin',
       items: [
@@ -254,7 +256,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       ],
       note: invoice.note.trim() || undefined,
       audit: [
-        `${createdAt} · ${roleLabel} tạo hóa đơn gồm ${invoiceItems.length} dịch vụ${deposit > 0 ? ` và ghi nhận đã thu ${money(deposit)}` : ''}`,
+        `${createdAt} · ${roleLabel} tạo hóa đơn gồm ${invoiceItems.length} dịch vụ ở trạng thái ${statusMeta[invoice.invoiceStatus].label}${paidAmount > 0 ? ` và ghi nhận đã thu ${money(paidAmount)}` : ''}`,
         ...(normalizedDiscountCode ? [`${createdAt} · Áp dụng mã ${normalizedDiscountCode} giảm ${appliedDiscount?.rate || 0}%`] : []),
         ...(tax > 0 ? [`${createdAt} · Tính thuế VAT ${taxRate}% tương đương ${money(tax)}`] : [])
       ]
@@ -402,11 +404,14 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
               </div>
             </fieldset>
             <fieldset className="border-t border-slate-100 pt-5">
-              <legend className="mb-3 text-[9px] font-black text-slate-800">Thanh toán ban đầu</legend>
+              <legend className="mb-3 text-[9px] font-black text-slate-800">Trạng thái & thanh toán ban đầu</legend>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đã thu / tiền cọc</span><input type="number" min="0" max={invoiceTotal || undefined} step="1000" value={invoice.deposit} onChange={(event) => setInvoice((current) => ({ ...current, deposit: event.target.value }))} className={invoiceInputClass} /></label>
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Phương thức</span><BeautifulSelect value={invoice.method} onChange={(event) => setInvoice((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className={invoiceInputClass}>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label>
-                {Number(invoice.deposit) > 0 && invoice.method !== 'CASH' && <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giao dịch *</span><input value={invoice.reference} onChange={(event) => setInvoice((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className={invoiceInputClass} /></label>}
+                <div className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Trạng thái hóa đơn *</span><div className="grid gap-2 sm:grid-cols-3">{(['PENDING', 'PARTIAL', 'PAID'] as const).map((status) => <button key={status} type="button" onClick={() => setInvoice((current) => ({ ...current, invoiceStatus: status, deposit: status === 'PENDING' ? '0' : current.deposit, reference: status === 'PENDING' ? '' : current.reference }))} className={`flex min-h-14 items-center justify-between rounded-xl border px-3 text-left shadow-none ${invoice.invoiceStatus === status ? status === 'PAID' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-4 ring-emerald-100' : status === 'PARTIAL' ? 'border-amber-500 bg-amber-50 text-amber-700 ring-4 ring-amber-100' : 'border-blue-500 bg-blue-50 text-blue-700 ring-4 ring-blue-100' : 'border-slate-200 bg-white text-slate-500'}`}><span><span className="block text-[9px] font-black">{statusMeta[status].label}</span><span className="mt-1 block text-[7px] font-semibold opacity-70">{status === 'PENDING' ? 'Chưa ghi nhận thu tiền' : status === 'PARTIAL' ? 'Đã thu một phần hóa đơn' : 'Đã thu đủ tổng hóa đơn'}</span></span><span className={`h-2.5 w-2.5 rounded-full ${statusMeta[status].dot}`} /></button>)}</div></div>
+                {invoice.invoiceStatus === 'PENDING' ? <div className="flex items-center gap-2 rounded-xl bg-blue-50 p-3 text-[8px] font-semibold text-blue-700 sm:col-span-2"><Clock3 className="h-4 w-4 shrink-0" />Hóa đơn được tạo với công nợ {money(invoiceTotal)} và chưa ghi nhận phương thức thanh toán.</div> : <>
+                  {invoice.invoiceStatus === 'PARTIAL' ? <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số tiền đã thu *</span><input type="number" min="1" max={Math.max(1, invoiceTotal - 1)} step="1000" value={invoice.deposit} onChange={(event) => setInvoice((current) => ({ ...current, deposit: event.target.value }))} className={invoiceInputClass} /></label> : <div><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số tiền đã thu</span><div className="flex h-11 items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[10px] font-black text-emerald-700">{money(invoiceTotal)}</div></div>}
+                  <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Phương thức *</span><BeautifulSelect value={invoice.method} onChange={(event) => setInvoice((current) => ({ ...current, method: event.target.value as PaymentMethod, reference: event.target.value === 'CASH' ? '' : current.reference }))} className={invoiceInputClass}>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label>
+                  {invoice.method !== 'CASH' && <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giao dịch *</span><input value={invoice.reference} onChange={(event) => setInvoice((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className={invoiceInputClass} /></label>}
+                </>}
                 <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Ghi chú</span><textarea value={invoice.note} onChange={(event) => setInvoice((current) => ({ ...current, note: event.target.value }))} placeholder="Thông tin cần lưu cùng hóa đơn..." className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label>
               </div>
             </fieldset>
