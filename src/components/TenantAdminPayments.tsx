@@ -11,6 +11,7 @@ import BeautifulSelect from './BeautifulSelect';
 type PaymentStatus = 'PAID' | 'PARTIAL' | 'PENDING' | 'REFUNDED' | 'FAILED';
 type PaymentMethod = 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
 type BranchCode = 'Q1' | 'Q3';
+type ServiceCategory = 'ALL' | 'NAIL_ART' | 'MANICURE' | 'PEDICURE' | 'GEL' | 'ACRYLIC' | 'SPA';
 
 interface PaymentItem { name: string; quantity: number; amount: number; staff: string; }
 interface PaymentRecord {
@@ -49,6 +50,37 @@ const statusMeta: Record<PaymentStatus, { label: string; badge: string; dot: str
   FAILED: { label: 'Giao dịch lỗi', badge: 'bg-slate-100 text-slate-700 ring-slate-200', dot: 'bg-slate-500' }
 };
 
+const serviceCategoryLabels: Record<Exclude<ServiceCategory, 'ALL'>, string> = {
+  NAIL_ART: 'Nail Art',
+  MANICURE: 'Manicure',
+  PEDICURE: 'Pedicure',
+  GEL: 'Gel & Sơn gel',
+  ACRYLIC: 'Acrylic',
+  SPA: 'Spa & Phục hồi'
+};
+
+const invoiceServiceCatalog = [
+  { id: 'SVC-001', name: 'Nail Art Premium', category: 'NAIL_ART' as const, price: 950_000, branches: ['Q1', 'Q3'] as BranchCode[] },
+  { id: 'SVC-002', name: 'Combo manicure & sơn gel', category: 'MANICURE' as const, price: 450_000, branches: ['Q1', 'Q3'] as BranchCode[] },
+  { id: 'SVC-003', name: 'Pedicure spa chuyên sâu', category: 'PEDICURE' as const, price: 650_000, branches: ['Q1', 'Q3'] as BranchCode[] },
+  { id: 'SVC-004', name: 'Đắp gel nối móng', category: 'GEL' as const, price: 890_000, branches: ['Q1', 'Q3'] as BranchCode[] },
+  { id: 'SVC-005', name: 'Acrylic Full Set', category: 'ACRYLIC' as const, price: 1_350_000, branches: ['Q3'] as BranchCode[] },
+  { id: 'SVC-006', name: 'Sơn gel Hàn Quốc', category: 'GEL' as const, price: 420_000, branches: ['Q1', 'Q3'] as BranchCode[] },
+  { id: 'SVC-007', name: 'Chăm sóc gót chân', category: 'SPA' as const, price: 320_000, branches: ['Q1', 'Q3'] as BranchCode[] },
+  { id: 'SVC-008', name: 'Nail Art cô dâu', category: 'NAIL_ART' as const, price: 1_650_000, branches: ['Q1'] as BranchCode[] }
+];
+
+const invoiceStaffDirectory = [
+  { name: 'Thảo Nguyễn', branch: 'Q3' as const, role: 'Nail Artist Senior' },
+  { name: 'Minh Châu', branch: 'Q3' as const, role: 'Pedicure Specialist' },
+  { name: 'Quốc Bảo', branch: 'Q3' as const, role: 'Pedicure Specialist' },
+  { name: 'Thuỳ Dương', branch: 'Q3' as const, role: 'Gel Nail Technician' },
+  { name: 'An Nhiên', branch: 'Q3' as const, role: 'Nail Art Technician' },
+  { name: 'Khánh Vy', branch: 'Q3' as const, role: 'Extension Specialist' },
+  { name: 'Hà My', branch: 'Q1' as const, role: 'Nail Artist Senior' },
+  { name: 'Gia Huy', branch: 'Q1' as const, role: 'Nail Technician' }
+];
+
 const seed: PaymentRecord[] = [
   { id: 'INV-7821', appointmentId: 'APT-1072', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', branch: 'Q3', createdAt: '19/07/2026 · 14:28', subtotal: 1020000, discount: 50000, tip: 100000, deposit: 300000, total: 1070000, paid: 1070000, refunded: 0, status: 'PAID', method: 'MOMO', reference: 'MOMO-190726-8421', cashier: 'Lê Hoàng Nam', source: 'POS tại quầy', items: [{ name: 'Gel Manicure + Nail Art', quantity: 1, amount: 850000, staff: 'Thảo Nguyễn' }, { name: 'Dầu dưỡng móng', quantity: 1, amount: 170000, staff: 'Quầy bán lẻ' }], audit: ['14:28 · Lê Hoàng Nam xác nhận thanh toán MoMo', '14:25 · Đã áp dụng ưu đãi thành viên 50.000đ', '10:02 · Ghi nhận đặt cọc 300.000đ'] },
   { id: 'INV-7822', appointmentId: 'APT-1074', customer: 'Trần Thu Hà', phone: '0908 337 912', branch: 'Q3', createdAt: '19/07/2026 · 14:16', subtotal: 780000, discount: 0, tip: 0, deposit: 200000, total: 780000, paid: 200000, refunded: 0, status: 'PARTIAL', method: 'BANK', reference: 'DEP-7822', cashier: 'Minh Châu', source: 'Lịch hẹn tại quầy', items: [{ name: 'Pedicure Spa + Sơn gel', quantity: 1, amount: 780000, staff: 'Minh Châu' }], note: 'Khách thanh toán phần còn lại sau khi hoàn tất dịch vụ.', audit: ['14:16 · Hóa đơn được tạo từ lịch hẹn APT-1074', '12:08 · Đã đối soát tiền cọc 200.000đ'] },
@@ -66,12 +98,13 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const [methodFilter, setMethodFilter] = useState<'ALL' | PaymentMethod>('ALL');
   const [selected, setSelected] = useState<PaymentRecord | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [catalogCreateOpen, setCatalogCreateOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [formError, setFormError] = useState('');
   const [invoice, setInvoice] = useState({
     customer: '', phone: '', branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
-    appointmentId: '', itemName: '', quantity: '1', unitPrice: '', staff: '',
+    appointmentId: '', category: 'ALL' as ServiceCategory, itemName: '', quantity: '1', unitPrice: '', staff: '',
     discount: '0', tip: '0', deposit: '0', method: 'CASH' as PaymentMethod,
     reference: '', note: ''
   });
@@ -80,7 +113,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const canManage = accessMode === 'full' && !readOnlyReason;
 
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(records)); }, [records, storageKey]);
-  useEffect(() => { if (!selected && !createOpen && !captureOpen && !refundOpen) return; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelected(null); setCreateOpen(false); setCaptureOpen(false); setRefundOpen(false); } }; addEventListener('keydown', close); return () => { document.body.style.overflow = previous; removeEventListener('keydown', close); }; }, [captureOpen, createOpen, refundOpen, selected]);
+  useEffect(() => { if (!selected && !createOpen && !catalogCreateOpen && !captureOpen && !refundOpen) return; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelected(null); setCreateOpen(false); setCatalogCreateOpen(false); setCaptureOpen(false); setRefundOpen(false); } }; addEventListener('keydown', close); return () => { document.body.style.overflow = previous; removeEventListener('keydown', close); }; }, [captureOpen, catalogCreateOpen, createOpen, refundOpen, selected]);
 
   const requireManage = () => { if (canManage) return true; onNotify?.(readOnlyReason || 'Gói hiện tại chỉ cho phép xem dữ liệu thanh toán.'); return false; };
   const scoped = records.filter((record) => selectedBranch === 'ALL' || record.branch === selectedBranch);
@@ -89,6 +122,10 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const outstanding = scoped.reduce((sum, record) => sum + Math.max(0, record.total - record.paid), 0);
   const refunded = scoped.reduce((sum, record) => sum + record.refunded, 0);
   const netRevenue = collected - refunded;
+  const availableInvoiceServices = invoiceServiceCatalog.filter((service) =>
+    service.branches.includes(invoice.branch) && (invoice.category === 'ALL' || service.category === invoice.category)
+  );
+  const availableInvoiceStaff = invoiceStaffDirectory.filter((staff) => staff.branch === invoice.branch);
   const invoiceSubtotal = Math.max(0, Number(invoice.quantity) || 0) * Math.max(0, Number(invoice.unitPrice) || 0);
   const invoiceTotal = Math.max(0, invoiceSubtotal - Math.max(0, Number(invoice.discount) || 0) + Math.max(0, Number(invoice.tip) || 0));
 
@@ -96,12 +133,12 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     if (!requireManage()) return;
     setInvoice({
       customer: '', phone: '', branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
-      appointmentId: '', itemName: '', quantity: '1', unitPrice: '', staff: '',
+      appointmentId: '', category: 'ALL', itemName: '', quantity: '1', unitPrice: '', staff: '',
       discount: '0', tip: '0', deposit: '0', method: 'CASH', reference: '', note: ''
     });
     setSelected(null);
     setFormError('');
-    setCreateOpen(true);
+    setCatalogCreateOpen(true);
   };
   const submitInvoice = (event: FormEvent) => {
     event.preventDefault();
@@ -169,6 +206,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     };
     setRecords((current) => [newRecord, ...current]);
     setCreateOpen(false);
+    setCatalogCreateOpen(false);
     setSelected(newRecord);
     setTab('ALL');
     onNotify?.(`Đã tạo hóa đơn ${newRecord.id} cho ${newRecord.customer}.`);
@@ -206,5 +244,90 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     {captureOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setCaptureOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitCapture} className="relative w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5"><div><p className="text-[9px] font-black uppercase tracking-wide text-emerald-600">Thu tiền tại quầy</p><h2 className="mt-1 text-lg font-black text-slate-900">Ghi nhận thanh toán</h2><p className="mt-1 text-[9px] text-slate-500">Kiểm tra đúng số tiền và mã giao dịch trước khi xác nhận.</p></div><button type="button" onClick={() => setCaptureOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="grid gap-4 p-5 sm:grid-cols-2">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700 sm:col-span-2"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Hóa đơn cần thu *</span><BeautifulSelect value={capture.invoiceId} onChange={(event) => { const target = records.find((item) => item.id === event.target.value); setCapture((current) => ({ ...current, invoiceId: event.target.value, amount: String(target ? target.total - target.paid : 0) })); }} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]">{scoped.filter((item) => item.paid < item.total).map((item) => <option key={item.id} value={item.id}>{item.id} · {item.customer} · Còn {money(item.total - item.paid)}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số tiền thu *</span><input type="number" min="1" step="1000" value={capture.amount} onChange={(event) => setCapture((current) => ({ ...current, amount: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Phương thức *</span><BeautifulSelect value={capture.method} onChange={(event) => setCapture((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]">{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mã giao dịch {capture.method === 'CASH' ? '(không bắt buộc)' : '*'}</span><input value={capture.reference} onChange={(event) => setCapture((current) => ({ ...current, reference: event.target.value }))} placeholder={capture.method === 'CASH' ? 'Tự động tạo mã phiếu thu' : 'Nhập mã từ ngân hàng hoặc cổng thanh toán'} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-[10px] outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></label></div><footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4"><button type="button" onClick={() => setCaptureOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-[9px] font-black text-white shadow-lg shadow-emerald-200"><Check className="h-4 w-4" />Xác nhận đã thu</button></footer></form></div>}
 
     {refundOpen && selected && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu hoàn tiền" onClick={() => setRefundOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitRefund} className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5"><div><p className="text-[9px] font-black uppercase tracking-wide text-rose-600">Kiểm soát hoàn tiền</p><h2 className="mt-1 text-lg font-black text-slate-900">Hoàn tiền {selected.id}</h2><p className="mt-1 text-[9px] text-slate-500">Có thể hoàn tối đa {money(selected.paid - selected.refunded)}.</p></div><button type="button" onClick={() => setRefundOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="space-y-4 p-5">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số tiền hoàn *</span><input type="number" min="1" step="1000" value={refund.amount} onChange={(event) => setRefund((current) => ({ ...current, amount: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Lý do hoàn tiền *</span><textarea value={refund.reason} onChange={(event) => setRefund((current) => ({ ...current, reason: event.target.value }))} placeholder="Mô tả lý do, phạm vi dịch vụ và người đã xác nhận..." className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" /></label><div className="flex gap-2 rounded-xl bg-amber-50 p-3 text-[8px] leading-4 text-amber-800"><ShieldCheck className="h-4 w-4 shrink-0" />Thao tác hoàn tiền được lưu vào nhật ký kiểm soát và cần được đối soát lại với cổng thanh toán.</div></div><footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4"><button type="button" onClick={() => setRefundOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-[9px] font-black text-white shadow-lg shadow-rose-200"><ArrowDownRight className="h-4 w-4" />Xác nhận hoàn tiền</button></footer></form></div>}
+    {catalogCreateOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6">
+        <button type="button" aria-label="Đóng biểu mẫu tạo hóa đơn" onClick={() => setCatalogCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
+        <form onSubmit={submitInvoice} role="dialog" aria-modal="true" aria-labelledby="catalog-create-invoice-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Tenant Admin · Hóa đơn thủ công</p>
+              <h2 id="catalog-create-invoice-title" className="mt-1 text-xl font-black text-slate-950">Tạo hóa đơn mới</h2>
+              <p className="mt-1 text-[9px] text-slate-500">Chọn dịch vụ và nhân viên trực tiếp từ danh mục của salon.</p>
+            </div>
+            <button type="button" onClick={() => setCatalogCreateOpen(false)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button>
+          </header>
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
+            {formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}
+            <fieldset>
+              <legend className="mb-3 text-[9px] font-black text-slate-800">Khách hàng & nguồn hóa đơn</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tên khách hàng *</span><input value={invoice.customer} onChange={(event) => setInvoice((current) => ({ ...current, customer: event.target.value }))} placeholder="Nguyễn Minh Anh" className={invoiceInputClass} /></label>
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số điện thoại *</span><input inputMode="tel" value={invoice.phone} onChange={(event) => setInvoice((current) => ({ ...current, phone: event.target.value }))} placeholder="0912 345 678" className={invoiceInputClass} /></label>
+                <label>
+                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Chi nhánh *</span>
+                  <BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode, category: 'ALL', itemName: '', unitPrice: '', staff: '' }))} className={invoiceInputClass}>
+                    <option value="Q3">Chi nhánh Quận 3</option>
+                    <option value="Q1">Chi nhánh Quận 1</option>
+                  </BeautifulSelect>
+                </label>
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã lịch hẹn (không bắt buộc)</span><input value={invoice.appointmentId} onChange={(event) => setInvoice((current) => ({ ...current, appointmentId: event.target.value }))} placeholder="APT-..." className={invoiceInputClass} /></label>
+              </div>
+            </fieldset>
+            <fieldset className="border-t border-slate-100 pt-5">
+              <legend className="mb-3 text-[9px] font-black text-slate-800">Danh mục, dịch vụ & nhân viên</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Danh mục dịch vụ</span>
+                  <BeautifulSelect value={invoice.category} onChange={(event) => setInvoice((current) => ({ ...current, category: event.target.value as ServiceCategory, itemName: '', unitPrice: '' }))} className={invoiceInputClass}>
+                    <option value="ALL">Tất cả danh mục</option>
+                    {Object.entries(serviceCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </BeautifulSelect>
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Dịch vụ *</span>
+                  <BeautifulSelect value={invoice.itemName} onChange={(event) => {
+                    const service = invoiceServiceCatalog.find((item) => item.name === event.target.value);
+                    setInvoice((current) => ({ ...current, itemName: event.target.value, unitPrice: service ? String(service.price) : '' }));
+                  }} className={invoiceInputClass}>
+                    <option value="">Chọn dịch vụ</option>
+                    {availableInvoiceServices.map((service) => <option key={service.id} value={service.name}>{serviceCategoryLabels[service.category]} · {service.name} · {money(service.price)}</option>)}
+                  </BeautifulSelect>
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Nhân viên phụ trách *</span>
+                  <BeautifulSelect value={invoice.staff} onChange={(event) => setInvoice((current) => ({ ...current, staff: event.target.value }))} className={invoiceInputClass}>
+                    <option value="">Chọn nhân viên</option>
+                    {availableInvoiceStaff.map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}
+                  </BeautifulSelect>
+                </label>
+                <div className="grid grid-cols-[100px_1fr] gap-3">
+                  <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số lượng *</span><input type="number" min="1" step="1" value={invoice.quantity} onChange={(event) => setInvoice((current) => ({ ...current, quantity: event.target.value }))} className={invoiceInputClass} /></label>
+                  <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đơn giá *</span><input type="number" min="1" step="1000" value={invoice.unitPrice} onChange={(event) => setInvoice((current) => ({ ...current, unitPrice: event.target.value }))} className={invoiceInputClass} /></label>
+                </div>
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Giảm giá</span><input type="number" min="0" step="1000" value={invoice.discount} onChange={(event) => setInvoice((current) => ({ ...current, discount: event.target.value }))} className={invoiceInputClass} /></label>
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label>
+              </div>
+              <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] text-white">
+                <div className="p-4"><p className="text-[8px] font-bold text-slate-400">Tạm tính</p><p className="mt-1 text-base font-black">{money(invoiceSubtotal)}</p></div>
+                <div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-violet-300">Tổng hóa đơn</p><p className="mt-1 text-base font-black">{money(invoiceTotal)}</p></div>
+              </div>
+            </fieldset>
+            <fieldset className="border-t border-slate-100 pt-5">
+              <legend className="mb-3 text-[9px] font-black text-slate-800">Thanh toán ban đầu</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đã thu / tiền cọc</span><input type="number" min="0" max={invoiceTotal || undefined} step="1000" value={invoice.deposit} onChange={(event) => setInvoice((current) => ({ ...current, deposit: event.target.value }))} className={invoiceInputClass} /></label>
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Phương thức</span><BeautifulSelect value={invoice.method} onChange={(event) => setInvoice((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className={invoiceInputClass}>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label>
+                {Number(invoice.deposit) > 0 && invoice.method !== 'CASH' && <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giao dịch *</span><input value={invoice.reference} onChange={(event) => setInvoice((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className={invoiceInputClass} /></label>}
+                <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Ghi chú</span><textarea value={invoice.note} onChange={(event) => setInvoice((current) => ({ ...current, note: event.target.value }))} placeholder="Thông tin cần lưu cùng hóa đơn..." className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label>
+              </div>
+            </fieldset>
+          </div>
+          <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">
+            <p className="hidden text-[8px] font-semibold text-slate-400 sm:block">Giá được tự động điền theo dịch vụ và vẫn có thể điều chỉnh trước khi lưu.</p>
+            <div className="ml-auto flex gap-2"><button type="button" onClick={() => setCatalogCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><ReceiptText className="h-4 w-4" />Tạo hóa đơn</button></div>
+          </footer>
+        </form>
+      </div>
+    )}
   </div>;
 }
