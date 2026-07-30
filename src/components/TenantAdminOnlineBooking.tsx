@@ -105,6 +105,8 @@ export interface TechnicianAvailability {
   offReason?: string;
 }
 
+type BookingActionConfirmation = 'CONFIRM' | 'PROPOSE_TIME' | 'CANCEL';
+
 interface TenantAdminOnlineBookingProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
@@ -492,6 +494,20 @@ const technicianIsAvailable = (technician: TechnicianAvailability, booking: Mobi
   technician.status === 'WORKING'
   && technician.branch === booking.branch
   && !technicianHasTimeConflict(technician, booking.time);
+const enforceDepositRule = (items: MobileAppBooking[]) =>
+  items.map((booking) => {
+    if (
+      booking.depositStatus === 'UNPAID'
+      && (booking.status === 'CONFIRMED' || booking.status === 'DEPOSITED')
+    ) {
+      return {
+        ...booking,
+        status: 'PENDING' as OnlineBookingStatus,
+        updatedAt: 'Đang chờ khách thanh toán tiền cọc',
+      };
+    }
+    return booking;
+  });
 
 export default function TenantAdminOnlineBooking({
   searchQuery,
@@ -509,7 +525,8 @@ export default function TenantAdminOnlineBooking({
   const [bookings, setBookings] = useState<MobileAppBooking[]>(() => {
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : initialMobileBookingsSeed;
+      const parsed = stored ? JSON.parse(stored) : initialMobileBookingsSeed;
+      return enforceDepositRule(Array.isArray(parsed) ? parsed : initialMobileBookingsSeed);
     } catch {
       return initialMobileBookingsSeed;
     }
@@ -558,6 +575,7 @@ export default function TenantAdminOnlineBooking({
   const [notice, setNotice] = useState('');
   const [validationError, setValidationError] = useState('');
   const [assignmentNotice, setAssignmentNotice] = useState('');
+  const [pendingAction, setPendingAction] = useState<BookingActionConfirmation | null>(null);
 
   const canManage = accessMode === 'full';
 
@@ -592,6 +610,7 @@ export default function TenantAdminOnlineBooking({
       setValidationError('');
       setProposeOpen(false);
       setCancelOpen(false);
+      setPendingAction(null);
     }
   }, [selectedBooking, technicians]);
 
@@ -712,8 +731,30 @@ export default function TenantAdminOnlineBooking({
   };
 
   // Action: Confirm Booking with strict validation
+  const requestConfirmBooking = (booking: MobileAppBooking) => {
+    if (!requireManage()) return;
+
+    if (booking.depositStatus !== 'PAID') {
+      setValidationError(
+        `Lịch ${booking.id} chưa nhận được tiền cọc. Vui lòng chờ khách thanh toán trước khi xác nhận.`
+      );
+      return;
+    }
+
+    setValidationError('');
+    setPendingAction('CONFIRM');
+  };
+
   const handleConfirmBooking = (booking: MobileAppBooking) => {
     if (!requireManage()) return;
+
+    if (booking.depositStatus !== 'PAID') {
+      setPendingAction(null);
+      setValidationError(
+        `Lịch ${booking.id} chưa nhận được tiền cọc. Không thể xác nhận lịch khi tiền cọc chưa được thanh toán.`
+      );
+      return;
+    }
 
     // Resolve an unavailable requested technician before confirming.
     let resolvedTechId = chosenTechId || 'ANY';
@@ -732,7 +773,7 @@ export default function TenantAdminOnlineBooking({
     }
 
     // Success confirmation
-    const newStatus: OnlineBookingStatus = booking.depositStatus === 'PAID' ? 'DEPOSITED' : 'CONFIRMED';
+    const newStatus: OnlineBookingStatus = 'CONFIRMED';
     const assignedTechObj = technicians.find((t) => t.id === resolvedTechId);
 
     const updatedBooking: MobileAppBooking = {
@@ -755,7 +796,7 @@ export default function TenantAdminOnlineBooking({
   };
 
   // Action: Propose Alternative Time
-  const handleProposeTime = (e: FormEvent, booking: MobileAppBooking) => {
+  const requestProposeTime = (e: FormEvent) => {
     e.preventDefault();
     if (!requireManage()) return;
 
@@ -764,6 +805,11 @@ export default function TenantAdminOnlineBooking({
       return;
     }
 
+    setValidationError('');
+    setPendingAction('PROPOSE_TIME');
+  };
+
+  const handleProposeTime = (booking: MobileAppBooking) => {
     const updatedBooking: MobileAppBooking = {
       ...booking,
       status: 'NEEDS_ADJUSTMENT',
@@ -780,10 +826,14 @@ export default function TenantAdminOnlineBooking({
   };
 
   // Action: Cancel Booking
-  const handleCancelBooking = (e: FormEvent, booking: MobileAppBooking) => {
+  const requestCancelBooking = (e: FormEvent) => {
     e.preventDefault();
     if (!requireManage()) return;
 
+    setPendingAction('CANCEL');
+  };
+
+  const handleCancelBooking = (booking: MobileAppBooking) => {
     const fullReason = customCancelNote ? `${cancelReason}: ${customCancelNote}` : cancelReason;
 
     const updatedBooking: MobileAppBooking = {
@@ -797,6 +847,23 @@ export default function TenantAdminOnlineBooking({
     setSelectedBooking(updatedBooking);
     setCancelOpen(false);
     setNotice(`Đã từ chối/hủy lịch hẹn ${booking.id}. Lý do: ${fullReason}`);
+  };
+
+  const handleConfirmedAction = () => {
+    if (!selectedBooking || !pendingAction) return;
+
+    const action = pendingAction;
+    setPendingAction(null);
+
+    if (action === 'CONFIRM') {
+      handleConfirmBooking(selectedBooking);
+      return;
+    }
+    if (action === 'PROPOSE_TIME') {
+      handleProposeTime(selectedBooking);
+      return;
+    }
+    handleCancelBooking(selectedBooking);
   };
 
   // Action: Quick Status Update
@@ -1587,15 +1654,26 @@ export default function TenantAdminOnlineBooking({
                       <CalendarClock className="h-4 w-4" /> Đề xuất giờ khác
                     </button>
 
-                    {['PENDING', 'NEEDS_ADJUSTMENT'].includes(selectedBooking.status) ? (
-                      <button
-                        type="button"
-                        onClick={() => handleConfirmBooking(selectedBooking)}
-                        disabled={!canManage}
-                        className="flex h-10 items-center gap-1.5 rounded-xl border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 disabled:opacity-50"
-                      >
-                        <Check className="h-4 w-4" /> Xác nhận lịch hẹn
-                      </button>
+                    {['PENDING', 'NEEDS_ADJUSTMENT', 'DEPOSITED'].includes(selectedBooking.status) ? (
+                      selectedBooking.depositStatus === 'PAID' ? (
+                        <button
+                          type="button"
+                          onClick={() => requestConfirmBooking(selectedBooking)}
+                          disabled={!canManage}
+                          className="flex h-10 items-center gap-1.5 rounded-xl border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 disabled:opacity-50"
+                        >
+                          <Check className="h-4 w-4" /> Xác nhận lịch hẹn
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="inline-flex h-10 cursor-not-allowed items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-4 text-xs font-black text-amber-800"
+                          title="Khách cần thanh toán tiền cọc trước khi salon xác nhận lịch"
+                        >
+                          <AlertTriangle className="h-4 w-4" /> Chờ khách đặt cọc
+                        </button>
+                      )
                     ) : (
                       <span className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-xs font-black text-emerald-700">
                         <CheckCircle2 className="h-4 w-4" /> Lịch đã được xác nhận
@@ -1846,7 +1924,7 @@ export default function TenantAdminOnlineBooking({
             {/* Sub-form: Propose Alternative Time */}
             {proposeOpen && (
               <form
-                onSubmit={(e) => handleProposeTime(e, selectedBooking)}
+                onSubmit={requestProposeTime}
                 className="rounded-2xl border border-orange-200 bg-orange-50/80 p-4 space-y-3 animate-fadeIn"
               >
                 <div className="flex items-center justify-between border-b border-orange-200 pb-2">
@@ -1919,7 +1997,7 @@ export default function TenantAdminOnlineBooking({
             {/* Sub-form: Reject / Cancel Booking */}
             {cancelOpen && (
               <form
-                onSubmit={(e) => handleCancelBooking(e, selectedBooking)}
+                onSubmit={requestCancelBooking}
                 className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 space-y-3 animate-fadeIn"
               >
                 <div className="flex items-center justify-between border-b border-rose-200 pb-2">
@@ -1979,6 +2057,93 @@ export default function TenantAdminOnlineBooking({
                   </button>
                 </div>
               </form>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Final confirmation before applying a booking action */}
+      {selectedBooking && pendingAction && (
+        <Modal
+          isOpen={true}
+          onClose={() => setPendingAction(null)}
+          maxWidth="md"
+          zIndex="z-[130]"
+          closeOnOverlayClick={false}
+          title={
+            pendingAction === 'CONFIRM'
+              ? 'Xác nhận lịch hẹn?'
+              : pendingAction === 'PROPOSE_TIME'
+              ? 'Gửi đề xuất đổi giờ?'
+              : 'Xác nhận hủy lịch?'
+          }
+          subtitle={`${selectedBooking.id} · ${selectedBooking.customerName}`}
+          headerIcon={
+            pendingAction === 'CONFIRM' ? (
+              <CheckCircle2 className="h-5 w-5" />
+            ) : pendingAction === 'PROPOSE_TIME' ? (
+              <CalendarClock className="h-5 w-5" />
+            ) : (
+              <XCircle className="h-5 w-5 text-rose-600" />
+            )
+          }
+          footer={
+            <div className="flex w-full justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingAction(null)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Hủy thao tác
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmedAction}
+                className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-black text-white shadow-md ${
+                  pendingAction === 'CANCEL'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : pendingAction === 'PROPOSE_TIME'
+                    ? 'bg-orange-600 hover:bg-orange-700'
+                    : 'bg-violet-600 hover:bg-violet-700'
+                }`}
+              >
+                {pendingAction === 'CONFIRM' ? (
+                  <><Check className="h-4 w-4" /> Xác nhận lịch hẹn</>
+                ) : pendingAction === 'PROPOSE_TIME' ? (
+                  <><Send className="h-4 w-4" /> Xác nhận gửi</>
+                ) : (
+                  <><XCircle className="h-4 w-4" /> Xác nhận hủy</>
+                )}
+              </button>
+            </div>
+          }
+        >
+          <div
+            className={`rounded-2xl border p-4 text-sm leading-6 ${
+              pendingAction === 'CANCEL'
+                ? 'border-rose-200 bg-rose-50 text-rose-900'
+                : pendingAction === 'PROPOSE_TIME'
+                ? 'border-orange-200 bg-orange-50 text-orange-900'
+                : 'border-violet-200 bg-violet-50 text-violet-900'
+            }`}
+          >
+            {pendingAction === 'CONFIRM' && (
+              <p>
+                Xác nhận giữ chỗ lúc <strong>{selectedBooking.time} · {selectedBooking.date}</strong>.
+                Hệ thống đã ghi nhận tiền cọc <strong>{money(selectedBooking.depositAmount)}</strong>.
+              </p>
+            )}
+            {pendingAction === 'PROPOSE_TIME' && (
+              <p>
+                Gửi giờ mới <strong>{proposeTime} · {proposeDate}</strong> tới ứng dụng của khách hàng.
+                Lịch sẽ chuyển sang trạng thái chờ khách phản hồi.
+              </p>
+            )}
+            {pendingAction === 'CANCEL' && (
+              <p>
+                Lịch hẹn sẽ bị hủy với lý do: <strong>{cancelReason}</strong>
+                {customCancelNote ? ` — ${customCancelNote}` : ''}. Thao tác này sẽ được lưu vào lịch sử.
+              </p>
             )}
           </div>
         </Modal>
