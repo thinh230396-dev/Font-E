@@ -69,7 +69,7 @@ interface DebtItem {
   total: number;
   paid: number;
   dueDate: string;
-  status: 'OPEN' | 'OVERDUE' | 'PARTIAL';
+  status: 'OPEN' | 'OVERDUE' | 'PARTIAL' | 'PAID';
   reference: string;
   owner: string;
 }
@@ -140,6 +140,7 @@ const debtStatusMeta = {
   OPEN: { label: 'Chưa thanh toán', badge: 'bg-blue-50 text-blue-700 ring-blue-200' },
   PARTIAL: { label: 'Thanh toán một phần', badge: 'bg-amber-50 text-amber-700 ring-amber-200' },
   OVERDUE: { label: 'Quá hạn', badge: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  PAID: { label: 'Đã tất toán', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
 };
 
 const methodLabel: Record<PaymentMethod, string> = {
@@ -164,6 +165,16 @@ const shortMoney = (value: number) =>
   `${(value / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`;
 const branchName = (branch: BranchCode | 'ALL') =>
   branch === 'ALL' ? 'Toàn hệ thống' : branch === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3';
+const dateToTimestamp = (value: string) => {
+  const [day, month, year] = value.split('/').map(Number);
+  return new Date(year, month - 1, day).getTime();
+};
+const debtReferenceDate = dateToTimestamp('20/07/2026');
+const dueSoonLimit = debtReferenceDate + 7 * 24 * 60 * 60 * 1000;
+const normalizeDebts = (items: DebtItem[]) =>
+  items.map((item) =>
+    item.paid >= item.total ? { ...item, paid: item.total, status: 'PAID' as const } : item
+  );
 
 export default function TenantAdminFinanceCompact({
   searchQuery,
@@ -185,7 +196,16 @@ export default function TenantAdminFinanceCompact({
     }
   });
   const [cashbooks] = useState<Cashbook[]>(() => getTenantAdminInitialData(null, cashbookSeed));
-  const [debts, setDebts] = useState<DebtItem[]>(() => getTenantAdminInitialData(null, debtSeed));
+  const [debts, setDebts] = useState<DebtItem[]>(() => {
+    try {
+      const stored = localStorage.getItem(`${storageKey}:debts`);
+      return normalizeDebts(
+        getTenantAdminInitialData(stored ? JSON.parse(stored) : null, debtSeed)
+      );
+    } catch {
+      return getTenantAdminInitialData(null, debtSeed);
+    }
+  });
   const [budgets, setBudgets] = useState<BudgetItem[]>(() => {
     try {
       const stored = localStorage.getItem(`${storageKey}:budgets`);
@@ -202,6 +222,12 @@ export default function TenantAdminFinanceCompact({
   const [selectedTransaction, setSelectedTransaction] = useState<FinanceTransaction | null>(null);
   const [selectedCashbook, setSelectedCashbook] = useState<Cashbook | null>(null);
   const [selectedDebt, setSelectedDebt] = useState<DebtItem | null>(null);
+  const [debtSearch, setDebtSearch] = useState('');
+  const [debtTypeFilter, setDebtTypeFilter] = useState('ALL');
+  const [debtStatusFilter, setDebtStatusFilter] = useState('ALL');
+  const [debtPaymentAmount, setDebtPaymentAmount] = useState('');
+  const [debtPaymentNote, setDebtPaymentNote] = useState('');
+  const [debtPaymentError, setDebtPaymentError] = useState('');
   const [transactionFormOpen, setTransactionFormOpen] = useState(false);
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [budgetFormOpen, setBudgetFormOpen] = useState(false);
@@ -239,6 +265,14 @@ export default function TenantAdminFinanceCompact({
     }
   }, [budgets, storageKey]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${storageKey}:debts`, JSON.stringify(debts));
+    } catch {
+      // Local persistence is optional.
+    }
+  }, [debts, storageKey]);
+
   const requireManage = () => {
     if (canManage) return true;
     const message = readOnlyReason || 'Quyền hiện tại chỉ cho phép xem dữ liệu thu chi.';
@@ -270,6 +304,26 @@ export default function TenantAdminFinanceCompact({
     [budgets, selectedBranch]
   );
 
+  const filteredDebts = useMemo(() => {
+    const query = debtSearch.trim().toLocaleLowerCase('vi');
+    const priority = { OVERDUE: 0, OPEN: 1, PARTIAL: 1, PAID: 2 };
+    return scopedDebts
+      .filter((item) => debtTypeFilter === 'ALL' || item.type === debtTypeFilter)
+      .filter((item) => debtStatusFilter === 'ALL' || item.status === debtStatusFilter)
+      .filter(
+        (item) =>
+          !query ||
+          `${item.id} ${item.name} ${item.category} ${item.reference} ${item.owner}`
+            .toLocaleLowerCase('vi')
+            .includes(query)
+      )
+      .sort(
+        (a, b) =>
+          priority[a.status] - priority[b.status] ||
+          dateToTimestamp(a.dueDate) - dateToTimestamp(b.dueDate)
+      );
+  }, [debtSearch, debtStatusFilter, debtTypeFilter, scopedDebts]);
+
   const filteredTransactions = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase('vi');
     return scopedTransactions
@@ -299,6 +353,17 @@ export default function TenantAdminFinanceCompact({
   const pendingReconciliation = scopedCashbooks.reduce((sum, item) => sum + item.pending, 0);
   const availableBalance = ledgerBalance - pendingReconciliation;
   const overdueDebts = scopedDebts.filter((item) => item.status === 'OVERDUE');
+  const overdueAmount = overdueDebts.reduce((sum, item) => sum + item.total - item.paid, 0);
+  const dueSoonDebts = scopedDebts.filter((item) => {
+    const dueAt = dateToTimestamp(item.dueDate);
+    return (
+      item.status !== 'PAID' &&
+      item.status !== 'OVERDUE' &&
+      dueAt > debtReferenceDate &&
+      dueAt <= dueSoonLimit
+    );
+  });
+  const dueSoonAmount = dueSoonDebts.reduce((sum, item) => sum + item.total - item.paid, 0);
   const receivable = scopedDebts
     .filter((item) => item.type === 'RECEIVABLE')
     .reduce((sum, item) => sum + item.total - item.paid, 0);
@@ -384,12 +449,46 @@ export default function TenantAdminFinanceCompact({
     setNotice(`Đã duyệt và ghi sổ ${transaction.id}.`);
   };
 
-  const settleDebt = (debt: DebtItem) => {
+  const openDebtDetails = (debt: DebtItem) => {
+    setSelectedDebt(debt);
+    setDebtPaymentAmount(String(Math.max(0, debt.total - debt.paid)));
+    setDebtPaymentNote('');
+    setDebtPaymentError('');
+  };
+
+  const recordDebtPayment = (event: FormEvent) => {
+    event.preventDefault();
     if (!requireManage()) return;
-    const updated = { ...debt, paid: debt.total, status: 'OPEN' as const };
-    setDebts((current) => current.map((item) => (item.id === debt.id ? updated : item)));
+    if (!selectedDebt) return;
+    const remaining = selectedDebt.total - selectedDebt.paid;
+    const amount = Number(debtPaymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setDebtPaymentError('Vui lòng nhập số tiền lớn hơn 0đ.');
+      return;
+    }
+    if (amount > remaining) {
+      setDebtPaymentError(`Số tiền không được vượt quá khoản còn lại ${money(remaining)}.`);
+      return;
+    }
+    const paid = Math.min(selectedDebt.total, selectedDebt.paid + amount);
+    const updated: DebtItem = {
+      ...selectedDebt,
+      paid,
+      status: paid >= selectedDebt.total ? 'PAID' : 'PARTIAL',
+    };
+    setDebts((current) =>
+      current.map((item) => (item.id === selectedDebt.id ? updated : item))
+    );
     setSelectedDebt(updated);
-    setNotice(`Đã ghi nhận thanh toán đủ cho ${debt.name}.`);
+    setDebtPaymentAmount(String(Math.max(0, updated.total - updated.paid)));
+    setDebtPaymentNote('');
+    setDebtPaymentError('');
+    const action = selectedDebt.type === 'RECEIVABLE' ? 'thu' : 'trả';
+    setNotice(
+      `Đã ghi nhận ${action} ${money(amount)} cho ${selectedDebt.name}${
+        debtPaymentNote.trim() ? ` · ${debtPaymentNote.trim()}` : ''
+      }.`
+    );
   };
 
   const openBudgetForm = () => {
@@ -980,62 +1079,187 @@ export default function TenantAdminFinanceCompact({
           )}
 
           {tab === 'DEBTS' && (
-            <div>
+            <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-base font-black text-slate-900">Công nợ</h2>
-                  <p className="mt-1 text-xs text-slate-400">Ưu tiên khoản quá hạn và sắp đến hạn</p>
+                  <h2 className="text-base font-black text-slate-900">Kiểm soát công nợ</h2>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Theo dõi tiền cần thu, cần trả và các khoản đến hạn
+                  </p>
                 </div>
-                <div className="flex gap-2">
-                  <span className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
-                    Phải thu {shortMoney(receivable)}
-                  </span>
-                  <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700">
-                    Phải trả {shortMoney(payable)}
-                  </span>
+                <div className="rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-500">
+                  Cập nhật đến 20/07/2026
                 </div>
               </div>
-              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                <div className="hidden grid-cols-[1.3fr_1fr_115px_115px_115px_110px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-wide text-slate-400 lg:grid">
-                  <span>Đối tác</span>
-                  <span>Danh mục</span>
-                  <span>Tổng giá trị</span>
-                  <span>Đã trả</span>
-                  <span>Còn lại</span>
-                  <span>Hạn / trạng thái</span>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {[...scopedDebts]
-                    .sort((a, b) => Number(b.status === 'OVERDUE') - Number(a.status === 'OVERDUE'))
-                    .map((debt) => (
-                      <button
-                        key={debt.id}
-                        type="button"
-                        onClick={() => setSelectedDebt(debt)}
-                        className="grid h-auto w-full gap-3 rounded-none border-0 bg-white px-4 py-4 text-left shadow-none hover:bg-slate-50 lg:grid-cols-[1.3fr_1fr_115px_115px_115px_110px] lg:items-center"
-                      >
-                        <span>
-                          <span className="block text-xs font-black text-slate-800">{debt.name}</span>
-                          <span className="mt-1 block text-[10px] text-slate-400">
-                            {debt.id} · {branchName(debt.branch)} · {debt.owner}
-                          </span>
-                        </span>
-                        <span className="text-xs font-bold text-slate-600">{debt.category}</span>
-                        <span className="text-xs font-black text-slate-700">{money(debt.total)}</span>
-                        <span className="text-xs font-black text-emerald-700">{money(debt.paid)}</span>
-                        <span className="text-xs font-black text-rose-700">
-                          {money(debt.total - debt.paid)}
-                        </span>
-                        <span>
-                          <span className="block text-[10px] font-bold text-slate-500">{debt.dueDate}</span>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    label: 'Phải thu',
+                    hint: 'Họ đang nợ mình',
+                    value: receivable,
+                    icon: <ArrowDownLeft className="h-4 w-4" />,
+                    tone: 'border-blue-100 bg-blue-50 text-blue-800',
+                  },
+                  {
+                    label: 'Phải trả',
+                    hint: 'Mình đang nợ họ',
+                    value: payable,
+                    icon: <ArrowUpRight className="h-4 w-4" />,
+                    tone: 'border-rose-100 bg-rose-50 text-rose-800',
+                  },
+                  {
+                    label: 'Quá hạn',
+                    hint: `${overdueDebts.length} khoản cần xử lý ngay`,
+                    value: overdueAmount,
+                    icon: <AlertTriangle className="h-4 w-4" />,
+                    tone: 'border-amber-100 bg-amber-50 text-amber-800',
+                  },
+                  {
+                    label: 'Sắp đến hạn',
+                    hint: `${dueSoonDebts.length} khoản trong 7 ngày`,
+                    value: dueSoonAmount,
+                    icon: <ClipboardCheck className="h-4 w-4" />,
+                    tone: 'border-violet-100 bg-violet-50 text-violet-800',
+                  },
+                ].map((card) => (
+                  <div key={card.label} className={`rounded-2xl border p-4 ${card.tone}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-black">{card.label}</p>
+                      {card.icon}
+                    </div>
+                    <p className="mt-3 text-xl font-black">{money(card.value)}</p>
+                    <p className="mt-1 text-[10px] font-semibold opacity-70">{card.hint}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 lg:flex-row">
+                <label className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                  <input
+                    value={debtSearch}
+                    onChange={(event) => setDebtSearch(event.target.value)}
+                    placeholder="Tìm đối tác, mã công nợ, chứng từ..."
+                    className={`${inputClass} bg-white pl-10`}
+                  />
+                </label>
+                <select
+                  value={debtTypeFilter}
+                  onChange={(event) => setDebtTypeFilter(event.target.value)}
+                  className={`${inputClass} bg-white lg:w-52`}
+                >
+                  <option value="ALL">Tất cả loại công nợ</option>
+                  <option value="RECEIVABLE">Phải thu · Họ nợ mình</option>
+                  <option value="PAYABLE">Phải trả · Mình nợ họ</option>
+                </select>
+                <select
+                  value={debtStatusFilter}
+                  onChange={(event) => setDebtStatusFilter(event.target.value)}
+                  className={`${inputClass} bg-white lg:w-52`}
+                >
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="OVERDUE">Quá hạn</option>
+                  <option value="OPEN">Chưa thanh toán</option>
+                  <option value="PARTIAL">Thanh toán một phần</option>
+                  <option value="PAID">Đã tất toán</option>
+                </select>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <div className="min-w-[1080px]">
+                  <div className="grid grid-cols-[150px_1.45fr_115px_115px_115px_150px_105px_130px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    <span>Loại công nợ</span>
+                    <span>Đối tác / phụ trách</span>
+                    <span>Tổng giá trị</span>
+                    <span>Đã thanh toán</span>
+                    <span>Còn lại</span>
+                    <span>Tiến độ</span>
+                    <span>Hạn</span>
+                    <span>Trạng thái</span>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {filteredDebts.map((debt) => {
+                      const remaining = Math.max(0, debt.total - debt.paid);
+                      const progress = debt.total ? Math.min(100, (debt.paid / debt.total) * 100) : 0;
+                      return (
+                        <button
+                          key={debt.id}
+                          type="button"
+                          onClick={() => openDebtDetails(debt)}
+                          className="grid w-full grid-cols-[150px_1.45fr_115px_115px_115px_150px_105px_130px] items-center gap-3 rounded-none border-0 bg-white px-4 py-4 text-left shadow-none transition hover:bg-violet-50/40"
+                        >
                           <span
-                            className={`mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-bold ring-1 ${debtStatusMeta[debt.status].badge}`}
+                            className={`w-fit rounded-lg px-2 py-1.5 text-[9px] font-black uppercase leading-4 ${
+                              debt.type === 'RECEIVABLE'
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'bg-rose-50 text-rose-700'
+                            }`}
+                          >
+                            {debt.type === 'RECEIVABLE' ? (
+                              <>
+                                Phải thu
+                                <span className="block opacity-70">Họ nợ mình</span>
+                              </>
+                            ) : (
+                              <>
+                                Phải trả
+                                <span className="block opacity-70">Mình nợ họ</span>
+                              </>
+                            )}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-black text-slate-800">
+                              {debt.name}
+                            </span>
+                            <span className="mt-1 block truncate text-[10px] font-semibold text-slate-500">
+                              {debt.category} · {debt.owner}
+                            </span>
+                            <span className="mt-1 block text-[10px] text-slate-400">
+                              {debt.id} · {branchName(debt.branch)}
+                            </span>
+                          </span>
+                          <span className="text-xs font-black text-slate-700">{money(debt.total)}</span>
+                          <span className="text-xs font-black text-emerald-700">{money(debt.paid)}</span>
+                          <span
+                            className={`text-xs font-black ${
+                              remaining ? 'text-rose-700' : 'text-emerald-700'
+                            }`}
+                          >
+                            {money(remaining)}
+                          </span>
+                          <span>
+                            <span className="mb-1.5 flex justify-between text-[10px] font-bold text-slate-500">
+                              <span>Đã thanh toán</span>
+                              <span>{Math.round(progress)}%</span>
+                            </span>
+                            <span className="block h-2 overflow-hidden rounded-full bg-slate-100">
+                              <span
+                                className={`block h-full rounded-full ${
+                                  progress >= 100 ? 'bg-emerald-500' : 'bg-violet-500'
+                                }`}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </span>
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-600">{debt.dueDate}</span>
+                          <span
+                            className={`w-fit rounded-full px-2 py-1 text-[10px] font-bold ring-1 ${debtStatusMeta[debt.status].badge}`}
                           >
                             {debtStatusMeta[debt.status].label}
                           </span>
-                        </span>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
+                    {!filteredDebts.length && (
+                      <div className="px-4 py-12 text-center">
+                        <p className="text-sm font-black text-slate-700">Không có công nợ phù hợp</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Hãy thử đổi từ khóa hoặc bộ lọc.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1296,20 +1520,29 @@ export default function TenantAdminFinanceCompact({
             <div className="flex w-full justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setSelectedDebt(null)}
+                onClick={() => {
+                  setSelectedDebt(null);
+                  setDebtPaymentError('');
+                }}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
               >
                 Đóng
               </button>
-              <button
-                type="button"
-                onClick={() => settleDebt(selectedDebt)}
-                disabled={!canManage || selectedDebt.paid >= selectedDebt.total}
-                className="flex h-10 items-center gap-2 rounded-xl bg-violet-600 px-4 text-xs font-black text-white disabled:opacity-50"
-              >
-                <Check className="h-4 w-4" />
-                Ghi nhận thanh toán đủ
-              </button>
+              {selectedDebt.status !== 'PAID' && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    (
+                      document.getElementById('compact-debt-payment-form') as HTMLFormElement | null
+                    )?.requestSubmit()
+                  }
+                  disabled={!canManage}
+                  className="flex h-10 items-center gap-2 rounded-xl bg-violet-600 px-4 text-xs font-black text-white disabled:opacity-50"
+                >
+                  <Check className="h-4 w-4" />
+                  {selectedDebt.type === 'RECEIVABLE' ? 'Ghi nhận đã thu' : 'Ghi nhận đã trả'}
+                </button>
+              )}
             </div>
           }
         >
@@ -1320,12 +1553,28 @@ export default function TenantAdminFinanceCompact({
               }`}
             >
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-300">
-                {selectedDebt.type === 'RECEIVABLE' ? 'Còn phải thu' : 'Còn phải trả'}
+                {selectedDebt.type === 'RECEIVABLE'
+                  ? 'Phải thu · Họ đang nợ mình'
+                  : 'Phải trả · Mình đang nợ họ'}
               </p>
-              <p className="mt-2 text-3xl font-black">{money(selectedDebt.total - selectedDebt.paid)}</p>
+              <p className="mt-2 text-3xl font-black">
+                {money(Math.max(0, selectedDebt.total - selectedDebt.paid))}
+              </p>
               <p className="mt-2 text-xs text-slate-300">
                 Tổng {money(selectedDebt.total)} · Đã thanh toán {money(selectedDebt.paid)}
               </p>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-white"
+                  style={{
+                    width: `${
+                      selectedDebt.total
+                        ? Math.min(100, (selectedDebt.paid / selectedDebt.total) * 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
             </section>
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -1340,6 +1589,77 @@ export default function TenantAdminFinanceCompact({
                 </div>
               ))}
             </div>
+            {selectedDebt.status === 'PAID' ? (
+              <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                  <Check className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-xs font-black">Khoản công nợ đã được tất toán</p>
+                  <p className="mt-1 text-[11px] text-emerald-700">
+                    Số tiền còn lại là 0đ. Không cần thực hiện thêm thanh toán.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <form
+                id="compact-debt-payment-form"
+                onSubmit={recordDebtPayment}
+                className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/60 p-4"
+              >
+                <div>
+                  <p className="text-xs font-black text-slate-800">Ghi nhận thanh toán</p>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Có thể nhập một phần hoặc thanh toán toàn bộ số tiền còn lại.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <label>
+                    <span className="mb-1.5 block text-[10px] font-bold text-slate-500">
+                      Số tiền thanh toán
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      max={Math.max(0, selectedDebt.total - selectedDebt.paid)}
+                      value={debtPaymentAmount}
+                      onChange={(event) => {
+                        setDebtPaymentAmount(event.target.value);
+                        setDebtPaymentError('');
+                      }}
+                      className={inputClass}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDebtPaymentAmount(String(selectedDebt.total - selectedDebt.paid));
+                      setDebtPaymentError('');
+                    }}
+                    className="mt-auto h-11 rounded-xl border border-violet-200 bg-white px-4 text-xs font-black text-violet-700"
+                  >
+                    Điền toàn bộ
+                  </button>
+                </div>
+                <label>
+                  <span className="mb-1.5 block text-[10px] font-bold text-slate-500">
+                    Ghi chú (không bắt buộc)
+                  </span>
+                  <input
+                    value={debtPaymentNote}
+                    onChange={(event) => setDebtPaymentNote(event.target.value)}
+                    placeholder="Ví dụ: Chuyển khoản đợt 2"
+                    className={inputClass}
+                  />
+                </label>
+                {debtPaymentError && (
+                  <p className="flex items-center gap-2 text-[11px] font-bold text-rose-600">
+                    <AlertTriangle className="h-4 w-4" />
+                    {debtPaymentError}
+                  </p>
+                )}
+              </form>
+            )}
           </div>
         </Modal>
       )}
