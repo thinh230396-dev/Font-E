@@ -3,10 +3,20 @@ import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, Banknote, Check, ChevronRight,
   CircleDollarSign, Clock3, CreditCard, Download, FileText, Landmark, LockKeyhole,
-  MoreHorizontal, Plus, ReceiptText, RefreshCcw, Search, ShieldCheck, Smartphone,
-  UserRound, WalletCards, X
+  MoreHorizontal, Palette, Plus, ReceiptText, RefreshCcw, Search, ShieldCheck, Smartphone,
+  Sparkles, UserRound, WalletCards, X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { NailDesign, PolishColor, colorSeed, designSeed } from './TenantAdminNailGallery';
+import { SalonService, serviceSeed } from './TenantAdminServices';
+import { inventorySeed } from './TenantAdminInventory';
+import { loadInventoryItems, syncColorsWithInventory, updateInventoryForColorUsage } from '../utils/inventorySync';
+import {
+  defaultLoyaltyPrograms,
+  evaluateDiscountCode,
+  InvoiceItemForDiscount,
+  LoyaltyProgram,
+} from '../utils/promotionUtils';
 
 type PaymentStatus = 'PAID' | 'PARTIAL' | 'PENDING' | 'REFUNDED' | 'FAILED';
 type PaymentMethod = 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
@@ -14,7 +24,19 @@ type BranchCode = 'Q1' | 'Q3';
 type ServiceCategory = 'ALL' | 'NAIL_ART' | 'MANICURE' | 'PEDICURE' | 'GEL' | 'ACRYLIC' | 'SPA';
 type PaymentDatePreset = 'ALL' | 'TODAY' | '7D' | '30D' | 'CUSTOM';
 
-interface PaymentItem { name: string; quantity: number; amount: number; staff: string; }
+interface PaymentItem {
+  name: string;
+  quantity: number;
+  amount: number;
+  staff: string;
+  basePrice?: number;
+  designName?: string;
+  designCode?: string;
+  designSurcharge?: number;
+  polishColorId?: string;
+  polishColorName?: string;
+}
+
 interface PaymentRecord {
   id: string; appointmentId?: string; customer: string; phone: string; branch: BranchCode;
   createdAt: string; total: number; subtotal: number; discount: number; tip: number; deposit: number;
@@ -29,6 +51,13 @@ interface InvoiceServiceLine {
   category: Exclude<ServiceCategory, 'ALL'>;
   price: number;
   quantity: number;
+  selectedDesignId?: string;
+  selectedDesignCode?: string;
+  selectedDesignName?: string;
+  selectedDesignSurcharge?: number;
+  selectedColorId?: string;
+  selectedColorCode?: string;
+  selectedColorName?: string;
 }
 
 interface TenantAdminPaymentsProps {
@@ -130,7 +159,17 @@ const seed: PaymentRecord[] = [
 
 export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, branchLocked = false, tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify }: TenantAdminPaymentsProps) {
   const storageKey = `tenant-admin-payments-v1:${tenantName}`;
+  const loyaltyStorageKey = `tenant-admin-loyalty-v1:${tenantName}`;
   const [records, setRecords] = useState<PaymentRecord[]>(() => { if (typeof window === 'undefined') return getTenantAdminInitialData(null, seed); try { const stored = localStorage.getItem(storageKey); return getTenantAdminInitialData(stored ? JSON.parse(stored) as PaymentRecord[] : null, seed); } catch { return getTenantAdminInitialData(null, seed); } });
+  const [loyaltyPrograms, setLoyaltyPrograms] = useState<LoyaltyProgram[]>(() => {
+    if (typeof window === 'undefined') return defaultLoyaltyPrograms;
+    try {
+      const stored = localStorage.getItem(loyaltyStorageKey);
+      return stored ? (JSON.parse(stored) as LoyaltyProgram[]) : defaultLoyaltyPrograms;
+    } catch {
+      return defaultLoyaltyPrograms;
+    }
+  });
   const [tab, setTab] = useState<'ALL' | PaymentStatus>('ALL');
   const [methodFilter, setMethodFilter] = useState<'ALL' | PaymentMethod>('ALL');
   const [datePreset, setDatePreset] = useState<PaymentDatePreset>('ALL');
@@ -141,6 +180,9 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const [catalogCreateOpen, setCatalogCreateOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
+  const [shiftModalOpen, setShiftModalOpen] = useState(false);
+  const [actualCashInput, setActualCashInput] = useState('2000000');
+  const [shiftNote, setShiftNote] = useState('');
   const [formError, setFormError] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
@@ -155,8 +197,90 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const [refund, setRefund] = useState({ amount: '', reason: '' });
   const canManage = accessMode === 'full' && !readOnlyReason;
 
+  const designStorageKey = `tenant-admin-nail-designs-v1:${tenantName}`;
+  const serviceStorageKey = `tenant-admin-services-v1:${tenantName}`;
+
+  const [salonServices, setSalonServices] = useState<SalonService[]>(() => {
+    if (typeof window === 'undefined') return serviceSeed;
+    try {
+      const value = localStorage.getItem(serviceStorageKey);
+      return value ? getTenantAdminInitialData(JSON.parse(value), serviceSeed) : serviceSeed;
+    } catch (e) {
+      console.error('Failed to parse stored services in payments', e);
+      return serviceSeed;
+    }
+  });
+
+  const [nailDesigns, setNailDesigns] = useState<NailDesign[]>(() => {
+    if (typeof window === 'undefined') return designSeed;
+    try {
+      const value = localStorage.getItem(designStorageKey);
+      return getTenantAdminInitialData(value ? JSON.parse(value) : null, designSeed);
+    } catch (e) {
+      console.error('Failed to parse stored nail designs in payments', e);
+      return designSeed;
+    }
+  });
+
+  const colorStorageKey = `${tenantName}_nail_colors`;
+
+  const [nailColors, setNailColors] = useState<PolishColor[]>(() => {
+    if (typeof window === 'undefined') return colorSeed;
+    try {
+      const value = localStorage.getItem(colorStorageKey);
+      const raw = getTenantAdminInitialData(value ? JSON.parse(value) : null, colorSeed);
+      const inv = loadInventoryItems(tenantName, inventorySeed);
+      return syncColorsWithInventory(raw, inv);
+    } catch (e) {
+      console.error('Failed to parse stored nail colors in payments', e);
+      return colorSeed;
+    }
+  });
+
+  useEffect(() => {
+    if (catalogCreateOpen || createOpen) {
+      try {
+        const sVal = localStorage.getItem(serviceStorageKey);
+        if (sVal) {
+          const parsed = JSON.parse(sVal);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSalonServices(getTenantAdminInitialData(parsed, serviceSeed));
+          }
+        }
+        const dVal = localStorage.getItem(designStorageKey);
+        if (dVal) {
+          const parsed = JSON.parse(dVal);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setNailDesigns(getTenantAdminInitialData(parsed, designSeed));
+          }
+        }
+        const cVal = localStorage.getItem(colorStorageKey);
+        const rawColors = getTenantAdminInitialData(cVal ? JSON.parse(cVal) : null, colorSeed);
+        const inv = loadInventoryItems(tenantName, inventorySeed);
+        setNailColors(syncColorsWithInventory(rawColors, inv));
+      } catch (e) {
+        console.error('Failed to reload services, designs and colors on create open', e);
+      }
+    }
+  }, [catalogCreateOpen, createOpen, designStorageKey, serviceStorageKey, colorStorageKey, tenantName]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const cVal = localStorage.getItem(colorStorageKey);
+        const rawColors = getTenantAdminInitialData(cVal ? JSON.parse(cVal) : null, colorSeed);
+        const inv = loadInventoryItems(tenantName, inventorySeed);
+        setNailColors(syncColorsWithInventory(rawColors, inv));
+      } catch (e) {
+        console.error('Sync error in payments', e);
+      }
+    };
+    window.addEventListener('salonsys_inventory_updated', handleSync);
+    return () => window.removeEventListener('salonsys_inventory_updated', handleSync);
+  }, [tenantName, colorStorageKey]);
+
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(records)); }, [records, storageKey]);
-  useEffect(() => { if (!selected && !createOpen && !catalogCreateOpen && !captureOpen && !refundOpen) return; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelected(null); setCreateOpen(false); setCatalogCreateOpen(false); setCaptureOpen(false); setRefundOpen(false); } }; addEventListener('keydown', close); return () => { document.body.style.overflow = previous; removeEventListener('keydown', close); }; }, [captureOpen, catalogCreateOpen, createOpen, refundOpen, selected]);
+  useEffect(() => { if (!selected && !createOpen && !catalogCreateOpen && !captureOpen && !refundOpen && !shiftModalOpen) return; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelected(null); setCreateOpen(false); setCatalogCreateOpen(false); setCaptureOpen(false); setRefundOpen(false); setShiftModalOpen(false); } }; addEventListener('keydown', close); return () => { document.body.style.overflow = previous; removeEventListener('keydown', close); }; }, [captureOpen, catalogCreateOpen, createOpen, refundOpen, selected, shiftModalOpen]);
 
   const requireManage = () => { if (canManage) return true; onNotify?.(readOnlyReason || 'Gói hiện tại chỉ cho phép xem dữ liệu thanh toán.'); return false; };
   const scoped = useMemo(() => records.filter((record) => selectedBranch === 'ALL' || record.branch === selectedBranch), [records, selectedBranch]);
@@ -166,21 +290,138 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const outstanding = periodScoped.reduce((sum, record) => sum + Math.max(0, record.total - record.paid), 0);
   const refunded = periodScoped.reduce((sum, record) => sum + record.refunded, 0);
   const netRevenue = collected - refunded;
-  const availableInvoiceServices = invoiceServiceCatalog.filter((service) => {
+
+  const availableInvoiceServices = salonServices.filter((service) => {
+    if (service.status === 'HIDDEN') return false;
     const query = serviceSearch.trim().toLowerCase();
-    return service.branches.includes(invoice.branch)
-      && (invoice.category === 'ALL' || service.category === invoice.category)
-      && (!query || `${service.id} ${service.name} ${serviceCategoryLabels[service.category]}`.toLowerCase().includes(query));
+    const matchesBranch = (invoice.branch as string) === 'ALL' || service.branches.includes(invoice.branch);
+    const matchesCategory = invoice.category === 'ALL' || service.category === invoice.category;
+    const matchesQuery = !query || `${service.id} ${service.name} ${serviceCategoryLabels[service.category]}`.toLowerCase().includes(query);
+    return matchesBranch && matchesCategory && matchesQuery;
   });
+
   const availableInvoiceStaff = invoiceStaffDirectory.filter((staff) => {
     const query = staffSearch.trim().toLowerCase();
     return staff.branch === invoice.branch
       && (!query || `${staff.name} ${staff.role}`.toLowerCase().includes(query));
   });
-  const normalizedDiscountCode = invoice.discountCode.trim().toUpperCase();
-  const appliedDiscount = normalizedDiscountCode ? discountCodes[normalizedDiscountCode] : undefined;
-  const invoiceSubtotal = invoiceItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const invoiceDiscount = appliedDiscount ? Math.round(invoiceSubtotal * appliedDiscount.rate / 100) : 0;
+
+  const getMatchingDesignsForService = (
+    serviceIdOrCode: string,
+    designs: NailDesign[]
+  ): NailDesign[] => {
+    if (!serviceIdOrCode) return [];
+    const target = String(serviceIdOrCode).trim().toLowerCase();
+
+    return designs.filter((d) => {
+      if (d.status === 'HIDDEN') return false;
+      const linked = String(
+        d.baseServiceId || (d as any).serviceId || (d as any).appliedServiceId || (d as any).serviceCode || ''
+      ).trim().toLowerCase();
+      return linked === target;
+    });
+  };
+
+  const updateInvoiceServiceDesign = (serviceId: string, designId: string) => {
+    setInvoiceItems((current) =>
+      current.map((item) => {
+        if (item.id !== serviceId) return item;
+        if (!designId || designId === 'NONE') {
+          return {
+            ...item,
+            selectedDesignId: undefined,
+            selectedDesignCode: undefined,
+            selectedDesignName: undefined,
+            selectedDesignSurcharge: undefined,
+          };
+        }
+        const matching = getMatchingDesignsForService(item.id, nailDesigns);
+        const chosen = matching.find((d) => d.id === designId);
+        if (!chosen) {
+          return {
+            ...item,
+            selectedDesignId: undefined,
+            selectedDesignCode: undefined,
+            selectedDesignName: undefined,
+            selectedDesignSurcharge: undefined,
+          };
+        }
+        return {
+          ...item,
+          selectedDesignId: chosen.id,
+          selectedDesignCode: chosen.id,
+          selectedDesignName: chosen.name,
+          selectedDesignSurcharge: chosen.surcharge,
+        };
+      })
+    );
+  };
+
+  const updateInvoiceServiceColor = (serviceId: string, colorId: string) => {
+    setInvoiceItems((current) =>
+      current.map((item) => {
+        if (item.id !== serviceId) return item;
+        if (!colorId || colorId === 'NONE') {
+          return {
+            ...item,
+            selectedColorId: undefined,
+            selectedColorCode: undefined,
+            selectedColorName: undefined,
+          };
+        }
+        const foundColor = nailColors.find((c) => c.id === colorId);
+        if (!foundColor) return item;
+
+        if (foundColor.status === 'OUT' || foundColor.stock <= 0) {
+          onNotify?.(`Màu sơn ${foundColor.name} đã HẾT HÀNG trong kho.`);
+          return item;
+        }
+
+        if (foundColor.status === 'LOW' || foundColor.stock <= foundColor.minimumStock) {
+          onNotify?.(`Cảnh báo: Màu sơn ${foundColor.name} sắp hết hàng (còn ${foundColor.stock} chai).`);
+        }
+
+        return {
+          ...item,
+          selectedColorId: foundColor.id,
+          selectedColorCode: foundColor.code,
+          selectedColorName: `${foundColor.brand} ${foundColor.name}`,
+        };
+      })
+    );
+  };
+
+  const mappedInvoiceItems: InvoiceItemForDiscount[] = useMemo(() => {
+    return invoiceItems.map((item) => ({
+      name: item.name,
+      type: 'SERVICE' as const,
+      quantity: item.quantity,
+      unitPrice: item.price + (item.selectedDesignSurcharge || 0),
+    }));
+  }, [invoiceItems]);
+
+  const promoEvaluation = useMemo(() => {
+    if (!invoice.discountCode.trim()) {
+      return { appliedProgram: null, discountAmount: 0, feedback: null };
+    }
+    return evaluateDiscountCode({
+      rawCode: invoice.discountCode,
+      programs: loyaltyPrograms,
+      items: mappedInvoiceItems,
+      branch: invoice.branch,
+    });
+  }, [invoice.discountCode, loyaltyPrograms, mappedInvoiceItems, invoice.branch]);
+
+  const invoiceBaseServicesSubtotal = useMemo(() => {
+    return invoiceItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }, [invoiceItems]);
+
+  const invoiceNailSurchargeSubtotal = useMemo(() => {
+    return invoiceItems.reduce((sum, item) => sum + (item.selectedDesignSurcharge || 0) * item.quantity, 0);
+  }, [invoiceItems]);
+
+  const invoiceSubtotal = invoiceBaseServicesSubtotal + invoiceNailSurchargeSubtotal;
+  const invoiceDiscount = promoEvaluation.discountAmount;
   const invoiceTax = Math.round(Math.max(0, invoiceSubtotal - invoiceDiscount) * Math.max(0, Number(invoice.taxRate) || 0) / 100);
   const invoiceTotal = Math.max(0, invoiceSubtotal - invoiceDiscount + invoiceTax + Math.max(0, Number(invoice.tip) || 0));
 
@@ -199,12 +440,12 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     setFormError('');
     setCatalogCreateOpen(true);
   };
-  const toggleInvoiceService = (service: (typeof invoiceServiceCatalog)[number]) => {
+  const toggleInvoiceService = (service: SalonService) => {
     setInvoiceItems((current) => current.some((item) => item.id === service.id)
       ? current.filter((item) => item.id !== service.id)
       : [...current, { id: service.id, name: service.name, category: service.category, price: service.price, quantity: 1 }]);
   };
-  const updateInvoiceServiceQuantity = (service: (typeof invoiceServiceCatalog)[number], quantity: number) => {
+  const updateInvoiceServiceQuantity = (service: SalonService, quantity: number) => {
     if (!Number.isInteger(quantity) || quantity < 1) {
       setInvoiceItems((current) => current.filter((item) => item.id !== service.id));
       return;
@@ -231,9 +472,11 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       setFormError('Số lượng dịch vụ, thuế và các giá trị tiền phải hợp lệ.');
       return;
     }
-    if (normalizedDiscountCode && !appliedDiscount) {
-      setFormError('Mã giảm giá không hợp lệ. Có thể dùng MEMBER5, SALON10 hoặc VIP15.');
-      return;
+    if (invoice.discountCode.trim()) {
+      if (!promoEvaluation.feedback || promoEvaluation.feedback.isError) {
+        setFormError(promoEvaluation.feedback?.text || 'Mã giảm giá không hợp lệ.');
+        return;
+      }
     }
     const subtotal = invoiceSubtotal + invoiceTax;
     const discount = invoiceDiscount;
@@ -264,7 +507,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       createdAt,
       subtotal,
       discount,
-      discountCode: normalizedDiscountCode || undefined,
+      discountCode: invoice.discountCode.trim() ? invoice.discountCode.trim().toUpperCase() : undefined,
       tax,
       tip,
       deposit: paidAmount,
@@ -277,27 +520,159 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       cashier: roleLabel,
       source: 'Tạo thủ công bởi Tenant Admin',
       items: [
-        ...invoiceItems.map((item) => ({ name: item.name, quantity: item.quantity, amount: item.price * item.quantity, staff: invoice.staff.trim() })),
+        ...invoiceItems.map((item) => {
+          const surcharge = item.selectedDesignSurcharge || 0;
+          const unitPrice = item.price + surcharge;
+          const hasDesign = Boolean(item.selectedDesignName);
+          const colorName = item.selectedColorName;
+          return {
+            name: hasDesign
+              ? `${item.name} + Mẫu ${item.selectedDesignName} (${item.selectedDesignCode})${colorName ? ` · Màu: ${colorName}` : ''}`
+              : colorName
+              ? `${item.name} · Màu: ${colorName}`
+              : item.name,
+            quantity: item.quantity,
+            amount: unitPrice * item.quantity,
+            staff: invoice.staff.trim(),
+            basePrice: item.price,
+            designName: item.selectedDesignName,
+            designCode: item.selectedDesignCode,
+            designSurcharge: surcharge,
+            polishColorId: item.selectedColorId,
+            polishColorName: item.selectedColorName,
+          };
+        }),
         ...(tax > 0 ? [{ name: `Thuế VAT ${taxRate}%`, quantity: 1, amount: tax, staff: 'Hệ thống' }] : [])
       ],
       note: invoice.note.trim() || undefined,
       audit: [
-        `${createdAt} · ${roleLabel} tạo hóa đơn gồm ${invoiceItems.length} dịch vụ ở trạng thái ${statusMeta[invoice.invoiceStatus].label}${paidAmount > 0 ? ` và ghi nhận đã thu ${money(paidAmount)}` : ''}`,
-        ...(normalizedDiscountCode ? [`${createdAt} · Áp dụng mã ${normalizedDiscountCode} giảm ${appliedDiscount?.rate || 0}%`] : []),
+        `${createdAt} · ${roleLabel} tạo hóa đơn gồm ${invoiceItems.length} dịch vụ${
+          invoiceItems.some((i) => i.selectedDesignName)
+            ? ` (kèm mẫu nail: ${invoiceItems
+                .filter((i) => i.selectedDesignName)
+                .map((i) => `${i.selectedDesignName} +${money(i.selectedDesignSurcharge || 0)}`)
+                .join(', ')})`
+            : ''
+        } ở trạng thái ${statusMeta[invoice.invoiceStatus].label}${paidAmount > 0 ? ` và ghi nhận đã thu ${money(paidAmount)}` : ''}`,
+        ...(promoEvaluation.appliedProgram ? [`${createdAt} · Áp dụng ưu đãi "${promoEvaluation.appliedProgram.name}" (-${money(discount)})`] : []),
         ...(tax > 0 ? [`${createdAt} · Tính thuế VAT ${taxRate}% tương đương ${money(tax)}`] : [])
       ]
     };
     setRecords((current) => [newRecord, ...current]);
+
+    // Trừ kho vật tư cho màu sơn nếu hóa đơn ở trạng thái Đã thanh toán (PAID)
+    if (newRecord.status === 'PAID') {
+      invoiceItems.forEach((item) => {
+        if (item.selectedColorId) {
+          updateInventoryForColorUsage({
+            tenantName,
+            colorId: item.selectedColorId,
+            serviceQuantity: item.quantity,
+            action: 'DEDUCT',
+            inventorySeed,
+            colorSeed,
+            invoiceId: newRecord.id,
+            actorName: roleLabel,
+          });
+        }
+      });
+    }
+
+    if (promoEvaluation.appliedProgram) {
+      const updatedPrograms = loyaltyPrograms.map((p) =>
+        p.id === promoEvaluation.appliedProgram!.id
+          ? {
+              ...p,
+              redeemed: p.redeemed + 1,
+              revenue: p.revenue + total,
+              cost: p.cost + discount,
+            }
+          : p
+      );
+      setLoyaltyPrograms(updatedPrograms);
+      try {
+        localStorage.setItem(loyaltyStorageKey, JSON.stringify(updatedPrograms));
+      } catch (e) {
+        console.error('Failed to update loyalty storage', e);
+      }
+    }
     setCreateOpen(false);
     setCatalogCreateOpen(false);
     setSelected(newRecord);
     setTab('ALL');
     onNotify?.(`Đã tạo hóa đơn ${newRecord.id} cho ${newRecord.customer}.`);
   };
+
   const openCapture = (record?: PaymentRecord) => { if (!requireManage()) return; const target = record || scoped.find((item) => item.status !== 'REFUNDED' && item.paid < item.total); if (!target || target.status === 'REFUNDED') { onNotify?.(target ? `Hóa đơn ${target.id} đã hoàn tiền nên không thể thu thêm.` : 'Không có hóa đơn cần thu trong phạm vi đang chọn.'); return; } setCapture({ invoiceId: target.id, method: target.method || 'BANK', amount: String(Math.max(0, target.total - target.paid)), reference: '' }); setFormError(''); setCaptureOpen(true); };
-  const submitCapture = (event: FormEvent) => { event.preventDefault(); const target = records.find((item) => item.id === capture.invoiceId); const amount = Number(capture.amount); if (target?.status === 'REFUNDED') { setFormError('Hóa đơn đã hoàn tiền nên không thể ghi nhận thu thêm.'); return; } if (!target || !amount || amount <= 0 || amount > target.total - target.paid) { setFormError('Số tiền thu phải lớn hơn 0 và không vượt quá công nợ còn lại.'); return; } if (capture.method !== 'CASH' && !capture.reference.trim()) { setFormError('Thanh toán điện tử bắt buộc có mã giao dịch để đối soát.'); return; } const nextPaid = target.paid + amount; const patch: Partial<PaymentRecord> = { paid: nextPaid, method: capture.method, reference: capture.reference.trim() || `CASH-${Date.now().toString().slice(-6)}`, status: nextPaid >= target.total ? 'PAID' : 'PARTIAL', audit: [`14:42 · ${roleLabel} ghi nhận ${money(amount)} qua ${methodMeta[capture.method].label}`, ...target.audit] }; setRecords((current) => current.map((item) => item.id === target.id ? { ...item, ...patch } : item)); setSelected((current) => current?.id === target.id ? { ...current, ...patch } as PaymentRecord : current); setCaptureOpen(false); onNotify?.(`Đã ghi nhận ${money(amount)} cho ${target.id}.`); };
+
+  const submitCapture = (event: FormEvent) => {
+    event.preventDefault();
+    const target = records.find((item) => item.id === capture.invoiceId);
+    const amount = Number(capture.amount);
+    if (target?.status === 'REFUNDED') { setFormError('Hóa đơn đã hoàn tiền nên không thể ghi nhận thu thêm.'); return; }
+    if (!target || !amount || amount <= 0 || amount > target.total - target.paid) { setFormError('Số tiền thu phải lớn hơn 0 và không vượt quá công nợ còn lại.'); return; }
+    if (capture.method !== 'CASH' && !capture.reference.trim()) { setFormError('Thanh toán điện tử bắt buộc có mã giao dịch để đối soát.'); return; }
+    const nextPaid = target.paid + amount;
+    const isNowPaid = nextPaid >= target.total;
+    const patch: Partial<PaymentRecord> = { paid: nextPaid, method: capture.method, reference: capture.reference.trim() || `CASH-${Date.now().toString().slice(-6)}`, status: isNowPaid ? 'PAID' : 'PARTIAL', audit: [`14:42 · ${roleLabel} ghi nhận ${money(amount)} qua ${methodMeta[capture.method].label}`, ...target.audit] };
+
+    // Khi thanh toán hoàn tất (PAID), trừ kho lượng màu sơn đã chọn
+    if (isNowPaid && target.status !== 'PAID') {
+      target.items?.forEach((item) => {
+        if (item.polishColorId) {
+          updateInventoryForColorUsage({
+            tenantName,
+            colorId: item.polishColorId,
+            serviceQuantity: item.quantity || 1,
+            action: 'DEDUCT',
+            inventorySeed,
+            colorSeed,
+            invoiceId: target.id,
+            actorName: roleLabel,
+          });
+        }
+      });
+    }
+
+    setRecords((current) => current.map((item) => item.id === target.id ? { ...item, ...patch } : item));
+    setSelected((current) => current?.id === target.id ? { ...current, ...patch } as PaymentRecord : current);
+    setCaptureOpen(false);
+    onNotify?.(`Đã ghi nhận ${money(amount)} cho ${target.id}.`);
+  };
+
   const openRefund = (record: PaymentRecord) => { if (!requireManage()) return; if (record.status === 'REFUNDED') { onNotify?.(`Hóa đơn ${record.id} đã được hoàn tiền và không thể hoàn thêm.`); return; } setRefund({ amount: '', reason: '' }); setFormError(''); setSelected(record); setRefundOpen(true); };
-  const submitRefund = (event: FormEvent) => { event.preventDefault(); if (!selected) return; if (selected.status === 'REFUNDED') { setFormError('Hóa đơn này đã được hoàn tiền. Không thể thực hiện hoàn tiền lần nữa.'); return; } const amount = Number(refund.amount); const refundable = selected.paid - selected.refunded; if (!amount || amount <= 0 || amount > refundable) { setFormError(`Số tiền hoàn phải lớn hơn 0đ và không vượt quá ${money(refundable)}.`); return; } if (refund.reason.trim().length < 8) { setFormError('Vui lòng nhập lý do hoàn tiền tối thiểu 8 ký tự.'); return; } const patch: Partial<PaymentRecord> = { refunded: selected.refunded + amount, status: 'REFUNDED', note: refund.reason.trim(), audit: [`14:45 · ${roleLabel} duyệt hoàn ${money(amount)} · ${refund.reason.trim()}`, ...selected.audit] }; setRecords((current) => current.map((item) => item.id === selected.id ? { ...item, ...patch } : item)); setSelected((current) => current ? { ...current, ...patch } as PaymentRecord : current); setRefundOpen(false); onNotify?.(`Đã ghi nhận yêu cầu hoàn ${money(amount)} cho ${selected.id}.`); };
+
+  const submitRefund = (event: FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    if (selected.status === 'REFUNDED') { setFormError('Hóa đơn này đã được hoàn tiền. Không thể thực hiện hoàn tiền lần nữa.'); return; }
+    const amount = Number(refund.amount);
+    const refundable = selected.paid - selected.refunded;
+    if (!amount || amount <= 0 || amount > refundable) { setFormError(`Số tiền hoàn phải lớn hơn 0đ và không vượt quá ${money(refundable)}.`); return; }
+    if (refund.reason.trim().length < 8) { setFormError('Vui lòng nhập lý do hoàn tiền tối thiểu 8 ký tự.'); return; }
+    const patch: Partial<PaymentRecord> = { refunded: selected.refunded + amount, status: 'REFUNDED', note: refund.reason.trim(), audit: [`14:45 · ${roleLabel} duyệt hoàn ${money(amount)} · ${refund.reason.trim()}`, ...selected.audit] };
+
+    // Hoàn lại tồn kho cho màu sơn nếu hóa đơn bị hủy/hoàn tiền
+    selected.items?.forEach((item) => {
+      if (item.polishColorId) {
+        updateInventoryForColorUsage({
+          tenantName,
+          colorId: item.polishColorId,
+          serviceQuantity: item.quantity || 1,
+          action: 'RESTORE',
+          inventorySeed,
+          colorSeed,
+          invoiceId: selected.id,
+          actorName: roleLabel,
+        });
+      }
+    });
+
+    setRecords((current) => current.map((item) => item.id === selected.id ? { ...item, ...patch } : item));
+    setSelected((current) => current ? { ...current, ...patch } as PaymentRecord : current);
+    setRefundOpen(false);
+    onNotify?.(`Đã ghi nhận yêu cầu hoàn ${money(amount)} cho ${selected.id}.`);
+  };
   const exportReport = () => { const header = 'Hoa don,Khach hang,Chi nhanh,Tong tien,Da thu,Hoan tien,Phuong thuc,Trang thai'; const body = filtered.map((record) => [record.id, record.customer, record.branch, record.total, record.paid, record.refunded, record.method ? methodMeta[record.method].label : 'Chua chon', statusMeta[record.status].label].join(',')).join('\n'); const blob = new Blob([header + '\n' + body], { type: 'text/csv;charset=utf-8' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'doi-soat-thanh-toan.csv'; link.click(); URL.revokeObjectURL(link.href); onNotify?.('Đã xuất báo cáo đối soát theo bộ lọc hiện tại.'); };
 
   const MethodBadge = ({ method }: { method?: PaymentMethod }) => { if (!method) return <span className="text-[8px] font-bold text-slate-400">Chưa chọn</span>; const meta = methodMeta[method]; const Icon = meta.icon; return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${meta.className}`}><Icon className="h-3 w-3" />{meta.label}</span>; };
@@ -345,7 +720,208 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]"><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between"><div className="relative w-full xl:w-72"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm hóa đơn, khách, mã giao dịch..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[10px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />{searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}</div><div className="flex flex-wrap gap-2"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect><BeautifulSelect value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as 'ALL' | PaymentMethod)} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Mọi phương thức</option>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></div></div><div className="flex gap-2 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 py-3">{(['ALL', 'PAID', 'PARTIAL', 'PENDING', 'REFUNDED', 'FAILED'] as const).map((value) => <button key={value} type="button" onClick={() => setTab(value)} className={`h-8 shrink-0 border px-3 text-[8px] font-black shadow-sm ${tab === value ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'}`}>{value === 'ALL' ? 'Tất cả giao dịch' : statusMeta[value].label}<span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-[7px]">{value === 'ALL' ? periodScoped.length : periodScoped.filter((item) => item.status === value).length}</span></button>)}</div>
       <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[930px] text-left"><thead><tr className="border-b border-slate-100 text-[8px] font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Hóa đơn</th><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Tổng tiền</th><th className="px-4 py-3">Đã thu / còn lại</th><th className="px-4 py-3">Phương thức</th><th className="px-5 py-3 text-right">Trạng thái</th></tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((record) => <tr key={record.id} onClick={() => setSelected(record)} className="cursor-pointer text-[9px] text-slate-600 hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{record.id}</p><p className="mt-1 text-[8px] text-slate-400">{record.createdAt}</p></td><td className="px-4 py-4"><p className="font-black text-slate-800">{record.customer}</p><p className="mt-1 text-[8px] text-slate-400">{record.phone} · {record.branch}</p></td><td className="px-4 py-4 font-black text-slate-900">{money(record.total)}{record.refunded > 0 && <p className="mt-1 text-[8px] font-bold text-rose-500">Đã hoàn {money(record.refunded)}</p>}</td><td className="px-4 py-4"><p className="font-black text-emerald-700">{money(record.paid)}</p><p className="mt-1 text-[8px] text-slate-400">Còn {money(Math.max(0, record.total - record.paid))}</p></td><td className="px-4 py-4"><MethodBadge method={record.method} /></td><td className="px-5 py-4 text-right"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[record.status].badge}`}><span className={`h-1.5 w-1.5 rounded-full ${statusMeta[record.status].dot}`} />{statusMeta[record.status].label}</span></td></tr>)}</tbody></table></div>
       <div className="divide-y divide-slate-100 md:hidden">{filtered.map((record) => <button key={record.id} type="button" onClick={() => setSelected(record)} className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none"><span className="flex items-start justify-between gap-3"><span><span className="text-[9px] font-black text-slate-900">{record.id}</span><span className="mt-1 block text-[8px] text-slate-400">{record.customer} · {record.branch}</span></span><span className="text-[11px] font-black text-slate-900">{money(record.total)}</span></span><span className="mt-3 flex items-center justify-between"><MethodBadge method={record.method} /><span className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${statusMeta[record.status].badge}`}>{statusMeta[record.status].label}</span></span></button>)}</div>{!filtered.length && <div className="py-16 text-center"><ReceiptText className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-600">Không có giao dịch phù hợp</p></div>}<div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3"><p className="text-[8px] text-slate-400">Hiển thị <strong className="text-slate-600">{filtered.length}</strong> giao dịch</p><p className="text-[8px] font-semibold text-slate-400">Tổng theo bộ lọc: {money(filtered.reduce((sum, item) => sum + item.total, 0))}</p></div></div>
-      <aside className="space-y-4"><div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white shadow-lg"><div className="flex items-start justify-between"><div><p className="text-[8px] font-black uppercase tracking-[0.16em] text-violet-300">Ca hiện tại</p><p className="mt-2 text-lg font-black">08:00–20:30</p><p className="mt-1 text-[8px] text-slate-400">Quản lý ca · Lê Hoàng Nam</p></div><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-300/20"><RefreshCcw className="h-4 w-4" /></span></div><div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl bg-white/7 p-3"><p className="text-[7px] text-slate-400">Tiền mặt</p><p className="mt-1 text-[11px] font-black">{money(scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0))}</p></div><div className="rounded-xl bg-white/7 p-3"><p className="text-[7px] text-slate-400">Điện tử</p><p className="mt-1 text-[11px] font-black">{money(scoped.filter((item) => item.method && item.method !== 'CASH').reduce((sum, item) => sum + item.paid, 0))}</p></div></div><button type="button" onClick={() => canManage ? onNotify?.('Đã mở quy trình kiểm đếm và đóng ca.') : requireManage()} className="mt-4 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/8 text-[8px] font-black text-white shadow-none"><LockKeyhole className="h-3.5 w-3.5" />Kiểm đếm & đóng ca</button></div><div className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between"><div><p className="text-[9px] font-black text-slate-800">Việc cần xử lý</p><p className="mt-1 text-[8px] text-slate-400">Ưu tiên theo rủi ro tài chính</p></div><AlertCircle className="h-4 w-4 text-amber-500" /></div><div className="mt-3 space-y-2">{[{ label: 'Hóa đơn còn công nợ', value: scoped.filter((item) => item.paid < item.total).length, tone: 'text-amber-600 bg-amber-50' }, { label: 'Giao dịch lỗi cần kiểm tra', value: scoped.filter((item) => item.status === 'FAILED').length, tone: 'text-rose-600 bg-rose-50' }, { label: 'Hoàn tiền chờ đối soát', value: scoped.filter((item) => item.refunded > 0).length, tone: 'text-violet-600 bg-violet-50' }].map((item) => <div key={item.label} className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><span className="text-[8px] font-bold text-slate-600">{item.label}</span><span className={`flex h-6 min-w-6 items-center justify-center rounded-lg px-1.5 text-[8px] font-black ${item.tone}`}>{item.value}</span></div>)}</div></div></aside></section>
+      <aside className="space-y-4">
+        <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white shadow-lg">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-[0.16em] text-violet-300">Ca hiện tại</p>
+              <p className="mt-2 text-lg font-black">08:00–20:30</p>
+              <p className="mt-1 text-[8px] text-slate-400">Quản lý ca · Lê Hoàng Nam</p>
+            </div>
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-300/20">
+              <RefreshCcw className="h-4 w-4" />
+            </span>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-white/7 p-3">
+              <p className="text-[7px] text-slate-400">Tiền mặt</p>
+              <p className="mt-1 text-[11px] font-black">
+                {money(scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0))}
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/7 p-3">
+              <p className="text-[7px] text-slate-400">Điện tử</p>
+              <p className="mt-1 text-[11px] font-black">
+                {money(scoped.filter((item) => item.method && item.method !== 'CASH').reduce((sum, item) => sum + item.paid, 0))}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!requireManage()) return;
+              const expected = 2000000 + scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0);
+              setActualCashInput(String(expected));
+              setShiftModalOpen(true);
+            }}
+            className="mt-4 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/8 text-[8px] font-black text-white shadow-none hover:bg-white/15"
+          >
+            <LockKeyhole className="h-3.5 w-3.5" />
+            Kiểm đếm & đóng ca
+          </button>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[9px] font-black text-slate-800">Việc cần xử lý</p>
+              <p className="mt-1 text-[8px] text-slate-400">Ưu tiên theo rủi ro tài chính</p>
+            </div>
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+          </div>
+          <div className="mt-3 space-y-2">
+            {[
+              { label: 'Hóa đơn còn công nợ', value: scoped.filter((item) => item.paid < item.total).length, tone: 'text-amber-600 bg-amber-50' },
+              { label: 'Giao dịch lỗi cần kiểm tra', value: scoped.filter((item) => item.status === 'FAILED').length, tone: 'text-rose-600 bg-rose-50' },
+              { label: 'Hoàn tiền chờ đối soát', value: scoped.filter((item) => item.refunded > 0).length, tone: 'text-violet-600 bg-violet-50' }
+            ].map((item) => (
+              <div key={item.label} className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+                <span className="text-[8px] font-bold text-slate-600">{item.label}</span>
+                <span className={`flex h-6 min-w-6 items-center justify-center rounded-lg px-1.5 text-[8px] font-black ${item.tone}`}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    {shiftModalOpen && (() => {
+      const cashRevenue = scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0);
+      const nonCashRevenue = scoped.filter((item) => item.method && item.method !== 'CASH').reduce((sum, item) => sum + item.paid, 0);
+      const expectedCash = 2000000 + cashRevenue;
+      const actualCashNum = Number(actualCashInput) || 0;
+      const cashDiff = actualCashNum - expectedCash;
+
+      return (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6">
+          <button
+            type="button"
+            aria-label="Đóng biểu mẫu kiểm đếm ca"
+            onClick={() => setShiftModalOpen(false)}
+            className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shift-modal-title"
+            className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+          >
+            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
+                  <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Quy trình đóng ca & kiểm kê két</p>
+                </div>
+                <h2 id="shift-modal-title" className="mt-1 text-xl font-black text-slate-950">
+                  Kiểm đếm tiền & Đóng ca làm việc
+                </h2>
+                <p className="mt-1 text-[9px] text-slate-500">
+                  Ca 08:00–20:30 · Quản lý ca: Lê Hoàng Nam · Chi nhánh {selectedBranch === 'ALL' ? 'Quận 3' : selectedBranch}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShiftModalOpen(false)}
+                aria-label="Đóng"
+                className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
+              <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <span className="text-[9px] font-bold text-violet-300">Chi tiết doanh thu ca làm việc</span>
+                  <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[8px] font-black text-emerald-300 ring-1 ring-emerald-400/20">
+                    Đang hoạt động
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl bg-white/7 p-3">
+                    <p className="text-[7px] text-slate-400">Tiền mặt đầu ca</p>
+                    <p className="mt-1 text-[11px] font-black text-white">{money(2000000)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/7 p-3">
+                    <p className="text-[7px] text-slate-400">Thu tiền mặt trong ca</p>
+                    <p className="mt-1 text-[11px] font-black text-emerald-400">+{money(cashRevenue)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/7 p-3 sm:col-span-1">
+                    <p className="text-[7px] text-slate-400">Thu điện tử / ngân hàng</p>
+                    <p className="mt-1 text-[11px] font-black text-violet-300">+{money(nonCashRevenue)}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between rounded-xl bg-white/10 p-3">
+                  <span className="text-[8px] font-bold text-slate-300">Tổng tiền mặt lý thuyết trong két</span>
+                  <span className="text-sm font-black text-emerald-300">{money(expectedCash)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-2xl border border-slate-200 p-4">
+                <p className="text-[9px] font-black text-slate-800">Kiểm kê thực tế tại két tiền</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="sm:col-span-2">
+                    <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số tiền mặt kiểm đếm thực tế (VNĐ) *</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000"
+                      value={actualCashInput}
+                      onChange={(e) => setActualCashInput(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-black text-slate-900 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                    />
+                  </label>
+                </div>
+
+                <div className={`flex items-center justify-between rounded-xl p-3 text-[8px] font-bold ${
+                  cashDiff === 0 ? 'bg-emerald-50 text-emerald-800' : cashDiff > 0 ? 'bg-amber-50 text-amber-800' : 'bg-rose-50 text-rose-800'
+                }`}>
+                  <span>Chênh lệch kiểm kê:</span>
+                  <span className="text-[10px] font-black">
+                    {cashDiff === 0 ? '✓ Khớp hoàn toàn' : cashDiff > 0 ? `Thừa +${money(cashDiff)}` : `Thiếu -${money(Math.abs(cashDiff))}`}
+                  </span>
+                </div>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Ghi chú bàn giao & niêm phong két</span>
+                  <textarea
+                    value={shiftNote}
+                    onChange={(e) => setShiftNote(e.target.value)}
+                    placeholder="Ghi chú tiền lẻ còn lại, hóa đơn nghi vấn hoặc bàn giao ca tiếp theo..."
+                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">
+              <p className="hidden text-[8px] font-semibold text-slate-400 sm:block">
+                Biên bản kiểm kê két sẽ được lưu vào nhật ký đối soát tenant.
+              </p>
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShiftModalOpen(false)}
+                  className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShiftModalOpen(false);
+                    onNotify?.('Đã hoàn tất kiểm đếm và đóng ca làm việc thành công.');
+                  }}
+                  className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"
+                >
+                  <LockKeyhole className="h-4 w-4" />
+                  Xác nhận đóng ca
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      );
+    })()}
 
     {createOpen && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"><button type="button" aria-label="Đóng biểu mẫu tạo hóa đơn" onClick={() => setCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitInvoice} role="dialog" aria-modal="true" aria-labelledby="create-invoice-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7"><div><p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Hóa đơn thủ công</p><h2 id="create-invoice-title" className="mt-1 text-xl font-black text-slate-950">Tạo hóa đơn mới</h2><p className="mt-1 text-[9px] text-slate-500">Tạo hóa đơn dịch vụ hoặc bán lẻ trong phạm vi tenant.</p></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<fieldset><legend className="mb-3 text-[9px] font-black text-slate-800">Khách hàng & nguồn hóa đơn</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tên khách hàng *</span><input value={invoice.customer} onChange={(event) => setInvoice((current) => ({ ...current, customer: event.target.value }))} placeholder="Nguyễn Minh Anh" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số điện thoại *</span><input inputMode="tel" value={invoice.phone} onChange={(event) => setInvoice((current) => ({ ...current, phone: event.target.value }))} placeholder="0912 345 678" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode }))} className={invoiceInputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã lịch hẹn (không bắt buộc)</span><input value={invoice.appointmentId} onChange={(event) => setInvoice((current) => ({ ...current, appointmentId: event.target.value }))} placeholder="APT-..." className={invoiceInputClass} /></label></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 text-[9px] font-black text-slate-800">Dịch vụ & thành tiền</legend><div className="grid gap-3 sm:grid-cols-2"><label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tên dịch vụ / sản phẩm *</span><input value={invoice.itemName} onChange={(event) => setInvoice((current) => ({ ...current, itemName: event.target.value }))} placeholder="Ví dụ: Gel Manicure + Nail Art" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Nhân viên phụ trách *</span><input value={invoice.staff} onChange={(event) => setInvoice((current) => ({ ...current, staff: event.target.value }))} placeholder="Tên kỹ thuật viên" className={invoiceInputClass} /></label><div className="grid grid-cols-[100px_1fr] gap-3"><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số lượng *</span><input type="number" min="1" step="1" value={invoice.quantity} onChange={(event) => setInvoice((current) => ({ ...current, quantity: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đơn giá *</span><input type="number" min="1" step="1000" value={invoice.unitPrice} onChange={(event) => setInvoice((current) => ({ ...current, unitPrice: event.target.value }))} placeholder="0" className={invoiceInputClass} /></label></div><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Giảm giá</span><input type="number" min="0" step="1000" value={invoice.discount} onChange={(event) => setInvoice((current) => ({ ...current, discount: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label></div><div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] text-white"><div className="p-4"><p className="text-[8px] font-bold text-slate-400">Tạm tính</p><p className="mt-1 text-base font-black">{money(invoiceSubtotal)}</p></div><div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-violet-300">Tổng hóa đơn</p><p className="mt-1 text-base font-black">{money(invoiceTotal)}</p></div></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 text-[9px] font-black text-slate-800">Thanh toán ban đầu</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đã thu / tiền cọc</span><input type="number" min="0" max={invoiceTotal || undefined} step="1000" value={invoice.deposit} onChange={(event) => setInvoice((current) => ({ ...current, deposit: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Phương thức</span><BeautifulSelect value={invoice.method} onChange={(event) => setInvoice((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className={invoiceInputClass}>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label>{Number(invoice.deposit) > 0 && invoice.method !== 'CASH' && <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giao dịch *</span><input value={invoice.reference} onChange={(event) => setInvoice((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className={invoiceInputClass} /></label>}<label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Ghi chú</span><textarea value={invoice.note} onChange={(event) => setInvoice((current) => ({ ...current, note: event.target.value }))} placeholder="Thông tin cần lưu cùng hóa đơn..." className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label></div></fieldset></div><footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7"><p className="hidden text-[8px] font-semibold text-slate-400 sm:block">Hóa đơn được lưu vào nhật ký kiểm soát tenant.</p><div className="ml-auto flex gap-2"><button type="button" onClick={() => setCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><ReceiptText className="h-4 w-4" />Tạo hóa đơn</button></div></footer></form></div>}
 
@@ -444,16 +1020,203 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                   </div>
                 </section>
               </div>
+
+              {/* Phần chọn Mẫu Nail áp dụng theo Dịch vụ */}
+              {invoiceItems.length > 0 && (
+                <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/50 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/60 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-violet-600" />
+                      <p className="text-[10px] font-black text-slate-800">
+                        Chọn Mẫu Nail tương ứng cho dịch vụ
+                      </p>
+                    </div>
+                    <span className="text-[8px] font-bold text-violet-700 bg-white px-2 py-0.5 rounded-full border border-violet-200">
+                      Hiển thị các mẫu phù hợp theo liên kết ở trang Màu & mẫu Nail
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {invoiceItems.map((item) => {
+                      const matchingDesigns = getMatchingDesignsForService(item.id, nailDesigns);
+                      const hasDesigns = matchingDesigns.length > 0;
+                      const currentDesign = matchingDesigns.find(
+                        (d) => d.id === item.selectedDesignId
+                      );
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5 shadow-sm"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <span className="text-[10px] font-black text-slate-900">
+                                {item.name}
+                              </span>
+                              <span className="ml-2 text-[8px] font-bold text-slate-400">
+                                [{item.id}]
+                              </span>
+                              <p className="text-[8px] text-slate-500 mt-0.5">
+                                Giá dịch vụ nền:{' '}
+                                <strong className="text-slate-800">{money(item.price)}</strong> / lượt
+                              </p>
+                            </div>
+
+                            {hasDesigns ? (
+                              <div className="w-full sm:w-80">
+                                <BeautifulSelect
+                                  value={item.selectedDesignId || 'NONE'}
+                                  onChange={(e) => updateInvoiceServiceDesign(item.id, e.target.value)}
+                                  className="h-10 w-full rounded-xl border border-violet-200 bg-violet-50/70 px-3 text-[9px] font-bold text-violet-950 focus:bg-white"
+                                >
+                                  <option value="NONE">
+                                    -- Không chọn mẫu nail (Dùng giá dịch vụ nền) --
+                                  </option>
+                                  {matchingDesigns.map((design) => (
+                                    <option key={design.id} value={design.id}>
+                                      [{design.id}] {design.name} (+{money(design.surcharge)})
+                                    </option>
+                                  ))}
+                                </BeautifulSelect>
+                              </div>
+                            ) : (
+                              <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-[8px] font-semibold text-slate-500">
+                                Chưa có mẫu nail liên kết với dịch vụ này
+                              </span>
+                            )}
+                          </div>
+
+                          {currentDesign && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 px-3.5 py-2 text-[8.5px]">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="font-bold text-amber-950">
+                                  Mẫu đã chọn: <strong className="font-black text-amber-900">{currentDesign.name}</strong>
+                                </span>
+                                <span className="rounded bg-amber-200/80 px-2 py-0.5 font-mono text-[8px] font-black text-amber-900">
+                                  Mã: {currentDesign.id}
+                                </span>
+                                <span className="font-black text-amber-800 bg-white px-2.5 py-0.5 rounded-full border border-amber-300">
+                                  Phụ thu mẫu: +{money(currentDesign.surcharge)}
+                                </span>
+                              </div>
+                              <div className="font-black text-slate-800">
+                                Tổng dòng: {money(item.price)} + {money(currentDesign.surcharge)} ={' '}
+                                <span className="text-violet-700 font-black text-[9.5px]">
+                                  {money((item.price + currentDesign.surcharge) * item.quantity)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Chọn Màu sơn sử dụng liên kết Kho vật tư */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <Palette className="h-3.5 w-3.5 text-violet-600" />
+                              <span className="text-[9px] font-bold text-slate-700">Màu sơn sử dụng (Kho vật tư):</span>
+                            </div>
+                            <div className="w-full sm:w-80">
+                              <BeautifulSelect
+                                value={item.selectedColorId || 'NONE'}
+                                onChange={(e) => updateInvoiceServiceColor(item.id, e.target.value)}
+                                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] font-bold text-slate-800 focus:bg-white"
+                              >
+                                <option value="NONE">-- Chọn màu sơn (Từ kho vật tư) --</option>
+                                {nailColors.map((color) => {
+                                  const isOut = color.status === 'OUT' || color.stock <= 0;
+                                  const isLow = color.status === 'LOW' || color.stock <= color.minimumStock;
+                                  return (
+                                    <option key={color.id} value={color.id} disabled={isOut}>
+                                      [{color.brand} {color.code}] {color.name} — {isOut ? '❌ HẾT HÀNG' : isLow ? `⚠️ Tồn thấp (${color.stock} chai)` : `Còn: ${color.stock} chai`}
+                                    </option>
+                                  );
+                                })}
+                              </BeautifulSelect>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giảm giá</span><input value={invoice.discountCode} onChange={(event) => setInvoice((current) => ({ ...current, discountCode: event.target.value.toUpperCase() }))} placeholder="MEMBER5, SALON10, VIP15" className={invoiceInputClass} />{normalizedDiscountCode && <span className={`mt-1 block text-[7px] font-bold ${appliedDiscount ? 'text-emerald-600' : 'text-rose-600'}`}>{appliedDiscount ? `${appliedDiscount.label}: giảm ${appliedDiscount.rate}% (-${money(invoiceDiscount)})` : 'Mã chưa hợp lệ'}</span>}</label>
+                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giảm giá</span><input value={invoice.discountCode} onChange={(event) => setInvoice((current) => ({ ...current, discountCode: event.target.value }))} placeholder="MEMBER5, SALON10, VIP15, LOY-003..." className={invoiceInputClass} />{promoEvaluation.feedback && <span className={`mt-1 block text-[7.5px] font-bold leading-tight ${promoEvaluation.feedback.isError ? 'text-rose-600' : 'text-emerald-600'}`}>{promoEvaluation.feedback.text}</span>}</label>
                 <div><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Thuế VAT</span><div className="grid h-11 grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">{['0', '5', '8', '10'].map((rate) => <button key={rate} type="button" onClick={() => setInvoice((current) => ({ ...current, taxRate: rate }))} className={`min-h-0 rounded-none border-0 border-r border-slate-200 px-1 text-[8px] font-black shadow-none last:border-r-0 ${invoice.taxRate === rate ? 'bg-violet-600 text-white' : 'bg-transparent text-slate-500'}`}>{rate}%</button>)}</div><span className="mt-1 block text-[7px] font-semibold text-slate-400">Tiền thuế: {money(invoiceTax)}</span></div>
                 <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label>
               </div>
-              <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] text-white sm:grid-cols-4">
-                <div className="p-4"><p className="text-[8px] font-bold text-slate-400">Tạm tính · {invoiceItems.reduce((sum, item) => sum + item.quantity, 0)} lượt</p><p className="mt-1 text-sm font-black">{money(invoiceSubtotal)}</p></div>
-                <div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-slate-400">Giảm giá</p><p className="mt-1 text-sm font-black text-emerald-300">-{money(invoiceDiscount)}</p></div>
-                <div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-slate-400">Thuế + tip</p><p className="mt-1 text-sm font-black">+{money(invoiceTax + Math.max(0, Number(invoice.tip) || 0))}</p></div>
-                <div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-violet-300">Tổng hóa đơn</p><p className="mt-1 text-base font-black">{money(invoiceTotal)}</p></div>
+
+              {/* Tóm tắt hóa đơn tách rõ dịch vụ nền & phụ thu mẫu nail */}
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 text-white p-4 space-y-3 shadow-md">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-violet-300">
+                    Tóm tắt hóa đơn dịch vụ
+                  </span>
+                  <span className="text-[8px] font-bold text-slate-400">
+                    {invoiceItems.reduce((s, i) => s + i.quantity, 0)} lượt dịch vụ
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-[8.5px]">
+                  {/* Dịch vụ nền */}
+                  <div className="flex justify-between text-slate-300">
+                    <span>Dịch vụ nền:</span>
+                    <span className="font-bold">{money(invoiceBaseServicesSubtotal)}</span>
+                  </div>
+
+                  {/* Chi tiết từng mẫu nail */}
+                  {invoiceItems.some((i) => i.selectedDesignName) ? (
+                    invoiceItems
+                      .filter((i) => i.selectedDesignName)
+                      .map((i) => (
+                        <div key={`summary-${i.id}`} className="flex justify-between text-amber-300 pl-3">
+                          <span>
+                            ↳ Mẫu nail đã chọn: <strong>{i.selectedDesignName}</strong> [{i.selectedDesignCode}]:
+                          </span>
+                          <span className="font-bold">+{money((i.selectedDesignSurcharge || 0) * i.quantity)}</span>
+                        </div>
+                      ))
+                  ) : (
+                    <div className="flex justify-between text-slate-400 pl-3 italic">
+                      <span>↳ Mẫu nail đã chọn:</span>
+                      <span>Chưa chọn mẫu (dùng giá dịch vụ nền)</span>
+                    </div>
+                  )}
+
+                  {/* Phụ thu mẫu nail tổng */}
+                  <div className="flex justify-between text-amber-400 pt-1 border-t border-white/5">
+                    <span>Phụ thu mẫu nail:</span>
+                    <span className="font-bold">+{money(invoiceNailSurchargeSubtotal)}</span>
+                  </div>
+
+                  {/* Tạm tính */}
+                  <div className="flex justify-between text-white font-bold pt-1 border-t border-white/10">
+                    <span>Tạm tính (Dịch vụ nền + Phụ thu mẫu):</span>
+                    <span>{money(invoiceSubtotal)}</span>
+                  </div>
+
+                  {/* Giảm giá */}
+                  {invoiceDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-400">
+                      <span>Giảm giá ({promoEvaluation.appliedProgram?.name || invoice.discountCode}):</span>
+                      <span className="font-bold">-{money(invoiceDiscount)}</span>
+                    </div>
+                  )}
+
+                  {/* Thuế + Tip */}
+                  {(invoiceTax > 0 || Number(invoice.tip) > 0) && (
+                    <div className="flex justify-between text-slate-300">
+                      <span>Thuế VAT ({invoice.taxRate}%) + Tip:</span>
+                      <span className="font-bold">+{money(invoiceTax + Math.max(0, Number(invoice.tip) || 0))}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-white/10 font-black text-white">
+                  <span className="text-violet-300 text-xs">TỔNG HÓA ĐƠN</span>
+                  <span className="text-emerald-400 text-lg">{money(invoiceTotal)}</span>
+                </div>
               </div>
             </fieldset>
             <fieldset className="border-t border-slate-100 pt-5">

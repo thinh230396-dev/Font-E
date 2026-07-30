@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import type { DemoAccount } from '../auth/demoAccounts';
 import { resetTenantMockStorage } from '../utils/mockDataReset';
+import { validateAndCalculatePromotion, type LoyaltyProgram } from '../utils/promotionUtils';
 
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
 const TenantAdminCustomers = lazy(() => import('./TenantAdminCustomers'));
@@ -396,6 +397,11 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [deletingAppointment, setDeletingAppointment] = useState<ReceptionAppointment | null>(null);
   const [shiftModal, setShiftModal] = useState<'OPEN' | 'CLOSE' | null>(null);
   const [toast, setToast] = useState('');
+  const loyaltyStorageKey = `tenant-admin-loyalty-v1:${tenantName}`;
+  const [loyaltyPrograms, setLoyaltyPrograms] = useState<LoyaltyProgram[]>(() => readStorage(loyaltyStorageKey, []));
+  const [selectedPromoId, setSelectedPromoId] = useState<string>('');
+  const [promoFeedback, setPromoFeedback] = useState<{ isError: boolean; text: string } | null>(null);
+
   const [formError, setFormError] = useState('');
   const [walkIn, setWalkIn] = useState({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: nowTime(), duration: '60', price: '450000', note: '' });
   const [paymentForm, setPaymentForm] = useState({ method: 'CASH' as PaymentMethod, discount: '0', tip: '0', reference: '', note: '' });
@@ -414,7 +420,25 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [technicianEditForm, setTechnicianEditForm] = useState<TechnicianEditForm>({ status: 'PRESENT', shift: 'FULL_DAY', checkIn: '', checkOut: '', leaveNote: '' });
   const [appointmentEditForm, setAppointmentEditForm] = useState<AppointmentEditForm>({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: nowTime(), duration: '60', price: '450000', note: '' });
 
-  useEffect(() => localStorage.setItem(appointmentStorageKey, JSON.stringify(appointments)), [appointmentStorageKey, appointments]);
+  useEffect(() => {
+    if (selectedPromoId && paymentAppointment) {
+      const program = loyaltyPrograms.find((p) => p.id === selectedPromoId);
+      if (program) {
+        const result = validateAndCalculatePromotion({
+          program,
+          items: invoiceLines,
+          customerUsageCount: 0,
+        });
+        if (!result.isValid) {
+          setPromoFeedback({ isError: true, text: result.reason || 'Hóa đơn chưa đủ điều kiện áp dụng ưu đãi này.' });
+          setPaymentForm((prev) => ({ ...prev, discount: '0' }));
+        } else {
+          setPromoFeedback({ isError: false, text: `Áp dụng thành công: ${program.name} (Giảm ${money(result.discountAmount)})` });
+          setPaymentForm((prev) => ({ ...prev, discount: String(result.discountAmount) }));
+        }
+      }
+    }
+  }, [invoiceLines]);
   useEffect(() => localStorage.setItem(paymentStorageKey, JSON.stringify(payments)), [paymentStorageKey, payments]);
   useEffect(() => localStorage.setItem(technicianStorageKey, JSON.stringify(technicians)), [technicianStorageKey, technicians]);
   useEffect(() => {
@@ -811,6 +835,32 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     });
   };
 
+  const handleSelectPromo = (promoId: string, lines = invoiceLines) => {
+    setSelectedPromoId(promoId);
+    if (!promoId) {
+      setPromoFeedback(null);
+      setPaymentForm((prev) => ({ ...prev, discount: '0' }));
+      return;
+    }
+    const program = loyaltyPrograms.find((p) => p.id === promoId);
+    if (!program) {
+      setPromoFeedback({ isError: true, text: 'Chương trình ưu đãi không tồn tại' });
+      return;
+    }
+    const result = validateAndCalculatePromotion({
+      program,
+      items: lines,
+      customerUsageCount: 0,
+    });
+    if (!result.isValid) {
+      setPromoFeedback({ isError: true, text: result.reason || 'Hóa đơn chưa đủ điều kiện áp dụng ưu đãi này.' });
+      setPaymentForm((prev) => ({ ...prev, discount: '0' }));
+    } else {
+      setPromoFeedback({ isError: false, text: `Áp dụng thành công: ${program.name} (Giảm ${money(result.discountAmount)})` });
+      setPaymentForm((prev) => ({ ...prev, discount: String(result.discountAmount) }));
+    }
+  };
+
   const openPayment = (appointment: ReceptionAppointment) => {
     if (!requireOpenShift()) return;
     if (appointment.status !== 'IN_SERVICE') {
@@ -821,6 +871,11 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       setToast('Lịch hẹn này đã có hóa đơn thanh toán hoàn tất.');
       return;
     }
+    const loadedPromos = readStorage<LoyaltyProgram[]>(loyaltyStorageKey, []);
+    setLoyaltyPrograms(loadedPromos);
+    setSelectedPromoId('');
+    setPromoFeedback(null);
+
     setPaymentAppointment(appointment);
     const selectedServices = appointment.services?.length ? appointment.services : [appointment.service];
     const splitPrice = Math.floor(appointment.price / selectedServices.length);
@@ -878,6 +933,21 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     if (invoiceLines.some((line) => !line.name.trim() || !Number.isInteger(line.quantity) || line.quantity < 1 || line.unitPrice < 0)) return setFormError('Vui lòng kiểm tra tên, số lượng và đơn giá của từng dòng.');
     const subtotal = invoiceLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
     const discount = Math.max(0, Number(paymentForm.discount) || 0);
+
+    if (selectedPromoId) {
+      const program = loyaltyPrograms.find((p) => p.id === selectedPromoId);
+      if (program) {
+        const result = validateAndCalculatePromotion({
+          program,
+          items: invoiceLines,
+          customerUsageCount: 0,
+        });
+        if (!result.isValid) {
+          return setFormError(`Không đủ điều kiện áp dụng ưu đãi "${program.name}": ${result.reason}`);
+        }
+      }
+    }
+
     const tip = Math.max(0, Number(paymentForm.tip) || 0);
     if (discount > subtotal) return setFormError('Giảm giá không được lớn hơn tổng tiền hàng.');
     const grandTotal = Math.max(0, subtotal - discount + tip);
@@ -2020,19 +2090,46 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                   </div>
                 </div>
 
+                {/* Chọn chương trình ưu đãi Loyalty */}
+                <div className="mt-3 rounded-xl border border-violet-500/25 bg-violet-500/5 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-black text-violet-600 flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" /> Áp dụng chương trình ưu đãi
+                    </span>
+                  </div>
+                  <select
+                    value={selectedPromoId}
+                    onChange={(e) => handleSelectPromo(e.target.value)}
+                    className="mt-2 h-9 w-full rounded-lg border border-violet-500/20 bg-brand-surface px-2.5 text-[10px] font-bold text-brand-text outline-none focus:border-violet-500"
+                  >
+                    <option value="">-- Chọn ưu đãi hoặc nhập giảm giá bên dưới --</option>
+                    {loyaltyPrograms.filter((p) => p.status === 'ACTIVE').map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.benefit})
+                      </option>
+                    ))}
+                  </select>
+
+                  {promoFeedback && (
+                    <div className={`mt-2 rounded-lg p-2.5 text-[9px] font-bold leading-4 ${promoFeedback.isError ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                      {promoFeedback.text}
+                    </div>
+                  )}
+                </div>
+
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-black text-rose-500">Ưu đãi</span>
+                      <span className="font-black text-rose-500">Giảm giá</span>
                       <div className="flex items-center gap-1">
                         <span className="font-bold text-rose-500">-</span>
-                        <input type="number" min="0" step="1000" value={paymentForm.discount} onChange={(event) => setPaymentForm({ ...paymentForm, discount: event.target.value })} className="w-[86px] rounded-lg border border-rose-500/20 bg-brand-surface py-1.5 px-2 text-right text-[10px] font-black text-brand-text outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/15" placeholder="0" />
+                        <input type="number" min="0" step="1000" value={paymentForm.discount} onChange={(event) => { setSelectedPromoId(''); setPromoFeedback(null); setPaymentForm({ ...paymentForm, discount: event.target.value }); }} className="w-[86px] rounded-lg border border-rose-500/20 bg-brand-surface py-1.5 px-2 text-right text-[10px] font-black text-brand-text outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/15" placeholder="0" />
                         <span className="font-bold text-brand-text">đ</span>
                       </div>
                     </div>
                     <div className="mt-2 grid grid-cols-4 gap-1">
                       {[0, 20000, 50000, 100000].map((val) => (
-                        <button key={val} type="button" onClick={() => setPaymentForm({ ...paymentForm, discount: String(val) })} className={`rounded-lg px-1.5 py-1.5 text-[8px] font-black transition ${Number(paymentForm.discount) === val ? 'bg-rose-500 text-white shadow-sm' : 'bg-brand-surface text-brand-text-muted hover:text-brand-text'}`}>
+                        <button key={val} type="button" onClick={() => { setSelectedPromoId(''); setPromoFeedback(null); setPaymentForm({ ...paymentForm, discount: String(val) }); }} className={`rounded-lg px-1.5 py-1.5 text-[8px] font-black transition ${Number(paymentForm.discount) === val ? 'bg-rose-500 text-white shadow-sm' : 'bg-brand-surface text-brand-text-muted hover:text-brand-text'}`}>
                           {val === 0 ? 'Không' : `-${val / 1000}k`}
                         </button>
                       ))}

@@ -2,5 +2,7 @@
   "name": "SalonSys Admin",
   "description": "Hệ thống quản trị trung tâm và điều hành mạng lưới tiệm Nail toàn cầu (SalonSys SaaS Superadmin Dashboard).",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

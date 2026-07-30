@@ -79,7 +79,6 @@ const TenantAdminStations = lazy(() => import('./TenantAdminStations'));
 const TenantAdminPayments = lazy(() => import('./TenantAdminPayments'));
 const TenantAdminCustomers = lazy(() => import('./TenantAdminCustomers'));
 const TenantAdminLoyalty = lazy(() => import('./TenantAdminLoyalty'));
-const TenantAdminCustomerCare = lazy(() => import('./TenantAdminCustomerCare'));
 const TenantAdminStaff = lazy(() => import('./TenantAdminStaff'));
 const TenantAdminServices = lazy(() => import('./TenantAdminServices'));
 const TenantAdminInventory = lazy(() => import('./TenantAdminInventory'));
@@ -128,8 +127,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
     label: 'Khách hàng',
     items: [
       { id: 'customers', label: 'Hồ sơ khách hàng', icon: UsersRound },
-      { id: 'loyalty', label: 'Thành viên & ưu đãi', icon: Gift },
-      { id: 'care', label: 'Chăm sóc khách', icon: Megaphone, badge: '38' }
+      { id: 'loyalty', label: 'Thành viên & ưu đãi', icon: Gift }
     ]
   },
   {
@@ -1679,7 +1677,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           </div>
         </header>
 
-        <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" data-page={activePage} data-compact-access={['stations', 'pos', 'customers', 'loyalty', 'care', 'staff', 'services', 'inventory'].includes(activePage) ? 'true' : undefined} tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+        <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" data-page={activePage} data-compact-access={['stations', 'pos', 'customers', 'loyalty', 'staff', 'services', 'inventory'].includes(activePage) ? 'true' : undefined} tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
           {activePage !== 'overview' && demoMode && <section className="tenant-demo-strip mb-4 flex flex-col gap-2 rounded-xl border sm:flex-row sm:items-center">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-pink-50 text-pink-600"><Database className="h-4 w-4" /></span>
             <p className="min-w-0 flex-1 text-[9px] font-bold text-slate-600">Đang hiển thị dữ liệu mẫu</p>
@@ -1774,20 +1772,6 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           ) : activePage === 'loyalty' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải thành viên & ưu đãi...</div>}>
               <TenantAdminLoyalty
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-                selectedBranch={branch}
-                onSelectedBranchChange={(value) => { setBranch(value); setSelectedRow(null); }}
-                tenantName={tenantName}
-                roleLabel="Owner · Tenant Admin"
-                accessMode={currentAccessMode}
-                readOnlyReason={readOnlyReason}
-                onNotify={setToast}
-              />
-            </Suspense>
-          ) : activePage === 'care' ? (
-            <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-[10px] font-bold text-slate-400">Đang tải trung tâm chăm sóc khách hàng...</div>}>
-              <TenantAdminCustomerCare
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
                 selectedBranch={branch}

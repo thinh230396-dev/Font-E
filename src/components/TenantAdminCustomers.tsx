@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertTriangle,
@@ -8,6 +8,7 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Clock3,
   Download,
@@ -193,6 +194,83 @@ const statusMeta: Record<CustomerStatus, { label: string; badge: string; dot: st
     dot: 'bg-slate-400',
   },
 };
+
+interface CustomerStatusDropdownProps {
+  status: CustomerStatus;
+  disabled?: boolean;
+  onStatusChange: (newStatus: CustomerStatus) => void;
+}
+
+function CustomerStatusDropdown({ status, disabled = false, onStatusChange }: CustomerStatusDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const meta = statusMeta[status];
+
+  return (
+    <div ref={dropdownRef} className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled) setIsOpen((prev) => !prev);
+        }}
+        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 transition-all focus:outline-none ${meta.badge} ${
+          disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:ring-2 hover:shadow-sm'
+        }`}
+        title={disabled ? 'Không có quyền thay đổi' : 'Bấm để đổi trạng thái'}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+        <span>{meta.label}</span>
+        {!disabled && <ChevronDown className={`h-3 w-3 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />}
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 z-[120] mt-1.5 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5">
+          <p className="px-2.5 py-1 text-[7px] font-black uppercase tracking-wider text-slate-400">Đổi trạng thái</p>
+          {(Object.keys(statusMeta) as CustomerStatus[]).map((key) => {
+            const itemMeta = statusMeta[key];
+            const isCurrent = key === status;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isCurrent) {
+                    onStatusChange(key);
+                  }
+                  setIsOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[9px] font-bold transition ${
+                  isCurrent ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${itemMeta.badge}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${itemMeta.dot}`} />
+                  {itemMeta.label}
+                </span>
+                {isCurrent && <Check className="h-3 w-3 text-emerald-600" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const appointmentStatus: Record<string, { label: string; className: string }> = {
   PENDING: { label: 'Chờ xác nhận', className: 'bg-amber-50 text-amber-700 ring-amber-200' },
@@ -529,6 +607,47 @@ export default function TenantAdminCustomers({
   const selectedOutstanding = selectedTodayAppointment
     ? Math.max(0, selectedTodayAppointment.price - selectedTodayAppointment.deposit)
     : 0;
+
+  const handleStatusChange = (customerId: string, newStatus: CustomerStatus) => {
+    if (!requireManage()) return;
+    const targetCustomer = customers.find((c) => c.id === customerId);
+    if (!targetCustomer) return;
+    if (targetCustomer.status === newStatus) return;
+
+    const newLabel = statusMeta[newStatus].label;
+
+    setCustomers((current) =>
+      current.map((item) => {
+        if (item.id === customerId) {
+          return {
+            ...item,
+            status: newStatus,
+            activity: [
+              `${activityTime()} · Chuyển trạng thái sang "${newLabel}"`,
+              ...item.activity,
+            ],
+          };
+        }
+        return item;
+      }),
+    );
+
+    setSelected((current) => {
+      if (current?.id === customerId) {
+        return {
+          ...current,
+          status: newStatus,
+          activity: [
+            `${activityTime()} · Chuyển trạng thái sang "${newLabel}"`,
+            ...current.activity,
+          ],
+        };
+      }
+      return current;
+    });
+
+    onNotify?.(`Đã cập nhật trạng thái của ${targetCustomer.name} thành "${newLabel}".`);
+  };
 
   const openCreate = () => {
     if (!requireManage()) return;
@@ -960,11 +1079,12 @@ export default function TenantAdminCustomers({
                         {customer.allergies || 'Chưa khai báo'}
                       </p>
                     </td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[customer.status].badge}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusMeta[customer.status].dot}`} />
-                        {statusMeta[customer.status].label}
-                      </span>
+                    <td className="px-4 py-4" onClick={(event) => event.stopPropagation()}>
+                      <CustomerStatusDropdown
+                        status={customer.status}
+                        disabled={!canManage}
+                        onStatusChange={(newStatus) => handleStatusChange(customer.id, newStatus)}
+                      />
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
@@ -1010,11 +1130,18 @@ export default function TenantAdminCustomers({
 
         <div className="divide-y divide-slate-100 md:hidden">
           {filtered.map((customer) => (
-            <button
+            <div
               key={customer.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => setSelected(customer)}
-              className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setSelected(customer);
+                }
+              }}
+              className="block h-auto w-full cursor-pointer rounded-none border-0 bg-white p-4 text-left shadow-none transition hover:bg-slate-50/80"
             >
               <span className="flex items-start gap-3">
                 <span
@@ -1035,8 +1162,15 @@ export default function TenantAdminCustomers({
                     <ChevronRight className="h-4 w-4 text-slate-300" />
                   </span>
                   <span className="mt-3 flex items-center justify-between gap-2">
-                    <span className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${tierMeta[customer.tier].badge}`}>
-                      {tierMeta[customer.tier].label}
+                    <span className="flex items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+                      <span className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${tierMeta[customer.tier].badge}`}>
+                        {tierMeta[customer.tier].label}
+                      </span>
+                      <CustomerStatusDropdown
+                        status={customer.status}
+                        disabled={!canManage}
+                        onStatusChange={(newStatus) => handleStatusChange(customer.id, newStatus)}
+                      />
                     </span>
                     <span className="truncate text-[8px] font-bold text-slate-600">
                       {customer.preferences.slice(0, 2).join(' · ') || 'Chưa có sở thích'}
@@ -1044,7 +1178,7 @@ export default function TenantAdminCustomers({
                   </span>
                 </span>
               </span>
-            </button>
+            </div>
           ))}
         </div>
 
@@ -1109,6 +1243,11 @@ export default function TenantAdminCustomers({
                       <span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${tierMeta[selected.tier].badge}`}>
                         {tierMeta[selected.tier].label}
                       </span>
+                      <CustomerStatusDropdown
+                        status={selected.status}
+                        disabled={!canManage}
+                        onStatusChange={(newStatus) => handleStatusChange(selected.id, newStatus)}
+                      />
                     </div>
                     <h2 id="customer-detail-title" className="mt-2 truncate text-xl font-black text-slate-950">
                       {selected.name}

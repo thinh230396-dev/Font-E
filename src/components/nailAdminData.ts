@@ -9,7 +9,6 @@ export type NailPageId =
   | 'pos'
   | 'customers'
   | 'loyalty'
-  | 'care'
   | 'staff'
   | 'services'
   | 'inventory'
@@ -277,35 +276,6 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
       { key: 'conditions', label: 'Điều kiện áp dụng', type: 'textarea' }
     ]
   },
-  care: {
-    id: 'care', eyebrow: 'Chăm sóc tự động', title: 'Chăm sóc khách hàng', description: 'Tạo chiến dịch nhắc lịch, cảm ơn, xin đánh giá và mời khách quay lại.', primaryAction: 'Tạo chiến dịch', secondaryAction: 'Mẫu tin nhắn',
-    stats: [
-      { label: 'Tin nhắn tháng này', value: '2.486', detail: 'Tỷ lệ gửi thành công 98,6%', tone: 'blue' },
-      { label: 'Tỷ lệ mở', value: '82%', detail: 'SMS, Zalo và email', tone: 'violet' },
-      { label: 'Lịch tạo lại', value: '146', detail: 'Doanh thu quy đổi 92 triệu', tone: 'emerald' },
-      { label: 'Chờ xử lý', value: '38', detail: 'Khách vắng trên 45 ngày', tone: 'amber' }
-    ],
-    tabs: ['Tất cả', 'Tự động', 'Đang chạy', 'Bản nháp', 'Đã kết thúc'],
-    columns: ['Chiến dịch', 'Kênh', 'Đối tượng', 'Đã gửi', 'Chuyển đổi', 'Trạng thái'],
-    rows: [
-      { id: 'CRM-101', title: 'Nhắc lịch trước 24 giờ', subtitle: 'Tự động theo lịch đã xác nhận', cells: ['Zalo + SMS', 'Khách có lịch ngày mai', '428 tin', '92% xác nhận'], badge: 'Tự động', badgeTone: 'emerald', details: [d('Tần suất', 'Mỗi 15 phút'), d('Tỷ lệ gửi', '99,2%'), d('Tỷ lệ phản hồi', '48%'), d('Xác nhận lịch', '92%'), d('Hủy sau nhắc', '2,4%'), d('Mẫu tin', 'NTF-Appointment-01')] },
-      { id: 'CRM-102', title: 'Cảm ơn & xin đánh giá', subtitle: 'Gửi sau khi hoàn thành 2 giờ', cells: ['Zalo', 'Khách vừa sử dụng dịch vụ', '386 tin', '42% đánh giá'], badge: 'Tự động', badgeTone: 'emerald', details: [d('Tỷ lệ gửi', '98,8%'), d('Tỷ lệ mở', '91%'), d('Đánh giá nhận được', '162'), d('Điểm trung bình', '4.8/5'), d('Phản hồi tiêu cực', '3'), d('Mẫu tin', 'NTF-Review-02')] },
-      { id: 'CRM-103', title: 'Nhắc làm lại Gel sau 21 ngày', subtitle: 'Theo dịch vụ Gel Manicure', cells: ['Zalo + Email', 'Khách làm Gel 18–24 ngày trước', '214 tin', '28% đặt lại'], badge: 'Đang chạy', badgeTone: 'violet', details: [d('Đối tượng', '214 khách'), d('Đã mở', '178'), d('Đã bấm đặt lịch', '72'), d('Lịch đã tạo', '60'), d('Doanh thu quy đổi', '28,4 triệu'), d('Kết thúc', '31/07/2026')] },
-      { id: 'CRM-104', title: 'Quay lại cùng ưu đãi 15%', subtitle: 'Khách vắng mặt trên 45 ngày', cells: ['SMS + Email', '38 khách cần chăm sóc', '38 tin', '18% đặt lại'], badge: 'Đang chạy', badgeTone: 'violet', details: [d('Đối tượng', '38 khách'), d('Đã mở', '29'), d('Đã dùng ưu đãi', '7'), d('Doanh thu', '4,8 triệu'), d('Chi phí ưu đãi', '720.000đ'), d('Kết thúc', '25/07/2026')] },
-      { id: 'CRM-105', title: 'Bộ sưu tập Summer Chrome', subtitle: 'Ra mắt 12 mẫu Nail mới', cells: ['Instagram + Email', 'VIP và Thân thiết', '0 tin', 'Chưa chạy'], badge: 'Bản nháp', badgeTone: 'amber', details: [d('Đối tượng dự kiến', '398 khách'), d('Nội dung', '12 mẫu Summer Chrome'), d('Ưu đãi', 'Tặng Nail Art 2 ngón'), d('Ngân sách', '4 triệu'), d('Ngày gửi', '20/07/2026'), d('Người duyệt', 'Chưa duyệt')] }
-    ],
-    insightTitle: 'Hiệu quả kênh', insights: [
-      { label: 'Zalo', value: '88%', detail: 'Tỷ lệ mở cao nhất', tone: 'blue' },
-      { label: 'SMS', value: '98,9%', detail: 'Tỷ lệ gửi thành công', tone: 'emerald' },
-      { label: 'Email', value: '36%', detail: 'Tỷ lệ mở trung bình', tone: 'violet' }
-    ],
-    checklistTitle: 'Cần xử lý', checklist: ['Duyệt chiến dịch Summer Chrome', 'Phản hồi 3 đánh giá dưới 4 sao', 'Bổ sung số điện thoại 9 hồ sơ', 'Kiểm tra hạn mức SMS tháng'],
-    formTitle: 'Tạo chiến dịch chăm sóc', formFields: [
-      { key: 'name', label: 'Tên chiến dịch', type: 'text' }, { key: 'channel', label: 'Kênh gửi', type: 'select', options: ['Zalo', 'SMS', 'Email', 'Zalo + SMS', 'Đa kênh'] },
-      { key: 'audience', label: 'Nhóm khách hàng', type: 'select', options: ['Khách có lịch', 'Khách vừa hoàn thành', 'Khách vắng 45 ngày', 'VIP', 'Thân thiết'] },
-      { key: 'schedule', label: 'Thời gian gửi', type: 'date' }, { key: 'message', label: 'Nội dung', type: 'textarea', placeholder: 'Soạn nội dung cá nhân hóa...' }
-    ]
-  },
   staff: {
     id: 'staff', eyebrow: 'Đội ngũ & hiệu suất', title: 'Nhân sự', description: 'Quản lý kỹ thuật viên, ca làm, kỹ năng Nail, chấm công, doanh thu và hoa hồng.', primaryAction: 'Thêm nhân viên', secondaryAction: 'Xuất bảng công',
     stats: [
@@ -428,7 +398,7 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
     ]
   },
   online: {
-    id: 'online', eyebrow: 'Kênh đặt lịch công khai', title: 'Đặt lịch online', description: 'Cấu hình trang đặt lịch, dịch vụ hiển thị, tiền cọc, khung giờ và nguồn chuyển đổi.', primaryAction: 'Mở trang đặt lịch', secondaryAction: 'Sao chép liên kết',
+    id: 'online', eyebrow: 'Đặt lịch qua ứng dụng mobile', title: 'Đặt lịch online', description: 'Tiếp nhận và quản lý yêu cầu đặt lịch, dịch vụ, mẫu Nail, màu sơn và tiền cọc từ ứng dụng mobile khách hàng.', primaryAction: 'Ứng dụng khách hàng', secondaryAction: 'Sao chép liên kết',
     stats: [
       { label: 'Lượt truy cập tháng', value: '4.826', detail: '+24% so với tháng trước', tone: 'blue' },
       { label: 'Tỷ lệ chuyển đổi', value: '18,6%', detail: '898 lượt bắt đầu đặt', tone: 'violet' },

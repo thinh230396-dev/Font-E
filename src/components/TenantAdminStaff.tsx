@@ -37,14 +37,7 @@ import {
 } from "lucide-react";
 import BeautifulSelect from "./BeautifulSelect";
 
-type StaffRole =
-  | "OWNER"
-  | "MANAGER"
-  | "NAIL_ARTIST_SENIOR"
-  | "NAIL_TECHNICIAN"
-  | "PEDICURE_SPECIALIST"
-  | "ASSISTANT"
-  | "RECEPTIONIST";
+type StaffRole = "RECEPTIONIST" | "TECHNICIAN";
 type StaffStatus = "WORKING" | "OFF_SHIFT" | "LEAVE" | "INACTIVE";
 type ActiveStaffStatus = Exclude<StaffStatus, "INACTIVE">;
 type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT";
@@ -139,68 +132,19 @@ const roleMeta: Record<
   StaffRole,
   { label: string; badge: string; avatar: string }
 > = {
-  OWNER: {
-    label: "Chủ salon",
-    badge: "bg-violet-50 text-violet-700 ring-violet-200",
-    avatar: "bg-violet-100 text-violet-700",
-  },
-  MANAGER: {
-    label: "Quản lý",
-    badge: "bg-indigo-50 text-indigo-700 ring-indigo-200",
-    avatar: "bg-indigo-100 text-indigo-700",
-  },
-  NAIL_ARTIST_SENIOR: {
-    label: "Nail Artist Senior",
-    badge: "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200",
-    avatar: "bg-fuchsia-100 text-fuchsia-700",
-  },
-  NAIL_TECHNICIAN: {
-    label: "Nail Technician",
-    badge: "bg-blue-50 text-blue-700 ring-blue-200",
-    avatar: "bg-blue-100 text-blue-700",
-  },
-  PEDICURE_SPECIALIST: {
-    label: "Pedicure Specialist",
-    badge: "bg-cyan-50 text-cyan-700 ring-cyan-200",
-    avatar: "bg-cyan-100 text-cyan-700",
-  },
-  ASSISTANT: {
-    label: "Trợ lý kỹ thuật",
-    badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    avatar: "bg-emerald-100 text-emerald-700",
-  },
   RECEPTIONIST: {
     label: "Lễ tân",
     badge: "bg-amber-50 text-amber-700 ring-amber-200",
     avatar: "bg-amber-100 text-amber-700",
   },
+  TECHNICIAN: {
+    label: "Nhân viên kỹ thuật",
+    badge: "bg-blue-50 text-blue-700 ring-blue-200",
+    avatar: "bg-blue-100 text-blue-700",
+  },
 };
 
 const rolePermissionPresets: Record<StaffRole, RolePermissionPreset> = {
-  OWNER: {
-    canManageAppointments: true,
-    canViewCustomers: true,
-    canCollectPayment: true,
-    summary: "Toàn quyền vận hành salon, nhân sự, khách hàng và thanh toán.",
-    permissions: [
-      "Toàn quyền hệ thống",
-      "Quản lý toàn bộ lịch và ca làm",
-      "Xem và cập nhật hồ sơ khách",
-      "Thu tiền tại quầy",
-    ],
-  },
-  MANAGER: {
-    canManageAppointments: true,
-    canViewCustomers: true,
-    canCollectPayment: true,
-    summary:
-      "Quản lý lịch, ca làm, hồ sơ khách và nghiệp vụ thanh toán tại salon.",
-    permissions: [
-      "Quản lý toàn bộ lịch và ca làm",
-      "Xem và cập nhật hồ sơ khách",
-      "Thu tiền tại quầy",
-    ],
-  },
   RECEPTIONIST: {
     canManageAppointments: true,
     canViewCustomers: true,
@@ -213,47 +157,26 @@ const rolePermissionPresets: Record<StaffRole, RolePermissionPreset> = {
       "Thu tiền tại quầy",
     ],
   },
-  NAIL_ARTIST_SENIOR: {
+  TECHNICIAN: {
     canManageAppointments: true,
     canViewCustomers: false,
     canCollectPayment: false,
     summary:
-      "Chỉ xem và điều chỉnh lịch, ca làm cùng công việc được giao của cá nhân.",
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-  },
-  NAIL_TECHNICIAN: {
-    canManageAppointments: true,
-    canViewCustomers: false,
-    canCollectPayment: false,
-    summary:
-      "Chỉ xem và điều chỉnh lịch, ca làm cùng công việc được giao của cá nhân.",
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-  },
-  PEDICURE_SPECIALIST: {
-    canManageAppointments: true,
-    canViewCustomers: false,
-    canCollectPayment: false,
-    summary:
-      "Chỉ xem và điều chỉnh lịch, ca làm cùng công việc được giao của cá nhân.",
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-  },
-  ASSISTANT: {
-    canManageAppointments: true,
-    canViewCustomers: false,
-    canCollectPayment: false,
-    summary:
-      "Chỉ xem và điều chỉnh lịch, ca làm cùng công việc được giao của cá nhân.",
+      "Thực hiện dịch vụ kỹ thuật, quản lý lịch làm việc và ca làm cá nhân.",
     permissions: ["Quản lý lịch và ca làm cá nhân"],
   },
 };
 
 const normalizeStaffPermissions = (members: StaffMember[]) =>
   members.map((member) => {
+    const rawRole = String(member.role);
+    const role: StaffRole =
+      rawRole === "RECEPTIONIST" ? "RECEPTIONIST" : "TECHNICIAN";
     const preset =
-      rolePermissionPresets[member.role] ||
-      rolePermissionPresets.NAIL_TECHNICIAN;
+      rolePermissionPresets[role] || rolePermissionPresets.TECHNICIAN;
     return {
       ...member,
+      role,
       permissions: [...preset.permissions],
     };
   });
@@ -311,7 +234,7 @@ const staffSeed: StaffMember[] = [
     email: "nam.le@naile.vn",
     birthday: "1987-04-18",
     branch: "Q3",
-    role: "OWNER",
+    role: "RECEPTIONIST",
     status: "WORKING",
     employmentType: "FULL_TIME",
     startDate: "2022-03-01",
@@ -322,19 +245,19 @@ const staffSeed: StaffMember[] = [
     revenue: 18_600_000,
     rating: 4.9,
     utilization: 72,
-    commissionRate: 0,
-    commissionEarned: 0,
+    commissionRate: 5,
+    commissionEarned: 930_000,
     target: 20_000_000,
     attendance: 100,
     lateCount: 0,
     leaveBalance: 10,
-    skills: ["Quản lý salon Nail", "Tư vấn dịch vụ", "Kiểm soát chất lượng"],
+    skills: ["Lễ tân quầy", "Tư vấn dịch vụ", "Xử lý thanh toán"],
     permissions: [
-      "Toàn quyền hệ thống",
-      "Quản lý tài chính",
-      "Quản lý nhân sự",
+      "Quản lý toàn bộ lịch hẹn",
+      "Xem và cập nhật hồ sơ khách",
+      "Thu tiền tại quầy",
     ],
-    notes: "Phụ trách vận hành chung và khách VIP.",
+    notes: "Lễ tân trưởng phụ trách đón tiếp và xếp lịch tại salon.",
     schedule: createWeek("08:00–18:00", 6),
   },
   {
@@ -344,7 +267,7 @@ const staffSeed: StaffMember[] = [
     email: "thao.nguyen@naile.vn",
     birthday: "1991-09-12",
     branch: "Q3",
-    role: "NAIL_ARTIST_SENIOR",
+    role: "TECHNICIAN",
     status: "WORKING",
     employmentType: "FULL_TIME",
     startDate: "2022-05-16",
@@ -362,13 +285,13 @@ const staffSeed: StaffMember[] = [
     lateCount: 1,
     leaveBalance: 7.5,
     skills: [
-      "Nail Art Premium",
+      "Kỹ thuật Nail Art",
       "Acrylic",
       "Gel Extension",
       "Đào tạo kỹ thuật",
     ],
-    permissions: ["Quản lý lịch cá nhân", "Xem hồ sơ khách", "Thu tiền"],
-    notes: "Kỹ thuật viên chính cho Nail Art và khách VIP.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+    notes: "Kỹ thuật viên chính dịch vụ làm móng cao cấp.",
     schedule: createWeek("08:00–18:00", 1),
   },
   {
@@ -378,7 +301,7 @@ const staffSeed: StaffMember[] = [
     email: "khang.minh@naile.vn",
     birthday: "1994-12-03",
     branch: "Q3",
-    role: "NAIL_TECHNICIAN",
+    role: "TECHNICIAN",
     status: "WORKING",
     employmentType: "FULL_TIME",
     startDate: "2023-02-06",
@@ -396,8 +319,8 @@ const staffSeed: StaffMember[] = [
     lateCount: 2,
     leaveBalance: 8,
     skills: ["Gel Manicure", "Dặm gel", "Sửa form", "Nail Art cơ bản"],
-    permissions: ["Quản lý lịch cá nhân", "Xem hồ sơ khách"],
-    notes: "Có tỷ lệ khách quay lại cao nhất nhóm Nail Technician.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+    notes: "Kỹ thuật viên có tỷ lệ khách quay lại cao.",
     schedule: createWeek("09:00–20:00", 2),
   },
   {
@@ -407,7 +330,7 @@ const staffSeed: StaffMember[] = [
     email: "bao.quoc@naile.vn",
     birthday: "1990-06-24",
     branch: "Q3",
-    role: "PEDICURE_SPECIALIST",
+    role: "TECHNICIAN",
     status: "WORKING",
     employmentType: "FULL_TIME",
     startDate: "2023-08-14",
@@ -425,8 +348,8 @@ const staffSeed: StaffMember[] = [
     lateCount: 0,
     leaveBalance: 6,
     skills: ["Pedicure Spa", "Chăm sóc gót", "Massage chân", "Sơn gel"],
-    permissions: ["Quản lý lịch cá nhân", "Xem hồ sơ khách"],
-    notes: "Phụ trách nhóm dịch vụ Pedicure chuyên sâu.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+    notes: "Kỹ thuật viên phụ trách nhóm dịch vụ chăm sóc chân.",
     schedule: createWeek("08:00–17:00", 3),
   },
   {
@@ -436,7 +359,7 @@ const staffSeed: StaffMember[] = [
     email: "duong.thuy@naile.vn",
     birthday: "1998-02-19",
     branch: "Q3",
-    role: "ASSISTANT",
+    role: "TECHNICIAN",
     status: "WORKING",
     employmentType: "FULL_TIME",
     startDate: "2024-01-08",
@@ -454,8 +377,8 @@ const staffSeed: StaffMember[] = [
     lateCount: 2,
     leaveBalance: 9,
     skills: ["Chuẩn bị dụng cụ", "Sơn gel cơ bản", "Khử khuẩn thiết bị"],
-    permissions: ["Quản lý lịch cá nhân", "Xem hồ sơ khách"],
-    notes: "Đang trong lộ trình đào tạo lên Nail Technician.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+    notes: "Nhân viên kỹ thuật đang hoàn thiện nâng cao tay nghề.",
     schedule: createWeek("10:00–20:00", 4),
   },
   {
@@ -483,8 +406,12 @@ const staffSeed: StaffMember[] = [
     lateCount: 1,
     leaveBalance: 5.5,
     skills: ["Tiếp đón", "Quản lý lịch", "Chăm sóc khách", "Thu ngân"],
-    permissions: ["Quản lý toàn bộ lịch", "Xem hồ sơ khách", "Thu tiền"],
-    notes: "Nghỉ phép ngày 16–17/07.",
+    permissions: [
+      "Quản lý toàn bộ lịch hẹn",
+      "Xem và cập nhật hồ sơ khách",
+      "Thu tiền tại quầy",
+    ],
+    notes: "Lễ tân ca sáng - nghỉ phép ngày 16–17/07.",
     schedule: createWeek("08:00–17:00", 6, 3),
   },
   {
@@ -494,7 +421,7 @@ const staffSeed: StaffMember[] = [
     email: "my.ha@naile.vn",
     birthday: "1989-11-21",
     branch: "Q1",
-    role: "NAIL_ARTIST_SENIOR",
+    role: "TECHNICIAN",
     status: "WORKING",
     employmentType: "FULL_TIME",
     startDate: "2022-09-01",
@@ -512,8 +439,8 @@ const staffSeed: StaffMember[] = [
     lateCount: 0,
     leaveBalance: 8.5,
     skills: ["Nail Art", "Gel Extension", "Form Almond", "Đào tạo kỹ thuật"],
-    permissions: ["Quản lý toàn bộ lịch", "Xem hồ sơ khách", "Thu tiền"],
-    notes: "Trưởng nhóm kỹ thuật chi nhánh Quận 1.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+    notes: "Trưởng nhóm nhân viên kỹ thuật chi nhánh Quận 1.",
     schedule: createWeek("08:00–18:00", 2),
   },
   {
@@ -523,7 +450,7 @@ const staffSeed: StaffMember[] = [
     email: "huy.gia@naile.vn",
     birthday: "1995-03-08",
     branch: "Q1",
-    role: "NAIL_TECHNICIAN",
+    role: "TECHNICIAN",
     status: "WORKING",
     employmentType: "FULL_TIME",
     startDate: "2024-02-12",
@@ -541,8 +468,8 @@ const staffSeed: StaffMember[] = [
     lateCount: 1,
     leaveBalance: 9,
     skills: ["Manicure", "Gel đơn sắc", "French", "Dặm gel"],
-    permissions: ["Quản lý lịch cá nhân", "Xem hồ sơ khách"],
-    notes: "",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+    notes: "Nhân viên kỹ thuật chuyên gel đơn sắc và French.",
     schedule: createWeek("09:00–20:00", 1),
   },
   {
@@ -552,7 +479,7 @@ const staffSeed: StaffMember[] = [
     email: "anh.hoang@naile.vn",
     birthday: "1999-08-15",
     branch: "Q1",
-    role: "ASSISTANT",
+    role: "TECHNICIAN",
     status: "OFF_SHIFT",
     employmentType: "PART_TIME",
     startDate: "2025-01-06",
@@ -570,8 +497,8 @@ const staffSeed: StaffMember[] = [
     lateCount: 3,
     leaveBalance: 4,
     skills: ["Chuẩn bị bàn Nail", "Khử khuẩn", "Sơn gel cơ bản"],
-    permissions: ["Quản lý lịch cá nhân"],
-    notes: "Sinh viên làm bán thời gian ca chiều.",
+    permissions: ["Quản lý lịch và ca làm cá nhân"],
+    notes: "Nhân viên kỹ thuật bán thời gian ca chiều.",
     schedule: createWeek("14:00–20:00", 3),
   },
   {
@@ -599,8 +526,12 @@ const staffSeed: StaffMember[] = [
     lateCount: 1,
     leaveBalance: 7,
     skills: ["Tiếp đón", "Chăm sóc khách", "Thu ngân"],
-    permissions: ["Quản lý toàn bộ lịch", "Xem hồ sơ khách", "Thu tiền"],
-    notes: "",
+    permissions: [
+      "Quản lý toàn bộ lịch hẹn",
+      "Xem và cập nhật hồ sơ khách",
+      "Thu tiền tại quầy",
+    ],
+    notes: "Lễ tân ca tối tại Quận 1.",
     schedule: createWeek("10:00–20:00", 5),
   },
 ];
@@ -626,14 +557,14 @@ const performanceTone = (value: number) =>
       : "text-amber-600";
 
 const emptyForm = (branch: string): StaffFormState => {
-  const preset = rolePermissionPresets.NAIL_TECHNICIAN;
+  const preset = rolePermissionPresets.TECHNICIAN;
   return {
     name: "",
     phone: "",
     email: "",
     birthday: "",
     branch: branch === "Q1" ? "Q1" : "Q3",
-    role: "NAIL_TECHNICIAN",
+    role: "TECHNICIAN",
     status: "OFF_SHIFT",
     employmentType: "FULL_TIME",
     startDate: "2026-07-16",
@@ -779,13 +710,19 @@ export default function TenantAdminStaff({
   const workingCount = activeBranchStaff.filter(
     (member) => member.status === "WORKING",
   ).length;
+  const receptionistCount = activeBranchStaff.filter(
+    (member) => member.role === "RECEPTIONIST",
+  ).length;
+  const technicianCount = activeBranchStaff.filter(
+    (member) => member.role === "TECHNICIAN",
+  ).length;
   const activeFilterCount = [
     roleFilter !== "ALL",
     statusFilter !== "ALL",
     employmentFilter !== "ALL",
   ].filter(Boolean).length;
   const serviceStaff = activeBranchStaff.filter(
-    (member) => !["OWNER", "MANAGER", "RECEPTIONIST"].includes(member.role),
+    (member) => member.role === "TECHNICIAN",
   );
   const averageUtilization = serviceStaff.length
     ? Math.round(
@@ -1008,8 +945,8 @@ export default function TenantAdminStaff({
             Nhân sự
           </h1>
           <p className="mt-2 text-[11px] text-slate-500">
-            Quản lý đội ngũ Nail, lịch làm việc, kỹ năng, năng suất, doanh thu
-            và chính sách hoa hồng.
+            Quản lý đội ngũ Lễ tân và Nhân viên kỹ thuật: lịch làm việc, kỹ năng,
+            năng suất, doanh thu và chính sách hoa hồng.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1076,7 +1013,7 @@ export default function TenantAdminStaff({
           {
             label: "Tổng nhân sự",
             value: String(activeBranchStaff.length),
-            detail: `${workingCount} đang trong ca hôm nay`,
+            detail: `${receptionistCount} Lễ tân · ${technicianCount} Kỹ thuật viên (${workingCount} trong ca)`,
             icon: UsersRound,
             tone: "bg-blue-50 text-blue-600",
           },

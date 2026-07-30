@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import Modal from './Modal';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   ArrowDownLeft,
@@ -221,11 +222,391 @@ export default function TenantAdminFinance({ searchQuery, onSearchQueryChange, s
       {tab === 'BUDGETS' && <div><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-base font-black text-slate-900">Ngân sách tháng 07/2026</h2><p className="mt-1 text-xs text-slate-400">So sánh kế hoạch, thực chi và dự báo cuối kỳ</p></div><button type="button" onClick={openBudgetForm} disabled={!canManage} className="flex h-10 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200"><Target className="h-4 w-4" />Điều chỉnh ngân sách</button></div><div className="mt-5 overflow-hidden rounded-2xl border border-slate-200"><div className="hidden grid-cols-[1.2fr_110px_110px_110px_1fr_100px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-wide text-slate-400 lg:grid"><span>Danh mục</span><span>Ngân sách</span><span>Thực chi</span><span>Dự báo</span><span>Tiến độ</span><span>Trạng thái</span></div><div className="divide-y divide-slate-100">{scopedBudgets.map((budget) => { const percent = budget.actual / budget.budget * 100; const forecastOver = budget.forecast > budget.budget; return <div key={budget.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[1.2fr_110px_110px_110px_1fr_100px] lg:items-center"><div><p className="text-xs font-black text-slate-800">{budget.category}</p><p className="mt-1 text-[10px] text-slate-400">{branchName(budget.branch)} · {budget.owner}</p></div><p className="text-xs font-black text-slate-700">{shortMoney(budget.budget)}</p><p className="text-xs font-black text-slate-700">{shortMoney(budget.actual)}</p><p className={`text-xs font-black ${forecastOver ? 'text-rose-700' : 'text-emerald-700'}`}>{shortMoney(budget.forecast)}</p><div><div className="mb-1 flex justify-between text-[10px] font-bold text-slate-500"><span>Đã dùng</span><span>{percent.toLocaleString('vi-VN', { maximumFractionDigits: 0 })}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${percent > 85 ? 'bg-rose-500' : percent > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, percent)}%` }} /></div></div><span className={`w-fit rounded-full px-2 py-1 text-[10px] font-bold ring-1 ${forecastOver ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-emerald-50 text-emerald-700 ring-emerald-200'}`}>{forecastOver ? 'Có thể vượt' : 'Trong kế hoạch'}</span></div>; })}</div></div></div>}
     </div></section>
     <section className="grid gap-4 lg:grid-cols-3"><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="text-sm font-black text-slate-900">Kiểm soát phê duyệt</h2><p className="mt-1 text-xs text-slate-400">Theo quyền Tenant Admin</p></div><ShieldCheck className="h-5 w-5 text-violet-500" /></div><div className="mt-4 space-y-2">{[{ label: 'Chi dưới 2 triệu', value: 'Quản lý chi nhánh' }, { label: 'Từ 2–10 triệu', value: 'Tenant Admin' }, { label: 'Trên 10 triệu', value: 'Owner + chứng từ' }].map((item) => <div key={item.label} className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><span className="text-xs font-bold text-slate-600">{item.label}</span><span className="text-xs font-black text-violet-700">{item.value}</span></div>)}</div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="text-sm font-black text-slate-900">Tình trạng đối soát</h2><p className="mt-1 text-xs text-slate-400">20/07/2026</p></div><ClipboardCheck className="h-5 w-5 text-emerald-500" /></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-emerald-50 p-3"><p className="text-xl font-black text-emerald-700">4</p><p className="mt-1 text-[10px] font-bold text-emerald-600">Đã khớp</p></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-xl font-black text-amber-700">2</p><p className="mt-1 text-[10px] font-bold text-amber-600">Đang chờ</p></div><div className="rounded-xl bg-blue-50 p-3"><p className="text-xl font-black text-blue-700">0</p><p className="mt-1 text-[10px] font-bold text-blue-600">Sai lệch</p></div></div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="text-sm font-black text-slate-900">Việc tài chính cần xử lý</h2><p className="mt-1 text-xs text-slate-400">Ưu tiên của Tenant Admin</p></div><ReceiptText className="h-5 w-5 text-amber-500" /></div><div className="mt-3 divide-y divide-slate-100">{['Duyệt phiếu chi NailPro Supply', 'Thu hồi công nợ khách sạn quá hạn', 'Chốt sổ quỹ ngày 20/07'].map((item, index) => <button key={item} type="button" className="flex h-auto w-full items-center gap-3 rounded-none border-0 bg-white py-3 text-left shadow-none"><span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><span className="flex-1 text-xs font-bold text-slate-700">{item}</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>)}</div></article></section>
-    {selectedTransaction && <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"><button type="button" aria-label="Đóng chi tiết giao dịch" onClick={() => setSelectedTransaction(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[540px] flex-col bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 p-5 sm:p-6"><div><div className="flex items-center gap-2"><span className={`rounded-full px-2 py-1 text-[10px] font-black ${selectedTransaction.type === 'INCOME' ? 'bg-emerald-50 text-emerald-700' : selectedTransaction.type === 'EXPENSE' ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700'}`}>{selectedTransaction.type === 'INCOME' ? 'Phiếu thu' : selectedTransaction.type === 'EXPENSE' ? 'Phiếu chi' : 'Chuyển quỹ'}</span><span className={`rounded-full px-2 py-1 text-[10px] font-bold ring-1 ${transactionStatusMeta[selectedTransaction.status].badge}`}>{transactionStatusMeta[selectedTransaction.status].label}</span></div><h2 className="mt-3 text-xl font-black text-slate-900">{selectedTransaction.id}</h2><p className="mt-1 text-xs text-slate-400">{selectedTransaction.date} · {selectedTransaction.time} · {branchName(selectedTransaction.branch)}</p></div><button type="button" onClick={() => setSelectedTransaction(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="flex-1 overflow-y-auto p-5 sm:p-6"><section className={`rounded-2xl p-5 ${selectedTransaction.type === 'INCOME' ? 'bg-emerald-950' : selectedTransaction.type === 'EXPENSE' ? 'bg-slate-950' : 'bg-blue-950'} text-white`}><p className="text-[10px] uppercase tracking-wide text-slate-400">Giá trị giao dịch</p><p className="mt-2 text-3xl font-black">{selectedTransaction.type === 'INCOME' ? '+' : selectedTransaction.type === 'EXPENSE' ? '−' : ''}{money(selectedTransaction.amount)}</p><p className="mt-2 text-xs text-slate-300">{selectedTransaction.description}</p></section><div className="mt-5 grid grid-cols-2 gap-3">{[{ label: 'Danh mục', value: selectedTransaction.category }, { label: 'Đối tượng', value: selectedTransaction.counterparty }, { label: 'Phương thức', value: methodLabel[selectedTransaction.method] }, { label: 'Sổ quỹ', value: selectedTransaction.cashbook }, { label: 'Chứng từ tham chiếu', value: selectedTransaction.reference }, { label: 'Chi nhánh', value: branchName(selectedTransaction.branch) }].map((item) => <div key={item.label} className="rounded-xl border border-slate-200 p-3"><p className="text-[10px] text-slate-400">{item.label}</p><p className="mt-1 text-xs font-black leading-5 text-slate-700">{item.value}</p></div>)}</div><section className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><UserRoundCheck className="h-4 w-4 text-violet-600" /><h3 className="text-xs font-black text-slate-800">Luồng tạo & phê duyệt</h3></div><div className="mt-4 space-y-3"><div className="flex items-start gap-3"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><Check className="h-3.5 w-3.5" /></span><div><p className="text-xs font-black text-slate-700">Tạo bởi {selectedTransaction.createdBy}</p><p className="mt-1 text-[10px] text-slate-400">{selectedTransaction.date} · {selectedTransaction.time}</p></div></div><div className="flex items-start gap-3"><span className={`flex h-7 w-7 items-center justify-center rounded-full ${selectedTransaction.status === 'PENDING' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>{selectedTransaction.status === 'PENDING' ? <Clock3 className="h-3.5 w-3.5" /> : <BadgeCheck className="h-3.5 w-3.5" />}</span><div><p className="text-xs font-black text-slate-700">{selectedTransaction.approvedBy}</p><p className="mt-1 text-[10px] text-slate-400">{selectedTransaction.status === 'PENDING' ? 'Đang chờ kiểm tra chứng từ' : 'Đã phê duyệt và ghi sổ'}</p></div></div></div></section><section className="mt-5 rounded-2xl bg-violet-50 p-4"><p className="text-[10px] font-black uppercase tracking-wide text-violet-700">Ghi chú nghiệp vụ</p><p className="mt-2 text-xs leading-5 text-violet-800">{selectedTransaction.note || 'Không có ghi chú bổ sung.'}</p></section><p className="mt-5 text-[10px] text-slate-400">Mọi thay đổi được ghi trong nhật ký tài chính của tenant và chỉ Owner/Tenant Admin có quyền duyệt khoản chi theo hạn mức.</p></div><div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><div className="flex gap-2"><button type="button" onClick={() => setNotice('Đã tải bản xem trước chứng từ ' + selectedTransaction.id + '.')} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm"><FileText className="h-4 w-4" />Chứng từ</button>{selectedTransaction.status === 'PENDING' ? <button type="button" onClick={() => approveTransaction(selectedTransaction)} disabled={!canManage} className="flex h-11 flex-1 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Duyệt & ghi sổ</button> : <button type="button" disabled={!canManage} className="flex h-11 flex-1 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-black text-slate-600 shadow-sm"><Pencil className="h-4 w-4" />Tạo bút toán điều chỉnh</button>}</div></div></aside></div>}
-    {selectedCashbook && <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"><button type="button" aria-label="Đóng chi tiết sổ quỹ" onClick={() => setSelectedCashbook(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[500px] flex-col bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 p-5 sm:p-6"><div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">Đang hoạt động</span><h2 className="mt-3 text-xl font-black text-slate-900">{selectedCashbook.name}</h2><p className="mt-1 text-xs text-slate-400">{selectedCashbook.id} · {selectedCashbook.account}</p></div><button type="button" onClick={() => setSelectedCashbook(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="flex-1 overflow-y-auto p-5 sm:p-6"><section className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-[10px] uppercase tracking-wide text-slate-400">Số dư hiện tại</p><p className="mt-2 text-3xl font-black">{money(selectedCashbook.opening + selectedCashbook.income - selectedCashbook.expense)}</p><p className="mt-2 text-xs text-slate-400">Phạm vi {branchName(selectedCashbook.branch)}</p></section><div className="mt-5 grid grid-cols-3 gap-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] text-slate-400">Đầu ngày</p><p className="mt-1 text-sm font-black text-slate-800">{money(selectedCashbook.opening)}</p></div><div className="rounded-xl bg-emerald-50 p-3"><p className="text-[10px] text-emerald-500">Tổng thu</p><p className="mt-1 text-sm font-black text-emerald-800">+{money(selectedCashbook.income)}</p></div><div className="rounded-xl bg-rose-50 p-3"><p className="text-[10px] text-rose-500">Tổng chi</p><p className="mt-1 text-sm font-black text-rose-800">−{money(selectedCashbook.expense)}</p></div></div><section className="mt-5 rounded-2xl border border-slate-200 p-4"><h3 className="text-xs font-black text-slate-800">Tình trạng đối soát</h3><div className="mt-3 flex items-center gap-3 rounded-xl bg-emerald-50 p-3"><BadgeCheck className="h-5 w-5 text-emerald-600" /><div><p className="text-xs font-black text-emerald-800">Số dư hệ thống đã khớp</p><p className="mt-1 text-[10px] text-emerald-600">Đối soát gần nhất {selectedCashbook.lastReconciled}</p></div></div>{selectedCashbook.pending > 0 && <div className="mt-3 rounded-xl bg-amber-50 p-3"><p className="text-xs font-black text-amber-800">{money(selectedCashbook.pending)} đang chờ về tài khoản</p><p className="mt-1 text-[10px] text-amber-600">Không tính vào số dư khả dụng cho đến khi đối tác thanh toán xác nhận.</p></div>}</section><section className="mt-5 rounded-2xl bg-violet-50 p-4"><p className="text-xs font-black text-violet-800">Quyền quản trị sổ</p><p className="mt-2 text-xs leading-5 text-violet-700">Tenant Admin có thể đối soát, khóa sổ và tạo bút toán điều chỉnh. Không sửa trực tiếp giao dịch đã ghi sổ.</p></section></div><div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><button type="button" onClick={() => { if (!requireManage()) return; setNotice(`Đã đối soát ${selectedCashbook.name}.`); setSelectedCashbook(null); }} disabled={!canManage} className="flex h-11 w-full items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200"><ClipboardCheck className="h-4 w-4" />Đối soát sổ quỹ</button></div></aside></div>}
-    {selectedDebt && <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"><button type="button" aria-label="Đóng chi tiết công nợ" onClick={() => setSelectedDebt(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[500px] flex-col bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 p-5 sm:p-6"><div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ring-1 ${debtStatusMeta[selectedDebt.status].badge}`}>{debtStatusMeta[selectedDebt.status].label}</span><h2 className="mt-3 text-xl font-black text-slate-900">{selectedDebt.name}</h2><p className="mt-1 text-xs text-slate-400">{selectedDebt.id} · {selectedDebt.reference}</p></div><button type="button" onClick={() => setSelectedDebt(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="flex-1 overflow-y-auto p-5 sm:p-6"><section className={`rounded-2xl p-5 ${selectedDebt.type === 'RECEIVABLE' ? 'bg-blue-950' : 'bg-rose-950'} text-white`}><p className="text-[10px] uppercase tracking-wide text-slate-300">{selectedDebt.type === 'RECEIVABLE' ? 'Còn phải thu' : 'Còn phải trả'}</p><p className="mt-2 text-3xl font-black">{money(selectedDebt.total - selectedDebt.paid)}</p><p className="mt-2 text-xs text-slate-300">Tổng {money(selectedDebt.total)} · Đã thanh toán {money(selectedDebt.paid)}</p></section><div className="mt-5 grid grid-cols-2 gap-3">{[{ label: 'Danh mục', value: selectedDebt.category }, { label: 'Chi nhánh', value: branchName(selectedDebt.branch) }, { label: 'Hạn thanh toán', value: selectedDebt.dueDate }, { label: 'Người phụ trách', value: selectedDebt.owner }].map((item) => <div key={item.label} className="rounded-xl border border-slate-200 p-3"><p className="text-[10px] text-slate-400">{item.label}</p><p className="mt-1 text-xs font-black text-slate-700">{item.value}</p></div>)}</div><section className="mt-5 rounded-2xl border border-slate-200 p-4"><h3 className="text-xs font-black text-slate-800">Tiến độ thanh toán</h3><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-emerald-400" style={{ width: `${selectedDebt.total ? selectedDebt.paid / selectedDebt.total * 100 : 0}%` }} /></div><div className="mt-3 flex justify-between text-xs font-bold text-slate-500"><span>Đã thanh toán {selectedDebt.total ? (selectedDebt.paid / selectedDebt.total * 100).toLocaleString('vi-VN', { maximumFractionDigits: 0 }) : 0}%</span><span>{money(selectedDebt.paid)}</span></div></section></div><div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><button type="button" onClick={() => settleDebt(selectedDebt)} disabled={!canManage || selectedDebt.paid >= selectedDebt.total} className="flex h-11 w-full items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Ghi nhận thanh toán đủ</button></div></aside></div>}
-    {formOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setFormOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitTransaction} className="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white p-5 sm:p-6"><div><p className="text-[10px] font-black uppercase tracking-wide text-violet-600">{tenantName} · {roleLabel}</p><h2 className="mt-1 text-lg font-black text-slate-900">Tạo giao dịch thu chi</h2><p className="mt-1 text-xs text-slate-500">Nhập nội dung, sổ quỹ, chứng từ và thông tin phê duyệt.</p></div><button type="button" onClick={() => setFormOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="space-y-5 p-5 sm:p-6">{formError && <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{formError}</div>}<fieldset><legend className="mb-3 text-sm font-black text-slate-800">Thông tin giao dịch</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Loại giao dịch</span><BeautifulSelect value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as TransactionType }))} className={inputClass}><option value="INCOME">Phiếu thu</option><option value="EXPENSE">Phiếu chi</option><option value="TRANSFER">Chuyển quỹ nội bộ</option></BeautifulSelect></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Danh mục</span><BeautifulSelect value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className={inputClass}>{['Doanh thu khác', 'Nhập vật tư', 'Lương & hoa hồng', 'Điện nước & mặt bằng', 'Marketing', 'Bảo trì thiết bị', 'Chuyển quỹ nội bộ'].map((item) => <option key={item}>{item}</option>)}</BeautifulSelect></label><label className="sm:col-span-2"><span className="mb-1.5 block text-xs font-bold text-slate-600">Nội dung *</span><input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} className={inputClass} placeholder="Mô tả ngắn gọn mục đích thu/chi" /></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Số tiền *</span><input type="number" min="1" step="10000" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} className={inputClass} placeholder="0" /></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Chi nhánh</span><BeautifulSelect value={form.branch} onChange={(event) => setForm((current) => ({ ...current, branch: event.target.value as BranchCode }))} className={inputClass}><option value="Q1">Chi nhánh Quận 1</option><option value="Q3">Chi nhánh Quận 3</option></BeautifulSelect></label></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 text-sm font-black text-slate-800">Thanh toán & chứng từ</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Phương thức</span><BeautifulSelect value={form.method} onChange={(event) => setForm((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className={inputClass}>{Object.entries(methodLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Sổ quỹ</span><BeautifulSelect value={form.cashbook} onChange={(event) => setForm((current) => ({ ...current, cashbook: event.target.value }))} className={inputClass}>{cashbooks.map((item) => <option key={item.id}>{item.name}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Đối tượng giao dịch *</span><input value={form.counterparty} onChange={(event) => setForm((current) => ({ ...current, counterparty: event.target.value }))} className={inputClass} placeholder="Nhà cung cấp, nhân viên, khách hàng..." /></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Mã chứng từ / tham chiếu</span><input value={form.reference} onChange={(event) => setForm((current) => ({ ...current, reference: event.target.value }))} className={inputClass} placeholder="PO-0726-xxx" /></label><label className="sm:col-span-2"><span className="mb-1.5 block text-xs font-bold text-slate-600">Ghi chú nghiệp vụ</span><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} className="min-h-24 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label></div></fieldset><div className="rounded-2xl bg-violet-50 p-4"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-4 w-4 text-violet-600" /><div><p className="text-xs font-black text-violet-800">Quy trình phê duyệt</p><p className="mt-1 text-xs leading-5 text-violet-700">Khoản chi được tạo ở trạng thái chờ duyệt. Giao dịch chỉ ảnh hưởng số dư sau khi Tenant Admin kiểm tra và ghi sổ.</p></div></div></div></div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><button type="button" onClick={() => setFormOpen(false)} className="border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Tạo giao dịch</button></div></form></div>}
-    {budgetFormOpen && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"><button type="button" aria-label="Đóng biểu mẫu ngân sách" onClick={() => setBudgetFormOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitBudgets} className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl sm:max-h-[calc(100vh-2.5rem)]"><header className="flex shrink-0 items-start justify-between border-b border-slate-100 bg-white p-5 sm:p-6"><div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">{tenantName} · Tháng 07/2026</p><h2 className="mt-1 text-xl font-black text-slate-950">Điều chỉnh ngân sách</h2><p className="mt-1 text-xs leading-5 text-slate-500">Cập nhật kế hoạch và dự báo trong phạm vi {selectedBranch === 'ALL' ? 'toàn tenant' : branchName(selectedBranch as BranchCode)}.</p></div><button type="button" onClick={() => setBudgetFormOpen(false)} aria-label="Đóng" className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="flex-1 overflow-y-auto p-5 sm:p-6">{formError && <div className="mb-4 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{formError}</div>}<section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-violet-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-violet-500">Tổng ngân sách</p><p className="mt-2 text-lg font-black text-violet-900">{money(budgetDrafts.reduce((sum, item) => sum + item.budget, 0))}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Thực chi</p><p className="mt-2 text-lg font-black text-slate-900">{money(budgetDrafts.reduce((sum, item) => sum + item.actual, 0))}</p></div><div className="rounded-2xl bg-amber-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-amber-600">Dự báo cuối kỳ</p><p className="mt-2 text-lg font-black text-amber-900">{money(budgetDrafts.reduce((sum, item) => sum + item.forecast, 0))}</p></div><div className="rounded-2xl bg-emerald-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">Chênh lệch dự báo</p><p className={`mt-2 text-lg font-black ${budgetDrafts.reduce((sum, item) => sum + item.forecast - item.budget, 0) > 0 ? 'text-rose-700' : 'text-emerald-800'}`}>{money(budgetDrafts.reduce((sum, item) => sum + item.forecast - item.budget, 0))}</p></div></section><div className="mt-5 space-y-3">{budgetDrafts.map((item) => <section key={item.id} className="rounded-2xl border border-slate-200 p-4"><div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-sm font-black text-slate-900">{item.category}</h3><p className="mt-1 text-[10px] font-semibold text-slate-400">{item.id} · {branchName(item.branch)}</p></div><span className="w-fit rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">Đã chi {money(item.actual)}</span></div><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Ngân sách *</span><input type="number" min="1" step="100000" value={item.budget} onChange={(event) => updateBudgetDraft(item.id, 'budget', event.target.value)} className={inputClass} /></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Dự báo cuối kỳ *</span><input type="number" min="0" step="100000" value={item.forecast} onChange={(event) => updateBudgetDraft(item.id, 'forecast', event.target.value)} className={inputClass} /></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Người phụ trách *</span><input value={item.owner} onChange={(event) => updateBudgetDraft(item.id, 'owner', event.target.value)} className={inputClass} /></label></div></section>)}</div><div className="mt-5 flex items-start gap-3 rounded-2xl bg-blue-50 p-4 text-blue-800"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" /><p className="text-xs leading-5">Thực chi được lấy từ giao dịch đã ghi sổ và không chỉnh sửa tại đây. Sau khi lưu, bảng ngân sách và cảnh báo vượt kế hoạch sẽ được cập nhật ngay.</p></div></div><footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:justify-end sm:px-6"><button type="button" onClick={() => setBudgetFormOpen(false)} className="border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Lưu điều chỉnh</button></footer></form></div>}
-    {closeBookOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng đối soát" onClick={() => setCloseBookOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><section className="relative w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="bg-gradient-to-br from-[#19152f] to-[#35245e] p-6 text-white"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-violet-200"><LockKeyhole className="h-5 w-5" /></span><p className="mt-4 text-[10px] font-black uppercase tracking-[0.14em] text-violet-300">Khóa sổ cuối ngày</p><h2 className="mt-2 text-xl font-black">Xác nhận đối soát 20/07/2026</h2><p className="mt-2 text-xs leading-5 text-slate-300">Sau khi khóa sổ, giao dịch đã ghi sổ chỉ có thể điều chỉnh bằng bút toán mới.</p></div><div className="p-6"><div className="grid grid-cols-3 gap-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] text-slate-400">Sổ đã khớp</p><p className="mt-1 text-lg font-black text-emerald-700">4/5</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] text-slate-400">Chờ về</p><p className="mt-1 text-lg font-black text-amber-700">19,13tr</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] text-slate-400">Sai lệch</p><p className="mt-1 text-lg font-black text-slate-800">0đ</p></div></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCloseBookOpen(false)} className="border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Để sau</button><button type="button" onClick={() => { if (!requireManage()) return; setCloseBookOpen(false); setNotice('Đã khóa sổ tài chính ngày 20/07/2026.'); }} disabled={!canManage} className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><LockKeyhole className="h-4 w-4" />Xác nhận khóa sổ</button></div></div></section></div>}
+    {selectedTransaction && (
+      <Modal
+        isOpen={true}
+        onClose={() => setSelectedTransaction(null)}
+        maxWidth="2xl"
+        title={selectedTransaction.id}
+        headerBadge={
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${selectedTransaction.type === 'INCOME' ? 'bg-emerald-50 text-emerald-700' : selectedTransaction.type === 'EXPENSE' ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700'}`}>
+              {selectedTransaction.type === 'INCOME' ? 'Phiếu thu' : selectedTransaction.type === 'EXPENSE' ? 'Phiếu chi' : 'Chuyển quỹ'}
+            </span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${transactionStatusMeta[selectedTransaction.status].badge}`}>
+              {transactionStatusMeta[selectedTransaction.status].label}
+            </span>
+          </div>
+        }
+        subtitle={`${selectedTransaction.date} · ${selectedTransaction.time} · ${branchName(selectedTransaction.branch)}`}
+        footer={
+          <div className="flex gap-2 w-full justify-end">
+            <button type="button" onClick={() => setNotice('Đã tải bản xem trước chứng từ ' + selectedTransaction.id + '.')} className="flex h-10 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm rounded-xl">
+              <FileText className="h-4 w-4" />Chứng từ
+            </button>
+            {selectedTransaction.status === 'PENDING' ? (
+              <button type="button" onClick={() => approveTransaction(selectedTransaction)} disabled={!canManage} className="flex h-10 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200 rounded-xl">
+                <Check className="h-4 w-4" />Duyệt & ghi sổ
+              </button>
+            ) : (
+              <button type="button" disabled={!canManage} className="flex h-10 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-black text-slate-600 shadow-sm rounded-xl">
+                <Pencil className="h-4 w-4" />Tạo bút toán điều chỉnh
+              </button>
+            )}
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <section className={`rounded-2xl p-5 ${selectedTransaction.type === 'INCOME' ? 'bg-emerald-950' : selectedTransaction.type === 'EXPENSE' ? 'bg-slate-950' : 'bg-blue-950'} text-white`}>
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Giá trị giao dịch</p>
+            <p className="mt-2 text-3xl font-black">{selectedTransaction.type === 'INCOME' ? '+' : selectedTransaction.type === 'EXPENSE' ? '−' : ''}{money(selectedTransaction.amount)}</p>
+            <p className="mt-2 text-xs text-slate-300">{selectedTransaction.description}</p>
+          </section>
+          <div className="grid grid-cols-2 gap-3">
+            {[{ label: 'Danh mục', value: selectedTransaction.category }, { label: 'Đối tượng', value: selectedTransaction.counterparty }, { label: 'Phương thức', value: methodLabel[selectedTransaction.method] }, { label: 'Sổ quỹ', value: selectedTransaction.cashbook }, { label: 'Chứng từ tham chiếu', value: selectedTransaction.reference }, { label: 'Chi nhánh', value: branchName(selectedTransaction.branch) }].map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-200 p-3">
+                <p className="text-[10px] text-slate-400">{item.label}</p>
+                <p className="mt-1 text-xs font-black leading-5 text-slate-700">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          <section className="rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-center gap-2">
+              <UserRoundCheck className="h-4 w-4 text-violet-600" />
+              <h3 className="text-xs font-black text-slate-800">Luồng tạo & phê duyệt</h3>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <p className="text-xs font-black text-slate-700">Tạo bởi {selectedTransaction.createdBy}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{selectedTransaction.date} · {selectedTransaction.time}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className={`flex h-7 w-7 items-center justify-center rounded-full ${selectedTransaction.status === 'PENDING' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                  {selectedTransaction.status === 'PENDING' ? <Clock3 className="h-3.5 w-3.5" /> : <BadgeCheck className="h-3.5 w-3.5" />}
+                </span>
+                <div>
+                  <p className="text-xs font-black text-slate-700">{selectedTransaction.approvedBy}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{selectedTransaction.status === 'PENDING' ? 'Đang chờ kiểm tra chứng từ' : 'Đã phê duyệt và ghi sổ'}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section className="rounded-2xl bg-violet-50 p-4">
+            <p className="text-[10px] font-black uppercase tracking-wide text-violet-700">Ghi chú nghiệp vụ</p>
+            <p className="mt-2 text-xs leading-5 text-violet-800">{selectedTransaction.note || 'Không có ghi chú bổ sung.'}</p>
+          </section>
+        </div>
+      </Modal>
+    )}
+
+    {selectedCashbook && (
+      <Modal
+        isOpen={true}
+        onClose={() => setSelectedCashbook(null)}
+        maxWidth="lg"
+        title={selectedCashbook.name}
+        headerBadge={
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
+            Đang hoạt động
+          </span>
+        }
+        subtitle={`${selectedCashbook.id} · ${selectedCashbook.account}`}
+        footer={
+          <button type="button" onClick={() => { if (!requireManage()) return; setNotice(`Đã đối soát ${selectedCashbook.name}.`); setSelectedCashbook(null); }} disabled={!canManage} className="flex h-10 w-full items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200 rounded-xl">
+            <ClipboardCheck className="h-4 w-4" />Đối soát sổ quỹ
+          </button>
+        }
+      >
+        <div className="space-y-4">
+          <section className="rounded-2xl bg-slate-950 p-5 text-white">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Số dư hiện tại</p>
+            <p className="mt-2 text-3xl font-black">{money(selectedCashbook.opening + selectedCashbook.income - selectedCashbook.expense)}</p>
+            <p className="mt-2 text-xs text-slate-400">Phạm vi {branchName(selectedCashbook.branch)}</p>
+          </section>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-[10px] text-slate-400">Đầu ngày</p>
+              <p className="mt-1 text-sm font-black text-slate-800">{money(selectedCashbook.opening)}</p>
+            </div>
+            <div className="rounded-xl bg-emerald-50 p-3">
+              <p className="text-[10px] text-emerald-500">Tổng thu</p>
+              <p className="mt-1 text-sm font-black text-emerald-800">+{money(selectedCashbook.income)}</p>
+            </div>
+            <div className="rounded-xl bg-rose-50 p-3">
+              <p className="text-[10px] text-rose-500">Tổng chi</p>
+              <p className="mt-1 text-sm font-black text-rose-800">−{money(selectedCashbook.expense)}</p>
+            </div>
+          </div>
+          <section className="rounded-2xl border border-slate-200 p-4">
+            <h3 className="text-xs font-black text-slate-800">Tình trạng đối soát</h3>
+            <div className="mt-3 flex items-center gap-3 rounded-xl bg-emerald-50 p-3">
+              <BadgeCheck className="h-5 w-5 text-emerald-600" />
+              <div>
+                <p className="text-xs font-black text-emerald-800">Số dư hệ thống đã khớp</p>
+                <p className="mt-1 text-[10px] text-emerald-600">Đối soát gần nhất {selectedCashbook.lastReconciled}</p>
+              </div>
+            </div>
+            {selectedCashbook.pending > 0 && (
+              <div className="mt-3 rounded-xl bg-amber-50 p-3">
+                <p className="text-xs font-black text-amber-800">{money(selectedCashbook.pending)} đang chờ về tài khoản</p>
+                <p className="mt-1 text-[10px] text-amber-600">Không tính vào số dư khả dụng cho đến khi đối tác thanh toán xác nhận.</p>
+              </div>
+            )}
+          </section>
+        </div>
+      </Modal>
+    )}
+
+    {selectedDebt && (
+      <Modal
+        isOpen={true}
+        onClose={() => setSelectedDebt(null)}
+        maxWidth="lg"
+        title={selectedDebt.name}
+        headerBadge={
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${debtStatusMeta[selectedDebt.status].badge}`}>
+            {debtStatusMeta[selectedDebt.status].label}
+          </span>
+        }
+        subtitle={`${selectedDebt.id} · ${selectedDebt.reference}`}
+        footer={
+          <button type="button" onClick={() => settleDebt(selectedDebt)} disabled={!canManage || selectedDebt.paid >= selectedDebt.total} className="flex h-10 w-full items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200 rounded-xl">
+            <Check className="h-4 w-4" />Ghi nhận thanh toán đủ
+          </button>
+        }
+      >
+        <div className="space-y-4">
+          <section className={`rounded-2xl p-5 ${selectedDebt.type === 'RECEIVABLE' ? 'bg-blue-950' : 'bg-rose-950'} text-white`}>
+            <p className="text-[10px] uppercase tracking-wide text-slate-300">{selectedDebt.type === 'RECEIVABLE' ? 'Còn phải thu' : 'Còn phải trả'}</p>
+            <p className="mt-2 text-3xl font-black">{money(selectedDebt.total - selectedDebt.paid)}</p>
+            <p className="mt-2 text-xs text-slate-300">Tổng {money(selectedDebt.total)} · Đã thanh toán {money(selectedDebt.paid)}</p>
+          </section>
+          <div className="grid grid-cols-2 gap-3">
+            {[{ label: 'Danh mục', value: selectedDebt.category }, { label: 'Chi nhánh', value: branchName(selectedDebt.branch) }, { label: 'Hạn thanh toán', value: selectedDebt.dueDate }, { label: 'Người phụ trách', value: selectedDebt.owner }].map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-200 p-3">
+                <p className="text-[10px] text-slate-400">{item.label}</p>
+                <p className="mt-1 text-xs font-black text-slate-700">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          <section className="rounded-2xl border border-slate-200 p-4">
+            <h3 className="text-xs font-black text-slate-800">Tiến độ thanh toán</h3>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-emerald-400" style={{ width: `${selectedDebt.total ? selectedDebt.paid / selectedDebt.total * 100 : 0}%` }} />
+            </div>
+            <div className="mt-3 flex justify-between text-xs font-bold text-slate-500">
+              <span>Đã thanh toán {selectedDebt.total ? (selectedDebt.paid / selectedDebt.total * 100).toLocaleString('vi-VN', { maximumFractionDigits: 0 }) : 0}%</span>
+              <span>{money(selectedDebt.paid)}</span>
+            </div>
+          </section>
+        </div>
+      </Modal>
+    )}
+
+    {formOpen && (
+      <Modal
+        isOpen={true}
+        onClose={() => setFormOpen(false)}
+        maxWidth="3xl"
+        title="Tạo giao dịch thu chi"
+        subtitle="Nhập nội dung, sổ quỹ, chứng từ và thông tin phê duyệt."
+        footer={
+          <div className="flex gap-2 w-full justify-end">
+            <button type="button" onClick={() => setFormOpen(false)} className="border border-slate-200 bg-white px-4 h-10 text-xs font-bold text-slate-600 shadow-sm rounded-xl">Hủy</button>
+            <button type="button" onClick={(e) => { const formEl = document.getElementById('finance-transaction-form') as HTMLFormElement; if (formEl) formEl.requestSubmit(); }} className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 h-10 text-xs font-black text-white shadow-lg shadow-violet-200 rounded-xl">
+              <Check className="h-4 w-4" />Tạo giao dịch
+            </button>
+          </div>
+        }
+      >
+        <form id="finance-transaction-form" onSubmit={submitTransaction} className="space-y-5">
+          {formError && <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{formError}</div>}
+          <fieldset>
+            <legend className="mb-3 text-sm font-black text-slate-800">Thông tin giao dịch</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Loại giao dịch</span>
+                <BeautifulSelect value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as TransactionType }))} className={inputClass}>
+                  <option value="INCOME">Phiếu thu</option>
+                  <option value="EXPENSE">Phiếu chi</option>
+                  <option value="TRANSFER">Chuyển quỹ nội bộ</option>
+                </BeautifulSelect>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Danh mục</span>
+                <BeautifulSelect value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className={inputClass}>
+                  {['Doanh thu khác', 'Nhập vật tư', 'Lương & hoa hồng', 'Điện nước & mặt bằng', 'Marketing', 'Bảo trì thiết bị', 'Chuyển quỹ nội bộ'].map((item) => <option key={item}>{item}</option>)}
+                </BeautifulSelect>
+              </label>
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Nội dung *</span>
+                <input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} className={inputClass} placeholder="Mô tả ngắn gọn mục đích thu/chi" />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Số tiền *</span>
+                <input type="number" min="1" step="10000" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} className={inputClass} placeholder="0" />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Chi nhánh</span>
+                <BeautifulSelect value={form.branch} onChange={(event) => setForm((current) => ({ ...current, branch: event.target.value as BranchCode }))} className={inputClass}>
+                  <option value="Q1">Chi nhánh Quận 1</option>
+                  <option value="Q3">Chi nhánh Quận 3</option>
+                </BeautifulSelect>
+              </label>
+            </div>
+          </fieldset>
+          <fieldset className="border-t border-slate-100 pt-5">
+            <legend className="mb-3 text-sm font-black text-slate-800">Thanh toán & chứng từ</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Phương thức</span>
+                <BeautifulSelect value={form.method} onChange={(event) => setForm((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className={inputClass}>
+                  {Object.entries(methodLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </BeautifulSelect>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Sổ quỹ</span>
+                <BeautifulSelect value={form.cashbook} onChange={(event) => setForm((current) => ({ ...current, cashbook: event.target.value }))} className={inputClass}>
+                  {cashbooks.map((item) => <option key={item.id}>{item.name}</option>)}
+                </BeautifulSelect>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Đối tượng giao dịch *</span>
+                <input value={form.counterparty} onChange={(event) => setForm((current) => ({ ...current, counterparty: event.target.value }))} className={inputClass} placeholder="Nhà cung cấp, nhân viên, khách hàng..." />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Mã chứng từ / tham chiếu</span>
+                <input value={form.reference} onChange={(event) => setForm((current) => ({ ...current, reference: event.target.value }))} className={inputClass} placeholder="PO-0726-xxx" />
+              </label>
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Ghi chú nghiệp vụ</span>
+                <textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} className="min-h-24 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
+              </label>
+            </div>
+          </fieldset>
+          <div className="rounded-2xl bg-violet-50 p-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-4 w-4 text-violet-600" />
+              <div>
+                <p className="text-xs font-black text-violet-800">Quy trình phê duyệt</p>
+                <p className="mt-1 text-xs leading-5 text-violet-700">Khoản chi được tạo ở trạng thái chờ duyệt. Giao dịch chỉ ảnh hưởng số dư sau khi Tenant Admin kiểm tra và ghi sổ.</p>
+              </div>
+            </div>
+          </div>
+        </form>
+      </Modal>
+    )}
+
+    {budgetFormOpen && (
+      <Modal
+        isOpen={true}
+        onClose={() => setBudgetFormOpen(false)}
+        maxWidth="5xl"
+        title="Điều chỉnh ngân sách"
+        subtitle={`Cập nhật kế hoạch và dự báo trong phạm vi ${selectedBranch === 'ALL' ? 'toàn tenant' : branchName(selectedBranch as BranchCode)}.`}
+        footer={
+          <div className="flex gap-2 w-full justify-end">
+            <button type="button" onClick={() => setBudgetFormOpen(false)} className="border border-slate-200 bg-white px-4 h-10 text-xs font-bold text-slate-600 shadow-sm rounded-xl">Hủy</button>
+            <button type="button" onClick={() => { const formEl = document.getElementById('budget-adjust-form') as HTMLFormElement; if (formEl) formEl.requestSubmit(); }} className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 h-10 text-xs font-black text-white shadow-lg shadow-violet-200 rounded-xl">
+              <Check className="h-4 w-4" />Lưu điều chỉnh
+            </button>
+          </div>
+        }
+      >
+        <form id="budget-adjust-form" onSubmit={submitBudgets} className="space-y-5">
+          {formError && <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{formError}</div>}
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl bg-violet-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-500">Tổng ngân sách</p>
+              <p className="mt-2 text-lg font-black text-violet-900">{money(budgetDrafts.reduce((sum, item) => sum + item.budget, 0))}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Thực chi</p>
+              <p className="mt-2 text-lg font-black text-slate-900">{money(budgetDrafts.reduce((sum, item) => sum + item.actual, 0))}</p>
+            </div>
+            <div className="rounded-2xl bg-amber-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-amber-600">Dự báo cuối kỳ</p>
+              <p className="mt-2 text-lg font-black text-amber-900">{money(budgetDrafts.reduce((sum, item) => sum + item.forecast, 0))}</p>
+            </div>
+            <div className="rounded-2xl bg-emerald-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">Chênh lệch dự báo</p>
+              <p className={`mt-2 text-lg font-black ${budgetDrafts.reduce((sum, item) => sum + item.forecast - item.budget, 0) > 0 ? 'text-rose-700' : 'text-emerald-800'}`}>
+                {money(budgetDrafts.reduce((sum, item) => sum + item.forecast - item.budget, 0))}
+              </p>
+            </div>
+          </section>
+          <div className="space-y-3">
+            {budgetDrafts.map((item) => (
+              <section key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">{item.category}</h3>
+                    <p className="mt-1 text-[10px] font-semibold text-slate-400">{item.id} · {branchName(item.branch)}</p>
+                  </div>
+                  <span className="w-fit rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">Đã chi {money(item.actual)}</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label>
+                    <span className="mb-1.5 block text-xs font-bold text-slate-600">Ngân sách *</span>
+                    <input type="number" min="1" step="100000" value={item.budget} onChange={(event) => updateBudgetDraft(item.id, 'budget', event.target.value)} className={inputClass} />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-xs font-bold text-slate-600">Dự báo cuối kỳ *</span>
+                    <input type="number" min="0" step="100000" value={item.forecast} onChange={(event) => updateBudgetDraft(item.id, 'forecast', event.target.value)} className={inputClass} />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-xs font-bold text-slate-600">Người phụ trách *</span>
+                    <input value={item.owner} onChange={(event) => updateBudgetDraft(item.id, 'owner', event.target.value)} className={inputClass} />
+                  </label>
+                </div>
+              </section>
+            ))}
+          </div>
+          <div className="flex items-start gap-3 rounded-2xl bg-blue-50 p-4 text-blue-800">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+            <p className="text-xs leading-5">Thực chi được lấy từ giao dịch đã ghi sổ và không chỉnh sửa tại đây. Sau khi lưu, bảng ngân sách và cảnh báo vượt kế hoạch sẽ được cập nhật ngay.</p>
+          </div>
+        </form>
+      </Modal>
+    )}
+
+    {closeBookOpen && (
+      <Modal
+        isOpen={true}
+        onClose={() => setCloseBookOpen(false)}
+        maxWidth="xl"
+        title="Xác nhận đối soát 20/07/2026"
+        headerIcon={<LockKeyhole className="h-5 w-5 text-violet-600" />}
+        subtitle="Sau khi khóa sổ, giao dịch đã ghi sổ chỉ có thể điều chỉnh bằng bút toán mới."
+        footer={
+          <div className="flex gap-2 w-full justify-end">
+            <button type="button" onClick={() => setCloseBookOpen(false)} className="border border-slate-200 bg-white px-4 h-10 text-xs font-bold text-slate-600 shadow-sm rounded-xl">Để sau</button>
+            <button type="button" onClick={() => { if (!requireManage()) return; setCloseBookOpen(false); setNotice('Đã khóa sổ tài chính ngày 20/07/2026.'); }} disabled={!canManage} className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 h-10 text-xs font-black text-white shadow-lg shadow-violet-200 rounded-xl">
+              <LockKeyhole className="h-4 w-4" />Xác nhận khóa sổ
+            </button>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl bg-slate-50 p-3 text-center">
+            <p className="text-[10px] text-slate-400">Sổ đã khớp</p>
+            <p className="mt-1 text-lg font-black text-emerald-700">4/5</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3 text-center">
+            <p className="text-[10px] text-slate-400">Chờ về</p>
+            <p className="mt-1 text-lg font-black text-amber-700">19,13tr</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3 text-center">
+            <p className="text-[10px] text-slate-400">Sai lệch</p>
+            <p className="mt-1 text-lg font-black text-slate-800">0đ</p>
+          </div>
+        </div>
+      </Modal>
+    )}
   </div>;
 }

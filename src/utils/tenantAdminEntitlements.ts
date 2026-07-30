@@ -14,7 +14,6 @@ export const TENANT_PAGE_POLICIES: Partial<Record<NailPageId, TenantPagePolicy>>
   stations: { capabilityKey: 'appointments', fallback: 'locked' },
   customers: { capabilityKey: 'customers', fallback: 'locked' },
   loyalty: { capabilityKey: 'loyalty', fallback: 'locked' },
-  care: { capabilityKey: 'automation', fallback: 'locked' },
   inventory: { capabilityKey: 'inventory', fallback: 'locked' },
   online: { capabilityKey: 'online_booking', fallback: 'locked' },
   finance: { capabilityKey: 'inventory', fallback: 'locked' },

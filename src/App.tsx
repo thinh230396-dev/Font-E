@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import Modal from './components/Modal';
 import { 
   loadLocalStorageData, 
   saveLocalStorageData, 
@@ -1699,33 +1700,24 @@ export default function App() {
     const { title, message, onConfirm } = confirmDialog;
 
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-        {/* Backdrop overlay */}
-        <div 
-          className="sa-modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-          onClick={() => setConfirmDialog(null)}
-        />
-        
-        {/* Modal Dialog card */}
-        <div className="relative bg-brand-surface border border-brand-outline/45 rounded-2xl max-w-md w-full shadow-2xl p-6 overflow-hidden animate-zoomIn flex flex-col gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-brand-primary/10 text-brand-primary shrink-0">
-              <Info className="w-6 h-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-bold text-brand-text">{title}</h3>
-              <p className="text-xs text-brand-text-muted leading-relaxed mt-2">{message}</p>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 mt-2">
+      <Modal
+        isOpen={true}
+        onClose={() => setConfirmDialog(null)}
+        maxWidth="md"
+        zIndex="z-[9999]"
+        title={title}
+        headerIcon={<Info className="w-5 h-5 text-brand-primary" />}
+        footer={
+          <>
             <button
+              type="button"
               onClick={() => setConfirmDialog(null)}
               className="px-4 py-2 border border-brand-outline/40 hover:bg-brand-surface-high rounded-xl text-xs font-semibold text-brand-text transition-colors cursor-pointer"
             >
               Hủy
             </button>
             <button
+              type="button"
               onClick={() => {
                 onConfirm();
                 setConfirmDialog(null);
@@ -1734,9 +1726,11 @@ export default function App() {
             >
               Xác nhận
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      >
+        <p className="text-xs text-brand-text-muted leading-relaxed">{message}</p>
+      </Modal>
     );
   };
 
@@ -1747,50 +1741,39 @@ export default function App() {
     const { title, message, type } = alertDialog;
     
     let iconBg = 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400';
-    let icon = <Info className="w-6 h-6" />;
+    let icon = <Info className="w-5 h-5" />;
     
     if (type === 'success') {
       iconBg = 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400';
-      icon = <CheckCircle className="w-6 h-6" />;
+      icon = <CheckCircle className="w-5 h-5" />;
     } else if (type === 'error') {
       iconBg = 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400';
-      icon = <XCircle className="w-6 h-6" />;
+      icon = <XCircle className="w-5 h-5" />;
     } else if (type === 'warning') {
       iconBg = 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400';
-      icon = <AlertTriangle className="w-6 h-6" />;
+      icon = <AlertTriangle className="w-5 h-5" />;
     }
 
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-        {/* Backdrop overlay */}
-        <div 
-          className="sa-modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-          onClick={() => setAlertDialog(null)}
-        />
-        
-        {/* Modal Dialog card */}
-        <div className="relative bg-brand-surface border border-brand-outline/45 rounded-2xl max-w-md w-full shadow-2xl p-6 overflow-hidden animate-zoomIn flex flex-col gap-4">
-          <div className="flex items-start gap-4">
-            <div className={`p-2.5 rounded-xl shrink-0 ${iconBg}`}>
-              {icon}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-bold text-brand-text">{title}</h3>
-              <p className="text-xs text-brand-text-muted leading-relaxed mt-2 whitespace-pre-wrap">{message}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => setAlertDialog(null)}
-              className="px-5 py-2 bg-brand-primary hover:bg-brand-primary/95 text-brand-on-primary rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-md w-full sm:w-auto text-center"
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
-      </div>
+      <Modal
+        isOpen={true}
+        onClose={() => setAlertDialog(null)}
+        maxWidth="md"
+        zIndex="z-[9999]"
+        title={title}
+        headerIcon={<div className={`p-1 rounded-lg ${iconBg}`}>{icon}</div>}
+        footer={
+          <button
+            type="button"
+            onClick={() => setAlertDialog(null)}
+            className="px-5 py-2 bg-brand-primary hover:bg-brand-primary/95 text-brand-on-primary rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-md w-full sm:w-auto text-center"
+          >
+            Đóng
+          </button>
+        }
+      >
+        <p className="text-xs text-brand-text-muted leading-relaxed whitespace-pre-wrap">{message}</p>
+      </Modal>
     );
   };
 

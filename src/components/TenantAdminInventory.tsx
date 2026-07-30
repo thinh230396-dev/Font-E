@@ -33,7 +33,7 @@ import {
 import BeautifulSelect from "./BeautifulSelect";
 
 type BranchCode = "Q1" | "Q3";
-type InventoryCategory =
+export type InventoryCategory =
   | "GEL_POLISH"
   | "BUILDER"
   | "CHEMICAL"
@@ -55,7 +55,7 @@ interface Movement {
   note: string;
 }
 
-interface InventoryItem {
+export interface InventoryItem {
   id: string;
   name: string;
   variant: string;
@@ -242,7 +242,7 @@ const movementSeed = (
   },
 ];
 
-const inventorySeed: InventoryItem[] = [
+export const inventorySeed: InventoryItem[] = [
   {
     id: "SKU-DND-751",
     name: "DND Gel 751 – Merlot",
@@ -304,6 +304,162 @@ const inventorySeed: InventoryItem[] = [
       "PN-260714-09",
       "Nhập hàng định kỳ tháng 7.",
     ),
+  },
+  {
+    id: "SKU-AP-03",
+    name: "Aurora Pearl AP-03 – NailPro",
+    variant: "Ánh ngọc trai · 15ml",
+    category: "GEL_POLISH",
+    unit: "chai",
+    branch: "Q1",
+    location: "Kệ C-04",
+    supplier: "NailPro Supply",
+    supplierPhone: "0908 778 215",
+    stock: 8,
+    reserved: 0,
+    minimum: 5,
+    maximum: 20,
+    unitCost: 290_000,
+    averageCost: 285_000,
+    monthlyUse: 6,
+    lot: "LOT-AP03-0526",
+    expiry: "2028-05-31",
+    barcode: "8936100150033",
+    lastCounted: "17/07/2026 · Khớp",
+    reorderLeadDays: 5,
+    state: "ACTIVE",
+    note: "Sơn hiệu ứng ngọc trai cao cấp.",
+    movements: movementSeed("AP03", 10, "PN-260711-02", "Nhập đợt tháng 7."),
+  },
+  {
+    id: "SKU-GB-02",
+    name: "Glass Blue GB-02 – Jello Jello",
+    variant: "Xanh trong · 15ml",
+    category: "GEL_POLISH",
+    unit: "chai",
+    branch: "Q3",
+    location: "Kệ G-06",
+    supplier: "Jello Jello VN",
+    supplierPhone: "0909 123 456",
+    stock: 7,
+    reserved: 0,
+    minimum: 6,
+    maximum: 20,
+    unitCost: 310_000,
+    averageCost: 305_000,
+    monthlyUse: 4,
+    lot: "LOT-GB02-0626",
+    expiry: "2028-06-30",
+    barcode: "8936100150022",
+    lastCounted: "16/07/2026 · Khớp",
+    reorderLeadDays: 5,
+    state: "ACTIVE",
+    note: "Sơn thạch xanh dịu nhẹ.",
+    movements: movementSeed("GB02", 8, "PN-260710-01", "Nhập bổ sung."),
+  },
+  {
+    id: "SKU-MW-01",
+    name: "DND Milky White MW-01",
+    variant: "Trắng sữa · 18ml",
+    category: "GEL_POLISH",
+    unit: "chai",
+    branch: "Q1",
+    location: "Kệ G-01",
+    supplier: "DND Việt Nam",
+    supplierPhone: "028 7300 7510",
+    stock: 0,
+    reserved: 0,
+    minimum: 10,
+    maximum: 30,
+    unitCost: 275_000,
+    averageCost: 270_000,
+    monthlyUse: 15,
+    lot: "LOT-MW01-0426",
+    expiry: "2028-04-30",
+    barcode: "8936123450014",
+    lastCounted: "19/07/2026 · Khớp",
+    reorderLeadDays: 4,
+    state: "ACTIVE",
+    note: "Đã hết hàng, đang chờ nhà cung cấp giao.",
+    movements: movementSeed("MW01", 15, "PN-260701-05", "Nhập đợt 1 tháng 7."),
+  },
+  {
+    id: "SKU-OX-01",
+    name: "The GelBottle Onyx Black OX-01",
+    variant: "Đen tuyền · 20ml",
+    category: "GEL_POLISH",
+    unit: "chai",
+    branch: "Q3",
+    location: "Kệ G-03",
+    supplier: "TGB Official",
+    supplierPhone: "028 3811 2233",
+    stock: 11,
+    reserved: 1,
+    minimum: 6,
+    maximum: 25,
+    unitCost: 420_000,
+    averageCost: 410_000,
+    monthlyUse: 5,
+    lot: "LOT-OX01-0526",
+    expiry: "2028-05-31",
+    barcode: "8936123450099",
+    lastCounted: "12/07/2026 · Khớp",
+    reorderLeadDays: 6,
+    state: "ACTIVE",
+    note: "Sơn đen bóng chuyên dùng kẻ viền và vẽ art.",
+    movements: movementSeed("OX01", 12, "PN-260625-08", "Nhập định kỳ."),
+  },
+  {
+    id: "SKU-SG-04",
+    name: "Kokoist Sage Leaf SG-04",
+    variant: "Xanh xô thẫm · 15ml",
+    category: "GEL_POLISH",
+    unit: "chai",
+    branch: "Q1",
+    location: "Kệ G-05",
+    supplier: "Kokoist Japan",
+    supplierPhone: "028 3999 8877",
+    stock: 9,
+    reserved: 0,
+    minimum: 6,
+    maximum: 20,
+    unitCost: 350_000,
+    averageCost: 345_000,
+    monthlyUse: 5,
+    lot: "LOT-SG04-0626",
+    expiry: "2028-06-30",
+    barcode: "8936123450044",
+    lastCounted: "15/07/2026 · Khớp",
+    reorderLeadDays: 7,
+    state: "ACTIVE",
+    note: "Màu sơn pastel thiên nhiên.",
+    movements: movementSeed("SG04", 10, "PN-260705-09", "Nhập bổ sung."),
+  },
+  {
+    id: "SKU-LG-08",
+    name: "Presto Liquid Gold LG-08",
+    variant: "Vàng nhũ kim · 15ml",
+    category: "GEL_POLISH",
+    unit: "chai",
+    branch: "Q3",
+    location: "Kệ C-03",
+    supplier: "Presto Japan",
+    supplierPhone: "028 3822 5544",
+    stock: 2,
+    reserved: 0,
+    minimum: 5,
+    maximum: 15,
+    unitCost: 380_000,
+    averageCost: 375_000,
+    monthlyUse: 4,
+    lot: "LOT-LG08-0526",
+    expiry: "2028-05-31",
+    barcode: "8936123450088",
+    lastCounted: "19/07/2026 · Khớp",
+    reorderLeadDays: 6,
+    state: "ACTIVE",
+    note: "Tồn kho thấp, cần nhập thêm.",
+    movements: movementSeed("LG08", 5, "PN-260712-03", "Nhập bổ sung."),
   },
   {
     id: "SKU-APEX-CLEAR",
@@ -579,6 +735,21 @@ export default function TenantAdminInventory({
       /* Storage is optional. */
     }
   }, [items, storageKey]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || "null");
+        if (Array.isArray(parsed)) {
+          setItems(getTenantAdminInitialData(parsed, inventorySeed));
+        }
+      } catch {
+        /* Ignore */
+      }
+    };
+    window.addEventListener("salonsys_inventory_updated", handleSync);
+    return () => window.removeEventListener("salonsys_inventory_updated", handleSync);
+  }, [storageKey]);
 
   const canManage = accessMode === "full";
   const requireManage = () => {
