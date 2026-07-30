@@ -1134,6 +1134,95 @@ export default function TenantAdminFinanceCompact({
                 ))}
               </div>
 
+              <div className="rounded-2xl border border-slate-200 bg-white p-2">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {[
+                    {
+                      value: 'ALL',
+                      label: 'Tổng hợp',
+                      hint: `${scopedDebts.length} khoản công nợ`,
+                      active: 'border-slate-800 bg-slate-900 text-white',
+                    },
+                    {
+                      value: 'RECEIVABLE',
+                      label: 'Mình thu',
+                      hint: `${
+                        scopedDebts.filter((item) => item.type === 'RECEIVABLE').length
+                      } khoản · Họ nợ mình`,
+                      active: 'border-blue-600 bg-blue-600 text-white',
+                    },
+                    {
+                      value: 'PAYABLE',
+                      label: 'Mình trả',
+                      hint: `${
+                        scopedDebts.filter((item) => item.type === 'PAYABLE').length
+                      } khoản · Mình nợ họ`,
+                      active: 'border-rose-600 bg-rose-600 text-white',
+                    },
+                  ].map((item) => {
+                    const selected = debtTypeFilter === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setDebtTypeFilter(item.value)}
+                        className={`flex min-h-16 items-center justify-between rounded-xl border px-4 py-3 text-left transition ${
+                          selected
+                            ? item.active
+                            : 'border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white'
+                        }`}
+                      >
+                        <span>
+                          <span className="block text-sm font-black">{item.label}</span>
+                          <span
+                            className={`mt-1 block text-[10px] font-semibold ${
+                              selected ? 'text-white/75' : 'text-slate-400'
+                            }`}
+                          >
+                            {item.hint}
+                          </span>
+                        </span>
+                        {selected && <Check className="h-4 w-4 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div
+                className={`flex items-start gap-3 rounded-2xl border p-4 ${
+                  debtTypeFilter === 'RECEIVABLE'
+                    ? 'border-blue-100 bg-blue-50 text-blue-800'
+                    : debtTypeFilter === 'PAYABLE'
+                      ? 'border-rose-100 bg-rose-50 text-rose-800'
+                      : 'border-slate-200 bg-slate-50 text-slate-700'
+                }`}
+              >
+                {debtTypeFilter === 'RECEIVABLE' ? (
+                  <ArrowDownLeft className="mt-0.5 h-5 w-5 shrink-0" />
+                ) : debtTypeFilter === 'PAYABLE' ? (
+                  <ArrowUpRight className="mt-0.5 h-5 w-5 shrink-0" />
+                ) : (
+                  <ArrowRightLeft className="mt-0.5 h-5 w-5 shrink-0" />
+                )}
+                <div>
+                  <p className="text-xs font-black">
+                    {debtTypeFilter === 'RECEIVABLE'
+                      ? `Mình cần thu về ${money(receivable)}`
+                      : debtTypeFilter === 'PAYABLE'
+                        ? `Mình cần thanh toán ${money(payable)}`
+                        : 'Đang xem toàn bộ công nợ'}
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold opacity-70">
+                    {debtTypeFilter === 'RECEIVABLE'
+                      ? 'Các khoản khách hàng hoặc đối tác còn nợ salon.'
+                      : debtTypeFilter === 'PAYABLE'
+                        ? 'Các khoản salon còn phải trả nhà cung cấp hoặc đối tác.'
+                        : 'Chọn Mình thu hoặc Mình trả để quản lý riêng từng dòng tiền.'}
+                  </p>
+                </div>
+              </div>
+
               <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 lg:flex-row">
                 <label className="relative min-w-0 flex-1">
                   <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
@@ -1144,15 +1233,6 @@ export default function TenantAdminFinanceCompact({
                     className={`${inputClass} bg-white pl-10`}
                   />
                 </label>
-                <select
-                  value={debtTypeFilter}
-                  onChange={(event) => setDebtTypeFilter(event.target.value)}
-                  className={`${inputClass} bg-white lg:w-52`}
-                >
-                  <option value="ALL">Tất cả loại công nợ</option>
-                  <option value="RECEIVABLE">Phải thu · Họ nợ mình</option>
-                  <option value="PAYABLE">Phải trả · Mình nợ họ</option>
-                </select>
                 <select
                   value={debtStatusFilter}
                   onChange={(event) => setDebtStatusFilter(event.target.value)}
