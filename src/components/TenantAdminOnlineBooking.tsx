@@ -872,7 +872,7 @@ export default function TenantAdminOnlineBooking({
       </section>
 
       {/* SECTION 1: Quick Statistics (Thống kê nhanh) */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-6">
         {/* Card 1: Chờ xác nhận */}
         <button
           type="button"
@@ -1056,7 +1056,7 @@ export default function TenantAdminOnlineBooking({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6 pt-1">
+          <div className="grid grid-cols-2 gap-2.5 pt-1 sm:grid-cols-3 2xl:grid-cols-6">
             {/* Status Filter */}
             <BeautifulSelect
               value={statusFilter}
@@ -1132,166 +1132,199 @@ export default function TenantAdminOnlineBooking({
               <option value="TODAY">Hôm nay (29/07/2026)</option>
             </BeautifulSelect>
           </div>
+
+          <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[11px] font-semibold text-slate-500">
+              Hiển thị <span className="font-black text-slate-900">{filteredBookings.length}</span> / {bookings.length} lịch hẹn
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {filteredBookings.some((booking) => booking.status === 'PENDING') && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 ring-1 ring-amber-200/80">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  {filteredBookings.filter((booking) => booking.status === 'PENDING').length} lịch chờ xác nhận
+                </span>
+              )}
+              {filteredBookings.some((booking) => booking.status === 'NEEDS_ADJUSTMENT') && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-700 ring-1 ring-orange-200/80">
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                  {filteredBookings.filter((booking) => booking.status === 'NEEDS_ADJUSTMENT').length} lịch cần điều chỉnh
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* SECTION 2: List of Mobile App Bookings */}
         {/* Desktop & Tablet Table View */}
-        <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
-          <table className="w-full text-left text-xs table-fixed min-w-[1220px]">
-            <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+        <div className="hidden 2xl:block overflow-x-auto bg-white">
+          <table className="w-full table-fixed text-left text-xs">
+            <colgroup>
+              <col className="w-[18%]" />
+              <col className="w-[15%]" />
+              <col className="w-[23%]" />
+              <col className="w-[16%]" />
+              <col className="w-[12%]" />
+              <col className="w-[10%]" />
+              <col className="w-[6%]" />
+            </colgroup>
+            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
               <tr>
-                <th className="py-3.5 pl-4 pr-3 w-[210px]">Khách hàng</th>
-                <th className="py-3.5 px-3 w-[115px]">Thời gian</th>
-                <th className="py-3.5 px-3 w-[270px]">Dịch vụ & Mẫu Nail</th>
-                <th className="py-3.5 px-3 w-[125px]">KTV yêu cầu</th>
-                <th className="py-3.5 px-3 w-[115px]">Chi nhánh</th>
-                <th className="py-3.5 px-3 w-[125px]">Tiền cọc</th>
-                <th className="py-3.5 px-3 w-[95px]">Nguồn</th>
-                <th className="py-3.5 px-3 w-[135px]">Trạng thái</th>
-                <th className="py-3.5 pr-4 pl-3 w-[115px] text-right">Thao tác</th>
+                <th className="py-3 pl-5 pr-3">Khách hàng</th>
+                <th className="px-3 py-3">Lịch hẹn</th>
+                <th className="px-3 py-3">Dịch vụ</th>
+                <th className="px-3 py-3">Kỹ thuật viên</th>
+                <th className="px-3 py-3">Thanh toán</th>
+                <th className="px-3 py-3">Trạng thái</th>
+                <th className="py-3 pl-2 pr-4 text-right">
+                  <span className="sr-only">Thao tác</span>
+                </th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-100 font-medium">
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {filteredBookings.map((booking) => {
                 const statusInfo = bookingStatusMeta[booking.status];
                 const isUrgentPending = booking.status === 'PENDING';
                 const isUrgentAdjustment = booking.status === 'NEEDS_ADJUSTMENT';
 
-                let rowBorderClass = 'border-l-4 border-l-transparent hover:bg-slate-50/70';
+                let rowBorderClass = 'border-l-[3px] border-l-transparent hover:bg-slate-50/80';
                 if (isUrgentPending) {
-                  rowBorderClass = 'border-l-4 border-l-amber-500 bg-amber-50/20 hover:bg-amber-50/35';
+                  rowBorderClass = 'border-l-[3px] border-l-amber-500 bg-amber-50/20 hover:bg-amber-50/45';
                 } else if (isUrgentAdjustment) {
-                  rowBorderClass = 'border-l-4 border-l-orange-500 bg-orange-50/20 hover:bg-orange-50/35';
+                  rowBorderClass = 'border-l-[3px] border-l-orange-500 bg-orange-50/20 hover:bg-orange-50/45';
                 }
 
                 return (
                   <tr
                     key={booking.id}
-                    className={`align-middle transition-colors cursor-pointer ${rowBorderClass}`}
+                    className={`group cursor-pointer align-middle transition-colors ${rowBorderClass}`}
                     onClick={() => setSelectedBooking(booking)}
                   >
-                    {/* Cụm 1: Khách hàng */}
-                    <td className="py-3.5 pl-4 pr-3 align-middle">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700 border border-violet-200/50">
+                    <td className="py-3.5 pl-5 pr-3 align-middle">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-violet-200/70 bg-violet-100 text-xs font-black text-violet-700">
                           {booking.customerName.charAt(0)}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="font-bold text-slate-900 text-xs truncate leading-snug" title={booking.customerName}>
-                              {booking.customerName}
-                            </p>
-                            <span className="font-mono text-[10px] text-slate-400 shrink-0">
-                              #{booking.id}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 font-normal whitespace-nowrap flex items-center gap-1 mt-0.5">
+                          <p className="break-words text-xs font-black leading-4 text-slate-900">
+                            {booking.customerName}
+                          </p>
+                          <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-slate-500">
                             <Phone className="h-3 w-3 text-slate-400 shrink-0" />
                             {booking.customerPhone}
                           </p>
+                          <span className="mt-1 inline-flex rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-slate-500">
+                            {booking.id}
+                          </span>
                         </div>
                       </div>
                     </td>
 
-                    {/* Cụm 2: Thời gian */}
-                    <td className="py-3.5 px-3 whitespace-nowrap align-middle">
-                      <div className="flex items-center gap-1">
-                        <Clock3 className="h-3.5 w-3.5 text-violet-600 shrink-0" />
-                        <span className="font-extrabold text-xs text-slate-900">{booking.time}</span>
+                    <td className="px-3 py-3.5 align-middle">
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                          <Clock3 className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-slate-900">{booking.time}</p>
+                          <p className="mt-0.5 text-[10px] font-medium text-slate-500">{booking.date}</p>
+                        </div>
                       </div>
-                      <p className="text-[11px] text-slate-500 font-normal pl-4.5 mt-0.5">{booking.date}</p>
+                      <p className="mt-2 flex items-start gap-1 text-[10px] font-semibold leading-4 text-slate-600">
+                        <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" />
+                        <span>{branchName(booking.branch)}</span>
+                      </p>
                     </td>
 
-                    {/* Cụm 3: Dịch vụ & Mẫu Nail */}
-                    <td className="py-3.5 px-3 align-middle">
-                      <div className="space-y-0.5 min-w-0">
-                        <p className="font-bold text-slate-900 text-xs truncate max-w-[250px]" title={booking.serviceName}>
+                    <td className="px-3 py-3.5 align-middle">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black leading-4 text-slate-900">
                           {booking.serviceName}
                         </p>
                         {booking.nailDesignName && booking.nailDesignName !== 'Không chọn mẫu' ? (
-                          <p className="text-[11px] text-slate-600 font-normal truncate max-w-[250px] flex items-center gap-1" title={booking.nailDesignName}>
-                            <Sparkles className="h-3 w-3 text-violet-500 shrink-0" />
-                            <span>Mẫu: <strong className="font-semibold text-violet-700">{booking.nailDesignName}</strong></span>
+                          <p className="mt-1 flex items-start gap-1 text-[10px] font-semibold leading-4 text-violet-700">
+                            <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-violet-500" />
+                            <span className="line-clamp-2">{booking.nailDesignName}</span>
                           </p>
                         ) : (
-                          <p className="text-[11px] text-slate-400 font-normal italic">Không chọn mẫu trước</p>
+                          <p className="mt-1 text-[10px] font-medium italic text-slate-400">Không chọn mẫu trước</p>
                         )}
-                        <p className="text-[11px] text-slate-500 font-normal pt-0.5">
-                          Dự kiến: <span className="font-semibold text-slate-800">{money(booking.totalEstimatedPrice)}</span>
+                        <p className="mt-2 text-[10px] font-medium text-slate-500">
+                          Dự kiến <span className="ml-1 font-black text-slate-900">{money(booking.totalEstimatedPrice)}</span>
                         </p>
                       </div>
                     </td>
 
-                    {/* Cụm 4: KTV yêu cầu */}
-                    <td className="py-3.5 px-3 whitespace-nowrap align-middle">
+                    <td className="px-3 py-3.5 align-middle">
                       {booking.requestedTechnicianName && booking.requestedTechnicianName !== 'Bất kỳ / Tự động gán' ? (
-                        <div className="flex items-center gap-1 text-slate-700 text-xs font-medium truncate max-w-[115px]" title={booking.requestedTechnicianName}>
-                          <UsersRound className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate">{booking.requestedTechnicianName}</span>
+                        <div className="flex items-start gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                            <UsersRound className="h-3.5 w-3.5" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="break-words text-xs font-bold leading-4 text-slate-800">{booking.requestedTechnicianName}</p>
+                            <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Khách yêu cầu</p>
+                          </div>
                         </div>
                       ) : (
-                        <span className="text-slate-400 text-xs font-normal italic">Không yêu cầu</span>
+                        <div className="flex items-start gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                            <UsersRound className="h-3.5 w-3.5" />
+                          </span>
+                          <div>
+                            <p className="text-xs font-bold text-slate-600">Tự động phân bổ</p>
+                            <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Không yêu cầu KTV</p>
+                          </div>
+                        </div>
                       )}
                     </td>
 
-                    {/* Cụm 5: Chi nhánh */}
-                    <td className="py-3.5 px-3 whitespace-nowrap align-middle">
-                      <div className="flex items-center gap-1 text-slate-700 text-xs font-medium truncate max-w-[105px]" title={branchName(booking.branch)}>
-                        <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">{branchName(booking.branch)}</span>
-                      </div>
-                    </td>
-
-                    {/* Cụm 6: Tiền cọc */}
-                    <td className="py-3.5 px-3 whitespace-nowrap align-middle">
+                    <td className="px-3 py-3.5 align-middle">
                       {booking.depositStatus === 'PAID' ? (
                         <div>
-                          <p className="font-bold text-xs text-emerald-700 flex items-center gap-1">
-                            <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                            Đã cọc {money(booking.depositAmount)}
+                          <p className="flex items-center gap-1 text-[10px] font-bold text-emerald-700">
+                            <Check className="h-3 w-3 shrink-0" />
+                            Đã đặt cọc
                           </p>
-                          {booking.depositMethod && (
-                            <p className="text-[10px] text-slate-400 font-normal pl-4.5">{booking.depositMethod}</p>
-                          )}
+                          <p className="mt-0.5 text-xs font-black text-slate-900">{money(booking.depositAmount)}</p>
+                          <p className="mt-1 text-[9px] font-semibold text-slate-400">
+                            {booking.depositMethod || 'Mobile App'}
+                          </p>
                         </div>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 border border-amber-200/60">
-                          <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
-                          Chưa cọc
-                        </span>
+                        <div>
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200/80 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800">
+                            <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600" />
+                            Chưa cọc
+                          </span>
+                          <p className="mt-1.5 flex items-center gap-1 text-[9px] font-semibold text-slate-400">
+                            <Smartphone className="h-3 w-3" />
+                            Mobile App
+                          </p>
+                        </div>
                       )}
                     </td>
 
-                    {/* Cụm 7: Nguồn */}
-                    <td className="py-3.5 px-3 whitespace-nowrap align-middle">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
-                        <Smartphone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        Mobile App
-                      </span>
-                    </td>
-
-                    {/* Cụm 8: Trạng thái */}
-                    <td className="py-3.5 px-3 whitespace-nowrap align-middle">
+                    <td className="px-3 py-3.5 align-middle">
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold ${statusInfo.badge}`}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-bold leading-4 ${statusInfo.badge}`}
                       >
-                        <span className={`h-2 w-2 rounded-full ${statusInfo.dot}`} />
+                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusInfo.dot}`} />
                         {statusInfo.label}
                       </span>
                     </td>
 
-                    {/* Cụm 9: Thao tác */}
-                    <td className="py-3.5 pr-4 pl-3 text-right whitespace-nowrap align-middle">
+                    <td className="py-3.5 pl-2 pr-4 text-right align-middle">
                       <div
-                        className="flex items-center justify-end gap-1.5"
+                        className="flex flex-col items-end gap-1.5"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
                           type="button"
                           onClick={() => setCallingBooking(booking)}
-                          title="Gọi điện cho khách hàng"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 transition"
+                          aria-label={`Gọi cho ${booking.customerName}`}
+                          title={`Gọi cho ${booking.customerName}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"
                         >
                           <PhoneCall className="h-3.5 w-3.5" />
                         </button>
@@ -1299,9 +1332,10 @@ export default function TenantAdminOnlineBooking({
                         <button
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
-                          className="flex h-7 items-center gap-0.5 rounded-lg bg-violet-600 px-2.5 text-[11px] font-bold text-white shadow-xs hover:bg-violet-700 transition"
+                          aria-label={`Xử lý lịch ${booking.id}`}
+                          title="Xử lý chi tiết"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white shadow-xs transition hover:bg-violet-700"
                         >
-                          Xử lý
                           <ChevronRight className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -1312,7 +1346,7 @@ export default function TenantAdminOnlineBooking({
 
               {!filteredBookings.length && (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
                     <p className="text-sm font-bold text-slate-600">Không tìm thấy lịch hẹn online phù hợp</p>
                     <p className="text-xs text-slate-400 mt-1">Thử thay đổi bộ lọc tìm kiếm hoặc từ khóa</p>
                   </td>
@@ -1323,7 +1357,7 @@ export default function TenantAdminOnlineBooking({
         </div>
 
         {/* Mobile & Small Screen Responsive Card View */}
-        <div className="block lg:hidden p-4 space-y-3">
+        <div className="block space-y-3 p-4 2xl:hidden">
           {filteredBookings.map((booking) => {
             const statusInfo = bookingStatusMeta[booking.status];
             const needsUrgentAction = booking.status === 'PENDING' || booking.status === 'NEEDS_ADJUSTMENT';
