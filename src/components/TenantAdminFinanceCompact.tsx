@@ -290,13 +290,14 @@ export default function TenantAdminFinanceCompact({
   const expense = scopedTransactions
     .filter((item) => item.type === 'EXPENSE' && item.status === 'POSTED')
     .reduce((sum, item) => sum + item.amount, 0);
-  const balance = scopedCashbooks.reduce(
+  const ledgerBalance = scopedCashbooks.reduce(
     (sum, item) => sum + item.opening + item.income - item.expense,
     0
   );
   const pendingTransactions = scopedTransactions.filter((item) => item.status === 'PENDING');
   const pendingAmount = pendingTransactions.reduce((sum, item) => sum + item.amount, 0);
   const pendingReconciliation = scopedCashbooks.reduce((sum, item) => sum + item.pending, 0);
+  const availableBalance = ledgerBalance - pendingReconciliation;
   const overdueDebts = scopedDebts.filter((item) => item.status === 'OVERDUE');
   const receivable = scopedDebts
     .filter((item) => item.type === 'RECEIVABLE')
@@ -542,7 +543,9 @@ export default function TenantAdminFinanceCompact({
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-bold text-slate-400">Số dư khả dụng</p>
-              <p className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">{shortMoney(balance)}</p>
+              <p className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                {shortMoney(availableBalance)}
+              </p>
             </div>
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-violet-300">
               <Landmark className="h-5 w-5" />
@@ -722,8 +725,8 @@ export default function TenantAdminFinanceCompact({
               <aside className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-black text-slate-900">Số dư từng sổ</h2>
-                    <p className="mt-1 text-[11px] text-slate-400">Quỹ tiền mặt và tài khoản</p>
+                    <h2 className="text-sm font-black text-slate-900">Khả dụng từng sổ</h2>
+                    <p className="mt-1 text-[11px] text-slate-400">Đã trừ các khoản đang chờ đối soát</p>
                   </div>
                   <button
                     type="button"
@@ -736,7 +739,8 @@ export default function TenantAdminFinanceCompact({
                 </div>
                 <div className="mt-3 divide-y divide-slate-100">
                   {scopedCashbooks.map((cashbook) => {
-                    const current = cashbook.opening + cashbook.income - cashbook.expense;
+                    const ledger = cashbook.opening + cashbook.income - cashbook.expense;
+                    const available = ledger - cashbook.pending;
                     return (
                       <button
                         key={cashbook.id}
@@ -756,10 +760,11 @@ export default function TenantAdminFinanceCompact({
                             {cashbook.name}
                           </span>
                           <span className="mt-1 block text-[10px] text-slate-400">
-                            {cashbook.pending > 0 ? `${shortMoney(cashbook.pending)} chờ về` : 'Đã khớp'}
+                            Ghi sổ {shortMoney(ledger)}
+                            {cashbook.pending > 0 ? ` · ${shortMoney(cashbook.pending)} chờ` : ' · Đã khớp'}
                           </span>
                         </span>
-                        <span className="text-xs font-black text-slate-900">{shortMoney(current)}</span>
+                        <span className="text-xs font-black text-violet-700">{shortMoney(available)}</span>
                       </button>
                     );
                   })}
@@ -888,7 +893,9 @@ export default function TenantAdminFinanceCompact({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-base font-black text-slate-900">Sổ tiền</h2>
-                  <p className="mt-1 text-xs text-slate-400">Số dư tiền mặt, ngân hàng, thẻ và cọc online</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Tách rõ số đầu ngày, số ghi sổ, tiền đang chờ và tiền thực có thể dùng
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -900,47 +907,65 @@ export default function TenantAdminFinanceCompact({
                   Đối soát cuối ngày
                 </button>
               </div>
-              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                <div className="hidden grid-cols-[1.25fr_1fr_130px_130px_130px_105px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-wide text-slate-400 lg:grid">
-                  <span>Sổ tiền</span>
-                  <span>Tài khoản</span>
-                  <span>Thu trong ngày</span>
-                  <span>Chi trong ngày</span>
-                  <span>Số dư</span>
-                  <span>Đối soát</span>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {scopedCashbooks.map((cashbook) => {
-                    const current = cashbook.opening + cashbook.income - cashbook.expense;
-                    return (
-                      <button
-                        key={cashbook.id}
-                        type="button"
-                        onClick={() => setSelectedCashbook(cashbook)}
-                        className="grid h-auto w-full gap-3 rounded-none border-0 bg-white px-4 py-4 text-left shadow-none hover:bg-slate-50 lg:grid-cols-[1.25fr_1fr_130px_130px_130px_105px] lg:items-center"
-                      >
-                        <span>
-                          <span className="block text-xs font-black text-slate-800">{cashbook.name}</span>
-                          <span className="mt-1 block text-[10px] text-slate-400">
-                            {cashbook.id} · {branchName(cashbook.branch)}
-                          </span>
-                        </span>
-                        <span className="text-xs font-bold text-slate-600">{cashbook.account}</span>
-                        <span className="text-xs font-black text-emerald-700">+{money(cashbook.income)}</span>
-                        <span className="text-xs font-black text-rose-700">−{money(cashbook.expense)}</span>
-                        <span className="text-xs font-black text-slate-950">{money(current)}</span>
-                        <span
-                          className={`w-fit rounded-full px-2 py-1 text-[10px] font-bold ${
-                            cashbook.pending > 0
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-emerald-50 text-emerald-700'
-                          }`}
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                <div className="min-w-[1120px]">
+                  <div className="grid grid-cols-[1.55fr_115px_120px_120px_130px_120px_135px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    <span>Sổ tiền & tài khoản</span>
+                    <span>Đầu ngày</span>
+                    <span>Thu trong ngày</span>
+                    <span>Chi trong ngày</span>
+                    <span>Số dư ghi sổ</span>
+                    <span>Đang chờ</span>
+                    <span>Khả dụng</span>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {scopedCashbooks.map((cashbook) => {
+                      const ledger = cashbook.opening + cashbook.income - cashbook.expense;
+                      const available = ledger - cashbook.pending;
+                      return (
+                        <button
+                          key={cashbook.id}
+                          type="button"
+                          onClick={() => setSelectedCashbook(cashbook)}
+                          className="grid h-auto w-full grid-cols-[1.55fr_115px_120px_120px_130px_120px_135px] items-center gap-3 rounded-none border-0 bg-white px-4 py-4 text-left shadow-none hover:bg-slate-50"
                         >
-                          {cashbook.pending > 0 ? `${shortMoney(cashbook.pending)} chờ` : 'Đã khớp'}
-                        </span>
-                      </button>
-                    );
-                  })}
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-black text-slate-800">
+                              {cashbook.name}
+                            </span>
+                            <span className="mt-1 block truncate text-[10px] font-semibold text-slate-500">
+                              {cashbook.account}
+                            </span>
+                            <span className="mt-1 block text-[10px] text-slate-400">
+                              {cashbook.id} · {branchName(cashbook.branch)}
+                            </span>
+                          </span>
+                          <span className="text-xs font-black text-slate-700">
+                            {money(cashbook.opening)}
+                          </span>
+                          <span className="text-xs font-black text-emerald-700">
+                            +{money(cashbook.income)}
+                          </span>
+                          <span className="text-xs font-black text-rose-700">
+                            −{money(cashbook.expense)}
+                          </span>
+                          <span className="text-xs font-black text-slate-950">{money(ledger)}</span>
+                          <span
+                            className={`w-fit rounded-full px-2 py-1 text-[10px] font-bold ${
+                              cashbook.pending > 0
+                                ? 'bg-amber-50 text-amber-700'
+                                : 'bg-emerald-50 text-emerald-700'
+                            }`}
+                          >
+                            {cashbook.pending > 0 ? money(cashbook.pending) : 'Đã khớp'}
+                          </span>
+                          <span className="text-sm font-black text-violet-700">
+                            {money(available)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1195,28 +1220,52 @@ export default function TenantAdminFinanceCompact({
         >
           <div className="space-y-4">
             <section className="rounded-2xl bg-slate-950 p-5 text-white">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Số dư hiện tại</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Số dư khả dụng
+              </p>
               <p className="mt-2 text-3xl font-black">
-                {money(selectedCashbook.opening + selectedCashbook.income - selectedCashbook.expense)}
+                {money(
+                  selectedCashbook.opening
+                  + selectedCashbook.income
+                  - selectedCashbook.expense
+                  - selectedCashbook.pending
+                )}
               </p>
               <p className="mt-2 text-xs text-slate-400">
-                Đối soát gần nhất {selectedCashbook.lastReconciled}
+                Số dư ghi sổ{' '}
+                {money(selectedCashbook.opening + selectedCashbook.income - selectedCashbook.expense)}
+                {' '}− đang chờ {money(selectedCashbook.pending)}
               </p>
             </section>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-[10px] text-slate-500">Đầu ngày</p>
+                <p className="mt-1 text-sm font-black text-slate-800">
+                  {money(selectedCashbook.opening)}
+                </p>
+              </div>
               <div className="rounded-xl bg-emerald-50 p-3">
-                <p className="text-[10px] text-emerald-600">Tổng thu</p>
+                <p className="text-[10px] text-emerald-600">Thu trong ngày</p>
                 <p className="mt-1 text-sm font-black text-emerald-800">+{money(selectedCashbook.income)}</p>
               </div>
               <div className="rounded-xl bg-rose-50 p-3">
-                <p className="text-[10px] text-rose-600">Tổng chi</p>
+                <p className="text-[10px] text-rose-600">Chi trong ngày</p>
                 <p className="mt-1 text-sm font-black text-rose-800">−{money(selectedCashbook.expense)}</p>
               </div>
+              <div className="rounded-xl bg-blue-50 p-3">
+                <p className="text-[10px] text-blue-600">Số dư ghi sổ</p>
+                <p className="mt-1 text-sm font-black text-blue-800">
+                  {money(selectedCashbook.opening + selectedCashbook.income - selectedCashbook.expense)}
+                </p>
+              </div>
               <div className="rounded-xl bg-amber-50 p-3">
-                <p className="text-[10px] text-amber-600">Chờ về</p>
+                <p className="text-[10px] text-amber-600">Đang chờ</p>
                 <p className="mt-1 text-sm font-black text-amber-800">{money(selectedCashbook.pending)}</p>
               </div>
             </div>
+            <p className="text-[10px] font-semibold text-slate-400">
+              Đối soát gần nhất {selectedCashbook.lastReconciled}
+            </p>
           </div>
         </Modal>
       )}
