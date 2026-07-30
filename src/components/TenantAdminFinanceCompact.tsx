@@ -111,7 +111,7 @@ const cashbookSeed: Cashbook[] = [
   { id: 'CB-CASH-Q1', name: 'Tiền mặt Quận 1', type: 'CASH', branch: 'Q1', opening: 18200000, income: 28450000, expense: 9200000, pending: 0, lastReconciled: '20/07/2026 · 17:00', account: 'Két quầy thu ngân Q1' },
   { id: 'CB-CASH-Q3', name: 'Tiền mặt Quận 3', type: 'CASH', branch: 'Q3', opening: 24600000, income: 36280000, expense: 25000000, pending: 0, lastReconciled: '20/07/2026 · 17:05', account: 'Két quầy thu ngân Q3' },
   { id: 'CB-VCB-OPS', name: 'VCB vận hành', type: 'BANK', branch: 'ALL', opening: 486500000, income: 128600000, expense: 84200000, pending: 12850000, lastReconciled: '20/07/2026 · 16:30', account: 'VCB · 1029 886 168' },
-  { id: 'CB-CARD', name: 'Đối soát thẻ', type: 'CARD', branch: 'ALL', opening: 0, income: 84600000, expense: 0, pending: 6280000, lastReconciled: '20/07/2026 · 15:45', account: 'Visa · Mastercard · Napas' },
+  { id: 'CB-CARD', name: 'Đối soát thẻ', type: 'CARD', branch: 'ALL', opening: 0, income: 84600000, expense: 78320000, pending: 6280000, lastReconciled: '20/07/2026 · 15:45', account: 'Visa · Mastercard · Napas' },
   { id: 'CB-DEPOSIT', name: 'Cọc online', type: 'EWALLET', branch: 'ALL', opening: 32400000, income: 4850000, expense: 800000, pending: 0, lastReconciled: '20/07/2026 · 15:00', account: 'VNPay · MoMo · Chuyển khoản' },
 ];
 
@@ -913,7 +913,7 @@ export default function TenantAdminFinanceCompact({
                     <span>Sổ tiền & tài khoản</span>
                     <span>Đầu ngày</span>
                     <span>Thu trong ngày</span>
-                    <span>Chi trong ngày</span>
+                    <span>Chi / chuyển ra</span>
                     <span>Số dư ghi sổ</span>
                     <span>Đang chờ</span>
                     <span>Khả dụng</span>
@@ -966,6 +966,14 @@ export default function TenantAdminFinanceCompact({
                       );
                     })}
                   </div>
+                </div>
+                <div className="flex items-start gap-3 border-t border-blue-100 bg-blue-50 px-4 py-3 text-blue-800">
+                  <ArrowRightLeft className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                  <p className="text-[11px] leading-5">
+                    Với sổ đối soát thẻ, tiền đã chuyển về ngân hàng được ghi ở cột
+                    <strong> Chi / chuyển ra</strong>. Phần còn lại là tiền đang chờ đối tác thanh toán,
+                    nên chưa được tính là khả dụng và không bị cộng trùng với tài khoản VCB.
+                  </p>
                 </div>
               </div>
             </div>
@@ -1249,7 +1257,7 @@ export default function TenantAdminFinanceCompact({
                 <p className="mt-1 text-sm font-black text-emerald-800">+{money(selectedCashbook.income)}</p>
               </div>
               <div className="rounded-xl bg-rose-50 p-3">
-                <p className="text-[10px] text-rose-600">Chi trong ngày</p>
+                <p className="text-[10px] text-rose-600">Chi / chuyển ra</p>
                 <p className="mt-1 text-sm font-black text-rose-800">−{money(selectedCashbook.expense)}</p>
               </div>
               <div className="rounded-xl bg-blue-50 p-3">
