@@ -5,6 +5,7 @@ import {
   ArrowRightLeft,
   ArrowUpRight,
   Banknote,
+  CalendarDays,
   Check,
   ChevronRight,
   CircleDollarSign,
@@ -169,6 +170,14 @@ const dateToTimestamp = (value: string) => {
   const [day, month, year] = value.split('/').map(Number);
   return new Date(year, month - 1, day).getTime();
 };
+const inputDateToTimestamp = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day).getTime();
+};
+const formatInputDate = (value: string) => {
+  const [year, month, day] = value.split('-');
+  return day && month && year ? `${day}/${month}/${year}` : value;
+};
 const debtReferenceDate = dateToTimestamp('20/07/2026');
 const dueSoonLimit = debtReferenceDate + 7 * 24 * 60 * 60 * 1000;
 const normalizeDebts = (items: DebtItem[]) =>
@@ -217,6 +226,15 @@ export default function TenantAdminFinanceCompact({
 
   const [tab, setTab] = useState<FinanceTab>('OVERVIEW');
   const [period, setPeriod] = useState('MONTH');
+  const [customDateRange, setCustomDateRange] = useState({
+    from: '2026-07-01',
+    to: '2026-07-20',
+  });
+  const [customDateDraft, setCustomDateDraft] = useState({
+    from: '2026-07-01',
+    to: '2026-07-20',
+  });
+  const [dateRangeError, setDateRangeError] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedTransaction, setSelectedTransaction] = useState<FinanceTransaction | null>(null);
@@ -304,6 +322,43 @@ export default function TenantAdminFinanceCompact({
     [budgets, selectedBranch]
   );
 
+  const periodRange = useMemo(() => {
+    const day = 24 * 60 * 60 * 1000;
+    switch (period) {
+      case 'TODAY':
+        return { from: debtReferenceDate, to: debtReferenceDate };
+      case 'YESTERDAY':
+        return { from: debtReferenceDate - day, to: debtReferenceDate - day };
+      case 'LAST_7_DAYS':
+        return { from: debtReferenceDate - 6 * day, to: debtReferenceDate };
+      case 'WEEK':
+        return { from: dateToTimestamp('20/07/2026'), to: dateToTimestamp('26/07/2026') };
+      case 'LAST_WEEK':
+        return { from: dateToTimestamp('13/07/2026'), to: dateToTimestamp('19/07/2026') };
+      case 'LAST_MONTH':
+        return { from: dateToTimestamp('01/06/2026'), to: dateToTimestamp('30/06/2026') };
+      case 'QUARTER':
+        return { from: dateToTimestamp('01/07/2026'), to: dateToTimestamp('30/09/2026') };
+      case 'CUSTOM':
+        return {
+          from: inputDateToTimestamp(customDateRange.from),
+          to: inputDateToTimestamp(customDateRange.to),
+        };
+      case 'MONTH':
+      default:
+        return { from: dateToTimestamp('01/07/2026'), to: dateToTimestamp('31/07/2026') };
+    }
+  }, [customDateRange, period]);
+
+  const periodTransactions = useMemo(
+    () =>
+      scopedTransactions.filter((item) => {
+        const transactionAt = dateToTimestamp(item.date);
+        return transactionAt >= periodRange.from && transactionAt <= periodRange.to;
+      }),
+    [periodRange, scopedTransactions]
+  );
+
   const filteredDebts = useMemo(() => {
     const query = debtSearch.trim().toLocaleLowerCase('vi');
     const priority = { OVERDUE: 0, OPEN: 1, PARTIAL: 1, PAID: 2 };
@@ -326,7 +381,7 @@ export default function TenantAdminFinanceCompact({
 
   const filteredTransactions = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase('vi');
-    return scopedTransactions
+    return periodTransactions
       .filter((item) => typeFilter === 'ALL' || item.type === typeFilter)
       .filter((item) => statusFilter === 'ALL' || item.status === statusFilter)
       .filter(
@@ -336,19 +391,19 @@ export default function TenantAdminFinanceCompact({
             .toLocaleLowerCase('vi')
             .includes(query)
       );
-  }, [scopedTransactions, searchQuery, statusFilter, typeFilter]);
+  }, [periodTransactions, searchQuery, statusFilter, typeFilter]);
 
-  const income = scopedTransactions
+  const income = periodTransactions
     .filter((item) => item.type === 'INCOME' && item.status === 'POSTED')
     .reduce((sum, item) => sum + item.amount, 0);
-  const expense = scopedTransactions
+  const expense = periodTransactions
     .filter((item) => item.type === 'EXPENSE' && item.status === 'POSTED')
     .reduce((sum, item) => sum + item.amount, 0);
   const ledgerBalance = scopedCashbooks.reduce(
     (sum, item) => sum + item.opening + item.income - item.expense,
     0
   );
-  const pendingTransactions = scopedTransactions.filter((item) => item.status === 'PENDING');
+  const pendingTransactions = periodTransactions.filter((item) => item.status === 'PENDING');
   const pendingAmount = pendingTransactions.reduce((sum, item) => sum + item.amount, 0);
   const pendingReconciliation = scopedCashbooks.reduce((sum, item) => sum + item.pending, 0);
   const availableBalance = ledgerBalance - pendingReconciliation;
@@ -377,6 +432,24 @@ export default function TenantAdminFinanceCompact({
     onSearchQueryChange('');
     setTypeFilter('ALL');
     setStatusFilter('ALL');
+  };
+
+  const applyCustomDateRange = () => {
+    if (!customDateDraft.from || !customDateDraft.to) {
+      setDateRangeError('Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.');
+      return;
+    }
+    if (inputDateToTimestamp(customDateDraft.from) > inputDateToTimestamp(customDateDraft.to)) {
+      setDateRangeError('Ngày bắt đầu không được sau ngày kết thúc.');
+      return;
+    }
+    setCustomDateRange(customDateDraft);
+    setDateRangeError('');
+    setNotice(
+      `Đang xem dữ liệu từ ${formatInputDate(customDateDraft.from)} đến ${formatInputDate(
+        customDateDraft.to
+      )}.`
+    );
   };
 
   const openTransactionForm = (type: TransactionType) => {
@@ -609,12 +682,36 @@ export default function TenantAdminFinanceCompact({
           </BeautifulSelect>
           <BeautifulSelect
             value={period}
-            onChange={(event) => setPeriod(event.target.value)}
-            className="h-11 min-w-40 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700"
+            onChange={(event) => {
+              const nextPeriod = event.target.value;
+              setPeriod(nextPeriod);
+              setDateRangeError('');
+              if (nextPeriod === 'CUSTOM') setCustomDateDraft(customDateRange);
+            }}
+            aria-label="Chọn thời gian thu chi"
+            className="h-11 min-w-48 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700"
           >
-            <option value="TODAY">Hôm nay</option>
-            <option value="WEEK">Tuần này</option>
-            <option value="MONTH">Tháng 07/2026</option>
+            <optgroup label="Theo ngày">
+              <option value="TODAY">Hôm nay · 20/07/2026</option>
+              <option value="YESTERDAY">Hôm qua · 19/07/2026</option>
+              <option value="LAST_7_DAYS">7 ngày gần nhất</option>
+            </optgroup>
+            <optgroup label="Theo tuần">
+              <option value="WEEK">Tuần này · 20–26/07</option>
+              <option value="LAST_WEEK">Tuần trước · 13–19/07</option>
+            </optgroup>
+            <optgroup label="Theo tháng và quý">
+              <option value="MONTH">Tháng 07/2026</option>
+              <option value="LAST_MONTH">Tháng 06/2026</option>
+              <option value="QUARTER">Quý 3/2026</option>
+            </optgroup>
+            <optgroup label="Khoảng thời gian riêng">
+              <option value="CUSTOM">
+                {`Từ ${formatInputDate(customDateRange.from)} đến ${formatInputDate(
+                  customDateRange.to
+                )}`}
+              </option>
+            </optgroup>
           </BeautifulSelect>
           <button
             type="button"
@@ -636,6 +733,63 @@ export default function TenantAdminFinanceCompact({
           </button>
         </div>
       </section>
+
+      {period === 'CUSTOM' && (
+        <section className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm">
+                <CalendarDays className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-xs font-black text-slate-800">Chọn khoảng thời gian muốn xem</p>
+                <p className="mt-1 text-[10px] font-semibold text-slate-500">
+                  Dữ liệu phiếu thu, phiếu chi và tổng tiền sẽ cập nhật theo khoảng ngày này.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[180px_180px_auto]">
+              <label>
+                <span className="mb-1.5 block text-[10px] font-bold text-slate-500">Từ ngày</span>
+                <input
+                  type="date"
+                  value={customDateDraft.from}
+                  onChange={(event) => {
+                    setCustomDateDraft((current) => ({ ...current, from: event.target.value }));
+                    setDateRangeError('');
+                  }}
+                  className={inputClass}
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-[10px] font-bold text-slate-500">Đến ngày</span>
+                <input
+                  type="date"
+                  value={customDateDraft.to}
+                  onChange={(event) => {
+                    setCustomDateDraft((current) => ({ ...current, to: event.target.value }));
+                    setDateRangeError('');
+                  }}
+                  className={inputClass}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={applyCustomDateRange}
+                className="mt-auto h-11 rounded-xl bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"
+              >
+                Áp dụng
+              </button>
+            </div>
+          </div>
+          {dateRangeError && (
+            <p className="mt-3 flex items-center gap-2 text-[11px] font-bold text-rose-600 xl:justify-end">
+              <AlertTriangle className="h-4 w-4" />
+              {dateRangeError}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_1fr]">
         <article className="rounded-2xl bg-slate-950 p-5 text-white shadow-lg shadow-slate-200">
@@ -659,7 +813,7 @@ export default function TenantAdminFinanceCompact({
           {
             label: 'Tổng thu',
             value: income,
-            detail: `${scopedTransactions.filter((item) => item.type === 'INCOME').length} giao dịch`,
+            detail: `${periodTransactions.filter((item) => item.type === 'INCOME').length} giao dịch`,
             icon: ArrowDownLeft,
             tone: 'bg-emerald-50 text-emerald-600',
             valueTone: 'text-emerald-700',
@@ -667,7 +821,7 @@ export default function TenantAdminFinanceCompact({
           {
             label: 'Tổng chi',
             value: expense,
-            detail: `${scopedTransactions.filter((item) => item.type === 'EXPENSE').length} giao dịch`,
+            detail: `${periodTransactions.filter((item) => item.type === 'EXPENSE').length} giao dịch`,
             icon: ArrowUpRight,
             tone: 'bg-rose-50 text-rose-600',
             valueTone: 'text-rose-700',
@@ -781,7 +935,7 @@ export default function TenantAdminFinanceCompact({
                   </button>
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {scopedTransactions.slice(0, 6).map((transaction) => (
+                  {periodTransactions.slice(0, 6).map((transaction) => (
                     <button
                       key={transaction.id}
                       type="button"
