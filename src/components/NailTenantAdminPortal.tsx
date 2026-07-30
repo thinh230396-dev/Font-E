@@ -84,7 +84,7 @@ const TenantAdminServices = lazy(() => import('./TenantAdminServices'));
 const TenantAdminInventory = lazy(() => import('./TenantAdminInventory'));
 const TenantAdminNailGallery = lazy(() => import('./TenantAdminNailGallery'));
 const TenantAdminOnlineBooking = lazy(() => import('./TenantAdminOnlineBooking'));
-const TenantAdminFinance = lazy(() => import('./TenantAdminFinance'));
+const TenantAdminFinance = lazy(() => import('./TenantAdminFinanceCompact'));
 const TenantAdminSanitation = lazy(() => import('./TenantAdminSanitation'));
 const TenantAdminReports = lazy(() => import('./TenantAdminReports'));
 const TenantAdminSubscription = lazy(() => import('./TenantAdminSubscription'));
