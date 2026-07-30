@@ -483,6 +483,15 @@ const branchName = (branch: BranchCode | 'ALL') =>
     : branch === 'Q1'
     ? 'Chi nhánh Quận 1'
     : 'Chi nhánh Quận 3';
+const technicianHasTimeConflict = (technician: TechnicianAvailability, bookingTime: string) =>
+  technician.busySlots.some((slot) => {
+    const [start, end] = slot.split('-');
+    return bookingTime >= start && bookingTime < end;
+  });
+const technicianIsAvailable = (technician: TechnicianAvailability, booking: MobileAppBooking) =>
+  technician.status === 'WORKING'
+  && technician.branch === booking.branch
+  && !technicianHasTimeConflict(technician, booking.time);
 
 export default function TenantAdminOnlineBooking({
   searchQuery,
@@ -548,6 +557,7 @@ export default function TenantAdminOnlineBooking({
   // UI Toast Notice & Validation error
   const [notice, setNotice] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [assignmentNotice, setAssignmentNotice] = useState('');
 
   const canManage = accessMode === 'full';
 
@@ -563,12 +573,27 @@ export default function TenantAdminOnlineBooking({
   // Sync selected booking when editing technician choice
   useEffect(() => {
     if (selectedBooking) {
-      setChosenTechId(selectedBooking.assignedTechnicianId || selectedBooking.requestedTechnicianId || 'ANY');
+      const preferredTechId = selectedBooking.assignedTechnicianId || selectedBooking.requestedTechnicianId;
+      const preferredTech = technicians.find((technician) => technician.id === preferredTechId);
+
+      if (preferredTech && !technicianIsAvailable(preferredTech, selectedBooking)) {
+        const fallbackTech = technicians.find((technician) => technicianIsAvailable(technician, selectedBooking));
+        setChosenTechId(fallbackTech?.id || 'ANY');
+        setAssignmentNotice(
+          fallbackTech
+            ? `${preferredTech.name} hiện không sẵn sàng. Hệ thống đã chọn ${fallbackTech.name} thay thế; bạn có thể đổi lại trước khi xác nhận.`
+            : `${preferredTech.name} hiện không sẵn sàng. Lịch sẽ được xác nhận ở chế độ tự động phân bổ KTV.`
+        );
+      } else {
+        setChosenTechId(preferredTechId || 'ANY');
+        setAssignmentNotice('');
+      }
+
       setValidationError('');
       setProposeOpen(false);
       setCancelOpen(false);
     }
-  }, [selectedBooking]);
+  }, [selectedBooking, technicians]);
 
   const requireManage = () => {
     if (canManage) return true;
@@ -650,10 +675,7 @@ export default function TenantAdminOnlineBooking({
 
     // Check busy slots collision
     const bookingTime = booking.time;
-    const hasConflict = tech.busySlots.some((slot) => {
-      const [start, end] = slot.split('-');
-      return bookingTime >= start && bookingTime <= end;
-    });
+    const hasConflict = technicianHasTimeConflict(tech, bookingTime);
 
     if (hasConflict) {
       return {
@@ -693,11 +715,13 @@ export default function TenantAdminOnlineBooking({
   const handleConfirmBooking = (booking: MobileAppBooking) => {
     if (!requireManage()) return;
 
-    // Validate Tech
-    const techCheck = checkTechnicianAvailability(chosenTechId, booking);
+    // Resolve an unavailable requested technician before confirming.
+    let resolvedTechId = chosenTechId || 'ANY';
+    const techCheck = checkTechnicianAvailability(resolvedTechId, booking);
     if (!techCheck.ok) {
-      setValidationError(techCheck.message);
-      return;
+      const fallbackTech = technicians.find((technician) => technicianIsAvailable(technician, booking));
+      resolvedTechId = fallbackTech?.id || 'ANY';
+      setChosenTechId(resolvedTechId);
     }
 
     // Validate Station
@@ -709,21 +733,25 @@ export default function TenantAdminOnlineBooking({
 
     // Success confirmation
     const newStatus: OnlineBookingStatus = booking.depositStatus === 'PAID' ? 'DEPOSITED' : 'CONFIRMED';
-    const assignedTechObj = technicians.find((t) => t.id === chosenTechId);
+    const assignedTechObj = technicians.find((t) => t.id === resolvedTechId);
 
     const updatedBooking: MobileAppBooking = {
       ...booking,
       status: newStatus,
-      assignedTechnicianId: chosenTechId,
+      assignedTechnicianId: resolvedTechId === 'ANY' ? undefined : resolvedTechId,
       assignedTechnicianName: assignedTechObj ? assignedTechObj.name : 'Tự động phân bổ',
       assignedStation: booking.assignedStation || (booking.branch === 'Q1' ? 'Bàn Nail #02' : 'Ghế Spa #03'),
       updatedAt: `29/07/2026 · vừa xong`,
     };
 
     setBookings((prev) => prev.map((item) => (item.id === booking.id ? updatedBooking : item)));
-    setSelectedBooking(updatedBooking);
-    setNotice(`Đã xác nhận thành công lịch hẹn ${booking.id} cho ${booking.customerName}.`);
+    setSelectedBooking(null);
+    setNotice(
+      `Đã xác nhận lịch hẹn ${booking.id} cho ${booking.customerName}`
+      + `${assignedTechObj ? ` và phân công ${assignedTechObj.name}` : ' ở chế độ tự động phân bổ KTV'}.`
+    );
     setValidationError('');
+    setAssignmentNotice('');
   };
 
   // Action: Propose Alternative Time
@@ -1186,6 +1214,14 @@ export default function TenantAdminOnlineBooking({
                 const statusInfo = bookingStatusMeta[booking.status];
                 const isUrgentPending = booking.status === 'PENDING';
                 const isUrgentAdjustment = booking.status === 'NEEDS_ADJUSTMENT';
+                const hasFinalAssignment =
+                  !isUrgentPending
+                  && !isUrgentAdjustment
+                  && Boolean(booking.assignedTechnicianName)
+                  && booking.assignedTechnicianName !== 'Tự động phân bổ';
+                const displayedTechnicianName = hasFinalAssignment
+                  ? booking.assignedTechnicianName
+                  : booking.requestedTechnicianName;
 
                 let rowBorderClass = 'border-l-[3px] border-l-transparent hover:bg-slate-50/80';
                 if (isUrgentPending) {
@@ -1256,14 +1292,16 @@ export default function TenantAdminOnlineBooking({
                     </td>
 
                     <td className="px-3 py-3.5 align-middle">
-                      {booking.requestedTechnicianName && booking.requestedTechnicianName !== 'Bất kỳ / Tự động gán' ? (
+                      {displayedTechnicianName && displayedTechnicianName !== 'Bất kỳ / Tự động gán' ? (
                         <div className="flex items-start gap-2">
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                             <UsersRound className="h-3.5 w-3.5" />
                           </span>
                           <div className="min-w-0">
-                            <p className="break-words text-xs font-bold leading-4 text-slate-800">{booking.requestedTechnicianName}</p>
-                            <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Khách yêu cầu</p>
+                            <p className="break-words text-xs font-bold leading-4 text-slate-800">{displayedTechnicianName}</p>
+                            <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                              {hasFinalAssignment ? 'Đã phân công' : 'Khách yêu cầu'}
+                            </p>
                           </div>
                         </div>
                       ) : (
@@ -1549,14 +1587,20 @@ export default function TenantAdminOnlineBooking({
                       <CalendarClock className="h-4 w-4" /> Đề xuất giờ khác
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => handleConfirmBooking(selectedBooking)}
-                      disabled={!canManage}
-                      className="flex h-10 items-center gap-1.5 rounded-xl border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 disabled:opacity-50"
-                    >
-                      <Check className="h-4 w-4" /> Xác nhận lịch hẹn
-                    </button>
+                    {['PENDING', 'NEEDS_ADJUSTMENT'].includes(selectedBooking.status) ? (
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmBooking(selectedBooking)}
+                        disabled={!canManage}
+                        className="flex h-10 items-center gap-1.5 rounded-xl border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 disabled:opacity-50"
+                      >
+                        <Check className="h-4 w-4" /> Xác nhận lịch hẹn
+                      </button>
+                    ) : (
+                      <span className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-xs font-black text-emerald-700">
+                        <CheckCircle2 className="h-4 w-4" /> Lịch đã được xác nhận
+                      </span>
+                    )}
                   </>
                 )}
               </div>
@@ -1576,7 +1620,9 @@ export default function TenantAdminOnlineBooking({
                       type="button"
                       onClick={() => {
                         // Switch to ANY or first available tech
-                        const availTech = technicians.find((t) => t.status === 'WORKING' && t.branch === selectedBooking.branch);
+                        const availTech = technicians.find((technician) =>
+                          technicianIsAvailable(technician, selectedBooking)
+                        );
                         setChosenTechId(availTech ? availTech.id : 'ANY');
                         setValidationError('');
                       }}
@@ -1737,6 +1783,7 @@ export default function TenantAdminOnlineBooking({
                   onChange={(e) => {
                     setChosenTechId(e.target.value);
                     setValidationError('');
+                    setAssignmentNotice('');
                   }}
                   className={inputClass}
                 >
@@ -1758,6 +1805,12 @@ export default function TenantAdminOnlineBooking({
                       );
                     })}
                 </BeautifulSelect>
+                {assignmentNotice && (
+                  <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] font-semibold leading-5 text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <span>{assignmentNotice}</span>
+                  </div>
+                )}
               </div>
             </div>
 
