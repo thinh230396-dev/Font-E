@@ -13,6 +13,7 @@ import {
   Download,
   FileText,
   Landmark,
+  Pencil,
   Plus,
   Search,
   Target,
@@ -204,7 +205,14 @@ export default function TenantAdminFinanceCompact({
       return getTenantAdminInitialData(null, transactionSeed);
     }
   });
-  const [cashbooks] = useState<Cashbook[]>(() => getTenantAdminInitialData(null, cashbookSeed));
+  const [cashbooks, setCashbooks] = useState<Cashbook[]>(() => {
+    try {
+      const stored = localStorage.getItem(`${storageKey}:cashbooks`);
+      return getTenantAdminInitialData(stored ? JSON.parse(stored) : null, cashbookSeed);
+    } catch {
+      return getTenantAdminInitialData(null, cashbookSeed);
+    }
+  });
   const [debts, setDebts] = useState<DebtItem[]>(() => {
     try {
       const stored = localStorage.getItem(`${storageKey}:debts`);
@@ -238,6 +246,8 @@ export default function TenantAdminFinanceCompact({
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedTransaction, setSelectedTransaction] = useState<FinanceTransaction | null>(null);
+  const [transactionStatusDraft, setTransactionStatusDraft] =
+    useState<TransactionStatus>('PENDING');
   const [selectedCashbook, setSelectedCashbook] = useState<Cashbook | null>(null);
   const [selectedDebt, setSelectedDebt] = useState<DebtItem | null>(null);
   const [debtSearch, setDebtSearch] = useState('');
@@ -247,6 +257,14 @@ export default function TenantAdminFinanceCompact({
   const [debtPaymentNote, setDebtPaymentNote] = useState('');
   const [debtPaymentError, setDebtPaymentError] = useState('');
   const [transactionFormOpen, setTransactionFormOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<FinanceTransaction | null>(null);
+  const [cashbookFormOpen, setCashbookFormOpen] = useState(false);
+  const [editingCashbook, setEditingCashbook] = useState<Cashbook | null>(null);
+  const [cashbookFormError, setCashbookFormError] = useState('');
+  const [debtFormOpen, setDebtFormOpen] = useState(false);
+  const [debtFormError, setDebtFormError] = useState('');
+  const [budgetCreateFormOpen, setBudgetCreateFormOpen] = useState(false);
+  const [budgetCreateFormError, setBudgetCreateFormError] = useState('');
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [budgetFormOpen, setBudgetFormOpen] = useState(false);
   const [budgetDrafts, setBudgetDrafts] = useState<BudgetItem[]>([]);
@@ -264,6 +282,35 @@ export default function TenantAdminFinanceCompact({
     reference: '',
     note: '',
   });
+  const [cashbookForm, setCashbookForm] = useState({
+    name: '',
+    type: 'CASH' as PaymentMethod,
+    branch: (selectedBranch === 'Q1' || selectedBranch === 'Q3' ? selectedBranch : 'ALL') as
+      | BranchCode
+      | 'ALL',
+    account: '',
+    opening: '',
+  });
+  const [debtForm, setDebtForm] = useState({
+    type: 'RECEIVABLE' as DebtItem['type'],
+    name: '',
+    category: '',
+    branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
+    total: '',
+    paid: '',
+    dueDate: '2026-07-31',
+    reference: '',
+    owner: '',
+  });
+  const [budgetCreateForm, setBudgetCreateForm] = useState({
+    category: '',
+    branch: (selectedBranch === 'Q1' || selectedBranch === 'Q3' ? selectedBranch : 'ALL') as
+      | BranchCode
+      | 'ALL',
+    budget: '',
+    forecast: '',
+    owner: '',
+  });
 
   const canManage = accessMode === 'full';
 
@@ -274,6 +321,20 @@ export default function TenantAdminFinanceCompact({
       // Local persistence is optional.
     }
   }, [storageKey, transactions]);
+
+  useEffect(() => {
+    if (selectedTransaction) {
+      setTransactionStatusDraft(selectedTransaction.status);
+    }
+  }, [selectedTransaction]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${storageKey}:cashbooks`, JSON.stringify(cashbooks));
+    } catch {
+      // Local persistence is optional.
+    }
+  }, [cashbooks, storageKey]);
 
   useEffect(() => {
     try {
@@ -426,6 +487,60 @@ export default function TenantAdminFinanceCompact({
     .filter((item) => item.type === 'PAYABLE')
     .reduce((sum, item) => sum + item.total - item.paid, 0);
   const budgetAlerts = scopedBudgets.filter((item) => item.forecast > item.budget);
+  const postedTransactions = periodTransactions.filter((item) => item.status === 'POSTED');
+  const summarizeCategories = (type: Extract<TransactionType, 'INCOME' | 'EXPENSE'>) =>
+    Object.entries(
+      postedTransactions
+        .filter((item) => item.type === type)
+        .reduce<Record<string, { value: number; count: number }>>((result, item) => {
+          const current = result[item.category] || { value: 0, count: 0 };
+          result[item.category] = { value: current.value + item.amount, count: current.count + 1 };
+          return result;
+        }, {})
+    )
+      .map(([label, summary]) => ({ label, ...summary }))
+      .sort((a, b) => b.value - a.value);
+  const incomeCategories = summarizeCategories('INCOME');
+  const expenseCategories = summarizeCategories('EXPENSE');
+  const largestIncomeCategory = Math.max(1, ...incomeCategories.map((item) => item.value));
+  const largestExpenseCategory = Math.max(1, ...expenseCategories.map((item) => item.value));
+  const branchCashFlow = (['Q1', 'Q3'] as const)
+    .filter((branch) => selectedBranch === 'ALL' || selectedBranch === branch)
+    .map((branch) => {
+      const items = postedTransactions.filter((item) => item.branch === branch);
+      const branchIncome = items
+        .filter((item) => item.type === 'INCOME')
+        .reduce((sum, item) => sum + item.amount, 0);
+      const branchExpense = items
+        .filter((item) => item.type === 'EXPENSE')
+        .reduce((sum, item) => sum + item.amount, 0);
+      return {
+        branch,
+        income: branchIncome,
+        expense: branchExpense,
+        net: branchIncome - branchExpense,
+        transactions: items.length,
+      };
+    });
+  const paymentBreakdown = (Object.keys(methodLabel) as PaymentMethod[])
+    .map((method) => {
+      const items = postedTransactions.filter(
+        (item) => item.method === method && item.type !== 'TRANSFER'
+      );
+      const methodIncome = items
+        .filter((item) => item.type === 'INCOME')
+        .reduce((sum, item) => sum + item.amount, 0);
+      const methodExpense = items
+        .filter((item) => item.type === 'EXPENSE')
+        .reduce((sum, item) => sum + item.amount, 0);
+      return { method, income: methodIncome, expense: methodExpense, total: methodIncome + methodExpense };
+    })
+    .filter((item) => item.total > 0)
+    .sort((a, b) => b.total - a.total);
+  const totalPostedFlow = income + expense;
+  const postedTransfer = postedTransactions
+    .filter((item) => item.type === 'TRANSFER')
+    .reduce((sum, item) => sum + item.amount, 0);
 
   const switchTab = (nextTab: FinanceTab) => {
     setTab(nextTab);
@@ -454,6 +569,7 @@ export default function TenantAdminFinanceCompact({
 
   const openTransactionForm = (type: TransactionType) => {
     if (!requireManage()) return;
+    setEditingTransaction(null);
     setForm({
       type,
       category:
@@ -475,11 +591,191 @@ export default function TenantAdminFinanceCompact({
     setTransactionFormOpen(true);
   };
 
+  const openTransactionEdit = (transaction: FinanceTransaction) => {
+    if (!requireManage()) return;
+    setForm({
+      type: transaction.type,
+      category: transaction.category,
+      description: transaction.description,
+      amount: String(transaction.amount),
+      branch: transaction.branch,
+      method: transaction.method,
+      cashbook: transaction.cashbook,
+      counterparty: transaction.counterparty,
+      reference: transaction.reference === 'Chưa có chứng từ' ? '' : transaction.reference,
+      note: transaction.note,
+    });
+    setFormError('');
+    setEditingTransaction(transaction);
+    setSelectedTransaction(null);
+    setTransactionFormOpen(true);
+  };
+
+  const closeTransactionForm = () => {
+    setTransactionFormOpen(false);
+    if (editingTransaction) {
+      setSelectedTransaction(editingTransaction);
+      setEditingTransaction(null);
+    }
+    setFormError('');
+  };
+
+  const openCashbookForm = () => {
+    if (!requireManage()) return;
+    setEditingCashbook(null);
+    setCashbookForm({
+      name: '',
+      type: 'CASH',
+      branch: selectedBranch === 'Q1' || selectedBranch === 'Q3' ? selectedBranch : 'ALL',
+      account: '',
+      opening: '',
+    });
+    setCashbookFormError('');
+    setCashbookFormOpen(true);
+  };
+
+  const openCashbookEdit = (cashbook: Cashbook) => {
+    if (!requireManage()) return;
+    setCashbookForm({
+      name: cashbook.name,
+      type: cashbook.type,
+      branch: cashbook.branch,
+      account: cashbook.account,
+      opening: String(cashbook.opening),
+    });
+    setCashbookFormError('');
+    setEditingCashbook(cashbook);
+    setSelectedCashbook(null);
+    setCashbookFormOpen(true);
+  };
+
+  const closeCashbookForm = () => {
+    setCashbookFormOpen(false);
+    setCashbookFormError('');
+    if (editingCashbook) {
+      setSelectedCashbook(editingCashbook);
+      setEditingCashbook(null);
+    }
+  };
+
+  const submitCashbook = (event: FormEvent) => {
+    event.preventDefault();
+    if (!requireManage()) return;
+    const opening = Number(cashbookForm.opening || 0);
+    if (
+      !cashbookForm.name.trim()
+      || !cashbookForm.account.trim()
+      || !Number.isFinite(opening)
+      || opening < 0
+    ) {
+      setCashbookFormError('Vui lòng nhập tên sổ, thông tin tài khoản và số dư đầu kỳ hợp lệ.');
+      return;
+    }
+
+    if (
+      cashbooks.some(
+        (cashbook) =>
+          cashbook.id !== editingCashbook?.id
+          && cashbook.name.trim().toLocaleLowerCase('vi')
+            === cashbookForm.name.trim().toLocaleLowerCase('vi')
+      )
+    ) {
+      setCashbookFormError('Tên sổ tiền đã tồn tại. Vui lòng chọn một tên khác.');
+      return;
+    }
+
+    if (editingCashbook) {
+      const updated: Cashbook = {
+        ...editingCashbook,
+        name: cashbookForm.name.trim(),
+        type: cashbookForm.type,
+        branch: cashbookForm.branch,
+        account: cashbookForm.account.trim(),
+        opening,
+      };
+      setCashbooks((current) =>
+        current.map((cashbook) => (cashbook.id === editingCashbook.id ? updated : cashbook))
+      );
+      if (updated.name !== editingCashbook.name) {
+        setTransactions((current) =>
+          current.map((transaction) =>
+            transaction.cashbook === editingCashbook.name
+              ? { ...transaction, cashbook: updated.name }
+              : transaction
+          )
+        );
+      }
+      setCashbookFormOpen(false);
+      setCashbookFormError('');
+      setEditingCashbook(null);
+      setSelectedCashbook(updated);
+      setNotice(`Đã cập nhật sổ tiền “${updated.name}”.`);
+      return;
+    }
+
+    const typeCode: Record<PaymentMethod, string> = {
+      CASH: 'CASH',
+      BANK: 'BANK',
+      CARD: 'CARD',
+      EWALLET: 'WALLET',
+    };
+    const branchCode = cashbookForm.branch === 'ALL' ? 'ALL' : cashbookForm.branch;
+    const baseId = `CB-${typeCode[cashbookForm.type]}-${branchCode}`;
+    let sequence = 1;
+    let id = baseId;
+    while (cashbooks.some((cashbook) => cashbook.id === id)) {
+      sequence += 1;
+      id = `${baseId}-${sequence}`;
+    }
+
+    const created: Cashbook = {
+      id,
+      name: cashbookForm.name.trim(),
+      type: cashbookForm.type,
+      branch: cashbookForm.branch,
+      opening,
+      income: 0,
+      expense: 0,
+      pending: 0,
+      lastReconciled: 'Chưa đối soát',
+      account: cashbookForm.account.trim(),
+    };
+    setCashbooks((current) => [...current, created]);
+    setCashbookFormOpen(false);
+    setCashbookFormError('');
+    setNotice(`Đã thêm sổ tiền “${created.name}”.`);
+  };
+
   const submitTransaction = (event: FormEvent) => {
     event.preventDefault();
     if (!requireManage()) return;
     if (!form.description.trim() || Number(form.amount) <= 0 || !form.counterparty.trim()) {
       setFormError('Vui lòng nhập nội dung, số tiền và đối tượng giao dịch.');
+      return;
+    }
+
+    if (editingTransaction) {
+      const updated: FinanceTransaction = {
+        ...editingTransaction,
+        type: form.type,
+        category: form.category,
+        description: form.description.trim(),
+        amount: Number(form.amount),
+        branch: form.branch,
+        method: form.method,
+        cashbook: form.cashbook,
+        reference: form.reference.trim() || 'Chưa có chứng từ',
+        counterparty: form.counterparty.trim(),
+        note: form.note.trim(),
+      };
+      setTransactions((current) =>
+        current.map((item) => (item.id === editingTransaction.id ? updated : item))
+      );
+      setTransactionFormOpen(false);
+      setEditingTransaction(null);
+      setSelectedTransaction(updated);
+      setFormError('');
+      setNotice(`Đã cập nhật giao dịch ${updated.id}.`);
       return;
     }
 
@@ -508,18 +804,28 @@ export default function TenantAdminFinanceCompact({
     setNotice(`Đã tạo ${form.type === 'INCOME' ? 'phiếu thu' : form.type === 'EXPENSE' ? 'phiếu chi' : 'phiếu chuyển quỹ'} ${created.id}.`);
   };
 
-  const approveTransaction = (transaction: FinanceTransaction) => {
-    if (!requireManage()) return;
-    const updated = {
-      ...transaction,
-      status: 'POSTED' as TransactionStatus,
-      approvedBy: 'Nguyễn Trường Thịnh',
+  const updateTransactionStatus = () => {
+    if (!requireManage() || !selectedTransaction) return;
+    if (transactionStatusDraft === selectedTransaction.status) return;
+
+    const updated: FinanceTransaction = {
+      ...selectedTransaction,
+      status: transactionStatusDraft,
+      approvedBy:
+        transactionStatusDraft === 'POSTED'
+          ? 'Nguyễn Trường Thịnh'
+          : transactionStatusDraft === 'PENDING'
+            ? 'Chờ Tenant Admin'
+            : 'Nguyễn Trường Thịnh · đã hủy',
     };
+
     setTransactions((current) =>
-      current.map((item) => (item.id === transaction.id ? updated : item))
+      current.map((item) => (item.id === selectedTransaction.id ? updated : item))
     );
     setSelectedTransaction(updated);
-    setNotice(`Đã duyệt và ghi sổ ${transaction.id}.`);
+    setNotice(
+      `Đã chuyển ${selectedTransaction.id} sang trạng thái “${transactionStatusMeta[transactionStatusDraft].label}”.`
+    );
   };
 
   const openDebtDetails = (debt: DebtItem) => {
@@ -562,6 +868,129 @@ export default function TenantAdminFinanceCompact({
         debtPaymentNote.trim() ? ` · ${debtPaymentNote.trim()}` : ''
       }.`
     );
+  };
+
+  const openDebtForm = () => {
+    if (!requireManage()) return;
+    setDebtForm({
+      type: debtTypeFilter === 'PAYABLE' ? 'PAYABLE' : 'RECEIVABLE',
+      name: '',
+      category: '',
+      branch: selectedBranch === 'Q1' ? 'Q1' : 'Q3',
+      total: '',
+      paid: '',
+      dueDate: '2026-07-31',
+      reference: '',
+      owner: '',
+    });
+    setDebtFormError('');
+    setDebtFormOpen(true);
+  };
+
+  const submitDebt = (event: FormEvent) => {
+    event.preventDefault();
+    if (!requireManage()) return;
+    const total = Number(debtForm.total);
+    const paid = Number(debtForm.paid || 0);
+    if (
+      !debtForm.name.trim()
+      || !debtForm.category.trim()
+      || !debtForm.owner.trim()
+      || !debtForm.dueDate
+      || !Number.isFinite(total)
+      || total <= 0
+      || !Number.isFinite(paid)
+      || paid < 0
+      || paid > total
+    ) {
+      setDebtFormError('Vui lòng nhập đầy đủ thông tin và kiểm tra số tiền công nợ.');
+      return;
+    }
+
+    const prefix = debtForm.type === 'RECEIVABLE' ? 'CN-R' : 'CN-P';
+    let sequence = debts.filter((item) => item.type === debtForm.type).length + 1;
+    let id = `${prefix}-${String(sequence).padStart(3, '0')}`;
+    while (debts.some((item) => item.id === id)) {
+      sequence += 1;
+      id = `${prefix}-${String(sequence).padStart(3, '0')}`;
+    }
+    const dueDate = formatInputDate(debtForm.dueDate);
+    const status: DebtItem['status'] =
+      paid >= total
+        ? 'PAID'
+        : paid > 0
+          ? 'PARTIAL'
+          : inputDateToTimestamp(debtForm.dueDate) < debtReferenceDate
+            ? 'OVERDUE'
+            : 'OPEN';
+    const created: DebtItem = {
+      id,
+      type: debtForm.type,
+      name: debtForm.name.trim(),
+      category: debtForm.category.trim(),
+      branch: debtForm.branch,
+      total,
+      paid,
+      dueDate,
+      status,
+      reference: debtForm.reference.trim() || 'Chưa có chứng từ',
+      owner: debtForm.owner.trim(),
+    };
+    setDebts((current) => [created, ...current]);
+    setDebtFormOpen(false);
+    setDebtFormError('');
+    openDebtDetails(created);
+    setNotice(`Đã thêm khoản ${created.type === 'RECEIVABLE' ? 'phải thu' : 'phải trả'} “${created.name}”.`);
+  };
+
+  const openBudgetCreateForm = () => {
+    if (!requireManage()) return;
+    setBudgetCreateForm({
+      category: '',
+      branch: selectedBranch === 'Q1' || selectedBranch === 'Q3' ? selectedBranch : 'ALL',
+      budget: '',
+      forecast: '',
+      owner: '',
+    });
+    setBudgetCreateFormError('');
+    setBudgetCreateFormOpen(true);
+  };
+
+  const submitBudgetCreate = (event: FormEvent) => {
+    event.preventDefault();
+    if (!requireManage()) return;
+    const budget = Number(budgetCreateForm.budget);
+    const forecast = Number(budgetCreateForm.forecast || budget);
+    if (
+      !budgetCreateForm.category.trim()
+      || !budgetCreateForm.owner.trim()
+      || !Number.isFinite(budget)
+      || budget <= 0
+      || !Number.isFinite(forecast)
+      || forecast < 0
+    ) {
+      setBudgetCreateFormError('Vui lòng nhập danh mục, ngân sách và người phụ trách hợp lệ.');
+      return;
+    }
+    let sequence = budgets.length + 1;
+    let id = `BDG-${String(sequence).padStart(2, '0')}`;
+    while (budgets.some((item) => item.id === id)) {
+      sequence += 1;
+      id = `BDG-${String(sequence).padStart(2, '0')}`;
+    }
+    const created: BudgetItem = {
+      id,
+      category: budgetCreateForm.category.trim(),
+      branch: budgetCreateForm.branch,
+      budget,
+      actual: 0,
+      forecast,
+      owner: budgetCreateForm.owner.trim(),
+    };
+    setBudgets((current) => [...current, created]);
+    setBudgetCreateFormOpen(false);
+    setBudgetCreateFormError('');
+    setNotice(`Đã thêm ngân sách “${created.category}”.`);
   };
 
   const openBudgetForm = () => {
@@ -664,10 +1093,10 @@ export default function TenantAdminFinanceCompact({
             Quản lý dòng tiền
           </div>
           <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">
-            Sổ thu chi
+            Thu & Chi
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Theo dõi tiền vào, tiền ra và các khoản cần xử lý trong một màn hình.
+            Theo dõi chi tiết nguồn tiền vào, khoản tiền ra, dòng tiền theo chi nhánh và các nghĩa vụ cần xử lý.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:flex">
@@ -899,6 +1328,46 @@ export default function TenantAdminFinanceCompact({
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-950 p-5 text-white xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300">Phân tích dòng tiền</p>
+            <h2 className="mt-1 text-lg font-black">Chi tiết Thu & Chi trong kỳ</h2>
+            <p className="mt-1 text-[11px] text-slate-400">Chỉ tính giao dịch đã ghi sổ · loại trừ phiếu chờ duyệt và phiếu đã hủy</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:min-w-[520px]">
+            <div className="rounded-xl bg-white/5 px-3 py-2.5"><p className="text-[9px] font-bold text-slate-400">Tiền vào</p><p className="mt-1 text-sm font-black text-emerald-300">+{shortMoney(income)}</p></div>
+            <div className="rounded-xl bg-white/5 px-3 py-2.5"><p className="text-[9px] font-bold text-slate-400">Tiền ra</p><p className="mt-1 text-sm font-black text-rose-300">−{shortMoney(expense)}</p></div>
+            <div className="rounded-xl bg-white/5 px-3 py-2.5"><p className="text-[9px] font-bold text-slate-400">Chênh lệch</p><p className={`mt-1 text-sm font-black ${income - expense >= 0 ? 'text-violet-300' : 'text-rose-300'}`}>{income - expense >= 0 ? '+' : '−'}{shortMoney(Math.abs(income - expense))}</p></div>
+          </div>
+        </div>
+
+        <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-2">
+          <article className="rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4">
+            <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-black text-slate-900">Nguồn thu</h3><p className="mt-1 text-[10px] text-slate-500">{incomeCategories.reduce((sum, item) => sum + item.count, 0)} phiếu đã ghi sổ · tổng {shortMoney(income)}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm"><ArrowDownLeft className="h-4 w-4" /></span></div>
+            <div className="mt-4 space-y-3">{incomeCategories.length ? incomeCategories.map((item) => <div key={item.label} className="rounded-xl bg-white p-3 ring-1 ring-emerald-100"><div className="flex items-center justify-between gap-3"><div><p className="text-[11px] font-black text-slate-700">{item.label}</p><p className="mt-1 text-[9px] text-slate-400">{item.count} phiếu · {income ? (item.value / income * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : 0}% tổng thu</p></div><strong className="text-xs text-emerald-700">+{money(item.value)}</strong></div><div className="mt-2 h-2 rounded-full bg-emerald-50"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" style={{ width: `${Math.max(8, item.value / largestIncomeCategory * 100)}%` }} /></div></div>) : <p className="rounded-xl bg-white p-5 text-center text-[11px] font-semibold text-slate-400">Chưa có khoản thu đã ghi sổ trong kỳ này.</p>}</div>
+          </article>
+
+          <article className="rounded-2xl border border-rose-200 bg-rose-50/30 p-4">
+            <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-black text-slate-900">Khoản chi</h3><p className="mt-1 text-[10px] text-slate-500">{expenseCategories.reduce((sum, item) => sum + item.count, 0)} phiếu đã ghi sổ · tổng {shortMoney(expense)}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-rose-600 shadow-sm"><ArrowUpRight className="h-4 w-4" /></span></div>
+            <div className="mt-4 space-y-3">{expenseCategories.length ? expenseCategories.map((item) => <div key={item.label} className="rounded-xl bg-white p-3 ring-1 ring-rose-100"><div className="flex items-center justify-between gap-3"><div><p className="text-[11px] font-black text-slate-700">{item.label}</p><p className="mt-1 text-[9px] text-slate-400">{item.count} phiếu · {expense ? (item.value / expense * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : 0}% tổng chi</p></div><strong className="text-xs text-rose-700">−{money(item.value)}</strong></div><div className="mt-2 h-2 rounded-full bg-rose-50"><div className="h-full rounded-full bg-gradient-to-r from-rose-500 to-orange-400" style={{ width: `${Math.max(8, item.value / largestExpenseCategory * 100)}%` }} /></div></div>) : <p className="rounded-xl bg-white p-5 text-center text-[11px] font-semibold text-slate-400">Chưa có khoản chi đã ghi sổ trong kỳ này.</p>}</div>
+          </article>
+        </div>
+
+        <div className="grid gap-5 border-t border-slate-100 p-4 sm:p-5 xl:grid-cols-[1.2fr_.8fr]">
+          <article className="overflow-hidden rounded-2xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3"><div><h3 className="text-sm font-black text-slate-900">Dòng tiền theo chi nhánh</h3><p className="mt-1 text-[10px] text-slate-400">So sánh tiền vào, tiền ra và chênh lệch đã ghi sổ</p></div><Landmark className="h-4 w-4 text-violet-500" /></div>
+            <div className="overflow-x-auto"><table className="w-full min-w-[640px] border-collapse"><thead><tr className="text-left text-[9px] font-black uppercase tracking-wide text-slate-400"><th className="px-4 py-3">Chi nhánh</th><th className="px-3 py-3 text-right">Số phiếu</th><th className="px-3 py-3 text-right text-emerald-600">Thu</th><th className="px-3 py-3 text-right text-rose-600">Chi</th><th className="px-4 py-3 text-right">Thuần</th></tr></thead><tbody>{branchCashFlow.map((item) => <tr key={item.branch} className="border-t border-slate-100 text-[11px]"><td className="px-4 py-4 font-black text-slate-700">{branchName(item.branch)}</td><td className="px-3 py-4 text-right font-bold text-slate-500">{item.transactions}</td><td className="px-3 py-4 text-right font-black text-emerald-700">+{money(item.income)}</td><td className="px-3 py-4 text-right font-black text-rose-700">−{money(item.expense)}</td><td className={`px-4 py-4 text-right font-black ${item.net >= 0 ? 'text-violet-700' : 'text-rose-700'}`}>{item.net >= 0 ? '+' : '−'}{money(Math.abs(item.net))}</td></tr>)}</tbody><tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 text-[11px]"><td className="px-4 py-4 font-black text-slate-900">Tổng phạm vi</td><td className="px-3 py-4 text-right font-black text-slate-600">{postedTransactions.filter((item) => item.type !== 'TRANSFER').length}</td><td className="px-3 py-4 text-right font-black text-emerald-700">+{money(income)}</td><td className="px-3 py-4 text-right font-black text-rose-700">−{money(expense)}</td><td className={`px-4 py-4 text-right font-black ${income - expense >= 0 ? 'text-violet-800' : 'text-rose-700'}`}>{income - expense >= 0 ? '+' : '−'}{money(Math.abs(income - expense))}</td></tr></tfoot></table></div>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-black text-slate-900">Theo phương thức thanh toán</h3><p className="mt-1 text-[10px] text-slate-400">Giá trị thu và chi đã ghi sổ</p></div><WalletCards className="h-4 w-4 text-blue-500" /></div>
+            <div className="mt-4 space-y-2">{paymentBreakdown.map((item) => <div key={item.method} className="rounded-xl bg-slate-50 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-[11px] font-black text-slate-700">{methodLabel[item.method]}</p><p className="mt-1 text-[9px] text-slate-400">{totalPostedFlow ? (item.total / totalPostedFlow * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : 0}% tổng luân chuyển</p></div><div className="text-right"><p className="text-[10px] font-black text-emerald-700">+{shortMoney(item.income)}</p><p className="mt-1 text-[10px] font-black text-rose-700">−{shortMoney(item.expense)}</p></div></div><div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-white"><span className="bg-emerald-500" style={{ width: `${item.total ? item.income / item.total * 100 : 0}%` }} /><span className="bg-rose-500" style={{ width: `${item.total ? item.expense / item.total * 100 : 0}%` }} /></div></div>)}</div>
+            <div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-xl bg-blue-50 p-3"><p className="text-[9px] font-bold text-blue-600">Chuyển quỹ nội bộ</p><p className="mt-1 text-xs font-black text-blue-800">{shortMoney(postedTransfer)}</p></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-[9px] font-bold text-amber-600">Chờ ghi sổ</p><p className="mt-1 text-xs font-black text-amber-800">{shortMoney(pendingAmount)}</p></div></div>
+          </article>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-slate-50/70 p-2">
           {tabs.map((item) => (
             <button
@@ -1028,14 +1497,14 @@ export default function TenantAdminFinanceCompact({
 
           {tab === 'TRANSACTIONS' && (
             <div>
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
                 <div>
                   <h2 className="text-base font-black text-slate-900">Sổ giao dịch</h2>
                   <p className="mt-1 text-xs text-slate-400">
                     {filteredTransactions.length} giao dịch trong phạm vi đang chọn
                   </p>
                 </div>
-                <div className="grid flex-1 gap-2 sm:grid-cols-2 xl:max-w-4xl xl:grid-cols-[1fr_160px_150px_auto_auto]">
+                <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:max-w-[1120px] 2xl:grid-cols-[minmax(260px,1fr)_150px_145px_auto_auto_auto]">
                   <label className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
@@ -1065,6 +1534,17 @@ export default function TenantAdminFinanceCompact({
                     <option value="POSTED">Đã ghi sổ</option>
                     <option value="VOID">Đã hủy</option>
                   </BeautifulSelect>
+                  <button
+                    type="button"
+                    onClick={() => openTransactionForm('EXPENSE')}
+                    disabled={!canManage}
+                    className="group flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-600 bg-rose-600 px-4 text-xs font-black text-white shadow-[0_6px_16px_rgba(225,29,98,0.18)] hover:border-rose-700 hover:bg-rose-700 hover:shadow-[0_8px_20px_rgba(225,29,98,0.24)]"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/15 transition-colors group-hover:bg-white/20">
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2.6} />
+                    </span>
+                    Thêm giao dịch
+                  </button>
                   <button
                     type="button"
                     onClick={() => openTransactionForm('TRANSFER')}
@@ -1150,15 +1630,28 @@ export default function TenantAdminFinanceCompact({
                     Tách rõ số đầu ngày, số ghi sổ, tiền đang chờ và tiền thực có thể dùng
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setReconcileOpen(true)}
-                  disabled={!canManage}
-                  className="flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-xs font-black text-white"
-                >
-                  <ClipboardCheck className="h-4 w-4" />
-                  Đối soát cuối ngày
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openCashbookForm}
+                    disabled={!canManage}
+                    className="group flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-600 bg-rose-600 px-4 text-xs font-black text-white shadow-[0_6px_16px_rgba(225,29,98,0.18)] hover:border-rose-700 hover:bg-rose-700 hover:shadow-[0_8px_20px_rgba(225,29,98,0.24)]"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/15 transition-colors group-hover:bg-white/20">
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2.6} />
+                    </span>
+                    Thêm sổ tiền
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReconcileOpen(true)}
+                    disabled={!canManage}
+                    className="flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 bg-white px-4 text-xs font-black text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-50"
+                  >
+                    <ClipboardCheck className="h-4 w-4" />
+                    Đối soát cuối ngày
+                  </button>
+                </div>
               </div>
               <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
                 <div className="min-w-[1120px]">
@@ -1241,8 +1734,21 @@ export default function TenantAdminFinanceCompact({
                     Theo dõi tiền cần thu, cần trả và các khoản đến hạn
                   </p>
                 </div>
-                <div className="rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-500">
-                  Cập nhật đến 20/07/2026
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openDebtForm}
+                    disabled={!canManage}
+                    className="group flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-600 bg-rose-600 px-4 text-xs font-black text-white shadow-[0_6px_16px_rgba(225,29,98,0.18)] hover:border-rose-700 hover:bg-rose-700 hover:shadow-[0_8px_20px_rgba(225,29,98,0.24)]"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/15 transition-colors group-hover:bg-white/20">
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2.6} />
+                    </span>
+                    Thêm công nợ
+                  </button>
+                  <div className="rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-500">
+                    Cập nhật đến 20/07/2026
+                  </div>
                 </div>
               </div>
 
@@ -1506,15 +2012,28 @@ export default function TenantAdminFinanceCompact({
                   <h2 className="text-base font-black text-slate-900">Ngân sách tháng 07/2026</h2>
                   <p className="mt-1 text-xs text-slate-400">So sánh kế hoạch, thực chi và dự báo</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={openBudgetForm}
-                  disabled={!canManage}
-                  className="flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-xs font-black text-white"
-                >
-                  <Target className="h-4 w-4" />
-                  Điều chỉnh ngân sách
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openBudgetCreateForm}
+                    disabled={!canManage}
+                    className="group flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-600 bg-rose-600 px-4 text-xs font-black text-white shadow-[0_6px_16px_rgba(225,29,98,0.18)] hover:border-rose-700 hover:bg-rose-700 hover:shadow-[0_8px_20px_rgba(225,29,98,0.24)]"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/15 transition-colors group-hover:bg-white/20">
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2.6} />
+                    </span>
+                    Thêm ngân sách
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openBudgetForm}
+                    disabled={!canManage}
+                    className="flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 bg-white px-4 text-xs font-black text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-50"
+                  >
+                    <Target className="h-4 w-4" />
+                    Điều chỉnh ngân sách
+                  </button>
+                </div>
               </div>
               <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
                 <div className="hidden grid-cols-[1.25fr_120px_120px_120px_1fr_105px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-wide text-slate-400 lg:grid">
@@ -1597,26 +2116,13 @@ export default function TenantAdminFinanceCompact({
             </span>
           }
           footer={
-            <div className="flex w-full justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedTransaction(null)}
-                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
-              >
-                Đóng
-              </button>
-              {selectedTransaction.status === 'PENDING' && (
-                <button
-                  type="button"
-                  onClick={() => approveTransaction(selectedTransaction)}
-                  disabled={!canManage}
-                  className="flex h-10 items-center gap-2 rounded-xl bg-violet-600 px-4 text-xs font-black text-white"
-                >
-                  <Check className="h-4 w-4" />
-                  Duyệt & ghi sổ
-                </button>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedTransaction(null)}
+              className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
+            >
+              Đóng
+            </button>
           }
         >
           <div className="space-y-4">
@@ -1657,6 +2163,56 @@ export default function TenantAdminFinanceCompact({
                 </div>
               ))}
             </div>
+            <section className="rounded-2xl border border-violet-100 bg-violet-50/70 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black text-slate-800">Trạng thái & thao tác</p>
+                  <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                    Cập nhật trạng thái giao dịch hoặc mở biểu mẫu để chỉnh sửa thông tin.
+                  </p>
+                  <div className="mt-3 max-w-xs">
+                    <BeautifulSelect
+                      aria-label="Trạng thái giao dịch"
+                      value={transactionStatusDraft}
+                      onChange={(event) =>
+                        setTransactionStatusDraft(event.target.value as TransactionStatus)
+                      }
+                      disabled={!canManage}
+                      className={inputClass}
+                    >
+                      {Object.entries(transactionStatusMeta).map(([value, meta]) => (
+                        <option key={value} value={value}>
+                          {meta.label}
+                        </option>
+                      ))}
+                    </BeautifulSelect>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 sm:min-w-44">
+                  <button
+                    type="button"
+                    onClick={updateTransactionStatus}
+                    disabled={!canManage || transactionStatusDraft === selectedTransaction.status}
+                    className="flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-violet-200"
+                  >
+                    <Check className="h-4 w-4" />
+                    Lưu trạng thái
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTransactionEdit(selectedTransaction)}
+                    disabled={!canManage}
+                    className="flex h-10 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-4 text-xs font-black text-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Chỉnh sửa thông tin
+                  </button>
+                </div>
+              </div>
+              {!canManage && readOnlyReason && (
+                <p className="mt-3 text-[10px] font-semibold text-amber-700">{readOnlyReason}</p>
+              )}
+            </section>
             <div className="rounded-2xl bg-violet-50 p-4">
               <p className="text-[10px] font-black uppercase tracking-wide text-violet-700">Ghi chú</p>
               <p className="mt-2 text-xs leading-5 text-violet-800">
@@ -1671,17 +2227,28 @@ export default function TenantAdminFinanceCompact({
         <Modal
           isOpen
           onClose={() => setSelectedCashbook(null)}
-          maxWidth="lg"
+          maxWidth="3xl"
           title={selectedCashbook.name}
           subtitle={`${selectedCashbook.id} · ${selectedCashbook.account}`}
           footer={
-            <button
-              type="button"
-              onClick={() => setSelectedCashbook(null)}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
-            >
-              Đóng
-            </button>
+            <div className="flex w-full justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedCashbook(null)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => openCashbookEdit(selectedCashbook)}
+                disabled={!canManage}
+                className="flex h-10 items-center gap-2 rounded-xl bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Pencil className="h-4 w-4" />
+                Chỉnh sửa sổ tiền
+              </button>
+            </div>
           }
         >
           <div className="space-y-4">
@@ -1703,30 +2270,30 @@ export default function TenantAdminFinanceCompact({
                 {' '}− đang chờ {money(selectedCashbook.pending)}
               </p>
             </section>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <div className="rounded-xl bg-slate-50 p-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="min-w-0 rounded-xl bg-slate-50 p-3">
                 <p className="text-[10px] text-slate-500">Đầu ngày</p>
-                <p className="mt-1 text-sm font-black text-slate-800">
+                <p className="mt-1 whitespace-nowrap text-sm font-black tabular-nums text-slate-800">
                   {money(selectedCashbook.opening)}
                 </p>
               </div>
-              <div className="rounded-xl bg-emerald-50 p-3">
+              <div className="min-w-0 rounded-xl bg-emerald-50 p-3">
                 <p className="text-[10px] text-emerald-600">Thu trong ngày</p>
-                <p className="mt-1 text-sm font-black text-emerald-800">+{money(selectedCashbook.income)}</p>
+                <p className="mt-1 whitespace-nowrap text-sm font-black tabular-nums text-emerald-800">+{money(selectedCashbook.income)}</p>
               </div>
-              <div className="rounded-xl bg-rose-50 p-3">
+              <div className="min-w-0 rounded-xl bg-rose-50 p-3">
                 <p className="text-[10px] text-rose-600">Chi / chuyển ra</p>
-                <p className="mt-1 text-sm font-black text-rose-800">−{money(selectedCashbook.expense)}</p>
+                <p className="mt-1 whitespace-nowrap text-sm font-black tabular-nums text-rose-800">−{money(selectedCashbook.expense)}</p>
               </div>
-              <div className="rounded-xl bg-blue-50 p-3">
+              <div className="min-w-0 rounded-xl bg-blue-50 p-3">
                 <p className="text-[10px] text-blue-600">Số dư ghi sổ</p>
-                <p className="mt-1 text-sm font-black text-blue-800">
+                <p className="mt-1 whitespace-nowrap text-sm font-black tabular-nums text-blue-800">
                   {money(selectedCashbook.opening + selectedCashbook.income - selectedCashbook.expense)}
                 </p>
               </div>
-              <div className="rounded-xl bg-amber-50 p-3">
+              <div className="min-w-0 rounded-xl bg-amber-50 p-3">
                 <p className="text-[10px] text-amber-600">Đang chờ</p>
-                <p className="mt-1 text-sm font-black text-amber-800">{money(selectedCashbook.pending)}</p>
+                <p className="mt-1 whitespace-nowrap text-sm font-black tabular-nums text-amber-800">{money(selectedCashbook.pending)}</p>
               </div>
             </div>
             <p className="text-[10px] font-semibold text-slate-400">
@@ -1901,21 +2468,27 @@ export default function TenantAdminFinanceCompact({
       {transactionFormOpen && (
         <Modal
           isOpen
-          onClose={() => setTransactionFormOpen(false)}
+          onClose={closeTransactionForm}
           maxWidth="2xl"
           title={
-            form.type === 'INCOME'
+            editingTransaction
+              ? `Chỉnh sửa ${editingTransaction.id}`
+              : form.type === 'INCOME'
               ? 'Tạo phiếu thu'
               : form.type === 'EXPENSE'
                 ? 'Tạo phiếu chi'
                 : 'Tạo phiếu chuyển quỹ'
           }
-          subtitle="Nhập thông tin ngắn gọn để ghi nhận giao dịch."
+          subtitle={
+            editingTransaction
+              ? 'Cập nhật thông tin giao dịch; mã được giữ nguyên. Trạng thái chỉnh tại màn xem chi tiết.'
+              : 'Nhập thông tin ngắn gọn để ghi nhận giao dịch.'
+          }
           footer={
             <div className="flex w-full justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setTransactionFormOpen(false)}
+                onClick={closeTransactionForm}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
               >
                 Hủy
@@ -1928,7 +2501,7 @@ export default function TenantAdminFinanceCompact({
                 className="flex h-10 items-center gap-2 rounded-xl bg-violet-600 px-5 text-xs font-black text-white"
               >
                 <Check className="h-4 w-4" />
-                Tạo giao dịch
+                {editingTransaction ? 'Lưu thay đổi' : 'Tạo giao dịch'}
               </button>
             </div>
           }
@@ -1942,6 +2515,7 @@ export default function TenantAdminFinanceCompact({
                 <span className="mb-1.5 block text-xs font-bold text-slate-600">Loại giao dịch</span>
                 <BeautifulSelect
                   value={form.type}
+                  disabled={Boolean(editingTransaction)}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, type: event.target.value as TransactionType }))
                   }
@@ -1960,7 +2534,10 @@ export default function TenantAdminFinanceCompact({
                   className={inputClass}
                 >
                   {[
+                    'Doanh thu dịch vụ',
                     'Doanh thu khác',
+                    'Tiền cọc online',
+                    'Bán sản phẩm',
                     'Nhập vật tư',
                     'Lương & hoa hồng',
                     'Điện nước & mặt bằng',
@@ -2070,6 +2647,298 @@ export default function TenantAdminFinanceCompact({
         </Modal>
       )}
 
+      {debtFormOpen && (
+        <Modal
+          isOpen
+          onClose={() => setDebtFormOpen(false)}
+          maxWidth="2xl"
+          title="Thêm công nợ"
+          subtitle="Ghi nhận khoản phải thu hoặc phải trả mới."
+          footer={
+            <div className="flex w-full justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDebtFormOpen(false)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  (document.getElementById('compact-debt-form') as HTMLFormElement | null)?.requestSubmit()
+                }
+                disabled={!canManage}
+                className="flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-5 text-xs font-black text-white shadow-lg shadow-rose-200"
+              >
+                <Plus className="h-4 w-4" />
+                Thêm công nợ
+              </button>
+            </div>
+          }
+        >
+          <form id="compact-debt-form" onSubmit={submitDebt} className="space-y-4">
+            {debtFormError && (
+              <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">
+                {debtFormError}
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Loại công nợ</span>
+                <BeautifulSelect
+                  value={debtForm.type}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({
+                      ...current,
+                      type: event.target.value as DebtItem['type'],
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="RECEIVABLE">Phải thu · Họ nợ mình</option>
+                  <option value="PAYABLE">Phải trả · Mình nợ họ</option>
+                </BeautifulSelect>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Chi nhánh</span>
+                <BeautifulSelect
+                  value={debtForm.branch}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({
+                      ...current,
+                      branch: event.target.value as BranchCode,
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="Q1">Chi nhánh Quận 1</option>
+                  <option value="Q3">Chi nhánh Quận 3</option>
+                </BeautifulSelect>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Đối tác hoặc khách hàng *
+                </span>
+                <input
+                  value={debtForm.name}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="Tên khách hàng, đối tác hoặc nhà cung cấp"
+                  autoFocus
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Danh mục *</span>
+                <input
+                  value={debtForm.category}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({ ...current, category: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="Ví dụ: Vật tư & sơn gel"
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Tổng giá trị *
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  value={debtForm.total}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({ ...current, total: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Đã thanh toán
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={debtForm.paid}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({ ...current, paid: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Hạn thanh toán *
+                </span>
+                <input
+                  type="date"
+                  value={debtForm.dueDate}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({ ...current, dueDate: event.target.value }))
+                  }
+                  className={inputClass}
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Người phụ trách *
+                </span>
+                <input
+                  value={debtForm.owner}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({ ...current, owner: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="Nhân sự theo dõi khoản công nợ"
+                />
+              </label>
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Mã chứng từ</span>
+                <input
+                  value={debtForm.reference}
+                  onChange={(event) =>
+                    setDebtForm((current) => ({ ...current, reference: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="Hợp đồng, hóa đơn hoặc mã đơn hàng"
+                />
+              </label>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {budgetCreateFormOpen && (
+        <Modal
+          isOpen
+          onClose={() => setBudgetCreateFormOpen(false)}
+          maxWidth="lg"
+          title="Thêm ngân sách"
+          subtitle="Tạo hạn mức mới cho một danh mục chi phí."
+          footer={
+            <div className="flex w-full justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBudgetCreateFormOpen(false)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  (document.getElementById('compact-budget-create-form') as HTMLFormElement | null)?.requestSubmit()
+                }
+                disabled={!canManage}
+                className="flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-5 text-xs font-black text-white shadow-lg shadow-rose-200"
+              >
+                <Plus className="h-4 w-4" />
+                Thêm ngân sách
+              </button>
+            </div>
+          }
+        >
+          <form id="compact-budget-create-form" onSubmit={submitBudgetCreate} className="space-y-4">
+            {budgetCreateFormError && (
+              <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">
+                {budgetCreateFormError}
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Danh mục *</span>
+                <input
+                  value={budgetCreateForm.category}
+                  onChange={(event) =>
+                    setBudgetCreateForm((current) => ({
+                      ...current,
+                      category: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                  placeholder="Ví dụ: Đào tạo nhân sự"
+                  autoFocus
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Phạm vi</span>
+                <BeautifulSelect
+                  value={budgetCreateForm.branch}
+                  onChange={(event) =>
+                    setBudgetCreateForm((current) => ({
+                      ...current,
+                      branch: event.target.value as BranchCode | 'ALL',
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="ALL">Toàn hệ thống</option>
+                  <option value="Q1">Chi nhánh Quận 1</option>
+                  <option value="Q3">Chi nhánh Quận 3</option>
+                </BeautifulSelect>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Người phụ trách *
+                </span>
+                <input
+                  value={budgetCreateForm.owner}
+                  onChange={(event) =>
+                    setBudgetCreateForm((current) => ({ ...current, owner: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="Người quản lý ngân sách"
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Ngân sách *
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  value={budgetCreateForm.budget}
+                  onChange={(event) =>
+                    setBudgetCreateForm((current) => ({ ...current, budget: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Dự báo chi
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={budgetCreateForm.forecast}
+                  onChange={(event) =>
+                    setBudgetCreateForm((current) => ({
+                      ...current,
+                      forecast: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                  placeholder="Mặc định bằng ngân sách"
+                />
+              </label>
+            </div>
+            <div className="flex items-start gap-3 rounded-xl border border-violet-100 bg-violet-50 p-3 text-violet-800">
+              <Target className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+              <p className="text-[11px] leading-5">
+                Thực chi ban đầu bằng 0 và sẽ được cập nhật từ các giao dịch đã ghi sổ.
+              </p>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {budgetFormOpen && (
         <Modal
           isOpen
@@ -2167,6 +3036,132 @@ export default function TenantAdminFinanceCompact({
                 </div>
               </section>
             ))}
+          </form>
+        </Modal>
+      )}
+
+      {cashbookFormOpen && (
+        <Modal
+          isOpen
+          onClose={closeCashbookForm}
+          maxWidth="lg"
+          title={editingCashbook ? `Chỉnh sửa ${editingCashbook.name}` : 'Thêm sổ tiền'}
+          subtitle={
+            editingCashbook
+              ? 'Cập nhật thông tin sổ tiền; mã sổ và số liệu phát sinh được giữ nguyên.'
+              : 'Tạo sổ quỹ hoặc tài khoản để theo dõi dòng tiền riêng.'
+          }
+          footer={
+            <div className="flex w-full justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeCashbookForm}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  (document.getElementById('compact-cashbook-form') as HTMLFormElement | null)?.requestSubmit()
+                }
+                disabled={!canManage}
+                className="flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-5 text-xs font-black text-white shadow-lg shadow-rose-200"
+              >
+                {editingCashbook ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {editingCashbook ? 'Lưu thay đổi' : 'Thêm sổ tiền'}
+              </button>
+            </div>
+          }
+        >
+          <form id="compact-cashbook-form" onSubmit={submitCashbook} className="space-y-4">
+            {cashbookFormError && (
+              <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">
+                {cashbookFormError}
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Tên sổ tiền *</span>
+                <input
+                  value={cashbookForm.name}
+                  onChange={(event) =>
+                    setCashbookForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="Ví dụ: Tiền mặt lễ tân Quận 1"
+                  autoFocus
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Loại sổ</span>
+                <BeautifulSelect
+                  value={cashbookForm.type}
+                  onChange={(event) =>
+                    setCashbookForm((current) => ({
+                      ...current,
+                      type: event.target.value as PaymentMethod,
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="CASH">Tiền mặt</option>
+                  <option value="BANK">Tài khoản ngân hàng</option>
+                  <option value="CARD">Đối soát thẻ</option>
+                  <option value="EWALLET">Ví điện tử</option>
+                </BeautifulSelect>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Phạm vi áp dụng</span>
+                <BeautifulSelect
+                  value={cashbookForm.branch}
+                  onChange={(event) =>
+                    setCashbookForm((current) => ({
+                      ...current,
+                      branch: event.target.value as BranchCode | 'ALL',
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="ALL">Toàn hệ thống</option>
+                  <option value="Q1">Chi nhánh Quận 1</option>
+                  <option value="Q3">Chi nhánh Quận 3</option>
+                </BeautifulSelect>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">Số dư đầu kỳ</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={cashbookForm.opening}
+                  onChange={(event) =>
+                    setCashbookForm((current) => ({ ...current, opening: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-xs font-bold text-slate-600">
+                  Thông tin tài khoản *
+                </span>
+                <input
+                  value={cashbookForm.account}
+                  onChange={(event) =>
+                    setCashbookForm((current) => ({ ...current, account: event.target.value }))
+                  }
+                  className={inputClass}
+                  placeholder="Két tiền, ngân hàng hoặc số tài khoản"
+                />
+              </label>
+            </div>
+            <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-blue-800">
+              <WalletCards className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+              <p className="text-[11px] leading-5">
+                Mỗi sổ tiền nên đại diện cho một nguồn tiền thực tế để số dư và đối soát không bị
+                trùng lặp.
+              </p>
+            </div>
           </form>
         </Modal>
       )}

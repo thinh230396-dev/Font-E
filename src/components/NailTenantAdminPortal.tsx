@@ -143,7 +143,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
     label: 'Quản trị',
     items: [
       { id: 'online', label: 'Đặt lịch online', icon: Globe2 },
-      { id: 'finance', label: 'Thu chi', icon: WalletCards },
+      { id: 'finance', label: 'Thu & Chi', icon: WalletCards },
       { id: 'sanitation', label: 'Vệ sinh & an toàn', icon: ShieldCheck, badge: '4' },
       { id: 'reports', label: 'Báo cáo', icon: BarChart3 },
       { id: 'subscription', label: 'Gói đăng ký', icon: BadgePercent },
@@ -930,7 +930,7 @@ function ModulePage({ config, rows, searchQuery, activeTab, onSearch, onTab, onS
           <button type="button" onClick={accessMode === 'limited' ? onUpgrade : onCreate} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200">{accessMode === 'limited' ? <LockKeyhole className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{accessMode === 'limited' ? 'Mở báo cáo nâng cao' : config.primaryAction}</button>
         </div>
       </section>
-      {accessMode === 'limited' && <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><LockKeyhole className="h-5 w-5" /></span><div className="flex-1"><p className="text-[10px] font-black text-amber-900">Đang dùng chế độ báo cáo cơ bản của gói {planName}</p><p className="mt-1 text-[8px] leading-5 text-amber-700">Bạn vẫn xem được tổng quan và doanh thu ngày. Báo cáo tùy chỉnh, lịch gửi và phân tích chuyên sâu cần gói có quyền Báo cáo nâng cao.</p></div><button type="button" onClick={onUpgrade} className="h-9 border border-amber-300 bg-white px-3 text-[8px] font-black text-amber-800 shadow-sm">Xem gói phù hợp</button></section>}
+      {accessMode === 'limited' && <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><LockKeyhole className="h-5 w-5" /></span><div className="flex-1"><p className="text-[10px] font-black text-amber-900">Đang dùng chế độ báo cáo cơ bản của gói {planName}</p><p className="mt-1 text-[8px] leading-5 text-amber-700">Bạn vẫn xem được tổng quan và doanh thu ngày. Báo cáo tùy chỉnh và phân tích chuyên sâu cần gói có quyền Báo cáo nâng cao.</p></div><button type="button" onClick={onUpgrade} className="h-9 border border-amber-300 bg-white px-3 text-[8px] font-black text-amber-800 shadow-sm">Xem gói phù hợp</button></section>}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{displayedStats.map((stat, index) => <StatCard key={stat.label} stat={stat} index={index} />)}</section>
 
@@ -1715,9 +1715,9 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
               <TenantAdminAppointments
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
-                selectedBranch={branch}
-                onSelectedBranchChange={(value) => { setBranch(value); setSelectedRow(null); }}
-                tenantName={tenantName}
+                 selectedBranch={branch}
+                 onSelectedBranchChange={(value) => { setBranch(value); setSelectedRow(null); }}
+                 tenantName={tenantName}
                 roleLabel="Owner · Tenant Admin"
                 accessMode={currentAccessMode}
                 readOnlyReason={readOnlyReason}
@@ -1888,6 +1888,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 onSearchQueryChange={setSearchQuery}
                 selectedBranch={branch}
                 onSelectedBranchChange={(value) => { setBranch(value); setSelectedRow(null); }}
+                branches={branchRows.map((item) => ({ code: item.branchCode || item.id.replace(/^BR-/, ''), name: item.title }))}
                 tenantName={tenantName}
                 roleLabel="Owner · Tenant Admin"
                 accessMode={currentAccessMode}

@@ -2572,8 +2572,76 @@ html[data-theme="dark"] .role-shell--superadmin {
   color: #be185d !important;
 }
 
-.beautiful-select-menu--tenant .beautiful-select-option[aria-selected="true"] > span:last-child {
+.beautiful-select-menu--tenant .beautiful-select-option[aria-selected="true"] .beautiful-select-selected-check {
   background: #f43f78 !important;
+}
+
+.beautiful-select-menu--tenant .beautiful-select-option--technician {
+  border: 1px solid transparent !important;
+  border-radius: 0.875rem;
+}
+
+.beautiful-select-menu--tenant .beautiful-select-option--technician[aria-selected="true"] {
+  border-color: #f8bbcf !important;
+  background: #fff0f5 !important;
+}
+
+/* Sanitation detail panels use centered dialogs instead of right-side drawers. */
+.role-shell--tenant .role-main div.fixed.inset-0.justify-end:has(
+  > button:is(
+    [aria-label="Đóng chi tiết checklist"],
+    [aria-label="Đóng chi tiết lô"],
+    [aria-label="Đóng chi tiết sự cố"]
+  )
+) {
+  top: 0 !important;
+  z-index: 140 !important;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.role-shell--tenant .role-main div.fixed.inset-0.justify-end:has(
+  > button:is(
+    [aria-label="Đóng chi tiết checklist"],
+    [aria-label="Đóng chi tiết lô"],
+    [aria-label="Đóng chi tiết sự cố"]
+  )
+) > aside {
+  width: min(100%, 48rem);
+  height: auto;
+  max-width: 48rem;
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240 / 0.9);
+  border-radius: 1.5rem;
+  box-shadow: 0 28px 80px rgb(15 23 42 / 0.28);
+}
+
+.role-shell--tenant .role-main div.fixed.inset-0.justify-end:has(
+  > button:is(
+    [aria-label="Đóng chi tiết checklist"],
+    [aria-label="Đóng chi tiết lô"],
+    [aria-label="Đóng chi tiết sự cố"]
+  )
+) > aside > div:nth-child(2) {
+  min-height: 0;
+}
+
+/* Keep the compliance-record form centered within the full viewport as well. */
+.role-shell--tenant .role-main div.fixed.inset-0:has(
+  > button[aria-label="Đóng biểu mẫu hồ sơ"]
+) {
+  top: 0 !important;
+  z-index: 140 !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.role-shell--tenant .role-main div.fixed.inset-0:has(
+  > button[aria-label="Đóng biểu mẫu hồ sơ"]
+) > form {
+  max-height: calc(100dvh - 2rem);
 }
 
 .role-shell--tenant :is(

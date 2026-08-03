@@ -1858,30 +1858,63 @@ export default function TenantAdminOnlineBooking({
                 </label>
                 <BeautifulSelect
                   value={chosenTechId}
+                  optionLayout="technician"
+                  aria-label="Chọn kỹ thuật viên phụ trách"
                   onChange={(e) => {
                     setChosenTechId(e.target.value);
                     setValidationError('');
                     setAssignmentNotice('');
                   }}
-                  className={inputClass}
+                  className={`${inputClass} min-h-[58px]`}
                 >
-                  <option value="ANY">-- Tự động phân bổ KTV rảnh --</option>
-                  {technicians
-                    .filter((t) => t.branch === selectedBooking.branch)
-                    .map((tech) => {
-                      const avail = checkTechnicianAvailability(tech.id, selectedBooking);
-                      const statusTag = !avail.ok
-                        ? `[🔴 ${avail.message}]`
-                        : tech.status === 'WORKING'
-                        ? '[🟢 Sẵn sàng]'
-                        : '[🟡 Khác]';
-
-                      return (
-                        <option key={tech.id} value={tech.id}>
-                          {tech.name} · {tech.specialty} {statusTag}
+                  <optgroup label="Phân bổ tự động">
+                    <option
+                      value="ANY"
+                      data-description="Hệ thống chọn KTV phù hợp khi xác nhận"
+                      data-helper="Ưu tiên người đang rảnh và đúng chuyên môn"
+                      data-status="Đề xuất"
+                      data-tone="auto"
+                    >
+                      Tự động phân bổ KTV
+                    </option>
+                  </optgroup>
+                  <optgroup label="Kỹ thuật viên sẵn sàng">
+                    {technicians
+                      .filter((tech) => tech.branch === selectedBooking.branch)
+                      .filter((tech) => checkTechnicianAvailability(tech.id, selectedBooking).ok)
+                      .map((tech) => (
+                        <option
+                          key={tech.id}
+                          value={tech.id}
+                          data-description={tech.specialty}
+                          data-helper={`Có thể nhận lịch lúc ${selectedBooking.time}`}
+                          data-status="Sẵn sàng"
+                          data-tone="available"
+                        >
+                          {tech.name}
                         </option>
-                      );
-                    })}
+                      ))}
+                  </optgroup>
+                  <optgroup label="Không khả dụng trong khung giờ này">
+                    {technicians
+                      .filter((tech) => tech.branch === selectedBooking.branch)
+                      .filter((tech) => !checkTechnicianAvailability(tech.id, selectedBooking).ok)
+                      .map((tech) => {
+                        const isOff = tech.status === 'OFF';
+                        return (
+                          <option
+                            key={tech.id}
+                            value={tech.id}
+                            data-description={tech.specialty}
+                            data-helper={isOff ? tech.offReason || 'Đang nghỉ làm' : `Trùng ca ${tech.busySlots.join(', ')}`}
+                            data-status={isOff ? 'Nghỉ làm' : 'Đang bận'}
+                            data-tone={isOff ? 'off' : 'busy'}
+                          >
+                            {tech.name}
+                          </option>
+                        );
+                      })}
+                  </optgroup>
                 </BeautifulSelect>
                 {assignmentNotice && (
                   <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] font-semibold leading-5 text-amber-800">
