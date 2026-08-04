@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { getTenantAdminInitialData, isTenantAdminLiveDataMode } from '../utils/mockDataReset';
 import {
   ArrowDownRight,
@@ -41,7 +41,7 @@ import {
 import BeautifulSelect from './BeautifulSelect';
 
 type BranchCode = 'Q1' | 'Q3';
-type ReportTab = 'EXECUTIVE' | 'REVENUE' | 'CASH_FLOW' | 'OPERATIONS' | 'CUSTOMERS' | 'STAFF' | 'EXPORTS';
+type ReportTab = 'EXECUTIVE' | 'REVENUE' | 'OPERATIONS' | 'CUSTOMERS' | 'STAFF' | 'EXPORTS';
 type ScheduleFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 type ComparisonFilter = 'NONE' | 'PREVIOUS_PERIOD' | 'SAME_PERIOD_LAST_YEAR' | 'TARGET';
 interface TenantAdminReportsProps { searchQuery: string; onSearchQueryChange: (value: string) => void; selectedBranch: string; onSelectedBranchChange: (value: string) => void; branches?: Array<{ code: string; name: string }>; tenantName?: string; roleLabel?: string; accessMode?: 'full' | 'limited' | 'locked'; readOnlyReason?: string; onNotify?: (message: string) => void; }
@@ -62,7 +62,7 @@ const scheduleSeed: ReportSchedule[] = [
   { id: 'SCH-03', name: 'Hiệu suất chi nhánh Quận 3', frequency: 'WEEKLY', time: '09:00 · Thứ Ba', recipients: ['manager.q3@lumiere.vn'], format: 'PDF', branch: 'Q3', nextRun: '21/07/2026 · 09:00', active: true },
   { id: 'SCH-04', name: 'Tổng hợp hoa hồng tháng', frequency: 'MONTHLY', time: '08:00 · Ngày 01', recipients: ['hr@lumiere.vn', 'owner@lumiere.vn'], format: 'Excel', branch: 'ALL', nextRun: '01/08/2026 · 08:00', active: false }
 ];
-const tabs: Array<{ id: ReportTab; label: string }> = [{ id: 'EXECUTIVE', label: 'Điều hành' }, { id: 'REVENUE', label: 'Doanh thu' }, { id: 'CASH_FLOW', label: 'Thu & Chi' }, { id: 'OPERATIONS', label: 'Vận hành' }, { id: 'CUSTOMERS', label: 'Khách hàng' }, { id: 'STAFF', label: 'Nhân sự' }];
+const tabs: Array<{ id: ReportTab; label: string }> = [{ id: 'EXECUTIVE', label: 'Điều hành' }, { id: 'REVENUE', label: 'Doanh thu' }, { id: 'OPERATIONS', label: 'Vận hành' }, { id: 'CUSTOMERS', label: 'Khách hàng' }, { id: 'STAFF', label: 'Nhân sự' }];
 const comparisonLabels: Record<ComparisonFilter, string> = { NONE: 'Không so sánh', PREVIOUS_PERIOD: 'Kỳ liền trước', SAME_PERIOD_LAST_YEAR: 'Cùng kỳ năm trước', TARGET: 'Mục tiêu KPI' };
 const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
 const money = (value: number) => `${value.toLocaleString('vi-VN')}đ`;
@@ -138,9 +138,7 @@ function BranchComparisonTable({ branches }: { branches: Array<{ code: string; n
   </article>;
 }
 
-function RevenueReportTab({ mode, revenue, bookings, averageTicket, branches, selectedBranch, periodLabel, comparisonSuffix }: { mode: 'REVENUE' | 'CASH_FLOW'; revenue: number; bookings: number; averageTicket: number; branches: Array<{ code: string; name: string }>; selectedBranch: string; periodLabel: string; comparisonSuffix: string }) {
-  const [cashDetail, setCashDetail] = useState<'INCOME' | 'EXPENSE' | null>(null);
-  const [cashCategoryDetail, setCashCategoryDetail] = useState<string | null>(null);
+function RevenueReportTab({ revenue, bookings, averageTicket, branches, selectedBranch, periodLabel, comparisonSuffix }: { revenue: number; bookings: number; averageTicket: number; branches: Array<{ code: string; name: string }>; selectedBranch: string; periodLabel: string; comparisonSuffix: string }) {
   const grossRevenue = Math.round(revenue / 0.967);
   const discounts = Math.round(grossRevenue * 0.021);
   const refunds = Math.max(0, grossRevenue - discounts - revenue);
@@ -185,75 +183,8 @@ function RevenueReportTab({ mode, revenue, bookings, averageTicket, branches, se
     { label: 'Khách thành viên', share: 17, value: Math.round(revenue * 0.17), growth: '+18,7%' },
     { label: 'Đối tác & chiến dịch', share: 6, value: Math.round(revenue * 0.06), growth: '+7,2%' }
   ];
-  const totalIncome = Math.round(revenue * 1.018);
-  const incomeGroups = [
-    { label: 'Thu dịch vụ hoàn tất', share: 76, tone: 'bg-violet-500' },
-    { label: 'Thu bán sản phẩm', share: 8, tone: 'bg-blue-500' },
-    { label: 'Tiền cọc nhận trong kỳ', share: 8, tone: 'bg-fuchsia-500' },
-    { label: 'Thu hồi công nợ', share: 5, tone: 'bg-emerald-500' },
-    { label: 'Thu khác', share: 3, tone: 'bg-amber-500' }
-  ].map((item) => ({ ...item, value: Math.round(totalIncome * item.share / 100) }));
-  const expenseGroups = [
-    { label: 'Lương, phụ cấp & hoa hồng', value: Math.round(revenue * 0.23), tone: 'bg-rose-500' },
-    { label: 'Vật tư & giá vốn sản phẩm', value: Math.round(revenue * 0.16), tone: 'bg-orange-500' },
-    { label: 'Mặt bằng & cơ sở vật chất', value: Math.round(revenue * 0.085), tone: 'bg-amber-500' },
-    { label: 'Thuế & phí thanh toán', value: Math.round(revenue * 0.08), tone: 'bg-yellow-500' },
-    { label: 'Marketing & chăm sóc khách', value: Math.round(revenue * 0.047), tone: 'bg-pink-500' },
-    { label: 'Điện, nước & vận hành', value: Math.round(revenue * 0.042), tone: 'bg-cyan-500' },
-    { label: 'Hoàn tiền & chi khác', value: Math.round(revenue * 0.025), tone: 'bg-slate-500' }
-  ];
-  const totalExpense = expenseGroups.reduce((sum, item) => sum + item.value, 0);
-  const netCashFlow = totalIncome - totalExpense;
-  const openingBalance = Math.round(revenue * 0.31);
-  const endingBalance = openingBalance + netCashFlow;
-  const cashFlowByBranch = branchRows.map((branch) => {
-    const branchIncome = Math.round(totalIncome * branch.share / 100);
-    const branchExpense = Math.round(totalExpense * branch.share / 100);
-    const branchOpening = Math.round(openingBalance * branch.share / 100);
-    return { ...branch, income: branchIncome, expense: branchExpense, net: branchIncome - branchExpense, opening: branchOpening, ending: branchOpening + branchIncome - branchExpense };
-  });
-  const firstBranch = branchRows[0]?.name || 'Toàn hệ thống';
-  const secondBranch = branchRows[1]?.name || firstBranch;
-  const transactionRows = [
-    { code: 'PT-2007-018', date: '20/07/2026 · 16:42', branch: firstBranch, type: 'THU', category: 'Thanh toán dịch vụ', method: 'Chuyển khoản', value: Math.round(totalIncome * 0.019), status: 'Đã đối soát' },
-    { code: 'PC-2007-012', date: '20/07/2026 · 14:18', branch: secondBranch, type: 'CHI', category: 'Nhập vật tư tiêu hao', method: 'Chuyển khoản', value: Math.round(totalExpense * 0.027), status: 'Đã duyệt' },
-    { code: 'PT-2007-017', date: '20/07/2026 · 11:05', branch: secondBranch, type: 'THU', category: 'Tiền cọc lịch hẹn', method: 'Thẻ', value: Math.round(totalIncome * 0.008), status: 'Đã đối soát' },
-    { code: 'PC-1907-009', date: '19/07/2026 · 18:30', branch: firstBranch, type: 'CHI', category: 'Hoa hồng nhân viên', method: 'Chuyển khoản', value: Math.round(totalExpense * 0.041), status: 'Đã duyệt' },
-    { code: 'PT-1907-031', date: '19/07/2026 · 17:12', branch: firstBranch, type: 'THU', category: 'Bán sản phẩm', method: 'Tiền mặt', value: Math.round(totalIncome * 0.011), status: 'Đã chốt ca' },
-    { code: 'PC-1907-007', date: '19/07/2026 · 10:25', branch: secondBranch, type: 'CHI', category: 'Chi phí marketing', method: 'Ví doanh nghiệp', value: Math.round(totalExpense * 0.018), status: 'Chờ chứng từ' },
-    { code: 'PT-1807-026', date: '18/07/2026 · 15:46', branch: secondBranch, type: 'THU', category: 'Thu hồi công nợ', method: 'Chuyển khoản', value: Math.round(totalIncome * 0.014), status: 'Đã đối soát' },
-    { code: 'PC-1807-005', date: '18/07/2026 · 09:10', branch: firstBranch, type: 'CHI', category: 'Điện, nước & internet', method: 'Trích nợ', value: Math.round(totalExpense * 0.016), status: 'Đã duyệt' }
-  ];
-  const selectedCashGroups = cashDetail === 'INCOME'
-    ? incomeGroups
-    : expenseGroups.map((item) => ({ ...item, share: totalExpense ? item.value / totalExpense * 100 : 0 }));
-  const selectedCashTotal = cashDetail === 'INCOME' ? totalIncome : totalExpense;
-  const selectedCashTransactions = transactionRows.filter((item) => item.type === (cashDetail === 'INCOME' ? 'THU' : 'CHI'));
-  const payrollTotal = expenseGroups[0].value;
-  const payrollRows = (() => {
-    const staff = [
-      { name: 'Thảo Nguyễn', role: 'Senior Nail Artist', branch: 'Q3' as const, weight: 15, reference: 'PAY-0726-001' },
-      { name: 'Hà My', role: 'Nail Artist', branch: 'Q3' as const, weight: 14, reference: 'PAY-0726-002' },
-      { name: 'Minh Châu', role: 'Senior Technician', branch: 'Q3' as const, weight: 13.5, reference: 'PAY-0726-003' },
-      { name: 'Thu Hà', role: 'Quản lý chi nhánh', branch: 'Q1' as const, weight: 13, reference: 'PAY-0726-004' },
-      { name: 'Bảo Ngọc', role: 'Pedicure Specialist', branch: 'Q1' as const, weight: 12.5, reference: 'PAY-0726-005' },
-      { name: 'Kim Anh', role: 'Nail Technician', branch: 'Q1' as const, weight: 11.5, reference: 'PAY-0726-006' },
-      { name: 'Thuỳ Dương', role: 'Nail Technician', branch: 'Q3' as const, weight: 10.5, reference: 'PAY-0726-007' },
-      { name: 'Trâm Anh', role: 'Thu ngân', branch: 'Q1' as const, weight: 10, reference: 'PAY-0726-008' }
-    ].filter((item) => selectedBranch === 'ALL' || item.branch === selectedBranch);
-    const weightTotal = staff.reduce((sum, item) => sum + item.weight, 0) || 1;
-    const rows = staff.map((item) => ({ ...item, total: Math.round(payrollTotal * item.weight / weightTotal) }));
-    const difference = payrollTotal - rows.reduce((sum, item) => sum + item.total, 0);
-    if (rows.length) rows[rows.length - 1].total += difference;
-    return rows.map((item) => {
-      const salary = Math.round(item.total * 0.72);
-      const allowance = Math.round(item.total * 0.08);
-      return { ...item, salary, allowance, commission: item.total - salary - allowance, paidAt: '18/07/2026', status: 'Đã chuyển khoản' };
-    });
-  })();
-  const closeCashDetail = () => { setCashCategoryDetail(null); setCashDetail(null); };
+
   return <div className="space-y-5">
-    {mode === 'REVENUE' && <>
     <section className="flex flex-col gap-3 rounded-2xl bg-slate-950 p-5 text-white lg:flex-row lg:items-center lg:justify-between">
       <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-300">Tổng quan doanh thu · {periodLabel}</p><div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2"><p className="text-3xl font-black">{shortMoney(revenue)}</p><span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[10px] font-black text-emerald-300">+16,8% {compareText}</span></div><p className="mt-2 text-xs text-slate-400">Doanh thu thuần sau giảm giá và hoàn tiền · {bookings.toLocaleString('vi-VN')} hóa đơn hoàn tất</p></div>
       <div className="min-w-64 rounded-2xl bg-white/5 p-4"><div className="flex items-center justify-between text-[10px]"><span className="font-bold text-slate-400">Mục tiêu kỳ</span><strong>{shortMoney(target)}</strong></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400" style={{ width: `${Math.min(100, targetProgress)}%` }} /></div><p className="mt-2 text-[10px] font-bold text-violet-200">Đạt {targetProgress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% · còn {shortMoney(Math.max(0, target - revenue))}</p></div>
@@ -289,73 +220,8 @@ function RevenueReportTab({ mode, revenue, bookings, averageTicket, branches, se
       <article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Hiệu quả theo chi nhánh</h3><p className="mt-1 text-[10px] text-slate-400">Doanh thu, tỷ trọng và mức hoàn thành mục tiêu</p></div><Store className="h-5 w-5 text-blue-500" /></div><div className="mt-4 space-y-3">{branchRows.length ? branchRows.map((branch, index) => { const progress = branch.target ? branch.revenue / branch.target * 100 : 0; return <div key={branch.code} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black text-slate-800">{branch.name}</p><p className="mt-1 text-[9px] font-bold text-emerald-600">{branch.growth} {compareText}</p></div><div className="text-right"><p className="text-sm font-black text-slate-900">{shortMoney(branch.revenue)}</p><p className="mt-1 text-[9px] text-slate-400">{branch.share.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% toàn tenant</p></div></div><div className="mt-3 flex items-center gap-3"><div className="h-2 flex-1 rounded-full bg-slate-100"><div className={`h-full rounded-full ${index === 0 ? 'bg-violet-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(100, progress)}%` }} /></div><span className="text-[9px] font-black text-slate-500">{progress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu</span></div></div>; }) : <p className="py-8 text-center text-xs text-slate-400">Chưa có dữ liệu chi nhánh.</p>}</div></article>
       <article className="rounded-2xl border border-slate-200 p-5"><div><h3 className="text-sm font-black text-slate-900">Doanh thu theo nguồn khách</h3><p className="mt-1 text-[10px] text-slate-400">Kênh phát sinh giao dịch hoàn tất</p></div><div className="mt-4 space-y-2">{revenueChannels.map((item) => <div key={item.label} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl bg-slate-50 p-3"><div><div className="flex items-center justify-between gap-3"><span className="text-[10px] font-bold text-slate-600">{item.label}</span><span className="text-[9px] font-black text-emerald-600">{item.growth}</span></div><div className="mt-2 h-1.5 rounded-full bg-white"><div className="h-full rounded-full bg-violet-500" style={{ width: `${item.share}%` }} /></div></div><div className="text-right"><strong className="text-xs font-black text-slate-800">{shortMoney(item.value)}</strong><p className="mt-1 text-[8px] text-slate-400">{item.share}%</p></div></div>)}</div></article>
     </section>
-    </>}
 
-    {mode === 'CASH_FLOW' && <>
-    <section className="overflow-hidden rounded-2xl border border-slate-200">
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-950 p-5 text-white lg:flex-row lg:items-center lg:justify-between">
-        <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300">Dòng tiền toàn tenant</p><h3 className="mt-1 text-xl font-black">Báo cáo Thu & Chi</h3><p className="mt-1 text-[10px] text-slate-400">Tiền thực tế vào và ra trong {periodLabel.toLowerCase()} · theo phạm vi chi nhánh đang chọn</p></div>
-        <div className="rounded-xl bg-white/5 px-4 py-3 text-[10px] leading-5 text-slate-300"><strong className="text-white">Lưu ý nghiệp vụ:</strong> Doanh thu ghi nhận khi dịch vụ hoàn tất; tiền cọc và thu công nợ thuộc dòng tiền thu nhưng không phải toàn bộ là doanh thu của kỳ.</div>
-      </div>
-      <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-4">{[
-        { label: 'Tổng tiền thu', value: totalIncome, detail: 'Dịch vụ, sản phẩm, cọc, công nợ & thu khác', icon: ArrowUpRight, tone: 'bg-emerald-50 text-emerald-600', detailMode: 'INCOME' as const },
-        { label: 'Tổng tiền chi', value: totalExpense, detail: `${(totalExpense / revenue * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% doanh thu thuần`, icon: ArrowDownRight, tone: 'bg-rose-50 text-rose-600', detailMode: 'EXPENSE' as const },
-        { label: 'Dòng tiền ròng', value: netCashFlow, detail: 'Tổng thu trừ tổng chi trong kỳ', icon: WalletCards, tone: 'bg-blue-50 text-blue-600', detailMode: undefined },
-        { label: 'Số dư cuối kỳ', value: endingBalance, detail: `Số dư đầu kỳ ${shortMoney(openingBalance)}`, icon: CircleDollarSign, tone: 'bg-violet-50 text-violet-600', detailMode: undefined }
-      ].map(({ label, value, detail, icon: Icon, tone, detailMode }) => <article key={label} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4 w-4" /></span><span className="rounded-full bg-slate-100 px-2 py-1 text-[8px] font-black text-slate-500">{periodLabel}</span></div><p className="mt-3 text-[10px] font-bold text-slate-500">{label}</p><p className={`mt-1 text-xl font-black ${label === 'Tổng tiền chi' ? 'text-rose-600' : label === 'Tổng tiền thu' || label === 'Dòng tiền ròng' ? 'text-emerald-600' : 'text-slate-900'}`}>{label === 'Tổng tiền chi' ? '−' : label === 'Tổng tiền thu' ? '+' : ''}{shortMoney(value)}</p><p className="mt-1 text-[9px] font-semibold text-slate-400">{detail}</p>{detailMode && <button type="button" onClick={() => setCashDetail(detailMode)} className={`mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border text-[9px] font-black shadow-none ${detailMode === 'INCOME' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'}`}>Xem chi tiết<ChevronRight className="h-3.5 w-3.5" /></button>}</article>)}</div>
-    </section>
 
-    <section className="grid min-w-0 gap-5 xl:grid-cols-2">
-      <article className="rounded-2xl border border-emerald-200 bg-emerald-50/20 p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-black text-slate-900">Chi tiết các khoản thu</h3><p className="mt-1 text-[10px] text-slate-400">Phân bổ trên tổng tiền vào {shortMoney(totalIncome)}</p></div><button type="button" onClick={() => { setCashCategoryDetail(null); setCashDetail('INCOME'); }} className="flex h-9 items-center gap-1.5 border border-emerald-200 bg-white px-3 text-[9px] font-black text-emerald-700 shadow-sm">Xem chi tiết<ChevronRight className="h-3.5 w-3.5" /></button></div><div className="mt-5 space-y-3">{incomeGroups.map((item) => <div key={item.label} className="rounded-xl bg-white p-3 ring-1 ring-emerald-100"><div className="flex items-center justify-between gap-3"><span className="text-[10px] font-bold text-slate-600">{item.label}</span><span className="text-right"><strong className="text-xs font-black text-emerald-700">+{shortMoney(item.value)}</strong><em className="ml-2 not-italic text-[9px] font-bold text-slate-400">{item.share}%</em></span></div><div className="mt-2 h-1.5 rounded-full bg-emerald-50"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${item.share}%` }} /></div></div>)}</div></article>
-      <article className="rounded-2xl border border-rose-200 bg-rose-50/20 p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-black text-slate-900">Chi tiết các khoản chi</h3><p className="mt-1 text-[10px] text-slate-400">Phân bổ trên tổng tiền ra {shortMoney(totalExpense)}</p></div><button type="button" onClick={() => { setCashCategoryDetail(null); setCashDetail('EXPENSE'); }} className="flex h-9 items-center gap-1.5 border border-rose-200 bg-white px-3 text-[9px] font-black text-rose-700 shadow-sm">Xem chi tiết<ChevronRight className="h-3.5 w-3.5" /></button></div><div className="mt-5 space-y-3">{expenseGroups.map((item) => { const share = totalExpense ? item.value / totalExpense * 100 : 0; return <div key={item.label} className="rounded-xl bg-white p-3 ring-1 ring-rose-100"><div className="flex items-center justify-between gap-3"><span className="text-[10px] font-bold text-slate-600">{item.label}</span><span className="text-right"><strong className="text-xs font-black text-rose-700">−{shortMoney(item.value)}</strong><em className="ml-2 not-italic text-[9px] font-bold text-slate-400">{share.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</em></span></div><div className="mt-2 h-1.5 rounded-full bg-rose-50"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${share}%` }} /></div></div>; })}</div></article>
-    </section>
-
-    <section className="overflow-hidden rounded-2xl border border-slate-200"><div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-sm font-black text-slate-900">Thu & Chi theo chi nhánh</h3><p className="mt-1 text-[10px] text-slate-400">Đối chiếu số dư đầu kỳ, phát sinh và số dư cuối kỳ của tất cả chi nhánh</p></div><span className="rounded-full bg-white px-3 py-1.5 text-[9px] font-black text-blue-700 ring-1 ring-blue-200">{cashFlowByBranch.length} chi nhánh</span></div><div className="overflow-x-auto"><table className="w-full min-w-[860px] border-collapse"><thead><tr className="text-left text-[9px] font-black uppercase tracking-wide text-slate-400"><th className="px-4 py-3">Chi nhánh</th><th className="px-3 py-3 text-right">Số dư đầu kỳ</th><th className="px-3 py-3 text-right text-emerald-600">Tổng thu</th><th className="px-3 py-3 text-right text-rose-600">Tổng chi</th><th className="px-3 py-3 text-right">Dòng tiền ròng</th><th className="px-4 py-3 text-right">Số dư cuối kỳ</th></tr></thead><tbody>{cashFlowByBranch.map((branch) => <tr key={branch.code} className="border-t border-slate-100 text-xs"><td className="px-4 py-4"><p className="font-black text-slate-800">{branch.name}</p><p className="mt-1 text-[9px] text-slate-400">{branch.code} · {branch.share.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% quy mô kỳ</p></td><td className="px-3 py-4 text-right font-bold text-slate-600">{shortMoney(branch.opening)}</td><td className="px-3 py-4 text-right font-black text-emerald-600">+{shortMoney(branch.income)}</td><td className="px-3 py-4 text-right font-black text-rose-600">−{shortMoney(branch.expense)}</td><td className="px-3 py-4 text-right font-black text-blue-700">+{shortMoney(branch.net)}</td><td className="px-4 py-4 text-right font-black text-slate-900">{shortMoney(branch.ending)}</td></tr>)}</tbody><tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 text-xs"><td className="px-4 py-4 font-black text-slate-900">Toàn tenant</td><td className="px-3 py-4 text-right font-black text-slate-700">{shortMoney(openingBalance)}</td><td className="px-3 py-4 text-right font-black text-emerald-700">+{shortMoney(totalIncome)}</td><td className="px-3 py-4 text-right font-black text-rose-700">−{shortMoney(totalExpense)}</td><td className="px-3 py-4 text-right font-black text-blue-800">+{shortMoney(netCashFlow)}</td><td className="px-4 py-4 text-right font-black text-slate-950">{shortMoney(endingBalance)}</td></tr></tfoot></table></div></section>
-
-    <section className="overflow-hidden rounded-2xl border border-slate-200"><div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-sm font-black text-slate-900">Sổ giao dịch Thu & Chi</h3><p className="mt-1 text-[10px] text-slate-400">Các phiếu thu, phiếu chi gần nhất và trạng thái đối soát/chứng từ</p></div><div className="flex gap-2"><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-[9px] font-black text-emerald-700">4 phiếu thu</span><span className="rounded-full bg-rose-50 px-3 py-1.5 text-[9px] font-black text-rose-700">4 phiếu chi</span></div></div><div className="overflow-x-auto"><table className="w-full min-w-[1080px] border-collapse"><thead><tr className="text-left text-[9px] font-black uppercase tracking-wide text-slate-400"><th className="px-4 py-3">Mã & thời gian</th><th className="px-3 py-3">Chi nhánh</th><th className="px-3 py-3">Loại</th><th className="px-3 py-3">Danh mục</th><th className="px-3 py-3">Phương thức</th><th className="px-3 py-3 text-right">Số tiền</th><th className="px-4 py-3 text-right">Trạng thái</th></tr></thead><tbody>{transactionRows.map((item) => <tr key={item.code} className="border-t border-slate-100 text-[10px]"><td className="px-4 py-3.5"><p className="font-black text-slate-800">{item.code}</p><p className="mt-1 text-[9px] text-slate-400">{item.date}</p></td><td className="px-3 py-3.5 font-bold text-slate-600">{item.branch}</td><td className="px-3 py-3.5"><span className={`rounded-full px-2.5 py-1 text-[8px] font-black ${item.type === 'THU' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{item.type}</span></td><td className="px-3 py-3.5 font-bold text-slate-700">{item.category}</td><td className="px-3 py-3.5 text-slate-500">{item.method}</td><td className={`px-3 py-3.5 text-right text-xs font-black ${item.type === 'THU' ? 'text-emerald-600' : 'text-rose-600'}`}>{item.type === 'THU' ? '+' : '−'}{shortMoney(item.value)}</td><td className="px-4 py-3.5 text-right"><span className={`rounded-full px-2.5 py-1 text-[8px] font-black ${item.status === 'Chờ chứng từ' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{item.status}</span></td></tr>)}</tbody></table></div></section>
-    </>}
-
-    {cashDetail && <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6">
-      <button type="button" aria-label="Đóng chi tiết thu chi" onClick={closeCashDetail} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-      <section role="dialog" aria-modal="true" aria-labelledby="cash-detail-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <header className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-          <div><p className={`text-[10px] font-black uppercase tracking-[0.14em] ${cashDetail === 'INCOME' ? 'text-emerald-600' : 'text-rose-600'}`}>Chi tiết dòng tiền · {periodLabel}</p><h2 id="cash-detail-title" className="mt-1 text-xl font-black text-slate-900">{cashDetail === 'INCOME' ? 'Chi tiết các khoản Thu' : 'Chi tiết các khoản Chi'}</h2><p className="mt-1 text-xs text-slate-500">{selectedBranch === 'ALL' ? 'Tất cả chi nhánh' : branchRows[0]?.name || 'Chi nhánh đang chọn'} · số liệu đã ghi nhận trong kỳ</p></div>
-          <div className="flex items-center gap-2"><div className="flex rounded-xl bg-slate-100 p-1"><button type="button" onClick={() => { setCashCategoryDetail(null); setCashDetail('INCOME'); }} className={`h-9 border-0 px-3 text-[10px] font-black shadow-none ${cashDetail === 'INCOME' ? 'bg-white text-emerald-700 shadow-sm' : 'bg-transparent text-slate-500'}`}>Khoản Thu</button><button type="button" onClick={() => { setCashCategoryDetail(null); setCashDetail('EXPENSE'); }} className={`h-9 border-0 px-3 text-[10px] font-black shadow-none ${cashDetail === 'EXPENSE' ? 'bg-white text-rose-700 shadow-sm' : 'bg-transparent text-slate-500'}`}>Khoản Chi</button></div><button type="button" onClick={closeCashDetail} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>
-        </header>
-        <div className="overflow-y-auto p-5 sm:p-6">
-          <section className={`grid gap-4 rounded-2xl p-5 text-white sm:grid-cols-[1fr_auto] sm:items-center ${cashDetail === 'INCOME' ? 'bg-gradient-to-br from-emerald-600 to-teal-700' : 'bg-gradient-to-br from-rose-600 to-pink-700'}`}><div><p className="text-[10px] font-black uppercase tracking-wide text-white/70">{cashDetail === 'INCOME' ? 'Tổng tiền vào' : 'Tổng tiền ra'}</p><p className="mt-2 text-3xl font-black">{cashDetail === 'INCOME' ? '+' : '−'}{shortMoney(selectedCashTotal)}</p><p className="mt-2 text-xs font-semibold text-white/75">{selectedCashGroups.length} nhóm · {selectedCashTransactions.length} giao dịch gần nhất</p></div><div className="rounded-xl bg-white/10 px-4 py-3 text-right"><p className="text-[9px] font-bold text-white/65">Tỷ trọng trên doanh thu thuần</p><p className="mt-1 text-lg font-black">{(selectedCashTotal / revenue * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</p></div></section>
-
-          <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[1.05fr_.95fr]">
-            <article className="rounded-2xl border border-slate-200 p-4"><div className="flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-900">Cơ cấu theo danh mục</h3><p className="mt-1 text-[10px] text-slate-400">Nhấp vào danh mục có nút chi tiết để xem từng người nhận</p></div><Layers3 className={`h-5 w-5 ${cashDetail === 'INCOME' ? 'text-emerald-500' : 'text-rose-500'}`} /></div><div className="mt-4 space-y-3">{selectedCashGroups.map((item) => { const canOpenCategory = cashDetail === 'EXPENSE' && item.label === 'Lương, phụ cấp & hoa hồng'; return <button key={item.label} type="button" disabled={!canOpenCategory} onClick={() => canOpenCategory && setCashCategoryDetail(item.label)} className={`h-auto w-full rounded-xl border p-3 text-left shadow-none ${canOpenCategory ? 'border-rose-200 bg-rose-50/70 hover:border-rose-300 hover:bg-rose-50' : 'border-transparent bg-slate-50 disabled:cursor-default'}`}><div className="flex items-center justify-between gap-3"><div><p className="text-[11px] font-black text-slate-700">{item.label}</p><p className="mt-1 text-[9px] font-bold text-slate-400">{item.share.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% tổng {cashDetail === 'INCOME' ? 'thu' : 'chi'}</p>{canOpenCategory && <span className="mt-2 flex items-center gap-1 text-[9px] font-black text-rose-700">Xem người nhận & bảng lương<ChevronRight className="h-3.5 w-3.5" /></span>}</div><strong className={`text-xs ${cashDetail === 'INCOME' ? 'text-emerald-700' : 'text-rose-700'}`}>{cashDetail === 'INCOME' ? '+' : '−'}{money(item.value)}</strong></div><div className="mt-2 h-2 rounded-full bg-white"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${Math.max(3, item.share)}%` }} /></div></button>; })}</div></article>
-
-            <div className="space-y-5"><article className="rounded-2xl border border-slate-200 p-4"><h3 className="text-sm font-black text-slate-900">Theo chi nhánh</h3><div className="mt-3 space-y-2">{cashFlowByBranch.map((branch) => { const branchValue = cashDetail === 'INCOME' ? branch.income : branch.expense; return <div key={branch.code} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3"><div><p className="text-[11px] font-black text-slate-700">{branch.name}</p><p className="mt-1 text-[9px] text-slate-400">{branch.share.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% phạm vi</p></div><strong className={`text-xs ${cashDetail === 'INCOME' ? 'text-emerald-700' : 'text-rose-700'}`}>{cashDetail === 'INCOME' ? '+' : '−'}{shortMoney(branchValue)}</strong></div>; })}</div></article>
-              <article className="overflow-hidden rounded-2xl border border-slate-200"><div className="border-b border-slate-100 bg-slate-50 px-4 py-3"><h3 className="text-sm font-black text-slate-900">Giao dịch gần nhất</h3><p className="mt-1 text-[10px] text-slate-400">Mã phiếu, danh mục và trạng thái chứng từ</p></div><div className="divide-y divide-slate-100">{selectedCashTransactions.map((item) => <div key={item.code} className="grid grid-cols-[1fr_auto] gap-3 p-3"><div className="min-w-0"><p className="truncate text-[10px] font-black text-slate-700">{item.category}</p><p className="mt-1 text-[9px] text-slate-400">{item.code} · {item.date}</p><p className="mt-1 text-[9px] font-semibold text-slate-500">{item.branch} · {item.method}</p></div><div className="text-right"><p className={`text-[11px] font-black ${cashDetail === 'INCOME' ? 'text-emerald-700' : 'text-rose-700'}`}>{cashDetail === 'INCOME' ? '+' : '−'}{shortMoney(item.value)}</p><span className={`mt-1 inline-block rounded-full px-2 py-1 text-[8px] font-black ${item.status === 'Chờ chứng từ' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{item.status}</span></div></div>)}</div></article>
-            </div>
-          </div>
-        </div>
-        <footer className="flex justify-end border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><button type="button" onClick={closeCashDetail} className="h-10 border border-slate-200 bg-white px-5 text-[10px] font-black text-slate-600 shadow-sm">Đóng chi tiết</button></footer>
-      </section>
-    </div>}
-
-    {cashCategoryDetail === 'Lương, phụ cấp & hoa hồng' && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm sm:p-6">
-      <button type="button" aria-label="Đóng chi tiết bảng lương" onClick={() => setCashCategoryDetail(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-      <section role="dialog" aria-modal="true" aria-labelledby="payroll-detail-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:px-6"><div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-rose-600">Chi tiết danh mục chi · {periodLabel}</p><h2 id="payroll-detail-title" className="mt-1 text-xl font-black text-slate-900">Lương, phụ cấp & hoa hồng</h2><p className="mt-1 text-xs text-slate-500">Danh sách người đã nhận tiền · {selectedBranch === 'ALL' ? 'Tất cả chi nhánh' : branchName(selectedBranch as BranchCode)}</p></div><button type="button" onClick={() => setCashCategoryDetail(null)} aria-label="Đóng" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header>
-        <div className="overflow-y-auto p-5 sm:p-6">
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
-            { label: 'Tổng đã thanh toán', value: money(payrollTotal), tone: 'text-rose-700' },
-            { label: 'Người đã nhận', value: `${payrollRows.length} nhân sự`, tone: 'text-slate-900' },
-            { label: 'Lương cơ bản', value: money(payrollRows.reduce((sum, item) => sum + item.salary, 0)), tone: 'text-violet-700' },
-            { label: 'Phụ cấp & hoa hồng', value: money(payrollRows.reduce((sum, item) => sum + item.allowance + item.commission, 0)), tone: 'text-emerald-700' }
-          ].map((item) => <article key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-bold text-slate-500">{item.label}</p><p className={`mt-2 text-lg font-black ${item.tone}`}>{item.value}</p></article>)}</section>
-          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200"><div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-sm font-black text-slate-900">Danh sách thanh toán nhân sự</h3><p className="mt-1 text-[10px] text-slate-400">Chi tiết lương cơ bản, phụ cấp và hoa hồng đã chuyển</p></div><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-[9px] font-black text-emerald-700">100% đã thanh toán</span></div><div className="overflow-x-auto"><table className="w-full min-w-[1080px] border-collapse"><thead><tr className="text-left text-[9px] font-black uppercase tracking-wide text-slate-400"><th className="px-4 py-3">Nhân sự</th><th className="px-3 py-3">Chi nhánh</th><th className="px-3 py-3 text-right">Lương cơ bản</th><th className="px-3 py-3 text-right">Phụ cấp</th><th className="px-3 py-3 text-right">Hoa hồng</th><th className="px-3 py-3 text-right">Thực nhận</th><th className="px-3 py-3">Ngày trả</th><th className="px-4 py-3 text-right">Trạng thái</th></tr></thead><tbody>{payrollRows.map((item) => <tr key={item.reference} className="border-t border-slate-100 text-[10px]"><td className="px-4 py-3.5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-[10px] font-black text-violet-700">{item.name.split(' ').map((word) => word[0]).slice(-2).join('')}</span><div><p className="font-black text-slate-800">{item.name}</p><p className="mt-1 text-[9px] text-slate-400">{item.role} · {item.reference}</p></div></div></td><td className="px-3 py-3.5 font-bold text-slate-600">{branchName(item.branch)}</td><td className="px-3 py-3.5 text-right font-bold text-slate-600">{money(item.salary)}</td><td className="px-3 py-3.5 text-right font-bold text-blue-700">{money(item.allowance)}</td><td className="px-3 py-3.5 text-right font-bold text-emerald-700">{money(item.commission)}</td><td className="px-3 py-3.5 text-right text-xs font-black text-rose-700">{money(item.total)}</td><td className="px-3 py-3.5 text-slate-500">{item.paidAt}</td><td className="px-4 py-3.5 text-right"><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[8px] font-black text-emerald-700">{item.status}</span></td></tr>)}</tbody><tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 text-[10px]"><td className="px-4 py-4 font-black text-slate-900" colSpan={2}>Tổng cộng</td><td className="px-3 py-4 text-right font-black text-slate-700">{money(payrollRows.reduce((sum, item) => sum + item.salary, 0))}</td><td className="px-3 py-4 text-right font-black text-blue-700">{money(payrollRows.reduce((sum, item) => sum + item.allowance, 0))}</td><td className="px-3 py-4 text-right font-black text-emerald-700">{money(payrollRows.reduce((sum, item) => sum + item.commission, 0))}</td><td className="px-3 py-4 text-right text-xs font-black text-rose-800">{money(payrollRows.reduce((sum, item) => sum + item.total, 0))}</td><td className="px-3 py-4 text-slate-500">—</td><td className="px-4 py-4 text-right font-black text-emerald-700">Đã khớp</td></tr></tfoot></table></div></div>
-          <p className="mt-4 rounded-xl bg-blue-50 p-3 text-[10px] font-semibold leading-5 text-blue-800">Số thực nhận bằng lương cơ bản cộng phụ cấp và hoa hồng trong kỳ. Các khoản khấu trừ hoặc điều chỉnh phát sinh sẽ được ghi thành phiếu riêng để dễ đối soát.</p>
-        </div>
-        <footer className="flex justify-between gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><button type="button" onClick={() => setCashCategoryDetail(null)} className="h-10 border border-slate-200 bg-white px-4 text-[10px] font-black text-slate-600 shadow-sm"><ChevronLeft className="mr-1 inline h-3.5 w-3.5" />Quay lại khoản Chi</button><button type="button" onClick={closeCashDetail} className="h-10 border border-rose-700 bg-rose-600 px-5 text-[10px] font-black text-white shadow-sm">Đóng tất cả</button></footer>
-      </section>
-    </div>}
-
-    {mode === 'REVENUE' && <>
     <section className="grid gap-5 lg:grid-cols-3">
       <article className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5"><h3 className="text-sm font-black text-rose-900">Giảm giá & hoàn tiền</h3><div className="mt-4 space-y-2">{[
         { label: 'Ưu đãi thành viên', value: discounts * 0.48 }, { label: 'Mã khuyến mãi', value: discounts * 0.34 }, { label: 'Điều chỉnh thủ công', value: discounts * 0.18 }, { label: 'Hoàn tiền', value: refunds }
@@ -367,7 +233,6 @@ function RevenueReportTab({ mode, revenue, bookings, averageTicket, branches, se
         'Nail Art đóng góp lớn nhất và tăng nhanh nhất trong kỳ.', 'Đặt lịch trực tuyến tăng 23,4%, cao hơn các nguồn khách khác.', 'Tỷ lệ thực thu đạt 96,4%; cần hoàn tất 4 giao dịch đối soát.'
       ].map((item, index) => <div key={item} className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-[9px] font-black text-emerald-700">{index + 1}</span><p className="text-[10px] font-semibold leading-5 text-emerald-800">{item}</p></div>)}</div></article>
     </section>
-    </>}
   </div>;
 }
 
@@ -391,10 +256,76 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
   const canManage = accessMode === 'full';
   const requireManage = () => { if (canManage) return true; const message = readOnlyReason || 'Gói hiện tại chỉ cho phép xem báo cáo cơ bản.'; setNotice(message); onNotify?.(message); return false; };
   const filteredTemplates = useMemo(() => { const query = searchQuery.trim().toLocaleLowerCase('vi'); return getTenantAdminInitialData(null, templates).filter((item) => groupFilter === 'ALL' || item.group === groupFilter).filter((item) => !favoriteOnly || item.favorite).filter((item) => !query || `${item.id} ${item.name} ${item.group} ${item.description}`.toLocaleLowerCase('vi').includes(query)); }, [favoriteOnly, groupFilter, searchQuery]);
-  const revenue = isTenantAdminLiveDataMode() ? 0 : selectedBranch === 'Q1' ? 468600000 : selectedBranch === 'Q3' ? 672400000 : 1141000000;
-  const bookings = isTenantAdminLiveDataMode() ? 0 : selectedBranch === 'Q1' ? 612 : selectedBranch === 'Q3' ? 846 : 1458;
-  const averageTicket = Math.round(revenue / bookings / 10000) * 10000;
-  const newCustomers = isTenantAdminLiveDataMode() ? 0 : selectedBranch === 'Q1' ? 126 : selectedBranch === 'Q3' ? 168 : 294;
+  const storageKey = `tenant-admin-finance-v1:${tenantName}:transactions`;
+  const [completedTx, setCompletedTx] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return parsed.filter((t: any) => t.status === 'POSTED' || t.status === 'Hoàn thành');
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    const syncFinance = () => {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setCompletedTx(parsed.filter((t: any) => t.status === 'POSTED' || t.status === 'Hoàn thành'));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('salonsys_finance_updated', syncFinance);
+    window.addEventListener('storage', syncFinance);
+    return () => {
+      window.removeEventListener('salonsys_finance_updated', syncFinance);
+      window.removeEventListener('storage', syncFinance);
+    };
+  }, [storageKey]);
+
+  const scopedTx = useMemo(() => {
+    return completedTx.filter(
+      (t) => selectedBranch === 'ALL' || t.branch === selectedBranch
+    );
+  }, [completedTx, selectedBranch]);
+
+  const realRevenueSum = useMemo(() => {
+    return scopedTx
+      .filter((t) => t.type === 'INCOME')
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+  }, [scopedTx]);
+
+  const revenue =
+    realRevenueSum > 0
+      ? realRevenueSum
+      : selectedBranch === 'Q1'
+      ? 468600000
+      : selectedBranch === 'Q3'
+      ? 672400000
+      : 1141000000;
+
+  const bookings = isTenantAdminLiveDataMode()
+    ? 0
+    : selectedBranch === 'Q1'
+    ? 612
+    : selectedBranch === 'Q3'
+    ? 846
+    : 1458;
+  const averageTicket = Math.round(revenue / (bookings || 1) / 10000) * 10000;
+  const newCustomers = isTenantAdminLiveDataMode()
+    ? 0
+    : selectedBranch === 'Q1'
+    ? 126
+    : selectedBranch === 'Q3'
+    ? 168
+    : 294;
   const exportReport = (name = 'Báo cáo điều hành') => { const rows = [['Chỉ số', 'Giá trị', 'So sánh'], ['Doanh thu', revenue, '+16,8%'], ['Lịch hoàn tất', bookings, '+12,4%'], ['Giá trị trung bình', averageTicket, '+3,9%'], ['Khách mới', newCustomers, '+18,2%']]; const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n'); const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); link.download = `${name.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')}.csv`; link.click(); URL.revokeObjectURL(link.href); setNotice(`Đã xuất ${name}.`); };
   const submitBuilder = (event: FormEvent) => { event.preventDefault(); if (!requireManage()) return; if (!builder.name.trim() || builder.metrics.length === 0) { setFormError('Vui lòng nhập tên và chọn ít nhất một chỉ số.'); return; } setBuilderOpen(false); setNotice(`Đã tạo báo cáo tùy chỉnh “${builder.name}”.`); };
   const submitSchedule = (event: FormEvent) => { event.preventDefault(); if (!requireManage()) return; const recipients = scheduleForm.recipients.split(',').map((item) => item.trim()).filter(Boolean); if (!scheduleForm.name.trim() || recipients.length === 0) { setFormError('Vui lòng nhập tên lịch gửi và ít nhất một email nhận báo cáo.'); return; } const created: ReportSchedule = { id: `SCH-${String(schedules.length + 1).padStart(2, '0')}`, name: scheduleForm.name.trim(), frequency: scheduleForm.frequency, time: scheduleForm.time, recipients, format: scheduleForm.format, branch: scheduleForm.branch, nextRun: scheduleForm.frequency === 'DAILY' ? `21/07/2026 · ${scheduleForm.time}` : scheduleForm.frequency === 'WEEKLY' ? `27/07/2026 · ${scheduleForm.time}` : `01/08/2026 · ${scheduleForm.time}`, active: true }; setSchedules((current) => [created, ...current]); setScheduleOpen(false); setNotice(`Đã tạo lịch gửi “${created.name}”.`); };
@@ -463,8 +394,7 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[{ label: 'Doanh thu thuần', value: shortMoney(revenue), detail: compare === 'NONE' ? `Trong ${periodLabel.toLocaleLowerCase('vi')}` : `+16,8% ${comparisonSuffix}`, icon: CircleDollarSign, tone: 'bg-violet-50 text-violet-600', key: 'revenue' }, { label: 'Lịch hoàn tất', value: bookings.toLocaleString('vi-VN'), detail: '92,6% lịch đã xác nhận', icon: CalendarDays, tone: 'bg-blue-50 text-blue-600', key: 'bookings' }, { label: 'Giá trị trung bình', value: money(averageTicket), detail: '+3,9% trên mỗi hóa đơn', icon: WalletCards, tone: 'bg-emerald-50 text-emerald-600', key: 'ticket' }, { label: 'Khách hàng mới', value: newCustomers.toLocaleString('vi-VN'), detail: 'Tỷ lệ quay lại 74,2%', icon: UsersRound, tone: 'bg-amber-50 text-amber-600', key: 'customers' }].map(({ label, value, detail, icon: Icon, tone, key }) => <button key={label} type="button" onClick={() => setMetricOpen(key)} className="h-auto border border-slate-200 bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.04)] hover:border-violet-200 hover:shadow-lg"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-slate-500">{label}</p><p className="mt-1.5 text-xl font-black tracking-tight text-slate-950">{value}</p></div><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span></div><p className="mt-2 text-xs font-semibold text-emerald-600">{detail}</p></button>)}</section>
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex gap-1 overflow-x-auto border-b border-slate-100 px-3 pt-3 sm:px-5">{tabs.map((item) => <button key={item.id} type="button" onClick={() => switchTab(item.id)} className={`h-10 shrink-0 rounded-b-none border-x-0 border-t-0 px-3 text-xs font-black shadow-none ${tab === item.id ? 'border-b-2 border-violet-600 bg-violet-50/60 text-violet-700' : 'border-b-2 border-transparent bg-white text-slate-500'}`}>{item.label}</button>)}</div><div className="p-4 sm:p-5">
       {tab === 'EXECUTIVE' && <div className="space-y-5"><div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]"><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h2 className="text-base font-black text-slate-900">Xu hướng doanh thu</h2><p className="mt-1 text-xs text-slate-400">Doanh thu theo ngày và đường so sánh kỳ trước</p></div><TrendingUp className="h-5 w-5 text-violet-500" /></div><div className="relative mt-6 h-56 border-b border-l border-slate-200"><div className="absolute inset-0 flex flex-col justify-between">{[100, 75, 50, 25, 0].map((value) => <div key={value} className="border-t border-dashed border-slate-100"><span className="-ml-10 -translate-y-2 block w-8 text-right text-[9px] font-bold text-slate-400">{value}%</span></div>)}</div><div className="absolute inset-0 flex items-end gap-1.5 px-2">{lineValues.map((value, index) => <div key={index} className="group relative flex h-full flex-1 items-end"><span className="absolute bottom-0 w-full rounded-t bg-violet-500/12" style={{ height: `${value}%` }} /><span className="absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-white bg-violet-600 shadow" style={{ bottom: `calc(${value}% - 5px)` }} /><span className="absolute left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-slate-300" style={{ bottom: `calc(${previousValues[index]}% - 4px)` }} /></div>)}</div></div><div className="mt-4 flex justify-center gap-5 text-[10px] font-bold text-slate-500"><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-violet-600" />Kỳ hiện tại</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-slate-300" />Kỳ trước</span></div></article><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h2 className="text-base font-black text-slate-900">Mục tiêu tháng</h2><p className="mt-1 text-xs text-slate-400">Tiến độ các KPI chính</p></div><Target className="h-5 w-5 text-fuchsia-500" /></div><div className="mt-5 space-y-4">{[{ label: 'Doanh thu', actual: 1141, target: 1280, unit: 'tr', tone: 'bg-violet-500' }, { label: 'Khách hàng mới', actual: 294, target: 350, unit: '', tone: 'bg-blue-500' }, { label: 'Tỷ lệ quay lại', actual: 74.2, target: 78, unit: '%', tone: 'bg-emerald-500' }, { label: 'Công suất ghế', actual: 82.6, target: 85, unit: '%', tone: 'bg-amber-500' }].map((item) => { const percent = item.actual / item.target * 100; return <div key={item.label}><div className="mb-1.5 flex justify-between text-xs"><span className="font-bold text-slate-600">{item.label}</span><span className="font-black text-slate-800">{item.actual}{item.unit} / {item.target}{item.unit}</span></div><div className="h-2.5 rounded-full bg-slate-100"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${Math.min(100, percent)}%` }} /></div><p className="mt-1 text-[9px] font-bold text-slate-400">Đạt {percent.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu</p></div>; })}</div></article></div><div className="grid gap-5 lg:grid-cols-3"><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Doanh thu theo chi nhánh</h3><p className="mt-1 text-xs text-slate-400">Tháng 07/2026</p></div><Store className="h-5 w-5 text-blue-500" /></div><div className="mt-4 space-y-3">{[{ name: 'Quận 3', value: 672.4, share: 59, growth: '+18,2%' }, { name: 'Quận 1', value: 468.6, share: 41, growth: '+14,9%' }].map((item) => <button key={item.name} type="button" className="h-auto w-full border-0 bg-slate-50 p-3 text-left shadow-none"><div className="flex justify-between"><div><p className="text-xs font-black text-slate-700">Chi nhánh {item.name}</p><p className="mt-1 text-[10px] text-emerald-600">{item.growth}</p></div><p className="text-sm font-black text-slate-900">{item.value}tr</p></div><div className="mt-2 h-2 rounded-full bg-white"><div className="h-full rounded-full bg-blue-500" style={{ width: `${item.share}%` }} /></div></button>)}</div></article><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Dịch vụ dẫn đầu</h3><p className="mt-1 text-xs text-slate-400">Theo doanh thu</p></div><Sparkles className="h-5 w-5 text-violet-500" /></div><div className="mt-3 divide-y divide-slate-100">{[{ name: 'Nail Art Premium', value: '168,4tr', share: '14,8%' }, { name: 'Acrylic Full Set', value: '142,8tr', share: '12,5%' }, { name: 'Pedicure Spa', value: '136,2tr', share: '11,9%' }, { name: 'Gel Manicure', value: '128,6tr', share: '11,3%' }].map((item, index) => <div key={item.name} className="flex items-center gap-3 py-3"><span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><div className="flex-1"><p className="text-xs font-black text-slate-700">{item.name}</p><p className="mt-1 text-[10px] text-slate-400">{item.share} tổng doanh thu</p></div><p className="text-xs font-black text-violet-700">{item.value}</p></div>)}</div></article><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Điểm cần chú ý</h3><p className="mt-1 text-xs text-slate-400">Tự động từ dữ liệu</p></div><Gauge className="h-5 w-5 text-amber-500" /></div><div className="mt-3 space-y-2">{[{ title: 'Công suất chiều thứ Bảy', detail: 'Đạt 96%, có nguy cơ từ chối lịch', tone: 'bg-rose-50 text-rose-700' }, { title: 'Chi phí vật tư', detail: 'Dự báo vượt ngân sách 4,5%', tone: 'bg-amber-50 text-amber-700' }, { title: 'Khách thành viên', detail: 'LTV cao hơn khách thường 2,3 lần', tone: 'bg-emerald-50 text-emerald-700' }].map((item) => <div key={item.title} className={`rounded-xl p-3 ${item.tone}`}><p className="text-xs font-black">{item.title}</p><p className="mt-1 text-[10px] leading-4 opacity-80">{item.detail}</p></div>)}</div></article></div></div>}
-      {tab === 'REVENUE' && <RevenueReportTab mode="REVENUE" revenue={revenue} bookings={bookings} averageTicket={averageTicket} branches={branches} selectedBranch={selectedBranch} periodLabel={periodLabel} comparisonSuffix={comparisonSuffix} />}
-      {tab === 'CASH_FLOW' && <RevenueReportTab mode="CASH_FLOW" revenue={revenue} bookings={bookings} averageTicket={averageTicket} branches={branches} selectedBranch={selectedBranch} periodLabel={periodLabel} comparisonSuffix={comparisonSuffix} />}
+      {tab === 'REVENUE' && <RevenueReportTab revenue={revenue} bookings={bookings} averageTicket={averageTicket} branches={branches} selectedBranch={selectedBranch} periodLabel={periodLabel} comparisonSuffix={comparisonSuffix} />}
       {tab === 'OPERATIONS' && <div className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{[{ label: 'Công suất ghế', value: '82,6%', detail: '+5,2 điểm', tone: 'text-violet-700' }, { label: 'Thời gian phục vụ TB', value: '86 phút', detail: '−4 phút', tone: 'text-blue-700' }, { label: 'Tỷ lệ hủy/no-show', value: '4,8%', detail: '−1,2 điểm', tone: 'text-emerald-700' }, { label: 'Lịch đúng giờ', value: '91,4%', detail: '+2,8 điểm', tone: 'text-amber-700' }].map((item) => <article key={item.label} className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold text-slate-500">{item.label}</p><p className={`mt-2 text-2xl font-black ${item.tone}`}>{item.value}</p><p className="mt-1 text-[10px] font-bold text-emerald-600">{item.detail} so với kỳ trước</p></article>)}</div>
         <div className="grid min-w-0 gap-5 lg:grid-cols-2">
