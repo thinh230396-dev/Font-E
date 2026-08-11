@@ -1,35 +1,30 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  BadgeCheck,
   Banknote,
+  CalendarDays,
   Check,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Clock3,
-  Download,
+  CreditCard,
   Eye,
   FileSpreadsheet,
-  FileText,
-  Filter,
   Landmark,
-  LockKeyhole,
   Paperclip,
   Pencil,
   Plus,
   Printer,
-  ReceiptText,
-  RefreshCcw,
   Search,
   ShieldCheck,
-  Store,
   Trash2,
-  TrendingDown,
-  TrendingUp,
-  UserCheck,
-  UserRound,
+  Wallet,
   WalletCards,
   X,
+  XCircle,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
 import Modal from './Modal';
@@ -402,6 +397,390 @@ const statusMeta: Record<TransactionStatus, { label: string; tone: string }> = {
   VOID: { label: 'Đã hủy', tone: 'bg-rose-50 text-rose-600 ring-rose-200' },
 };
 
+// Small status dot color used for the compact table row indicator (presentation only, mirrors statusMeta).
+const statusDot: Record<TransactionStatus, string> = {
+  POSTED: 'bg-emerald-500',
+  PENDING: 'bg-amber-500',
+  DRAFT: 'bg-slate-400',
+  VOID: 'bg-rose-500',
+};
+
+const FINANCE_PAGE_SIZE = 20;
+
+type DateChipValue = 'ALL' | 'TODAY' | 'YESTERDAY' | '7D' | 'MONTH' | 'CUSTOM';
+
+const DATE_CHIPS: { value: DateChipValue; label: string }[] = [
+  { value: 'ALL', label: 'Tất cả' },
+  { value: 'TODAY', label: 'Hôm nay' },
+  { value: 'YESTERDAY', label: 'Hôm qua' },
+  { value: '7D', label: '7 ngày' },
+  { value: 'MONTH', label: 'Tháng này' },
+  { value: 'CUSTOM', label: 'Tùy chỉnh' },
+];
+
+const STATUS_CHIPS: { value: 'ALL' | TransactionStatus; label: string }[] = [
+  { value: 'ALL', label: 'Tất cả' },
+  { value: 'POSTED', label: 'Hoàn thành' },
+  { value: 'PENDING', label: 'Đang chờ' },
+  { value: 'DRAFT', label: 'Nháp' },
+  { value: 'VOID', label: 'Đã hủy' },
+];
+
+const CASH_METHOD_ROWS: { key: PaymentMethod; label: string; icon: LucideIcon }[] = [
+  { key: 'CASH', label: 'Tiền mặt', icon: Banknote },
+  { key: 'BANK', label: 'Chuyển khoản', icon: Landmark },
+  { key: 'CARD', label: 'Thẻ POS', icon: CreditCard },
+  { key: 'EWALLET', label: 'Ví điện tử', icon: Wallet },
+];
+
+// Parses a DD/MM/YYYY string into a Date for range comparisons only; the stored field stays a plain string.
+const parseVNDate = (value: string): Date | null => {
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, day, month, year] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+const getDateRangeForChip = (
+  chip: DateChipValue,
+  customFrom: string,
+  customTo: string
+): { from: Date | null; to: Date | null } => {
+  const now = new Date();
+  switch (chip) {
+    case 'TODAY':
+      return { from: startOfDay(now), to: endOfDay(now) };
+    case 'YESTERDAY': {
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      return { from: startOfDay(y), to: endOfDay(y) };
+    }
+    case '7D': {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 6);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+    case 'MONTH':
+      return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: endOfDay(now) };
+    case 'CUSTOM': {
+      const from = parseVNDate(customFrom);
+      const to = parseVNDate(customTo);
+      return { from: from ? startOfDay(from) : null, to: to ? endOfDay(to) : null };
+    }
+    default:
+      return { from: null, to: null };
+  }
+};
+
+// Stat tile using this app's dominant typography convention: tiny bold uppercase label, big font-black number.
+function FinanceKpiTile({
+  icon: Icon,
+  label,
+  value,
+  valueClassName = 'text-slate-900',
+  iconClassName = 'text-slate-300',
+  footer,
+  footerClassName = 'text-slate-400',
+}: {
+  icon?: LucideIcon;
+  label: string;
+  value: ReactNode;
+  valueClassName?: string;
+  iconClassName?: string;
+  footer?: ReactNode;
+  footerClassName?: string;
+}) {
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+        {Icon && <Icon className={`h-4 w-4 ${iconClassName}`} strokeWidth={2} />}
+      </div>
+      <p className={`mt-2.5 text-2xl font-black leading-tight tracking-tight tabular-nums ${valueClassName}`}>
+        {value}
+      </p>
+      {footer && <p className={`mt-2 text-[10px] font-bold ${footerClassName}`}>{footer}</p>}
+    </article>
+  );
+}
+
+function FinanceCashByMethodTile({ cashByMethod }: { cashByMethod: Record<PaymentMethod, number> }) {
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-5">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tồn quỹ theo phương thức</p>
+      <div className="mt-3 space-y-2">
+        {CASH_METHOD_ROWS.map((row) => {
+          const val = cashByMethod[row.key] ?? 0;
+          return (
+            <div key={row.key} className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                <row.icon className="h-3.5 w-3.5 text-slate-300" strokeWidth={2} />
+                {row.label}
+              </span>
+              <span className={`text-[11px] font-black tabular-nums ${val < 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                {val < 0 ? '−' : ''}
+                {money(Math.abs(val))}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
+// Segmented control (compact track) for mutually-exclusive filter groups.
+function FinanceSegmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: ReactNode; activeClassName?: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-black transition ${
+            value === opt.value
+              ? opt.activeClassName || 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Quiet ghost chip used for filter groups with more options than a segmented track comfortably fits (e.g. Status).
+function FinanceFilterChip({
+  active,
+  onClick,
+  children,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  count?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[10px] font-black transition ${
+        active
+          ? 'border-slate-900 bg-slate-900 text-white'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      {children}
+      {typeof count === 'number' && (
+        <span className={active ? 'text-white/70' : 'text-slate-400'}>{count}</span>
+      )}
+    </button>
+  );
+}
+
+function FinanceTransactionRow({
+  tx,
+  selected,
+  onToggleSelect,
+  onView,
+  onEdit,
+  onApprove,
+  onDelete,
+}: {
+  tx: FinanceTransaction;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onView: () => void;
+  onEdit: () => void;
+  onApprove: () => void;
+  onDelete: () => void;
+}) {
+  const isInc = tx.type === 'INCOME';
+  const st = statusMeta[tx.status];
+  const selectable = tx.status !== 'POSTED';
+
+  return (
+    <tr className={`group transition-colors ${selected ? 'bg-violet-50/60' : 'hover:bg-slate-50'}`}>
+      {/* Select */}
+      <td className="py-3 pl-5 pr-2">
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          disabled={!selectable}
+          aria-label={selected ? 'Bỏ chọn dòng' : 'Chọn dòng'}
+          className={`flex h-4 w-4 items-center justify-center rounded border transition ${
+            !selectable
+              ? 'cursor-not-allowed border-slate-100 bg-slate-50'
+              : selected
+              ? 'border-slate-900 bg-slate-900'
+              : 'border-slate-300 bg-white hover:border-slate-400'
+          }`}
+        >
+          {selected && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+        </button>
+      </td>
+
+      {/* Code & Date */}
+      <td className="px-3 py-3">
+        <p className="text-xs font-black text-slate-900">{tx.id}</p>
+        <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+          {tx.date} · {tx.time}
+        </p>
+      </td>
+
+      {/* Type & Category */}
+      <td className="px-3 py-3">
+        <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+          <span className={`h-1.5 w-1.5 rounded-full ${isInc ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+          {isInc ? 'Thu' : 'Chi'}
+        </span>
+        <p className="mt-1 text-xs font-bold text-slate-800">{tx.category}</p>
+      </td>
+
+      {/* Branch */}
+      <td className="px-3 py-3 text-xs font-bold text-slate-600">{tx.branch === 'Q3' ? 'Quận 3' : 'Quận 1'}</td>
+
+      {/* Counterparty */}
+      <td className="px-3 py-3">
+        <p className="text-xs font-bold text-slate-800">{tx.counterparty}</p>
+        <p className="mt-0.5 max-w-[190px] truncate text-[10px] text-slate-400">{tx.description}</p>
+      </td>
+
+      {/* Related Staff / Customer */}
+      <td className="px-3 py-3 text-[10px]">
+        {tx.relatedStaff && <span className="block font-bold text-violet-600">{tx.relatedStaff}</span>}
+        {tx.relatedCustomer && <span className="block font-semibold text-slate-500">{tx.relatedCustomer}</span>}
+        {!tx.relatedStaff && !tx.relatedCustomer && <span className="text-slate-300">—</span>}
+      </td>
+
+      {/* Payment Method */}
+      <td className="px-3 py-3 text-xs font-bold text-slate-600">{methodLabels[tx.method]}</td>
+
+      {/* Amount */}
+      <td className={`px-3 py-3 text-right text-xs font-black tabular-nums ${isInc ? 'text-emerald-600' : 'text-rose-600'}`}>
+        {isInc ? '+' : '−'}
+        {money(tx.amount)}
+      </td>
+
+      {/* Status */}
+      <td className="px-3 py-3">
+        <span className="flex items-center justify-center gap-1.5 text-[10px] font-black text-slate-600">
+          <span className={`h-1.5 w-1.5 rounded-full ${statusDot[tx.status]}`} />
+          {st.label}
+        </span>
+      </td>
+
+      {/* Created By */}
+      <td className="px-3 py-3 text-[10px] font-semibold text-slate-400">{tx.createdBy}</td>
+
+      {/* Actions */}
+      <td className="py-3 pl-2 pr-5">
+        <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <button
+            type="button"
+            onClick={onView}
+            title="Xem chi tiết phiếu"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+
+          {tx.status !== 'POSTED' && (
+            <>
+              <button
+                type="button"
+                onClick={onEdit}
+                title="Chỉnh sửa phiếu"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-violet-50 hover:text-violet-600"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onApprove}
+                title="Chốt sổ / Duyệt ngay"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onDelete}
+                title="Xóa phiếu"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function FinanceTablePager({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-end gap-1 border-t border-slate-100 px-5 py-3">
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => onChange(page - 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-30"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <span className="px-2 text-[10px] font-black text-slate-500">
+        Trang {page}/{totalPages}
+      </span>
+      <button
+        type="button"
+        disabled={page >= totalPages}
+        onClick={() => onChange(page + 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-30"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+// Tiny inline "label: control" wrapper used to keep the filter bar on one compact row instead of stacked label/control blocks.
+function FinanceFilterGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 export default function TenantAdminFinanceCompact({
   searchQuery: externalSearchQuery,
   onSearchQueryChange,
@@ -444,10 +823,17 @@ export default function TenantAdminFinanceCompact({
     onSearchQueryChange?.(val);
   };
 
-  const [datePeriod, setDatePeriod] = useState<string>('ALL');
+  const [dateChip, setDateChip] = useState<DateChipValue>('ALL');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [methodFilter, setMethodFilter] = useState<'ALL' | PaymentMethod>('ALL');
+
+  // Bulk selection & pagination (UI-only, resets on filter change)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
 
   // Modal states
   const [formOpen, setFormOpen] = useState(false);
@@ -684,22 +1070,72 @@ export default function TenantAdminFinanceCompact({
     }
   };
 
-  // Filtered transactions
-  const filteredTransactions = useMemo(() => {
+  // Approve multiple selected transactions in one batch (same rule as handleApproveTransaction)
+  const handleApproveSelected = () => {
+    if (selectedIds.size === 0) return;
+    const nowStr = `${new Date().toLocaleDateString('vi-VN')} ${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+    let approvedCount = 0;
+    const updated = transactions.map((t) => {
+      if (selectedIds.has(t.id) && t.status !== 'POSTED') {
+        approvedCount += 1;
+        return {
+          ...t,
+          status: 'POSTED' as TransactionStatus,
+          approvedBy: 'Nguyễn Trường Thịnh',
+          auditTrail: [
+            { time: nowStr, action: 'Duyệt hàng loạt & chốt sổ ghi nhận', actor: 'Tenant Admin' },
+            ...(t.auditTrail || []),
+          ],
+        };
+      }
+      return t;
+    });
+    if (approvedCount === 0) return;
+    saveTransactions(updated);
+    onNotify?.(`Đã duyệt & chốt sổ thành công ${approvedCount} phiếu giao dịch.`);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Date range currently in effect (branch + period scope shared by KPIs and the table)
+  const dateRange = useMemo(
+    () => getDateRangeForChip(dateChip, customFrom, customTo),
+    [dateChip, customFrom, customTo]
+  );
+
+  const dateScopedList = useMemo(() => {
     return transactions.filter((tx) => {
-      // Branch filter
       if (selectedBranch !== 'ALL' && tx.branch !== selectedBranch) return false;
+      if (dateRange.from || dateRange.to) {
+        const txDate = parseVNDate(tx.date);
+        if (txDate) {
+          if (dateRange.from && txDate < dateRange.from) return false;
+          if (dateRange.to && txDate > dateRange.to) return false;
+        }
+      }
+      return true;
+    });
+  }, [transactions, selectedBranch, dateRange]);
 
-      // Type filter
+  // Filtered transactions for the table: date/branch scope + the rest of the drill-down filters
+  const filteredTransactions = useMemo(() => {
+    return dateScopedList.filter((tx) => {
       if (typeFilter !== 'ALL' && tx.type !== typeFilter) return false;
-
-      // Category filter
       if (categoryFilter !== 'ALL' && tx.category !== categoryFilter) return false;
-
-      // Status filter
       if (statusFilter !== 'ALL' && tx.status !== statusFilter) return false;
+      if (methodFilter !== 'ALL' && tx.method !== methodFilter) return false;
 
-      // Search query
       if (activeSearch.trim()) {
         const q = activeSearch.toLowerCase().trim();
         const matchCode = tx.id.toLowerCase().includes(q);
@@ -714,42 +1150,99 @@ export default function TenantAdminFinanceCompact({
 
       return true;
     });
-  }, [transactions, selectedBranch, typeFilter, categoryFilter, statusFilter, activeSearch]);
+  }, [dateScopedList, typeFilter, categoryFilter, statusFilter, methodFilter, activeSearch]);
 
-  // Top KPIs calculations
+  // KPIs reflect the current Branch + Period scope (matches the period being viewed, not the row-level drill-down filters)
   const kpiData = useMemo(() => {
-    const branchTxList = transactions.filter(
-      (t) => selectedBranch === 'ALL' || t.branch === selectedBranch
-    );
-
-    // Posted Income
-    const totalIncome = branchTxList
+    const totalIncome = dateScopedList
       .filter((t) => t.type === 'INCOME' && t.status === 'POSTED')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Posted Expense
-    const totalExpense = branchTxList
+    const totalExpense = dateScopedList
       .filter((t) => t.type === 'EXPENSE' && t.status === 'POSTED')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Net Cash Flow
     const netCashFlow = totalIncome - totalExpense;
 
-    // Pending / Draft
-    const pendingList = branchTxList.filter(
-      (t) => t.status === 'PENDING' || t.status === 'DRAFT'
-    );
+    const pendingList = dateScopedList.filter((t) => t.status === 'PENDING' || t.status === 'DRAFT');
     const pendingCount = pendingList.length;
     const pendingAmount = pendingList.reduce((sum, t) => sum + t.amount, 0);
 
-    return {
-      totalIncome,
-      totalExpense,
-      netCashFlow,
-      pendingCount,
-      pendingAmount,
-    };
-  }, [transactions, selectedBranch]);
+    return { totalIncome, totalExpense, netCashFlow, pendingCount, pendingAmount };
+  }, [dateScopedList]);
+
+  const cashByMethod = useMemo(() => {
+    const base: Record<PaymentMethod, number> = { CASH: 0, BANK: 0, CARD: 0, EWALLET: 0 };
+    dateScopedList.forEach((t) => {
+      if (t.status !== 'POSTED') return;
+      base[t.method] += t.type === 'INCOME' ? t.amount : -t.amount;
+    });
+    return base;
+  }, [dateScopedList]);
+
+  const typeCounts = useMemo(
+    () => ({
+      INCOME: dateScopedList.filter((t) => t.type === 'INCOME').length,
+      EXPENSE: dateScopedList.filter((t) => t.type === 'EXPENSE').length,
+    }),
+    [dateScopedList]
+  );
+
+  const statusCounts = useMemo(() => {
+    const base: Record<TransactionStatus, number> = { POSTED: 0, PENDING: 0, DRAFT: 0, VOID: 0 };
+    dateScopedList.forEach((t) => {
+      base[t.status] += 1;
+    });
+    return base;
+  }, [dateScopedList]);
+
+  const netFilteredAmount = useMemo(
+    () => filteredTransactions.reduce((sum, t) => sum + (t.type === 'INCOME' ? t.amount : -t.amount), 0),
+    [filteredTransactions]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / FINANCE_PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const pagedTransactions = useMemo(
+    () => filteredTransactions.slice((currentPage - 1) * FINANCE_PAGE_SIZE, currentPage * FINANCE_PAGE_SIZE),
+    [filteredTransactions, currentPage]
+  );
+  const pageSelectableIds = useMemo(
+    () => pagedTransactions.filter((t) => t.status !== 'POSTED').map((t) => t.id),
+    [pagedTransactions]
+  );
+
+  // Reset to page 1 whenever the active scope/filters change
+  useEffect(() => {
+    setPage(1);
+  }, [typeFilter, categoryFilter, statusFilter, methodFilter, activeSearch, dateChip, customFrom, customTo, selectedBranch]);
+
+  // Clear row selection whenever the visible scope or the page changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [typeFilter, categoryFilter, statusFilter, methodFilter, activeSearch, dateChip, customFrom, customTo, selectedBranch, page]);
+
+  const toggleSelectAll = () => {
+    const allSelected = pageSelectableIds.length > 0 && pageSelectableIds.every((id) => selectedIds.has(id));
+    setSelectedIds(allSelected ? new Set() : new Set(pageSelectableIds));
+  };
+
+  const hasActiveFilters =
+    typeFilter !== 'ALL' ||
+    categoryFilter !== 'ALL' ||
+    statusFilter !== 'ALL' ||
+    methodFilter !== 'ALL' ||
+    dateChip !== 'ALL' ||
+    activeSearch.trim() !== '';
+
+  const clearFilters = () => {
+    setTypeFilter('ALL');
+    setCategoryFilter('ALL');
+    setStatusFilter('ALL');
+    setMethodFilter('ALL');
+    setDateChip('ALL');
+    handleSearchChange('');
+  };
 
   // Export functions
   const exportExcel = () => {
@@ -786,7 +1279,7 @@ export default function TenantAdminFinanceCompact({
     ]);
 
     const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
+      'data:text/csv;charset=utf-8,﻿' +
       [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
 
     const encodedUri = encodeURI(csvContent);
@@ -805,194 +1298,200 @@ export default function TenantAdminFinanceCompact({
 
   return (
     <div className="space-y-6">
-      {/* HEADER SECTION */}
-      <section className="flex flex-col gap-4 rounded-3xl bg-slate-950 p-6 text-white shadow-xl lg:flex-row lg:items-center lg:justify-between">
+      {/* PAGE HEADER */}
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/20 text-violet-300">
-              <WalletCards className="h-4 w-4" />
-            </span>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">
-              Hệ thống Quản lý Giao dịch Tài chính (Nghiệp vụ POS / ERP)
-            </p>
-          </div>
-          <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
-            Sổ Nhật Ký Thu & Chi
-          </h1>
-          <p className="mt-1 text-xs text-slate-400">
-            Nguồn dữ liệu giao dịch duy nhất. Mọi khoản thu, chi phát sinh tại salon được ghi sổ
-            và tự động tổng hợp sang module Báo Báo.
+          <h1 className="text-xl font-black tracking-tight text-slate-900">Sổ Nhật Ký Thu & Chi</h1>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            Theo dõi dòng tiền, tìm kiếm & tạo giao dịch nhanh cho {roleLabel}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={exportExcel}
-            className="flex h-11 items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900 px-4 text-xs font-bold text-slate-200 shadow-sm transition hover:bg-slate-800 hover:text-white"
+            title="Xuất Excel/CSV"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
           >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
-            Xuất Excel/CSV
+            <FileSpreadsheet className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={exportPDF}
-            className="flex h-11 items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900 px-4 text-xs font-bold text-slate-200 shadow-sm transition hover:bg-slate-800 hover:text-white"
+            title="In sổ / PDF"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
           >
-            <Printer className="h-4 w-4 text-violet-400" />
-            In sổ / PDF
+            <Printer className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={openCreateModal}
-            className="flex h-11 items-center gap-2 rounded-2xl border border-violet-600 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-500/25 transition hover:bg-violet-700 active:scale-95"
+            className="flex h-9 items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 text-xs font-black text-white shadow-sm transition hover:bg-violet-700 active:scale-[0.98]"
           >
             <Plus className="h-4 w-4" />
             Tạo giao dịch mới
           </button>
         </div>
+      </header>
+
+      {/* KPI ROW */}
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <FinanceKpiTile
+          icon={ArrowDownLeft}
+          label="Tổng Thu"
+          value={money(kpiData.totalIncome)}
+          valueClassName="text-slate-900"
+          iconClassName="text-emerald-400"
+          footer="Doanh thu thực nhận, kỳ đang xem"
+        />
+        <FinanceKpiTile
+          icon={ArrowUpRight}
+          label="Tổng Chi"
+          value={money(kpiData.totalExpense)}
+          valueClassName="text-slate-900"
+          iconClassName="text-rose-400"
+          footer="Chi phí vận hành, kỳ đang xem"
+        />
+        <FinanceKpiTile
+          icon={CircleDollarSign}
+          label="Dòng Tiền Thuần"
+          value={money(kpiData.netCashFlow)}
+          valueClassName={kpiData.netCashFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}
+          iconClassName="text-violet-400"
+          footer="Thu trừ chi trong kỳ đang xem"
+        />
+        <FinanceKpiTile
+          icon={Clock3}
+          label="Đang Chờ Xử Lý"
+          value={
+            <>
+              {kpiData.pendingCount}
+              <span className="ml-1 text-xs font-bold text-slate-400">phiếu</span>
+            </>
+          }
+          iconClassName="text-amber-400"
+          footer={`Giá trị chờ duyệt: ${shortMoney(kpiData.pendingAmount)}`}
+          footerClassName="text-amber-600"
+        />
+        <FinanceCashByMethodTile cashByMethod={cashByMethod} />
       </section>
 
-      {/* TOP KPIS SECTION */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {/* Total Income */}
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Tổng Thu (Đã ghi sổ)
-              </p>
-              <p className="mt-2 text-2xl font-black text-emerald-700">
-                {money(kpiData.totalIncome)}
-              </p>
-            </div>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <ArrowDownLeft className="h-5 w-5" />
-            </span>
-          </div>
-          <p className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-emerald-600">
-            <TrendingUp className="h-3.5 w-3.5" /> Doanh thu thực nhận từ dịch vụ, cọc & bán lẻ
-          </p>
-        </article>
-
-        {/* Total Expense */}
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Tổng Chi (Đã ghi sổ)
-              </p>
-              <p className="mt-2 text-2xl font-black text-rose-700">
-                {money(kpiData.totalExpense)}
-              </p>
-            </div>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-              <ArrowUpRight className="h-5 w-5" />
-            </span>
-          </div>
-          <p className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-rose-600">
-            <TrendingDown className="h-3.5 w-3.5" /> Chi phí lương, vật tư, thuê nhà & vận hành
-          </p>
-        </article>
-
-        {/* Net Cashflow */}
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Dòng Tiền Thuần
-              </p>
-              <p
-                className={`mt-2 text-2xl font-black ${
-                  kpiData.netCashFlow >= 0 ? 'text-violet-700' : 'text-rose-700'
-                }`}
-              >
-                {money(kpiData.netCashFlow)}
-              </p>
-            </div>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
-              <CircleDollarSign className="h-5 w-5" />
-            </span>
-          </div>
-          <p className="mt-3 text-[10px] font-bold text-slate-500">
-            Cân đối thu trừ chi thực tế trong kỳ
-          </p>
-        </article>
-
-        {/* Pending Transactions */}
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Giao Dịch Đang Chờ Xử Lý
-              </p>
-              <p className="mt-2 text-2xl font-black text-amber-600">
-                {kpiData.pendingCount} <span className="text-sm font-bold text-slate-500">phiếu</span>
-              </p>
-            </div>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-              <Clock3 className="h-5 w-5" />
-            </span>
-          </div>
-          <p className="mt-3 text-[10px] font-bold text-amber-700">
-            Tổng giá trị chờ duyệt: {shortMoney(kpiData.pendingAmount)}
-          </p>
-        </article>
-      </section>
-
-      {/* FILTER BAR SECTION */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          {/* Search */}
-          <div className="relative lg:col-span-2">
-            <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
+      {/* TOOLBAR: search, date range, and drill-down filters in one panel */}
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative min-w-[220px] flex-1 lg:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={activeSearch}
               onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Tìm theo mã phiếu, người nộp/nhận, khách hàng, nội dung..."
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-xs outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+              placeholder="Tìm mã phiếu, khách hàng, nội dung..."
+              className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs font-bold text-slate-700 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
+            />
+            {activeSearch && (
+              <button
+                type="button"
+                onClick={() => handleSearchChange('')}
+                aria-label="Xóa tìm kiếm"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto">
+            <FinanceSegmented<DateChipValue> value={dateChip} onChange={setDateChip} options={DATE_CHIPS} />
+          </div>
+        </div>
+
+        {dateChip === 'CUSTOM' && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 p-2.5">
+            <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+            <input
+              type="text"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              placeholder="Từ DD/MM/YYYY"
+              className="h-8 w-32 rounded-md border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-700 outline-none focus:border-violet-500"
+            />
+            <span className="text-[10px] font-bold text-slate-400">đến</span>
+            <input
+              type="text"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              placeholder="Đến DD/MM/YYYY"
+              className="h-8 w-32 rounded-md border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-700 outline-none focus:border-violet-500"
             />
           </div>
+        )}
 
-          {/* Branch filter */}
-          <div>
-            <BeautifulSelect
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-slate-100 pt-4">
+          <FinanceFilterGroup label="Chi nhánh">
+            <FinanceSegmented
               value={selectedBranch}
-              onChange={(e) => onSelectedBranchChange(e.target.value)}
-              aria-label="Chi nhánh"
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none"
-            >
-              <option value="ALL">Tất cả chi nhánh</option>
-              <option value="Q3">Chi nhánh Quận 3</option>
-              <option value="Q1">Chi nhánh Quận 1</option>
-            </BeautifulSelect>
-          </div>
+              onChange={onSelectedBranchChange}
+              options={[
+                { value: 'ALL', label: 'Tất cả' },
+                { value: 'Q3', label: 'Quận 3' },
+                { value: 'Q1', label: 'Quận 1' },
+              ]}
+            />
+          </FinanceFilterGroup>
 
-          {/* Type filter */}
-          <div>
-            <BeautifulSelect
+          <FinanceFilterGroup label="Loại">
+            <FinanceSegmented<'ALL' | 'INCOME' | 'EXPENSE'>
               value={typeFilter}
-              onChange={(e) => {
-                setTypeFilter(e.target.value as any);
+              onChange={(value) => {
+                setTypeFilter(value);
                 setCategoryFilter('ALL');
               }}
-              aria-label="Loại giao dịch"
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none"
-            >
-              <option value="ALL">Tất cả loại (Thu & Chi)</option>
-              <option value="INCOME">Chỉ khoản THU (+)</option>
-              <option value="EXPENSE">Chỉ khoản CHI (−)</option>
-            </BeautifulSelect>
-          </div>
+              options={[
+                { value: 'ALL', label: 'Tất cả' },
+                {
+                  value: 'INCOME',
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      Thu <span className="text-slate-400">{typeCounts.INCOME}</span>
+                    </span>
+                  ),
+                  activeClassName: 'bg-white text-emerald-700 shadow-sm',
+                },
+                {
+                  value: 'EXPENSE',
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      Chi <span className="text-slate-400">{typeCounts.EXPENSE}</span>
+                    </span>
+                  ),
+                  activeClassName: 'bg-white text-rose-700 shadow-sm',
+                },
+              ]}
+            />
+          </FinanceFilterGroup>
 
-          {/* Category filter */}
-          <div>
+          <FinanceFilterGroup label="Trạng thái">
+            <div className="flex flex-wrap gap-1.5">
+              {STATUS_CHIPS.map((s) => (
+                <FinanceFilterChip
+                  key={s.value}
+                  active={statusFilter === s.value}
+                  onClick={() => setStatusFilter(s.value)}
+                  count={s.value === 'ALL' ? undefined : statusCounts[s.value as TransactionStatus]}
+                >
+                  {s.label}
+                </FinanceFilterChip>
+              ))}
+            </div>
+          </FinanceFilterGroup>
+
+          <FinanceFilterGroup label="Danh mục">
             <BeautifulSelect
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               aria-label="Danh mục"
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none"
+              className="h-8 w-40 rounded-md border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-700 outline-none"
             >
               <option value="ALL">Tất cả danh mục</option>
               {typeFilter !== 'EXPENSE' && (
@@ -1014,293 +1513,201 @@ export default function TenantAdminFinanceCompact({
                 </optgroup>
               )}
             </BeautifulSelect>
-          </div>
+          </FinanceFilterGroup>
 
-          {/* Status filter */}
-          <div>
+          <FinanceFilterGroup label="Phương thức">
             <BeautifulSelect
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Trạng thái"
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none"
+              value={methodFilter}
+              onChange={(e) => setMethodFilter(e.target.value as 'ALL' | PaymentMethod)}
+              aria-label="Phương thức thanh toán"
+              className="h-8 w-36 rounded-md border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-700 outline-none"
             >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="POSTED">Hoàn thành (Đã ghi sổ)</option>
-              <option value="PENDING">Đang chờ xử lý</option>
-              <option value="DRAFT">Phiếu nháp</option>
-              <option value="VOID">Đã hủy</option>
+              <option value="ALL">Tất cả</option>
+              <option value="CASH">Tiền mặt</option>
+              <option value="BANK">Chuyển khoản</option>
+              <option value="CARD">Thẻ POS</option>
+              <option value="EWALLET">Ví điện tử</option>
             </BeautifulSelect>
-          </div>
+          </FinanceFilterGroup>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-auto flex items-center gap-1 text-[10px] font-black text-violet-600 hover:text-violet-800"
+            >
+              <XCircle className="h-3.5 w-3.5" /> Xóa bộ lọc
+            </button>
+          )}
         </div>
       </section>
 
       {/* TRANSACTIONS TABLE */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-sm font-black text-slate-900">Danh Sách Phiếu Giao Dịch</h2>
-            <p className="mt-0.5 text-[10px] text-slate-500">
-              Hiển thị {filteredTransactions.length} trên tổng số {transactions.length} giao dịch
+            <h2 className="text-sm font-black text-slate-900">Danh sách phiếu giao dịch</h2>
+            <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+              {pagedTransactions.length} / {filteredTransactions.length} giao dịch phù hợp
+              {selectedBranch !== 'ALL' && ` · Chi nhánh ${selectedBranch}`}
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-violet-50 px-3 py-1 text-[9px] font-bold text-violet-700">
-              Chi nhánh: {selectedBranch === 'ALL' ? 'Toàn hệ thống' : selectedBranch}
-            </span>
-          </div>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1.5">
+              <span className="text-[10px] font-black text-white">{selectedIds.size} phiếu đã chọn</span>
+              <button
+                type="button"
+                onClick={handleApproveSelected}
+                className="flex h-7 items-center gap-1.5 rounded-md bg-white px-2.5 text-[10px] font-black text-slate-900 transition hover:bg-slate-100"
+              >
+                <Check className="h-3.5 w-3.5" /> Duyệt & chốt sổ
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                aria-label="Bỏ chọn tất cả"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-left">
+          <table className="w-full min-w-[1160px] border-collapse text-left">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-wider text-slate-400">
-                <th className="px-4 py-3.5">Mã phiếu & Ngày</th>
-                <th className="px-3 py-3.5">Loại & Danh mục</th>
-                <th className="px-3 py-3.5">Chi nhánh</th>
-                <th className="px-3 py-3.5">Người nhận / Nộp</th>
-                <th className="px-3 py-3.5">Liên quan (NV / KH)</th>
-                <th className="px-3 py-3.5">Thanh toán</th>
-                <th className="px-3 py-3.5 text-right">Số tiền</th>
-                <th className="px-3 py-3.5 text-center">Trạng thái</th>
-                <th className="px-3 py-3.5">Người tạo</th>
-                <th className="px-4 py-3.5 text-right">Thao tác</th>
+              <tr className="border-b border-slate-200">
+                <th className="w-10 py-3 pl-5 pr-2">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    aria-label="Chọn tất cả trong trang"
+                    className={`flex h-4 w-4 items-center justify-center rounded border transition ${
+                      pageSelectableIds.length > 0 && pageSelectableIds.every((id) => selectedIds.has(id))
+                        ? 'border-slate-900 bg-slate-900'
+                        : 'border-slate-300 bg-white hover:border-slate-400'
+                    }`}
+                  >
+                    {pageSelectableIds.length > 0 && pageSelectableIds.every((id) => selectedIds.has(id)) && (
+                      <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                    )}
+                  </button>
+                </th>
+                <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400">Mã phiếu & ngày</th>
+                <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400">Loại & danh mục</th>
+                <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400">Chi nhánh</th>
+                <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400">Người nhận / nộp</th>
+                <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400">Liên quan</th>
+                <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400">Thanh toán</th>
+                <th className="px-3 py-3 text-right text-[10px] font-black uppercase tracking-wider text-slate-400">Số tiền</th>
+                <th className="px-3 py-3 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">Trạng thái</th>
+                <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400">Người tạo</th>
+                <th className="py-3 pl-2 pr-5 text-right text-[10px] font-black uppercase tracking-wider text-slate-400">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-[11px]">
-              {filteredTransactions.length > 0 ? (
-                filteredTransactions.map((tx) => {
-                  const isInc = tx.type === 'INCOME';
-                  const st = statusMeta[tx.status];
-
-                  return (
-                    <tr key={tx.id} className="transition hover:bg-slate-50/80">
-                      {/* Code & Date */}
-                      <td className="px-4 py-3.5">
-                        <p className="font-black text-slate-900">{tx.id}</p>
-                        <p className="mt-0.5 text-[9px] font-semibold text-slate-400">
-                          {tx.date} · {tx.time}
-                        </p>
-                      </td>
-
-                      {/* Type & Category */}
-                      <td className="px-3 py-3.5">
-                        <span
-                          className={`inline-block rounded-md px-2 py-0.5 text-[8px] font-black uppercase ${
-                            isInc ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {isInc ? 'THU (+)' : 'CHI (−)'}
-                        </span>
-                        <p className="mt-1 font-bold text-slate-800">{tx.category}</p>
-                      </td>
-
-                      {/* Branch */}
-                      <td className="px-3 py-3.5 font-bold text-slate-700">
-                        {tx.branch === 'Q3' ? 'Quận 3' : 'Quận 1'}
-                      </td>
-
-                      {/* Counterparty */}
-                      <td className="px-3 py-3.5">
-                        <p className="font-bold text-slate-800">{tx.counterparty}</p>
-                        <p className="mt-0.5 max-w-[180px] truncate text-[9px] text-slate-400">
-                          {tx.description}
-                        </p>
-                      </td>
-
-                      {/* Related Staff / Customer */}
-                      <td className="px-3 py-3.5">
-                        {tx.relatedStaff && (
-                          <span className="block text-[10px] font-bold text-violet-700">
-                            NV: {tx.relatedStaff}
-                          </span>
-                        )}
-                        {tx.relatedCustomer && (
-                          <span className="block text-[10px] font-medium text-slate-600">
-                            KH: {tx.relatedCustomer}
-                          </span>
-                        )}
-                        {!tx.relatedStaff && !tx.relatedCustomer && (
-                          <span className="text-[10px] text-slate-300">—</span>
-                        )}
-                      </td>
-
-                      {/* Payment Method */}
-                      <td className="px-3 py-3.5 font-semibold text-slate-600">
-                        {methodLabels[tx.method]}
-                      </td>
-
-                      {/* Amount */}
-                      <td
-                        className={`px-3 py-3.5 text-right text-xs font-black ${
-                          isInc ? 'text-emerald-700' : 'text-rose-700'
-                        }`}
-                      >
-                        {isInc ? '+' : '−'}
-                        {money(tx.amount)}
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-3 py-3.5 text-center">
-                        <span
-                          className={`inline-block rounded-full px-2.5 py-1 text-[8px] font-black ${st.tone}`}
-                        >
-                          {st.label}
-                        </span>
-                      </td>
-
-                      {/* Created By */}
-                      <td className="px-3 py-3.5 text-slate-500">{tx.createdBy}</td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* View Button */}
-                          <button
-                            type="button"
-                            onClick={() => setDetailTransaction(tx)}
-                            title="Xem chi tiết phiếu"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-900"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
-
-                          {/* Edit Button (Disabled for POSTED) */}
-                          {tx.status !== 'POSTED' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => openEditModal(tx)}
-                                title="Chỉnh sửa phiếu"
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-violet-600 shadow-sm transition hover:bg-violet-50"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleApproveTransaction(tx)}
-                                title="Chốt sổ / Duyệt ngay"
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm transition hover:bg-emerald-100"
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setDeleteConfirmTx(tx)}
-                                title="Xóa phiếu"
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 shadow-sm transition hover:bg-rose-50"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
+            <tbody className="divide-y divide-slate-100">
+              {pagedTransactions.length > 0 ? (
+                pagedTransactions.map((tx) => (
+                  <FinanceTransactionRow
+                    key={tx.id}
+                    tx={tx}
+                    selected={selectedIds.has(tx.id)}
+                    onToggleSelect={() => toggleSelectOne(tx.id)}
+                    onView={() => setDetailTransaction(tx)}
+                    onEdit={() => openEditModal(tx)}
+                    onApprove={() => handleApproveTransaction(tx)}
+                    onDelete={() => setDeleteConfirmTx(tx)}
+                  />
+                ))
               ) : (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-xs font-semibold text-slate-400">
+                  <td colSpan={11} className="py-14 text-center text-xs font-bold text-slate-400">
                     Không tìm thấy giao dịch nào phù hợp với bộ lọc hiện tại.
                   </td>
                 </tr>
               )}
             </tbody>
-            {filteredTransactions.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-slate-200 bg-slate-50/80 font-black text-slate-900">
-                  <td colSpan={6} className="px-4 py-3.5 text-xs">
-                    Tổng cộng ({filteredTransactions.length} giao dịch)
-                  </td>
-                  <td className="px-3 py-3.5 text-right text-xs text-violet-700">
-                    {money(
-                      filteredTransactions.reduce(
-                        (sum, t) => sum + (t.type === 'INCOME' ? t.amount : -t.amount),
-                        0
-                      )
-                    )}
-                  </td>
-                  <td colSpan={3} className="px-4 py-3.5 text-right text-[10px] text-slate-500">
-                    Đã chọn bộ lọc
-                  </td>
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
+
+        {filteredTransactions.length > 0 && (
+          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+            <p className="text-[10px] font-bold text-slate-500">Tổng ròng ({filteredTransactions.length} giao dịch)</p>
+            <p className={`text-xs font-black tabular-nums ${netFilteredAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {money(netFilteredAmount)}
+            </p>
+          </div>
+        )}
+
+        <FinanceTablePager page={currentPage} totalPages={totalPages} onChange={setPage} />
       </section>
 
       {/* CREATE / EDIT TRANSACTION MODAL */}
       <Modal
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
-        title={editingTransaction ? `Chỉnh Sửa Giao Dịch ${formCode}` : 'Tạo Giao Dịch Mới'}
+        title={editingTransaction ? `Chỉnh sửa giao dịch ${formCode}` : 'Tạo giao dịch mới'}
         subtitle="Phiếu giao dịch sẽ được ghi nhận trực tiếp vào sổ nhật ký tài chính của salon"
         maxWidth="max-w-2xl"
       >
         <form onSubmit={handleSaveTransaction} className="space-y-4">
           {formError && (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">
               {formError}
             </div>
           )}
 
           {/* Type Toggle */}
-          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-slate-100 p-1.5">
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
             <button
               type="button"
               onClick={() => handleTypeChange('INCOME')}
-              className={`flex h-11 items-center justify-center gap-2 rounded-xl text-xs font-black transition ${
-                formType === 'INCOME'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-900'
+              className={`flex h-9 items-center justify-center gap-2 rounded-md text-xs font-black transition ${
+                formType === 'INCOME' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               <ArrowDownLeft className="h-4 w-4" />
-              PHIẾU THU (+ Khoản Thu)
+              Phiếu thu (+ khoản thu)
             </button>
             <button
               type="button"
               onClick={() => handleTypeChange('EXPENSE')}
-              className={`flex h-11 items-center justify-center gap-2 rounded-xl text-xs font-black transition ${
-                formType === 'EXPENSE'
-                  ? 'bg-rose-600 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-900'
+              className={`flex h-9 items-center justify-center gap-2 rounded-md text-xs font-black transition ${
+                formType === 'EXPENSE' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               <ArrowUpRight className="h-4 w-4" />
-              PHIẾU CHI (− Khoản Chi)
+              Phiếu chi (− khoản chi)
             </button>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Code (Auto-generated) */}
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
-                Mã phiếu <span className="text-slate-400">(Tự động)</span>
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
+                Mã phiếu <span className="text-slate-400">(tự động)</span>
               </label>
               <input
                 type="text"
                 value={formCode}
                 onChange={(e) => setFormCode(e.target.value)}
                 readOnly={Boolean(editingTransaction)}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-xs font-black text-slate-800 outline-none"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-black text-slate-800 outline-none"
               />
             </div>
 
             {/* Category */}
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
-                Danh mục {formType === 'INCOME' ? 'Thu' : 'Chi'} <span className="text-rose-500">*</span>
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
+                Danh mục {formType === 'INCOME' ? 'thu' : 'chi'} <span className="text-rose-500">*</span>
               </label>
               <BeautifulSelect
                 value={formCategory}
                 onChange={(e) => handleCategoryChange(e.target.value)}
                 aria-label="Danh mục"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-800 outline-none"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none"
               >
                 {(formType === 'INCOME' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((c) => (
                   <option key={c} value={c}>
@@ -1312,7 +1719,7 @@ export default function TenantAdminFinanceCompact({
 
             {/* Date & Time */}
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
                 Ngày giao dịch <span className="text-rose-500">*</span>
               </label>
               <input
@@ -1320,12 +1727,12 @@ export default function TenantAdminFinanceCompact({
                 value={formDate}
                 onChange={(e) => setFormDate(e.target.value)}
                 placeholder="DD/MM/YYYY"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-800 outline-none focus:border-violet-400 focus:bg-white"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
                 Giờ giao dịch <span className="text-rose-500">*</span>
               </label>
               <input
@@ -1333,20 +1740,20 @@ export default function TenantAdminFinanceCompact({
                 value={formTime}
                 onChange={(e) => setFormTime(e.target.value)}
                 placeholder="HH:mm"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-800 outline-none focus:border-violet-400 focus:bg-white"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
               />
             </div>
 
             {/* Branch */}
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
                 Chi nhánh phát sinh <span className="text-rose-500">*</span>
               </label>
               <BeautifulSelect
                 value={formBranch}
-                onChange={(e) => setFormBranch(e.target.value as any)}
+                onChange={(e) => setFormBranch(e.target.value as 'Q3' | 'Q1')}
                 aria-label="Chi nhánh"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-800 outline-none"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none"
               >
                 <option value="Q3">Chi nhánh Quận 3</option>
                 <option value="Q1">Chi nhánh Quận 1</option>
@@ -1355,25 +1762,25 @@ export default function TenantAdminFinanceCompact({
 
             {/* Payment Method */}
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
                 Phương thức thanh toán <span className="text-rose-500">*</span>
               </label>
               <BeautifulSelect
                 value={formMethod}
-                onChange={(e) => setFormMethod(e.target.value as any)}
+                onChange={(e) => setFormMethod(e.target.value as PaymentMethod)}
                 aria-label="Phương thức thanh toán"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-800 outline-none"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none"
               >
-                <option value="BANK">Chuyển khoản Ngân hàng</option>
+                <option value="BANK">Chuyển khoản ngân hàng</option>
                 <option value="CASH">Tiền mặt tại quầy</option>
                 <option value="CARD">Quẹt thẻ POS</option>
-                <option value="EWALLET">Ví điện tử / Online</option>
+                <option value="EWALLET">Ví điện tử / online</option>
               </BeautifulSelect>
             </div>
 
             {/* Counterparty */}
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
                 {formType === 'INCOME' ? 'Người nộp tiền' : 'Người nhận tiền'}{' '}
                 <span className="text-rose-500">*</span>
               </label>
@@ -1384,13 +1791,13 @@ export default function TenantAdminFinanceCompact({
                 placeholder={
                   formType === 'INCOME' ? 'Nhập tên khách / đơn vị nộp' : 'Nhập tên nhà cung cấp / người nhận'
                 }
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-800 outline-none focus:border-violet-400 focus:bg-white"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
               />
             </div>
 
             {/* Amount */}
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
                 Số tiền (VNĐ) <span className="text-rose-500">*</span>
               </label>
               <input
@@ -1398,31 +1805,31 @@ export default function TenantAdminFinanceCompact({
                 value={formAmount}
                 onChange={(e) => setFormAmount(e.target.value)}
                 placeholder="Nhập số tiền..."
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-black text-slate-900 outline-none focus:border-violet-400 focus:bg-white"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
               />
             </div>
           </div>
 
           {/* Business Logic: Staff integration for Payroll category */}
           {formCategory === 'Lương, phụ cấp & hoa hồng' && (
-            <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+            <div className="rounded-lg border border-violet-100 bg-violet-50/60 p-4">
               <p className="text-[10px] font-black uppercase tracking-wider text-violet-800">
-                ⚡ Nghiệp vụ chi lương & hoa hồng nhân viên
+                Nghiệp vụ chi lương & hoa hồng nhân viên
               </p>
-              <p className="mt-0.5 text-[10px] text-violet-600">
+              <p className="mt-0.5 text-[10px] font-semibold text-violet-600">
                 Danh sách nhân viên được đồng bộ trực tiếp từ Module Nhân Sự
               </p>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-[10px] font-bold text-slate-700">
+                  <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
                     Chọn nhân viên hưởng lương
                   </label>
                   <BeautifulSelect
                     value={formStaff}
                     onChange={(e) => handleStaffSelect(e.target.value)}
                     aria-label="Nhân viên"
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none"
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none"
                   >
                     <option value="">-- Chọn nhân viên --</option>
                     {STAFF_LIST.map((s) => (
@@ -1434,14 +1841,12 @@ export default function TenantAdminFinanceCompact({
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-[10px] font-bold text-slate-700">
-                    Chi nhánh nhân viên
-                  </label>
+                  <label className="mb-1.5 block text-[10px] font-bold text-slate-700">Chi nhánh nhân viên</label>
                   <input
                     type="text"
                     value={formBranch === 'Q3' ? 'Chi nhánh Quận 3' : 'Chi nhánh Quận 1'}
                     readOnly
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-xs font-bold text-slate-700 outline-none"
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 text-xs font-bold text-slate-700 outline-none"
                   />
                 </div>
               </div>
@@ -1452,28 +1857,28 @@ export default function TenantAdminFinanceCompact({
           {formCategory !== 'Lương, phụ cấp & hoa hồng' && (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-700">
-                  Khách hàng liên quan <span className="text-slate-400">(Tùy chọn)</span>
+                <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
+                  Khách hàng liên quan <span className="text-slate-400">(tùy chọn)</span>
                 </label>
                 <input
                   type="text"
                   value={formCustomer}
                   onChange={(e) => setFormCustomer(e.target.value)}
                   placeholder="Chọn hoặc nhập tên khách hàng..."
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-800 outline-none focus:border-violet-400 focus:bg-white"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-700">
-                  Nhân viên liên quan <span className="text-slate-400">(Tùy chọn)</span>
+                <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
+                  Nhân viên liên quan <span className="text-slate-400">(tùy chọn)</span>
                 </label>
                 <input
                   type="text"
                   value={formStaff}
                   onChange={(e) => setFormStaff(e.target.value)}
                   placeholder="Nhập tên nhân viên liên quan..."
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-800 outline-none focus:border-violet-400 focus:bg-white"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
                 />
               </div>
             </div>
@@ -1481,23 +1886,23 @@ export default function TenantAdminFinanceCompact({
 
           {/* Description */}
           <div>
-            <label className="mb-1 block text-[10px] font-bold text-slate-700">
-              Nội dung / Mô tả lý do giao dịch <span className="text-rose-500">*</span>
+            <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
+              Nội dung / mô tả lý do giao dịch <span className="text-rose-500">*</span>
             </label>
             <textarea
               rows={2}
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
               placeholder="Nhập chi tiết diễn giải phiếu giao dịch..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-800 outline-none focus:border-violet-400 focus:bg-white"
+              className="w-full rounded-lg border border-slate-200 bg-white p-3 text-xs font-medium text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
             />
           </div>
 
           {/* Document Attachment & Status */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
-                Đính kèm chứng từ / Hóa đơn VAT <span className="text-slate-400">(Tùy chọn)</span>
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
+                Đính kèm chứng từ / hóa đơn VAT <span className="text-slate-400">(tùy chọn)</span>
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -1505,12 +1910,12 @@ export default function TenantAdminFinanceCompact({
                   value={formDocument}
                   onChange={(e) => setFormDocument(e.target.value)}
                   placeholder="Tên chứng từ (VD: hoa_don_vat.pdf)..."
-                  className="h-11 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs outline-none focus:border-violet-400 focus:bg-white"
+                  className="h-10 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
                 />
                 <button
                   type="button"
                   onClick={() => setFormDocument(`bien_nhan_${Date.now().toString().slice(-4)}.pdf`)}
-                  className="flex h-11 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-100 px-3 text-[10px] font-bold text-slate-700 shadow-sm hover:bg-slate-200"
+                  className="flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-600 transition hover:bg-slate-50"
                 >
                   <Paperclip className="h-3.5 w-3.5" /> Thêm file
                 </button>
@@ -1518,35 +1923,35 @@ export default function TenantAdminFinanceCompact({
             </div>
 
             <div>
-              <label className="mb-1 block text-[10px] font-bold text-slate-700">
+              <label className="mb-1.5 block text-[10px] font-bold text-slate-700">
                 Trạng thái ghi sổ <span className="text-rose-500">*</span>
               </label>
               <BeautifulSelect
                 value={formStatus}
-                onChange={(e) => setFormStatus(e.target.value as any)}
+                onChange={(e) => setFormStatus(e.target.value as TransactionStatus)}
                 aria-label="Trạng thái"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-800 outline-none"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none"
               >
-                <option value="POSTED">Hoàn thành (Ghi sổ ngay)</option>
+                <option value="POSTED">Hoàn thành (ghi sổ ngay)</option>
                 <option value="PENDING">Đang chờ phê duyệt</option>
                 <option value="DRAFT">Lưu phiếu nháp</option>
               </BeautifulSelect>
             </div>
           </div>
 
-          <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+          <div className="mt-6 flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
             <button
               type="button"
               onClick={() => setFormOpen(false)}
-              className="h-11 rounded-xl border border-slate-200 bg-white px-5 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50"
+              className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="h-11 rounded-xl border border-violet-600 bg-violet-600 px-6 text-xs font-black text-white shadow-lg shadow-violet-200 transition hover:bg-violet-700"
+              className="h-9 rounded-lg bg-violet-600 px-5 text-xs font-black text-white shadow-sm transition hover:bg-violet-700"
             >
-              {editingTransaction ? 'Cập Nhật Giao Dịch' : 'Lưu & Ghi Sổ'}
+              {editingTransaction ? 'Cập nhật giao dịch' : 'Lưu & ghi sổ'}
             </button>
           </div>
         </form>
@@ -1557,119 +1962,107 @@ export default function TenantAdminFinanceCompact({
         <Modal
           isOpen={Boolean(detailTransaction)}
           onClose={() => setDetailTransaction(null)}
-          title={`Chi Tiết Phiếu Giao Dịch ${detailTransaction.id}`}
-          subtitle="Chứng từ kế toán chính thức thuộc sổ nhật ký tài chính Lumière Studio"
+          title={`Chi tiết phiếu giao dịch ${detailTransaction.id}`}
+          subtitle="Chứng từ kế toán chính thức thuộc sổ nhật ký tài chính"
           maxWidth="max-w-2xl"
         >
-          <div className="space-y-5">
+          <div className="space-y-4">
             {/* Stamp & Banner */}
             <div
-              className={`relative overflow-hidden rounded-2xl p-5 text-white shadow-md ${
-                detailTransaction.type === 'INCOME'
-                  ? 'bg-gradient-to-r from-emerald-800 to-teal-900'
-                  : 'bg-gradient-to-r from-slate-900 to-rose-950'
+              className={`relative overflow-hidden rounded-lg p-5 text-white ${
+                detailTransaction.type === 'INCOME' ? 'bg-emerald-700' : 'bg-slate-900'
               }`}
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="rounded-full bg-white/20 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-white">
-                    {detailTransaction.type === 'INCOME' ? 'PHIẾU THU THUẦN' : 'PHIẾU CHI THỰC TẾ'}
+                  <span className="text-[10px] font-black uppercase tracking-wide text-white/70">
+                    {detailTransaction.type === 'INCOME' ? 'Phiếu thu thuần' : 'Phiếu chi thực tế'}
                   </span>
-                  <p className="mt-2 text-xs font-semibold text-slate-300">
-                    Mã chứng từ: <span className="font-mono font-bold text-white">{detailTransaction.id}</span>
+                  <p className="mt-2 text-[10px] font-semibold text-white/70">
+                    Mã chứng từ: <span className="font-black text-white">{detailTransaction.id}</span>
                   </p>
-                  <p className="mt-1 text-3xl font-black">
+                  <p className="mt-1 text-3xl font-black tracking-tight">
                     {money(detailTransaction.amount)}
                   </p>
                 </div>
 
                 <div className="text-right">
-                  <span
-                    className={`inline-block rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
-                      statusMeta[detailTransaction.status].tone
-                    }`}
-                  >
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-black text-white">
+                    <span className={`h-1.5 w-1.5 rounded-full ${statusDot[detailTransaction.status]}`} />
                     {statusMeta[detailTransaction.status].label}
                   </span>
-                  <p className="mt-2 text-[10px] font-bold text-slate-300">
+                  <p className="mt-2 text-[10px] font-semibold text-white/60">
                     {detailTransaction.date} · {detailTransaction.time}
                   </p>
                 </div>
               </div>
 
-              {/* Watermark stamp for POSTED */}
               {detailTransaction.status === 'POSTED' && (
-                <div className="absolute -bottom-4 -right-4 rotate-[-12deg] rounded-2xl border-4 border-emerald-400/40 px-4 py-2 text-xl font-black uppercase tracking-widest text-emerald-300/30">
-                  ĐÃ CHỐT SỔ
+                <div className="absolute -bottom-3 -right-3 rotate-[-10deg] rounded-lg border-2 border-white/15 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-white/15">
+                  Đã chốt sổ
                 </div>
               )}
             </div>
 
             {/* Attributes Grid */}
-            <div className="grid gap-3 sm:grid-cols-2 text-xs">
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                 <p className="text-[10px] font-bold text-slate-400">Danh mục tài chính</p>
-                <p className="mt-1 font-black text-slate-800">{detailTransaction.category}</p>
+                <p className="mt-1 text-xs font-black text-slate-800">{detailTransaction.category}</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                 <p className="text-[10px] font-bold text-slate-400">Chi nhánh hạch toán</p>
-                <p className="mt-1 font-black text-slate-800">
+                <p className="mt-1 text-xs font-black text-slate-800">
                   {detailTransaction.branch === 'Q3' ? 'Chi nhánh Quận 3' : 'Chi nhánh Quận 1'}
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                 <p className="text-[10px] font-bold text-slate-400">
                   {detailTransaction.type === 'INCOME' ? 'Người nộp tiền' : 'Người nhận tiền'}
                 </p>
-                <p className="mt-1 font-black text-slate-800">{detailTransaction.counterparty}</p>
+                <p className="mt-1 text-xs font-black text-slate-800">{detailTransaction.counterparty}</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                 <p className="text-[10px] font-bold text-slate-400">Phương thức thanh toán</p>
-                <p className="mt-1 font-black text-slate-800">
-                  {methodLabels[detailTransaction.method]}
-                </p>
+                <p className="mt-1 text-xs font-black text-slate-800">{methodLabels[detailTransaction.method]}</p>
               </div>
 
               {detailTransaction.relatedStaff && (
-                <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-3">
-                  <p className="text-[10px] font-bold text-violet-600">Nhân viên liên quan</p>
-                  <p className="mt-1 font-black text-violet-900">{detailTransaction.relatedStaff}</p>
+                <div className="rounded-lg border border-violet-100 bg-violet-50/60 p-3">
+                  <p className="text-[10px] font-bold text-violet-500">Nhân viên liên quan</p>
+                  <p className="mt-1 text-xs font-black text-violet-900">{detailTransaction.relatedStaff}</p>
                 </div>
               )}
 
               {detailTransaction.relatedCustomer && (
-                <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
-                  <p className="text-[10px] font-bold text-blue-600">Khách hàng liên quan</p>
-                  <p className="mt-1 font-black text-blue-900">{detailTransaction.relatedCustomer}</p>
+                <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
+                  <p className="text-[10px] font-bold text-blue-500">Khách hàng liên quan</p>
+                  <p className="mt-1 text-xs font-black text-blue-900">{detailTransaction.relatedCustomer}</p>
                 </div>
               )}
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                 <p className="text-[10px] font-bold text-slate-400">Người lập phiếu</p>
-                <p className="mt-1 font-bold text-slate-700">{detailTransaction.createdBy}</p>
+                <p className="mt-1 text-xs font-bold text-slate-700">{detailTransaction.createdBy}</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-                <p className="text-[10px] font-bold text-slate-400">Người phê duyệt / Chốt sổ</p>
-                <p className="mt-1 font-bold text-slate-700">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                <p className="text-[10px] font-bold text-slate-400">Người phê duyệt / chốt sổ</p>
+                <p className="mt-1 text-xs font-bold text-slate-700">
                   {detailTransaction.approvedBy || 'Chưa duyệt'}
                 </p>
               </div>
             </div>
 
             {/* Description & Notes */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Nội dung diễn giải
-              </p>
-              <p className="mt-1.5 text-xs font-semibold leading-relaxed text-slate-800">
-                {detailTransaction.description}
-              </p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+              <p className="text-[10px] font-bold text-slate-400">Nội dung diễn giải</p>
+              <p className="mt-1.5 text-xs font-semibold leading-relaxed text-slate-800">{detailTransaction.description}</p>
               {detailTransaction.note && (
-                <p className="mt-2 border-t border-slate-200/60 pt-2 text-[10px] text-slate-500">
+                <p className="mt-2 border-t border-slate-200 pt-2 text-[10px] font-semibold text-slate-500">
                   Ghi chú: {detailTransaction.note}
                 </p>
               )}
@@ -1677,15 +2070,15 @@ export default function TenantAdminFinanceCompact({
 
             {/* Document attachment */}
             {detailTransaction.documentName && (
-              <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs">
+              <div className="flex items-center justify-between rounded-lg border border-violet-100 bg-violet-50/50 p-3">
                 <div className="flex items-center gap-2">
-                  <Paperclip className="h-4 w-4 text-violet-600" />
-                  <span className="font-bold text-violet-900">{detailTransaction.documentName}</span>
+                  <Paperclip className="h-4 w-4 text-violet-500" />
+                  <span className="text-xs font-bold text-violet-900">{detailTransaction.documentName}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => onNotify?.(`Đang tải tập tin ${detailTransaction.documentName}...`)}
-                  className="rounded-lg bg-white px-3 py-1.5 text-[10px] font-bold text-violet-700 shadow-sm"
+                  className="rounded-md bg-white px-2.5 py-1 text-[10px] font-bold text-violet-700 shadow-sm"
                 >
                   Xem chứng từ
                 </button>
@@ -1693,25 +2086,23 @@ export default function TenantAdminFinanceCompact({
             )}
 
             {/* Audit Trail Timeline */}
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Lịch sử cập nhật phiếu (Audit Trail)
-              </p>
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="text-[10px] font-bold text-slate-400">Lịch sử cập nhật phiếu</p>
               <div className="mt-3 space-y-2.5">
                 {detailTransaction.auditTrail && detailTransaction.auditTrail.length > 0 ? (
                   detailTransaction.auditTrail.map((item, idx) => (
                     <div key={idx} className="flex items-start gap-3 text-[10px]">
-                      <span className="mt-1 h-2 w-2 rounded-full bg-violet-500" />
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
                       <div className="flex-1">
                         <p className="font-bold text-slate-800">{item.action}</p>
-                        <p className="mt-0.5 text-slate-400">
-                          {item.time} · Thực hiện bởi: <span className="font-bold">{item.actor}</span>
+                        <p className="mt-0.5 font-semibold text-slate-400">
+                          {item.time} · Thực hiện bởi: <span className="font-bold text-slate-600">{item.actor}</span>
                         </p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[10px] text-slate-400">Chưa có lịch sử thay đổi thêm.</p>
+                  <p className="text-[10px] font-semibold text-slate-400">Chưa có lịch sử thay đổi thêm.</p>
                 )}
               </div>
             </div>
@@ -1722,14 +2113,14 @@ export default function TenantAdminFinanceCompact({
                 <button
                   type="button"
                   onClick={() => handleApproveTransaction(detailTransaction)}
-                  className="flex h-11 items-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-5 text-xs font-black text-white shadow-md shadow-emerald-200 hover:bg-emerald-700"
+                  className="flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700"
                 >
                   <Check className="h-4 w-4" />
-                  Duyệt & Chốt Sổ Ngay
+                  Duyệt & chốt sổ ngay
                 </button>
               ) : (
-                <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700">
-                  <ShieldCheck className="h-4 w-4" /> Đã chốt sổ (Chỉ được xem)
+                <span className="flex items-center gap-1.5 text-xs font-black text-emerald-600">
+                  <ShieldCheck className="h-4 w-4" /> Đã chốt sổ (chỉ được xem)
                 </span>
               )}
 
@@ -1737,14 +2128,14 @@ export default function TenantAdminFinanceCompact({
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
                 >
                   In chứng từ
                 </button>
                 <button
                   type="button"
                   onClick={() => setDetailTransaction(null)}
-                  className="h-11 rounded-xl border border-slate-200 bg-slate-900 px-5 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
+                  className="h-9 rounded-lg bg-slate-900 px-4 text-xs font-black text-white transition hover:bg-slate-800"
                 >
                   Đóng
                 </button>
@@ -1759,29 +2150,31 @@ export default function TenantAdminFinanceCompact({
         <Modal
           isOpen={Boolean(deleteConfirmTx)}
           onClose={() => setDeleteConfirmTx(null)}
-          title="Xác Nhận Xóa Phiếu Giao Dịch"
+          title="Xác nhận xóa phiếu giao dịch"
           subtitle="Thao tác này chỉ áp dụng với phiếu nháp hoặc phiếu đang chờ xử lý"
           maxWidth="max-w-md"
         >
-          <div className="space-y-4 text-xs">
-            <p className="font-semibold text-slate-700">
-              Bạn có chắc chắn muốn xóa vĩnh viễn phiếu <span className="font-black text-rose-600">{deleteConfirmTx.id}</span> ({deleteConfirmTx.category} - {money(deleteConfirmTx.amount)}) không?
+          <div className="space-y-4">
+            <p className="text-xs font-semibold text-slate-700">
+              Bạn có chắc chắn muốn xóa vĩnh viễn phiếu{' '}
+              <span className="font-black text-rose-600">{deleteConfirmTx.id}</span> (
+              {deleteConfirmTx.category} - {money(deleteConfirmTx.amount)}) không?
             </p>
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
               <button
                 type="button"
                 onClick={() => setDeleteConfirmTx(null)}
-                className="h-10 rounded-xl border border-slate-200 bg-white px-4 font-bold text-slate-600 shadow-sm"
+                className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
               >
                 Hủy
               </button>
               <button
                 type="button"
                 onClick={() => handleDeleteTransaction(deleteConfirmTx)}
-                className="h-10 rounded-xl bg-rose-600 px-5 font-black text-white shadow-md hover:bg-rose-700"
+                className="h-9 rounded-lg bg-rose-600 px-4 text-xs font-black text-white shadow-sm transition hover:bg-rose-700"
               >
-                Xác Nhận Xóa
+                Xác nhận xóa
               </button>
             </div>
           </div>
