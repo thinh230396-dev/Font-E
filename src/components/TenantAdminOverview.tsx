@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BadgePercent,
   CalendarClock,
@@ -90,13 +90,56 @@ export default function TenantAdminOverview({
   onQuickCreate
 }: TenantAdminOverviewProps) {
   const [range, setRange] = useState<7 | 14 | 30>(7);
-  const points = (demoMode ? revenueSeries : Array<number>(30).fill(0)).slice(-range);
-  const chartPoints = range === 30
-    ? points.filter((_value, index) => index % 4 === 0 || index === points.length - 1)
-    : range === 14
-      ? points.filter((_value, index) => index % 2 === 0 || index === points.length - 1)
-      : points;
-  const chartMax = Math.max(1, ...chartPoints);
+
+  const chartPoints = useMemo(() => {
+    const now = new Date();
+    const demoPoints = revenueSeries.slice(-range);
+
+    let realTxMap: Record<string, number> = {};
+    if (!demoMode && tenantName) {
+      try {
+        const raw = localStorage.getItem(`tenant-admin-finance-v1:${tenantName}:transactions`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          parsed.forEach((tx: any) => {
+            if ((tx.status === 'POSTED' || tx.status === 'Hoàn thành') && tx.type === 'INCOME') {
+              let dateKey = tx.date;
+              if (dateKey) {
+                if (dateKey.includes('-')) {
+                  const [y, m, d] = dateKey.split('-');
+                  dateKey = `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+                }
+                realTxMap[dateKey] = (realTxMap[dateKey] || 0) + (tx.amount || 0) / 1_000_000;
+              }
+            }
+          });
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return Array.from({ length: range }, (_, index) => {
+      const daysAgo = range - 1 - index;
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo);
+      const dayStr = String(d.getDate()).padStart(2, '0');
+      const monthStr = String(d.getMonth() + 1).padStart(2, '0');
+      const yearStr = d.getFullYear();
+      const dateKey = `${dayStr}/${monthStr}/${yearStr}`;
+      const label = `${dayStr}/${monthStr}`;
+
+      const value = demoMode ? (demoPoints[index] ?? 0) : (realTxMap[dateKey] || 0);
+
+      return {
+        id: `${dateKey}-${index}`,
+        label,
+        value,
+        dateKey
+      };
+    });
+  }, [demoMode, range, tenantName]);
+
+  const chartMax = Math.max(1, ...chartPoints.map((item) => item.value));
   const branchQuota = formatTenantQuota(branchCount, branchLimit, 'branches');
   const staffQuota = formatTenantQuota(staffCount, staffLimit, 'staff');
   const branchAtLimit = !isUnlimitedTenantLimit(branchLimit, 'branches') && branchCount >= branchLimit;
@@ -150,22 +193,29 @@ export default function TenantAdminOverview({
               {([7, 14, 30] as const).map((value) => <button key={value} type="button" onClick={() => setRange(value)} aria-pressed={range === value} className={`h-8 min-h-0 border-0 px-3 text-[8px] font-black shadow-none ${range === value ? 'bg-white text-pink-600 shadow-sm' : 'bg-transparent text-slate-400'}`}>{value} ngày</button>)}
             </div>
           </div>
-          <div className="tenant-revenue-chart relative grid min-h-[285px] items-end gap-3 px-5 pb-5 pt-12 sm:px-7" style={{ gridTemplateColumns: `repeat(${chartPoints.length}, minmax(0, 1fr))` }}>
-            {chartPoints.map((value, index) => {
-              const height = Math.max(24, Math.round(value / chartMax * 100));
+          <div className="tenant-revenue-chart relative grid min-h-[285px] items-end px-3 pb-5 pt-12 sm:px-6" style={{ gridTemplateColumns: `repeat(${chartPoints.length}, minmax(0, 1fr))`, gap: range === 30 ? '2px' : range === 14 ? '6px' : '12px' }}>
+            {chartPoints.map((item) => {
+              const height = item.value > 0 ? Math.max(8, Math.round((item.value / chartMax) * 100)) : 2;
               return (
-                <div key={`${index}-${value}`} className="group flex h-full flex-col items-center justify-end">
-                  <span className="mb-2 text-[7px] font-black text-slate-600 opacity-0 transition group-hover:opacity-100">{value.toLocaleString('vi-VN')}M</span>
+                <div key={item.id} className="group flex h-full flex-col items-center justify-end">
+                  <span className="mb-2 text-[7px] font-black text-slate-600 opacity-0 transition group-hover:opacity-100">{item.value.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}M</span>
                   <div className="relative flex w-full flex-1 items-end justify-center">
-                    <div className="tenant-revenue-area relative w-full rounded-t-xl bg-gradient-to-t from-pink-50 via-pink-100/80 to-pink-200/70" style={{ height: `${demoMode ? height : 2}%` }}>
-                      <span className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-[3px] border-white bg-pink-500 shadow-[0_0_0_2px_rgba(244,63,120,0.15)]" />
+                    <div className="tenant-revenue-area relative w-full rounded-t-xl bg-gradient-to-t from-pink-50 via-pink-100/80 to-pink-200/70" style={{ height: `${demoMode ? height : (item.value > 0 ? height : 2)}%` }}>
+                      <span className={`absolute left-1/2 -translate-x-1/2 rounded-full border-[3px] border-white bg-pink-500 shadow-[0_0_0_2px_rgba(244,63,120,0.15)] ${range === 30 ? 'h-2 w-2 -top-1' : range === 14 ? 'h-2.5 w-2.5 -top-1' : 'h-3 w-3 -top-1.5'}`} />
                     </div>
                   </div>
-                  <span className="mt-3 text-[7px] font-semibold text-slate-400">{20 + index}/05</span>
+                  <span className={`mt-3 block truncate text-center font-semibold text-slate-400 ${range === 30 ? 'text-[5.5px] sm:text-[7px]' : range === 14 ? 'text-[6.5px] sm:text-[7px]' : 'text-[7px] sm:text-[8px]'}`}>{item.label}</span>
                 </div>
               );
             })}
-            {!demoMode && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-xl border border-pink-100 bg-white/90 px-4 py-3 text-center shadow-sm backdrop-blur"><p className="text-[9px] font-black text-slate-600">Chưa có doanh thu theo ngày</p><p className="mt-1 text-[7px] text-slate-400">Biểu đồ sẽ hiển thị khi có giao dịch thực tế.</p></div></div>}
+            {!demoMode && chartPoints.every((item) => item.value === 0) && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="rounded-xl border border-pink-100 bg-white/90 px-4 py-3 text-center shadow-sm backdrop-blur">
+                  <p className="text-[9px] font-black text-slate-600">Chưa có doanh thu theo ngày</p>
+                  <p className="mt-1 text-[7px] text-slate-400">Biểu đồ sẽ hiển thị khi có giao dịch thực tế.</p>
+                </div>
+              </div>
+            )}
           </div>
         </article>
 
