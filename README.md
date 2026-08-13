@@ -2,6 +2,25 @@
 
 > Tài liệu này là nguồn tham chiếu chung khi thiết kế, phát triển và kiểm thử giao diện. Nội dung ưu tiên cho phần mềm quản lý tiệm Nail, nhưng có thể áp dụng cho phần lớn dashboard, trang quản trị và ứng dụng frontend khác.
 
+## Bắt đầu nhanh
+
+Cài đặt và chạy dự án ở chế độ phát triển:
+
+```bash
+npm install
+npm run dev
+```
+
+Ứng dụng mặc định chạy tại `http://localhost:3000` (cấu hình trong `package.json` và `.env.example`).
+
+Các lệnh khác:
+
+| Lệnh | Mục đích |
+|---|---|
+| `npm run build` | Build bản production vào thư mục `dist/` |
+| `npm run preview` | Xem trước bản build production |
+| `npm run lint` | Kiểm tra kiểu dữ liệu TypeScript (`tsc --noEmit`) |
+
 ## Mục lục
 
 1. [Mục tiêu và phạm vi](#1-mục-tiêu-và-phạm-vi)
