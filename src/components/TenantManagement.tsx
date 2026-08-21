@@ -1212,7 +1212,7 @@ export default function TenantManagement({
             header: 'Hành động',
             actions: true,
             cell: (tenant) => (
-              <div className="flex items-center justify-end gap-1.5">
+              <div className="sa-row-actions">
                 <Button
                   variant="ghost"
                   size="small"

@@ -638,7 +638,7 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
                 <SlidersHorizontal className="h-4 w-4 text-brand-primary" />
                 <span className="text-xs font-bold text-brand-text">Audit trail toàn hệ thống</span>
               </div>
-              <span className="hidden text-[9px] font-mono text-brand-text-muted sm:inline">READ ONLY · IMMUTABLE</span>
+              <span className="hidden text-[9px] font-bold uppercase tracking-wide text-brand-text-muted sm:inline">READ ONLY · IMMUTABLE</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1120px] border-collapse text-left">
@@ -659,7 +659,7 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
                     <tr><td colSpan={8} className="px-5 py-16 text-center"><FileClock className="mx-auto h-8 w-8 text-brand-text-muted/50" /><p className="mt-3 text-xs font-semibold text-brand-text">{logs.length === 0 ? 'Chưa có nhật ký kiểm toán' : 'Không tìm thấy bản ghi phù hợp'}</p><p className="mt-1 text-[10px] text-brand-text-muted">{logs.length === 0 ? 'Các hoạt động thực tế của hệ thống sẽ được ghi nhận tại đây.' : 'Thử thay đổi từ khóa, khoảng thời gian hoặc bộ lọc.'}</p></td></tr>
                   ) : paginatedLogs.map((log) => (
                     <tr key={log.id} className="group hover:bg-brand-surface-high/30">
-                      <td className="whitespace-nowrap px-5 py-3.5"><p className="text-[11px] font-semibold text-brand-text">{formatDate(log.timestamp)}</p><p className="mt-0.5 text-[10px] font-mono text-brand-text-muted">{formatTime(log.timestamp)}</p></td>
+                      <td className="whitespace-nowrap px-5 py-3.5"><p className="text-[11px] font-semibold text-brand-text">{formatDate(log.timestamp)}</p><p className="mt-0.5 text-[10px] tabular-nums text-brand-text-muted">{formatTime(log.timestamp)}</p></td>
                       <td className="px-5 py-3.5"><p className="max-w-[180px] truncate text-[11px] font-bold text-brand-text">{log.user}</p><p className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-primary">{ROLE_LABELS[log.actorRole]}</p></td>
                       <td className="px-5 py-3.5"><p className="max-w-[240px] truncate text-[11px] font-semibold text-brand-text">{log.event}</p><p className="mt-0.5 text-[9px] font-mono text-brand-text-muted">{log.eventCode}</p></td>
                       <td className="px-5 py-3.5"><p className="max-w-[180px] truncate text-[11px] text-brand-text">{log.resource}</p><p className="mt-0.5 text-[9px] font-mono text-brand-text-muted">{log.resourceId || '—'}</p></td>

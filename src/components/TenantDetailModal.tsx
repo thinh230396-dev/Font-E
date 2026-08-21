@@ -1462,7 +1462,7 @@ export default function TenantDetailModal({
                 <div>
                   <span className="text-[10px] text-brand-text-muted uppercase font-bold block mb-0.5">Tenant / chuỗi tiệm vận hành</span>
                   <strong className="text-sm text-brand-text font-black block">{tenant.name}</strong>
-                  <span className="text-[10px] text-brand-text-muted font-mono mt-0.5 block">{tenant.id} • {tenant.adminName}</span>
+                  <span className="text-[10px] text-brand-text-muted mt-0.5 block"><span className="font-mono">{tenant.id}</span> • {tenant.adminName}</span>
                 </div>
                 <div className="md:border-l md:border-brand-outline/25 md:pl-4 space-y-1.5">
                   <div className="flex justify-between items-center">
@@ -1881,7 +1881,7 @@ export default function TenantDetailModal({
                   <div className="grid grid-cols-2 gap-4 border-t border-brand-outline/20 pt-4 text-xs">
                     <div>
                       <span className="text-brand-text-muted text-[10px]">Lần đăng nhập cuối</span>
-                      <p className="text-brand-text font-semibold mt-0.5 flex items-center gap-1 font-mono">
+                      <p className="text-brand-text font-semibold mt-0.5 flex items-center gap-1 tabular-nums">
                         <Clock className="w-3.5 h-3.5 text-brand-text-muted" />
                         {tenant.lastLogin}
                       </p>
@@ -2051,7 +2051,7 @@ export default function TenantDetailModal({
                           </div>
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-brand-text-muted">Ngày còn lại</span>
-                            <span className={`font-mono font-black ${details.daysRemaining < 0 ? 'text-brand-error' : 'text-brand-text'}`}>
+                            <span className={`tabular-nums font-black ${details.daysRemaining < 0 ? 'text-brand-error' : 'text-brand-text'}`}>
                               {details.daysRemaining < 0 ? `Quá hạn ${Math.abs(details.daysRemaining)} ngày` : `${details.daysRemaining} ngày`}
                             </span>
                           </div>
@@ -2102,7 +2102,7 @@ export default function TenantDetailModal({
                           Gói {tenant.packageName}
                         </h4>
                         <p className="text-xs text-brand-text-muted leading-relaxed">
-                          Ngày bắt đầu: <strong className="text-brand-text font-mono">{tenant.createdAt}</strong> • Đã tích hợp thanh toán tự động qua thẻ Visa kết thúc đuôi *8024.
+                          Ngày bắt đầu: <strong className="text-brand-text tabular-nums">{tenant.createdAt}</strong> • Đã tích hợp thanh toán tự động qua thẻ Visa kết thúc đuôi *8024.
                         </p>
                       </div>
 
@@ -2164,7 +2164,7 @@ export default function TenantDetailModal({
                               <tr key={inv.id} className="bg-brand-surface text-brand-text">
                                 <td className="py-3 px-4 font-mono">{inv.id}</td>
                                 <td className="py-3 px-4">{inv.period || inv.servicePeriod}</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold">
+                                <td className="py-3 px-4 text-right tabular-nums font-bold">
                                   {formatMoney(inv.amount, inv.currency || details.currency)}
                                 </td>
                                 <td className="py-3 px-4 text-center">
@@ -2252,7 +2252,7 @@ export default function TenantDetailModal({
                               <div className="flex justify-between items-center"><span className="text-brand-text-muted">Mở cửa / Vị trí:</span><span className="font-semibold text-brand-text">{br.openingHours || '08:00–21:00'} · {br.stationCount || 0} vị trí</span></div>
                               <div className="flex justify-between items-center">
                                 <span className="text-brand-text-muted">Nhân viên / Thợ:</span>
-                                <span className={`font-bold font-mono ${hasZeroStaff ? 'text-brand-error font-extrabold' : 'text-brand-text font-semibold'}`}>
+                                <span className={`font-bold tabular-nums ${hasZeroStaff ? 'text-brand-error font-extrabold' : 'text-brand-text font-semibold'}`}>
                                   {br.staffUsed} thợ
                                 </span>
                               </div>
@@ -2345,7 +2345,7 @@ export default function TenantDetailModal({
                             {act.type === 'login' ? <Key className="w-3 h-3" /> : act.type === 'payment' ? <CreditCard className="w-3 h-3" /> : act.type === 'staff' ? <Users className="w-3 h-3" /> : <Settings className="w-3 h-3" />}
                           </span>
                           <div className="text-xs">
-                            <span className="text-[10px] text-brand-text-muted font-mono">{act.date}</span>
+                            <span className="text-[10px] text-brand-text-muted tabular-nums">{act.date}</span>
                             <p className="text-brand-text font-semibold mt-0.5">{act.description}</p>
                             <span className="text-[10px] text-brand-text-muted mt-1 block">Tác nhân thực hiện: <strong>{act.user}</strong></span>
                           </div>

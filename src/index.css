@@ -1281,7 +1281,10 @@ button[class*="amber-"]:not([class*="text-white"]):not(:disabled):hover {
   }
 
   .field-hint {
-    @apply text-[9px] text-brand-text-muted mt-1;
+    /* 9px nằm ngoài thang chữ và thấp hơn nhiều so với sàn nội dung ở README
+       §4.3; dùng token caption để dòng gợi ý dưới ô nhập đọc được như mọi chú
+       thích khác. */
+    @apply text-caption text-brand-text-muted mt-1;
   }
 
   .modal-footer {
@@ -2690,8 +2693,11 @@ html[data-theme="dark"] .role-topbar {
     var(--color-brand-surface);
 }
 
+/* Chữ số dùng dáng tabular như cổng Tenant Admin: các cột số thẳng hàng và
+   con số không đổi bề rộng khi giá trị thay đổi. */
 .role-shell--superadmin .superadmin-main {
   min-width: 0;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .role-shell--superadmin .superadmin-main:focus {
@@ -2707,8 +2713,9 @@ html[data-theme="dark"] .role-topbar {
   border-radius: var(--radius-control);
   background: var(--accent);
   color: white;
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--text-label);
+  font-weight: var(--text-label--font-weight);
+  line-height: var(--text-label--line-height);
   box-shadow: var(--shadow-floating);
   transform: translateY(-180%);
   transition: transform var(--motion-fast) var(--motion-ease);
@@ -2720,21 +2727,22 @@ html[data-theme="dark"] .role-topbar {
   outline-offset: 2px;
 }
 
+/* Thang chữ của Superadmin lấy Tenant Admin làm chuẩn (README §4.2): mọi cỡ
+   chữ rời rạc còn sót lại trong các màn hình cũ đều được kéo về token, để 12
+   trang của cổng này đọc như một hệ chữ duy nhất thay vì mỗi trang một thang.
+   Phải giữ !important vì quy tắc này phải thắng lớp tiện ích cỡ chữ đặt thẳng
+   trên phần tử; chỉ xóa khi từng màn hình đã chuyển sang lớp token. */
 .role-shell--superadmin :is(
+  .text-\[7px\],
+  .text-\[8px\],
   .text-\[9px\],
-  .text-\[10px\]
-) {
-  font-size: 0.8125rem !important;
-  line-height: 1.45 !important;
-}
-
-.role-shell--superadmin :is(
+  .text-\[10px\],
   .text-\[11px\],
   .text-\[12px\],
   .text-xs
 ) {
-  font-size: 0.875rem !important;
-  line-height: 1.5 !important;
+  font-size: var(--text-caption) !important;
+  line-height: var(--text-caption--line-height) !important;
 }
 
 /* `text-sm` của Tailwind là 14px và trùng đúng token --text-body. Quy tắc
@@ -2748,23 +2756,72 @@ html[data-theme="dark"] .role-topbar {
   line-height: var(--text-body--line-height) !important;
 }
 
-.role-shell--superadmin h1 {
-  font-size: clamp(1.625rem, 2vw, 1.75rem);
-  line-height: 1.285;
+/* Trọng lượng chữ: cổng Tenant Admin chặn font-black (900) và font-extrabold
+   (800) ở 700, nên toàn cổng chỉ còn 400/500/600/700 và các trang đọc như một
+   hệ chữ. Superadmin trước đây không có luật này nên cùng một loại nội dung
+   lại nặng khác nhau tùy trang — số liệu KPI là 900 ở Sao lưu, 800 ở Hóa đơn,
+   700 ở Tổng quan. Quy tắc dưới đây sao đúng luật của Tenant Admin. */
+.role-shell--superadmin :is(.font-black, .font-extrabold) {
+  font-weight: 700 !important;
+}
+
+/* <strong> và <b> mặc định là `bolder`, nghĩa là khi nằm trong dòng chữ 700 thì
+   trình duyệt đẩy lên 900 — nặng hơn mọi bậc có trong thang. Trang Tổng quan là
+   nơi lộ rõ nhất: tên tenant và các con số trạng thái đều đang là 900 trong khi
+   phần còn lại của cổng dừng ở 700. */
+.role-shell--superadmin :is(strong, b) {
   font-weight: 700;
+}
+
+/* Các bậc lớn của Tailwind (16/18/20/24/30px) nằm ngoài thang chữ, và mỗi màn
+   hình lại chọn một bậc khác nhau cho cùng một loại nội dung: số liệu KPI đang
+   là text-lg ở Báo cáo, text-xl ở Tenant và Hóa đơn, text-2xl ở Bảo mật, Hỗ trợ
+   và Sao lưu, text-3xl ở Gói dịch vụ. Ba quy tắc này gom chúng về token. Tiêu đề
+   được loại trừ vì đã có quy tắc riêng ngay bên dưới. */
+.role-shell--superadmin .text-base:not(:is(h1, h2, h3, h4)) {
+  font-size: var(--text-body-lg) !important;
+  line-height: var(--text-body-lg--line-height) !important;
+}
+
+.role-shell--superadmin .text-lg:not(:is(h1, h2, h3, h4)) {
+  font-size: var(--text-card-title) !important;
+  line-height: var(--text-card-title--line-height) !important;
+}
+
+.role-shell--superadmin :is(
+  .text-xl,
+  .text-2xl,
+  .text-3xl
+):not(:is(h1, h2, h3, h4)) {
+  font-size: var(--text-section-title) !important;
+  line-height: var(--text-section-title--line-height) !important;
+}
+
+.role-shell--superadmin h1 {
+  font-size: var(--text-page-title);
+  line-height: var(--text-page-title--line-height);
+  font-weight: var(--text-page-title--font-weight);
   letter-spacing: -0.025em;
 }
 
-.role-shell--superadmin h2 {
-  font-size: clamp(1.125rem, 1.5vw, 1.375rem);
-  line-height: 1.35;
-  font-weight: 700;
+/* h2/h3/h4 cần !important vì nhiều màn hình đặt sẵn cỡ chữ ngay trên thẻ tiêu
+   đề, và mỗi trang chọn một cỡ khác nhau: cùng là tiêu đề thẻ, Sao lưu và Hóa
+   đơn dùng text-sm (14px) còn Gói dịch vụ và Quản trị viên dùng text-lg (18px).
+   Chừa lại .text-section-title để một mục thật sự ở cấp section vẫn khai báo
+   được bằng lớp token, và chừa .uppercase vì nhãn IN HOA có tracking rộng là
+   eyebrow — kéo lên 16px sẽ thành một tiêu đề nặng chứ không còn là nhãn. */
+.role-shell--superadmin h2:not(.text-section-title):not(.uppercase) {
+  font-size: var(--text-card-title) !important;
+  line-height: var(--text-card-title--line-height) !important;
+  font-weight: var(--text-card-title--font-weight) !important;
+  letter-spacing: -0.012em;
 }
 
-.role-shell--superadmin h3 {
-  font-size: 1rem;
-  line-height: 1.5;
-  font-weight: 600;
+.role-shell--superadmin h3:not(.text-card-title):not(.text-section-title):not(.uppercase),
+.role-shell--superadmin h4:not(.text-card-title):not(.text-section-title):not(.uppercase) {
+  font-size: var(--text-subsection-title) !important;
+  line-height: var(--text-subsection-title--line-height) !important;
+  font-weight: var(--text-subsection-title--font-weight) !important;
 }
 
 .role-shell--superadmin .role-main :is(p, li, dd, label) {
@@ -2786,18 +2843,29 @@ html[data-theme="dark"] .role-topbar {
   border-radius: var(--radius-control);
   background-color: var(--color-brand-surface);
   color: var(--color-brand-text);
-  font-size: 0.875rem;
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
 }
 
 .role-shell--superadmin .role-main :is(input, textarea, select, .beautiful-select-trigger)::placeholder {
   color: color-mix(in srgb, var(--color-brand-text-muted) 82%, transparent);
 }
 
+/* Hộp thoại được portal ra ngoài `.role-main` nên quy tắc phía trên không với
+   tới: mọi ô nhập trong hộp thoại đang rơi về `text-xs` (12px) của
+   `.form-control`, thấp hơn sàn nội dung 14px ở README §4.3 — thấy rõ ở hộp
+   "Cấu hình gói" và "Tạo hóa đơn". Quy tắc này lặp lại đúng cỡ chữ đó ở cấp
+   shell để biểu mẫu trong hộp thoại và ngoài trang đọc như nhau. */
+.role-shell--superadmin :is(input, textarea, select, .beautiful-select-trigger) {
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
+}
+
 .role-shell--superadmin button {
   min-height: 2.5rem;
   border-radius: var(--radius-control);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--text-label);
+  font-weight: var(--text-label--font-weight);
   transition:
     background-color var(--motion-fast) var(--motion-ease),
     border-color var(--motion-fast) var(--motion-ease),
@@ -2823,7 +2891,7 @@ html[data-theme="dark"] .role-topbar {
 
 .role-shell--superadmin .role-main table:not(.ui-table) {
   width: 100%;
-  font-size: 0.875rem;
+  font-size: var(--text-body);
   font-variant-numeric: tabular-nums lining-nums;
 }
 
@@ -2835,10 +2903,40 @@ html[data-theme="dark"] .role-topbar {
   letter-spacing: 0.035em;
 }
 
+/* Header bảng lấy chuẩn từ khung "Danh sách hóa đơn gói dịch vụ" của trang Báo
+   cáo hệ thống: chữ IN HOA, cỡ caption, weight 700, giãn chữ nhẹ, màu phụ.
+   Trước đây mỗi bảng tự khai báo lấy kiểu này bằng lớp tiện ích, nên bảng nào
+   quên khai thì header ra chữ thường — rõ nhất là bảng Quản lý Tenant dựng
+   bằng <DataTable>, nơi header đọc là "Tenant / chuỗi tiệm" trong khi các trang
+   khác đọc là "TENANT". Selector đi qua `table` nên thắng cả `.ui-table thead
+   th`, và không giới hạn trong `.role-main` để các bảng nằm trong hộp thoại
+   (chi tiết tenant, chi tiết hóa đơn) cũng theo cùng một kiểu. */
+.role-shell--superadmin table thead th {
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-caption) !important;
+  font-weight: 700 !important;
+  line-height: var(--text-caption--line-height);
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+/* Cột sắp xếp được của <DataTable> bọc nhãn trong một <button>. Trình duyệt
+   không cho thẻ form kế thừa font và text-transform, nên nhãn đó thoát khỏi
+   quy tắc phía trên và ra 14px/600/chữ thường — đây chính là lý do bảng Quản lý
+   Tenant đọc là "Tenant / chuỗi tiệm" trong khi cột không sắp xếp được ngay bên
+   cạnh đọc là "GÓI DỊCH VỤ". Ép các phần tử con trong ô header kế thừa lại. */
+.role-shell--superadmin table thead th :is(button, span, a, div) {
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
 .role-shell--superadmin .role-main :not(.ui-table) > tbody td {
   min-height: 2.75rem;
-  font-size: 0.875rem !important;
-  line-height: 1.5;
+  font-size: var(--text-body) !important;
+  line-height: var(--text-body--line-height);
 }
 
 .role-shell--superadmin .role-main :is(
@@ -4201,7 +4299,7 @@ html[data-theme="dark"] .ui-modal-layer {
   overflow: hidden;
   color: #fff;
   font-size: 0.875rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.025em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4248,7 +4346,7 @@ html[data-theme="dark"] .ui-modal-layer {
   padding: 0 0.75rem;
   color: rgb(203 203 224 / 0.42);
   font-size: var(--text-caption);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -4330,8 +4428,8 @@ html[data-theme="dark"] .ui-modal-layer {
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  font-size: 0.8125rem;
-  font-weight: 650;
+  font-size: var(--text-caption);
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4358,7 +4456,7 @@ html[data-theme="dark"] .ui-modal-layer {
   border: 1px solid transparent;
   border-radius: 999px;
   font-size: var(--text-caption);
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -4420,7 +4518,7 @@ html[data-theme="dark"] .ui-modal-layer {
 .sa-system-status strong {
   color: rgb(246 247 251 / 0.84);
   font-size: var(--text-body);
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .sa-system-status small {
@@ -4636,14 +4734,14 @@ html[data-theme="dark"] .ui-modal-layer {
 .sa-profile-trigger-copy p {
   color: var(--color-brand-text);
   font-size: var(--text-body);
-  font-weight: 780;
+  font-weight: 700;
 }
 
 .sa-profile-trigger-copy span {
   margin-top: 0.22rem;
   color: var(--color-brand-text-muted);
   font-size: var(--text-caption);
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .sa-profile-chevron {
@@ -4744,7 +4842,7 @@ html[data-theme="dark"] .ui-modal-layer {
   border-radius: 999px;
   background: rgb(53 197 160 / 0.1);
   font-size: var(--text-caption);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -4792,7 +4890,7 @@ html[data-theme="dark"] .ui-modal-layer {
 .sa-profile-access-card strong {
   color: rgb(255 255 255 / 0.9);
   font-size: var(--text-caption);
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .sa-profile-access-card small {
@@ -4810,7 +4908,7 @@ html[data-theme="dark"] .ui-modal-layer {
   padding: 0 0.35rem;
   color: #969dac;
   font-size: var(--text-caption);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -4868,7 +4966,7 @@ html[data-theme="dark"] .ui-modal-layer {
 .sa-profile-action-title {
   color: var(--color-brand-text);
   font-size: var(--text-body);
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .sa-profile-action-note {
@@ -4915,7 +5013,7 @@ html[data-theme="dark"] .ui-modal-layer {
   background: rgb(239 101 118 / 0.045);
   box-shadow: none !important;
   font-size: var(--text-caption);
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .role-shell--superadmin .sa-profile-logout:hover {
@@ -5109,9 +5207,10 @@ body.system-modal-open :is(
 
 .role-shell--superadmin .sa-welcome-panel h1 {
   color: #fff;
-  font-size: clamp(1.55rem, 3vw, 2.05rem);
-  font-weight: 750;
-  letter-spacing: -0.045em;
+  font-size: var(--text-page-title);
+  line-height: var(--text-page-title--line-height);
+  font-weight: var(--text-page-title--font-weight);
+  letter-spacing: -0.035em;
 }
 
 /* Tiêu đề trang: quy tắc này tồn tại để thắng các lớp tiện ích cỡ chữ đặt ở
@@ -5154,7 +5253,7 @@ body.system-modal-open :is(
   background: rgb(255 255 255 / 0.075);
   color: rgb(255 255 255 / 0.76);
   font-size: var(--text-caption);
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.055em;
   text-transform: uppercase;
 }
@@ -5263,10 +5362,10 @@ body.system-modal-open :is(
   margin-top: 0.35rem;
   overflow: hidden;
   color: var(--color-brand-text);
-  font-size: clamp(1.25rem, 2vw, 1.55rem);
-  font-weight: 780;
-  letter-spacing: -0.04em;
-  line-height: 1.25;
+  font-size: var(--text-section-title);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: var(--text-section-title--line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5285,7 +5384,7 @@ body.system-modal-open :is(
   margin-top: 0.45rem;
   font-size: var(--text-caption);
   line-height: var(--text-caption--line-height);
-  font-weight: 650;
+  font-weight: 600;
   text-wrap: pretty;
 }
 
@@ -5321,9 +5420,10 @@ html[data-theme="dark"] .sa-danger { color: #ea8391; }
 
 .role-shell--superadmin .sa-panel-heading h2 {
   color: var(--color-brand-text);
-  font-size: 0.9rem;
-  font-weight: 750;
-  letter-spacing: -0.015em;
+  font-size: var(--text-card-title) !important;
+  line-height: var(--text-card-title--line-height) !important;
+  font-weight: var(--text-card-title--font-weight) !important;
+  letter-spacing: -0.012em;
 }
 
 .sa-panel-heading p {
@@ -5344,7 +5444,7 @@ html[data-theme="dark"] .sa-danger { color: #ea8391; }
   border-radius: 999px;
   background: rgb(112 97 232 / 0.07);
   font-size: var(--text-caption);
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -5413,7 +5513,7 @@ html[data-theme="dark"] .sa-chart-summary strong {
 
 .sa-chart-empty p:first-child {
   color: var(--color-brand-text);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .sa-chart-grid {
@@ -5561,15 +5661,16 @@ html[data-theme="dark"] .sa-chart-summary strong {
 
 .sa-donut-center strong {
   color: var(--color-brand-text);
-  font-size: 1.55rem;
-  font-weight: 780;
-  letter-spacing: -0.05em;
+  font-size: var(--text-section-title);
+  line-height: var(--text-section-title--line-height);
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .sa-donut-center span {
   color: var(--color-brand-text-muted);
   font-size: var(--text-caption);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .sa-status-list {
@@ -5658,7 +5759,7 @@ html[data-theme="dark"] .sa-chart-summary strong {
   padding: 0 1rem;
   color: var(--color-brand-text-muted);
   font-size: var(--text-caption) !important;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.055em;
   text-align: left;
   text-transform: uppercase;
@@ -5705,7 +5806,7 @@ html[data-theme="dark"] .sa-chart-summary strong {
   border-radius: 0.7rem;
   background: linear-gradient(145deg, #f3f0ff, #e9e5ff);
   font-size: var(--text-caption);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .sa-tenant-name > span:last-child {
@@ -5868,7 +5969,7 @@ html[data-theme="dark"] .sa-chart-summary strong {
   overflow: hidden;
   color: var(--color-brand-text);
   font-size: var(--text-body);
-  font-weight: 750;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -7232,4 +7333,69 @@ html:not([data-theme="dark"]) .role-shell--superadmin :is(
   @page {
     margin: 14mm;
   }
+}
+
+/* ==========================================================================
+   Cột "Hành động" của bảng — Superadmin
+   Ba bảng có cụm nút thao tác và trước đây mỗi bảng một nhịp: Tổng quan ô bấm
+   32px với biểu tượng 16 và khoảng cách 4, Tenant Admin ô 22×40 với biểu tượng
+   14 và khoảng cách 8, còn Quản lý Tenant ô 36px với biểu tượng 24, khoảng
+   cách 6 và nút xóa là một khối đỏ đặc. Khối dưới đây đưa cả ba về cùng một
+   nhịp: ô bấm vuông 2rem, biểu tượng 1rem, cách nhau 0.5rem, nền trong suốt.
+   Đặt ở cuối tệp để thắng các quy tắc .ui-btn--* vốn có cùng độ đặc hiệu.
+   ========================================================================== */
+/* Chỉ đặt flex cho <div> bọc nút. KHÔNG đặt cho .ui-table-actions vì đó là
+   chính thẻ <td>: cho <td> display:flex sẽ kéo ô ra khỏi bố cục bảng, ô co lại
+   còn 48px trong hàng cao 77px nên cụm nút trôi lên đỉnh và đường kẻ dưới ô
+   lệch hẳn so với các cột còn lại. */
+.role-shell--superadmin .sa-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.role-shell--superadmin :is(.sa-row-actions, .ui-table-actions) :is(button, a) {
+  display: inline-flex;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-brand-text-muted);
+}
+
+.role-shell--superadmin :is(.sa-row-actions, .ui-table-actions) :is(button, a) svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.role-shell--superadmin :is(.sa-row-actions, .ui-table-actions) :is(button, a):not(:disabled):hover {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  transform: none;
+}
+
+/* Nút xóa giữ tông cảnh báo ở biểu tượng thay vì cả khối nền. Một ô đỏ đặc lặp
+   lại ở từng dòng kéo mắt khỏi nội dung và làm cụm bốn nút mất cân — vẫn phân
+   biệt được với ba nút còn lại vì màu biểu tượng đã khác. Nút xóa đóng vai nút
+   chính trong hộp thoại xác nhận thì giữ nguyên nền đặc. */
+.role-shell--superadmin :is(.sa-row-actions, .ui-table-actions) button.ui-btn--danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-brand-error);
+}
+
+.role-shell--superadmin :is(.sa-row-actions, .ui-table-actions) button.ui-btn--danger:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--color-brand-error) 24%, transparent);
+  background: color-mix(in srgb, var(--color-brand-error) 10%, transparent);
+  color: var(--color-brand-error);
 }

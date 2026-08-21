@@ -1,6 +1,6 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Plugin } from 'vite';
+import { loadEnv, type Plugin } from 'vite';
 
 type LocalRole = 'SUPERADMIN' | 'TENANT_ADMIN' | 'RECEPTIONIST';
 
@@ -77,6 +77,19 @@ const getCookie = (request: IncomingMessage, name: string) => {
   return pair ? decodeURIComponent(pair.slice(name.length + 1)) : '';
 };
 
+/* Cửa đăng nhập chỉ dùng khi phát triển: cấp phiên cho một vai trò mà không
+   cần mật khẩu, để mở thẳng một cổng khi cần xem giao diện. MẶC ĐỊNH TẮT —
+   chỉ bật khi `SALONSYS_DEV_LOGIN` bằng 1/true, đặt trong biến môi trường
+   hoặc trong `.env.local` (thư mục gốc đã gitignore mọi file `.env*`).
+
+   Không có đường nào để nó lọt ra bản phát hành: plugin này khai
+   `apply: 'serve'` nên chỉ tồn tại trong `npm run dev`, còn xác thực thật khi
+   deploy nằm ở `scripts/sites-worker.js` (Cloudflare Worker + D1). */
+const isTruthyFlag = (value: string | undefined) => {
+  const flag = (value || '').trim().toLowerCase();
+  return flag === '1' || flag === 'true';
+};
+
 const passwordsMatch = (supplied: string, expected: string) => {
   const suppliedBytes = Buffer.from(supplied);
   const expectedBytes = Buffer.from(expected);
@@ -87,6 +100,15 @@ export const localAuthPlugin = (): Plugin => ({
   name: 'salonsys-local-auth',
   apply: 'serve',
   configureServer(server) {
+    const fileEnv = loadEnv(server.config.mode, server.config.root, '');
+    const devLoginEnabled = isTruthyFlag(process.env.SALONSYS_DEV_LOGIN ?? fileEnv.SALONSYS_DEV_LOGIN);
+
+    if (devLoginEnabled) {
+      server.config.logger.warn(
+        '[salonsys] SALONSYS_DEV_LOGIN đang bật — GET /api/auth/dev-login?role=SUPERADMIN cấp phiên mà không cần mật khẩu. Chỉ dùng khi phát triển.'
+      );
+    }
+
     server.middlewares.use(async (request, response, next) => {
       const url = new URL(request.url || '/', 'http://localhost');
       if (!url.pathname.startsWith('/api/auth/')) {
@@ -113,6 +135,33 @@ export const localAuthPlugin = (): Plugin => ({
         sendJson(response, 200, { account: publicAccount(account) }, {
           'Set-Cookie': `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`
         });
+        return;
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/auth/dev-login') {
+        if (!devLoginEnabled) {
+          sendJson(response, 404, { error: 'Không tìm thấy API local.' });
+          return;
+        }
+
+        const requestedRole = (url.searchParams.get('role') || 'SUPERADMIN').trim().toUpperCase();
+        const account = LOCAL_ACCOUNTS.find((candidate) => candidate.role === requestedRole);
+        if (!account) {
+          sendJson(response, 400, {
+            error: `Vai trò không hợp lệ: ${requestedRole}. Dùng SUPERADMIN, TENANT_ADMIN hoặc RECEPTIONIST.`
+          });
+          return;
+        }
+
+        const maxAge = 8 * 3_600;
+        const sessionId = randomUUID();
+        sessions.set(sessionId, { account, expiresAt: Date.now() + maxAge * 1000 });
+        response.writeHead(302, {
+          'Cache-Control': 'no-store',
+          Location: '/',
+          'Set-Cookie': `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`
+        });
+        response.end();
         return;
       }
 

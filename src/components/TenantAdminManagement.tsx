@@ -854,14 +854,14 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                         {admin.role}
                       </span>
                     </td>
-                    <td className="py-3.5 px-5 text-brand-text-muted font-medium font-mono">
+                    <td className="py-3.5 px-5 text-brand-text-muted font-medium tabular-nums">
                       {admin.lastActive}
                     </td>
                     <td className="py-3.5 px-5">
                       <StatusBadge status={admin.status} />
                     </td>
                     <td className="py-3.5 px-5 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <div className="sa-row-actions opacity-80 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => setSelectedAdmin(admin)}
                           title="Xem chi tiết Tenant Admin"

@@ -491,7 +491,7 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
                     <span className="text-lg font-black text-brand-text">{item.count}</span>
                   </div>
                   <p className="text-[10px] text-brand-text-muted mt-2">Tổng giá trị</p>
-                  <p className="text-[11px] font-bold font-mono text-brand-text mt-0.5">{formatMoney(item.amountVnd, reportCurrency)}</p>
+                  <p className="text-[11px] font-bold tabular-nums text-brand-text mt-0.5">{formatMoney(item.amountVnd, reportCurrency)}</p>
                 </div>
               ))}
             </div>
@@ -592,8 +592,8 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
                     {hoveredMonth === index && (
                       <div className="absolute z-20 bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-44 rounded-lg border border-brand-outline bg-brand-surface-high p-2.5 shadow-xl text-[10px] space-y-1">
                         <p className="font-bold text-brand-text">Tháng {index + 1}/{selectedYear}</p>
-                        <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Đã lập</span><span className="font-mono">{formatMoney(month.billedVnd, reportCurrency)}</span></p>
-                        <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Đã thu</span><span className="font-mono text-brand-primary">{formatMoney(month.collectedVnd, reportCurrency)}</span></p>
+                        <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Đã lập</span><span className="tabular-nums">{formatMoney(month.billedVnd, reportCurrency)}</span></p>
+                        <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Đã thu</span><span className="tabular-nums text-brand-primary">{formatMoney(month.collectedVnd, reportCurrency)}</span></p>
                         <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Hóa đơn</span><span>{month.invoiceCount}</span></p>
                         <p className="flex justify-between gap-2"><span className="text-brand-text-muted">Tenant mới</span><span>{month.newTenants}</span></p>
                       </div>
@@ -635,7 +635,7 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
                       <div className="h-2 rounded-full bg-brand-surface-highest overflow-hidden">
                         <div className="h-full rounded-full bg-brand-secondary" style={{ width: `${percent}%` }} />
                       </div>
-                      <span className="text-[10px] font-bold font-mono text-brand-secondary whitespace-nowrap">{formatMoney(tenant.monthlyRevenue, tenant.currency)}</span>
+                      <span className="text-[10px] font-bold tabular-nums text-brand-secondary whitespace-nowrap">{formatMoney(tenant.monthlyRevenue, tenant.currency)}</span>
                     </div>
                   );
                 })}
@@ -704,8 +704,8 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
                         <span className="text-[9px] text-brand-text-muted">{item.tenantCount} tenant · {item.invoiceCount} HĐ</span>
                       </div>
                       <div className="grid grid-cols-2 gap-2 mt-2.5 text-[9px]">
-                        <div><p className="text-brand-text-muted">Đã thu</p><p className="font-bold font-mono text-emerald-400 mt-0.5">{formatMoney(item.collectedVnd, reportCurrency)}</p></div>
-                        <div className="text-right"><p className="text-brand-text-muted">Công nợ</p><p className="font-bold font-mono text-amber-400 mt-0.5">{formatMoney(item.debtVnd, reportCurrency)}</p></div>
+                        <div><p className="text-brand-text-muted">Đã thu</p><p className="font-bold tabular-nums text-emerald-400 mt-0.5">{formatMoney(item.collectedVnd, reportCurrency)}</p></div>
+                        <div className="text-right"><p className="text-brand-text-muted">Công nợ</p><p className="font-bold tabular-nums text-amber-400 mt-0.5">{formatMoney(item.debtVnd, reportCurrency)}</p></div>
                       </div>
                       <div className="flex items-center gap-2 mt-2.5">
                         <div className="h-1.5 flex-1 rounded-full bg-brand-surface-highest overflow-hidden"><div className="h-full rounded-full" style={{ width: `${item.collectionRate}%`, backgroundColor: item.color }} /></div>
@@ -725,7 +725,7 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
                     <p className="text-xs font-bold text-brand-text truncate" title={tenant.name}>{tenant.name}</p>
                     <p className="text-[9px] text-brand-text-muted mt-0.5">{tenant.packageName} · {tenant.staffCount} nhân sự</p>
                   </div>
-                  <p className="text-[11px] font-bold font-mono text-brand-secondary whitespace-nowrap">{formatMoney(tenant.monthlyRevenue, tenant.currency)}</p>
+                  <p className="text-[11px] font-bold tabular-nums text-brand-secondary whitespace-nowrap">{formatMoney(tenant.monthlyRevenue, tenant.currency)}</p>
                 </div>
               ))}
             </div>
@@ -846,7 +846,7 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
                     </td>
                     <td className="px-4 py-3 text-[10px] text-brand-text-muted"><span className="inline-flex items-center gap-1"><CalendarDays className="w-3 h-3" />{formatDate(invoice.createdAt)}</span></td>
                     <td className="px-4 py-3"><span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-bold ${invoiceStatusMeta[invoice.status].badge}`}>{invoiceStatusMeta[invoice.status].label}</span></td>
-                    <td className="px-4 py-3 text-right text-[11px] font-bold font-mono text-brand-text whitespace-nowrap">{formatMoney(invoice.amount, invoice.currency)}</td>
+                    <td className="px-4 py-3 text-right text-[11px] font-bold tabular-nums text-brand-text whitespace-nowrap">{formatMoney(invoice.amount, invoice.currency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -876,7 +876,7 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
                       <td className="px-4 py-3"><span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-bold ${tenantStatusMeta[tenant.status].badge}`}>{tenantStatusMeta[tenant.status].label}</span></td>
                       <td className="px-4 py-3 text-center text-[11px] text-brand-text">{Math.max(tenant.branches?.length || 0, 1)}</td>
                       <td className="px-4 py-3 text-center text-[11px] text-brand-text">{tenant.staffCount}</td>
-                      <td className="px-4 py-3 text-right text-[11px] font-bold font-mono text-brand-secondary whitespace-nowrap">{formatMoney(tenant.monthlyRevenue, tenant.currency)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-bold tabular-nums text-brand-secondary whitespace-nowrap">{formatMoney(tenant.monthlyRevenue, tenant.currency)}</td>
                     </tr>
                   ))}
                 </tbody>
