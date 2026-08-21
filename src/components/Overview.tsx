@@ -463,14 +463,31 @@ export default function Overview({
                       </div>
                     </td>
                   </tr>
-                ) : filteredTenants.slice(0, 6).map((tenant) => (
-                  <tr key={tenant.id}>
+                ) : filteredTenants.slice(0, 6).map((tenant) => {
+                  const isAdminSuspended = tenant.adminStatus === 'SUSPENDED';
+                  return (
+                  <tr
+                    key={tenant.id}
+                    className={isAdminSuspended ? 'opacity-75 bg-amber-500/[0.04] dark:bg-amber-950/[0.15] border-l-2 border-l-amber-500' : undefined}
+                  >
                     <td>
                       <button type="button" className="sa-tenant-name" onClick={() => onViewTenant(tenant)}>
                         <span className="sa-tenant-avatar">{tenant.name.slice(0, 2).toUpperCase()}</span>
                         <span>
-                          <strong>{tenant.name}</strong>
-                          <small>{tenant.adminEmail}</small>
+                          <strong className="flex items-center gap-1.5">
+                            {tenant.name}
+                            {isAdminSuspended && (
+                              <span
+                                className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[10px] font-bold text-amber-700 dark:text-amber-300"
+                                title="Tenant Admin của tiệm này đang bị khóa tạm thời"
+                              >
+                                <Lock className="w-2.5 h-2.5 text-amber-500" /> Admin bị khóa
+                              </span>
+                            )}
+                          </strong>
+                          <small className={isAdminSuspended ? 'text-amber-700 dark:text-amber-400 font-medium' : undefined}>
+                            {tenant.adminEmail}
+                          </small>
                         </span>
                       </button>
                     </td>
@@ -495,7 +512,8 @@ export default function Overview({
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

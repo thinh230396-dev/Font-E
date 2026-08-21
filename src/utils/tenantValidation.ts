@@ -228,3 +228,72 @@ export const redistributeBranchStaff = (branches: Branch[], totalStaff: number):
     };
   });
 };
+
+export interface TenantDeletionEligibility {
+  canDelete: boolean;
+  blockReasons: string[];
+}
+
+/**
+ * Kiểm tra các ràng buộc dữ liệu & nghiệp vụ để xác định tenant có thể xóa an toàn hay không.
+ * Ngăn chặn xóa nhầm tenant đang có chi nhánh, nhân sự, đang hoạt động hoặc có yêu cầu nâng cấp đang chờ.
+ */
+export const getTenantDeletionEligibility = (
+  tenant: Tenant,
+  context?: {
+    upgradeRequests?: { tenantId: string; status?: string }[];
+  }
+): TenantDeletionEligibility => {
+  const blockReasons: string[] = [];
+
+  const branchCount = Math.max((tenant.branches && tenant.branches.length) || 0, 0);
+  if (branchCount > 0) {
+    blockReasons.push(`Tenant đang có ${branchCount} chi nhánh trực thuộc. Cần xóa hoặc giải thể tất cả chi nhánh trước.`);
+  }
+
+  const staffCount = Number(tenant.staffCount) || 0;
+  if (staffCount > 0) {
+    blockReasons.push(`Tenant đang có ${staffCount} nhân sự trực thuộc. Cần giải phóng hoặc điều chuyển toàn bộ nhân sự.`);
+  }
+
+  if (tenant.status === 'ACTIVE') {
+    blockReasons.push('Tenant đang ở trạng thái Hoạt động ("ACTIVE"). Cần tạm khóa ("SUSPENDED") hoặc ngưng hoạt động trước khi xóa.');
+  }
+
+  const hasPendingUpgrade = context?.upgradeRequests?.some(
+    (req) => req.tenantId === tenant.id && (!req.status || req.status === 'PENDING')
+  );
+  if (hasPendingUpgrade) {
+    blockReasons.push('Tenant đang có yêu cầu nâng cấp gói dịch vụ chờ duyệt.');
+  }
+
+  return {
+    canDelete: blockReasons.length === 0,
+    blockReasons
+  };
+};
+
+/**
+ * Kiểm tra xem tài khoản Tenant Admin của một Tenant có đang bị khóa (SUSPENDED) hay không.
+ */
+export const isTenantAdminSuspended = (
+  tenant: Tenant,
+  tenantAdmins?: TenantAdminAccount[]
+): boolean => {
+  if (tenant.adminStatus === 'SUSPENDED') return true;
+  if (!tenantAdmins || tenantAdmins.length === 0) return false;
+  const adminEmail = tenant.adminEmail?.trim().toLowerCase();
+  const adminId = tenant.tenantAdminId?.trim().toLowerCase();
+  return tenantAdmins.some((admin) => {
+    if (admin.status !== 'SUSPENDED') return false;
+    const matchEmail = Boolean(adminEmail && admin.email?.trim().toLowerCase() === adminEmail);
+    const matchId = Boolean(
+      adminId && (
+        (admin.adminCode && admin.adminCode.trim().toLowerCase() === adminId) ||
+        admin.id.trim().toLowerCase() === adminId
+      )
+    );
+    return matchEmail || matchId;
+  });
+};
+

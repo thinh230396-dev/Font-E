@@ -5854,7 +5854,8 @@ html[data-theme="dark"] .sa-chart-summary strong {
 
 .sa-row-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
   gap: 0.25rem;
 }
 
@@ -6717,7 +6718,7 @@ button.ui-pick-row:not(:disabled):hover {
 }
 
 .ui-table .ui-table-actions {
-  text-align: right;
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -6927,7 +6928,8 @@ button.ui-pick-row:not(:disabled):hover {
 .ui-modal--fullscreen .ui-modal-body {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ui-modal-header {
@@ -7031,6 +7033,8 @@ button.ui-pick-row:not(:disabled):hover {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: calc(var(--spacing) * 5);
   font-size: var(--text-body);
   line-height: var(--text-body--line-height);
@@ -7351,7 +7355,7 @@ html:not([data-theme="dark"]) .role-shell--superadmin :is(
 .role-shell--superadmin .sa-row-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 0.5rem;
 }
 

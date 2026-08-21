@@ -1833,6 +1833,22 @@ export default function TenantDetailModal({
           {/* Main Content Area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             
+            {tenant.adminStatus === 'SUSPENDED' && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs dark:bg-amber-950/30 flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-bold text-amber-900 dark:text-amber-200">
+                    Tài khoản Tenant Admin chính ({tenant.adminName} · {tenant.adminEmail}) đang bị khóa
+                  </p>
+                  <p className="text-caption text-amber-800 dark:text-amber-300 leading-relaxed">
+                    Quyền đăng nhập và quản trị chuỗi tiệm này của Admin đã bị tạm đình chỉ. Để mở khóa quyền truy cập, vui lòng kích hoạt lại tài khoản Admin trong mục <strong>Quản lí Tenant Admin</strong> hoặc chuyển quyền quản trị sang tài khoản khác.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {viewMode === 'quick' ? (
               // QUICK VIEW MODE (Compact Info Card Layout)
               <div className="space-y-6">
@@ -1874,7 +1890,14 @@ export default function TenantDetailModal({
                       {tenant.adminName.split(' ').pop()?.charAt(0)}
                     </div>
                     <div className="text-xs">
-                      <p className="text-brand-text font-bold text-sm">{tenant.adminName}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className={`font-bold text-sm ${tenant.adminStatus === 'SUSPENDED' ? 'line-through text-brand-text/80' : 'text-brand-text'}`}>{tenant.adminName}</p>
+                        {tenant.adminStatus === 'SUSPENDED' && (
+                          <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.2 bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold text-[9px] border border-rose-500/25">
+                            <Lock className="w-2.5 h-2.5" /> Bị khóa
+                          </span>
+                        )}
+                      </div>
                       <p className="text-brand-text-muted mt-0.5">{tenant.adminEmail}</p>
                     </div>
                   </div>

@@ -136,6 +136,7 @@ export interface Tenant {
   adminCountry?: string;
   adminTimezone?: string;
   adminAddress?: string;
+  adminStatus?: TenantAdminStatus;
 }
 
 export type TenantAdminRole = 'Owner' | 'Manager' | 'Staff';

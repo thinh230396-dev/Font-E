@@ -35,6 +35,7 @@ export interface DataTableProps<T> {
   emptyDescription?: ReactNode;
   emptyAction?: ReactNode;
   onRowClick?: (row: T, index: number) => void;
+  rowClassName?: (row: T, index: number) => string | undefined;
   className?: string;
   /** Chú thích dưới bảng: phạm vi đang xem, tổng số bản ghi (§12.2). */
   footer?: ReactNode;
@@ -55,6 +56,7 @@ export default function DataTable<T>({
   emptyDescription,
   emptyAction,
   onRowClick,
+  rowClassName,
   className = '',
   footer,
 }: DataTableProps<T>) {
@@ -140,7 +142,10 @@ export default function DataTable<T>({
                   <tr
                     key={rowKey(row, index)}
                     onClick={onRowClick ? () => onRowClick(row, index) : undefined}
-                    className={onRowClick ? 'is-clickable' : undefined}
+                    className={[
+                      onRowClick ? 'is-clickable' : '',
+                      rowClassName ? rowClassName(row, index) : ''
+                    ].filter(Boolean).join(' ') || undefined}
                   >
                     {columns.map((column) => {
                       const content = column.cell(row, index);

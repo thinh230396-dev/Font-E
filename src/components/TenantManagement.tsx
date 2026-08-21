@@ -48,8 +48,11 @@ import {
 } from '../utils/subscriptions';
 import {
   getSuggestedTrialEndDate,
+  getTenantDeletionEligibility,
+  isTenantAdminSuspended,
   redistributeBranchStaff,
   validateTenantDraft,
+  type TenantDeletionEligibility,
   type TenantFieldErrors
 } from '../utils/tenantValidation';
 
@@ -236,6 +239,10 @@ export default function TenantManagement({
   const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'billing' | 'branches' | 'activities' | 'config'>('overview');
   const [detailInitialViewMode, setDetailInitialViewMode] = useState<'quick' | 'full'>('quick');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [blockedDeleteTarget, setBlockedDeleteTarget] = useState<{ tenant: Tenant; eligibility: TenantDeletionEligibility } | null>(null);
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<Tenant | null>(null);
+  const [confirmDeleteInput, setConfirmDeleteInput] = useState('');
+  const [confirmDeleteAgreement, setConfirmDeleteAgreement] = useState(false);
 
   // Form states
   const [formName, setFormName] = useState('');
@@ -1094,6 +1101,11 @@ export default function TenantManagement({
         caption={`Danh sách tenant, đang xem ${pagedTenants.length} trên tổng ${filtered.length} kết quả`}
         rows={pagedTenants}
         rowKey={(tenant) => tenant.id}
+        rowClassName={(tenant) =>
+          isTenantAdminSuspended(tenant, tenantAdmins)
+            ? 'opacity-75 bg-amber-500/[0.04] dark:bg-amber-950/[0.15] hover:opacity-100 transition-opacity border-l-2 border-l-amber-500'
+            : undefined
+        }
         emptyTitle={hasActiveFilters ? 'Không có tenant nào khớp bộ lọc' : 'Chưa có tenant nào'}
         emptyDescription={hasActiveFilters
           ? 'Thử nới bộ lọc hoặc xóa từ khóa tìm kiếm.'
@@ -1136,15 +1148,28 @@ export default function TenantManagement({
           {
             key: 'tenant',
             header: <SortableHeader label="Tenant / chuỗi tiệm" column="name" activeColumn={sortBy} direction={sortDirection} onSort={toggleSort} />,
-            cell: (tenant) => (
-              <div className="flex min-w-[220px] items-center gap-3">
-                {renderTenantAvatar(tenant)}
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate font-bold text-brand-text">{tenant.name}</span>
-                  <span className="text-caption text-brand-text-muted">{tenant.id} · tạo ngày {tenant.createdAt}</span>
+            cell: (tenant) => {
+              const adminLocked = isTenantAdminSuspended(tenant, tenantAdmins);
+              return (
+                <div className="flex min-w-[220px] items-center gap-3">
+                  {renderTenantAvatar(tenant)}
+                  <div className="flex min-w-0 flex-col">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="truncate font-bold text-brand-text">{tenant.name}</span>
+                      {adminLocked && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[10px] font-bold text-amber-700 dark:text-amber-300 shrink-0"
+                          title="Tài khoản Tenant Admin của tiệm này đang bị khóa tạm thời"
+                        >
+                          <Lock className="w-2.5 h-2.5 text-amber-500" /> Admin bị khóa
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-caption text-brand-text-muted">{tenant.id} · tạo ngày {tenant.createdAt}</span>
+                  </div>
                 </div>
-              </div>
-            )
+              );
+            }
           },
           {
             key: 'admin',
@@ -1152,18 +1177,30 @@ export default function TenantManagement({
             hideBelow: 'md',
             cell: (tenant) => {
               const adminTenantCount = tenantAdminUsageByEmail[tenant.adminEmail.trim().toLowerCase()] || 0;
+              const adminLocked = isTenantAdminSuspended(tenant, tenantAdmins);
               return (
                 <div className="flex min-w-[180px] flex-col">
-                  <span className="font-medium text-brand-text">{tenant.adminName}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`font-medium text-brand-text ${adminLocked ? 'line-through opacity-80' : ''}`}>{tenant.adminName}</span>
+                    {adminLocked && (
+                      <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.2 bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold text-[9px] border border-rose-500/25">
+                        <Lock className="w-2.5 h-2.5" /> Bị khóa
+                      </span>
+                    )}
+                  </div>
                   <span className="break-all text-caption text-brand-text-muted">{tenant.adminEmail}</span>
-                  {adminTenantCount > 1 && (
+                  {adminLocked ? (
+                    <span className="mt-0.5 text-[10px] font-semibold text-rose-500 dark:text-rose-400 flex items-center gap-1">
+                      Quyền quản trị bị đình chỉ
+                    </span>
+                  ) : adminTenantCount > 1 ? (
                     <span
                       title="Tenant Admin này đang được gắn cho nhiều tenant, chưa đúng logic 1 Tenant Admin quản lý 1 tenant."
                       className="mt-1 w-fit rounded-full border border-brand-tertiary/30 bg-brand-tertiary/10 px-2 py-0.5 text-caption font-bold text-brand-tertiary"
                     >
                       Trùng trên {adminTenantCount} tenant
                     </span>
-                  )}
+                  ) : null}
                 </div>
               );
             }
@@ -1211,6 +1248,7 @@ export default function TenantManagement({
             key: 'actions',
             header: 'Hành động',
             actions: true,
+            width: '180px',
             cell: (tenant) => (
               <div className="sa-row-actions">
                 <Button
@@ -1264,22 +1302,35 @@ export default function TenantManagement({
                     <Lock />
                   </Button>
                 )}
-                {/* Xóa là hành động không hoàn tác được nên tách tông danger,
-                    không để lẫn tông với nút khóa ngay cạnh nó. */}
-                <Button
-                  variant="danger"
-                  size="small"
-                  iconOnly
-                  aria-label={`Xóa tenant ${tenant.name}`}
-                  title="Xóa tenant và dữ liệu trực thuộc"
-                  onClick={() => showConfirm(
-                    'Xác nhận xóa Tenant',
-                    `Bạn chắc chắn muốn xóa vĩnh viễn Tenant "${tenant.name}"? Toàn bộ chi nhánh, cấu hình, lịch sử thanh toán và tài khoản Tenant Admin của tenant này sẽ bị xóa. Thao tác này KHÔNG THỂ KHÔI PHỤC.`,
-                    () => onDeleteTenant(tenant.id)
-                  )}
-                >
-                  <Trash2 />
-                </Button>
+                {/* Xóa là hành động nguy hiểm: kiểm tra ràng buộc logic trước,
+                    nếu thỏa mãn thì mới mở bước xác nhận an toàn. */}
+                {(() => {
+                  const eligibility = getTenantDeletionEligibility(tenant, { upgradeRequests });
+                  return (
+                    <Button
+                      variant="danger"
+                      size="small"
+                      iconOnly
+                      aria-label={`Xóa tenant ${tenant.name}`}
+                      title={
+                        eligibility.canDelete
+                          ? `Xóa vĩnh viễn tenant ${tenant.name} (Đủ điều kiện)`
+                          : `Không thể xóa: ${eligibility.blockReasons.join('; ')}`
+                      }
+                      onClick={() => {
+                        if (!eligibility.canDelete) {
+                          setBlockedDeleteTarget({ tenant, eligibility });
+                        } else {
+                          setConfirmDeleteTarget(tenant);
+                          setConfirmDeleteInput('');
+                          setConfirmDeleteAgreement(false);
+                        }
+                      }}
+                    >
+                      <Trash2 />
+                    </Button>
+                  );
+                })()}
               </div>
             )
           }
@@ -2090,6 +2141,151 @@ export default function TenantManagement({
               )}
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* MODAL THÔNG BÁO KHÔNG ĐƯỢC PHÉP XÓA DO RÀNG BUỘC LOGIC */}
+      {blockedDeleteTarget && (
+        <Modal
+          open
+          onClose={() => setBlockedDeleteTarget(null)}
+          title={`Không thể xóa Tenant "${blockedDeleteTarget.tenant.name}"`}
+          eyebrow="Ràng buộc dữ liệu & logic hệ thống"
+          icon={<AlertTriangle className="h-5 w-5 text-amber-500" />}
+          size="medium"
+          footer={
+            <div className="flex w-full items-center justify-between gap-2">
+              {blockedDeleteTarget.tenant.status === 'ACTIVE' ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    onUpdateTenant(blockedDeleteTarget.tenant.id, { status: 'SUSPENDED' });
+                    setBlockedDeleteTarget(null);
+                    showToast(`Đã chuyển tenant ${blockedDeleteTarget.tenant.name} sang trạng thái SUSPENDED.`, 'info');
+                  }}
+                >
+                  <Lock className="mr-1.5 h-3.5 w-3.5" />
+                  Tạm khóa Tenant ngay
+                </Button>
+              ) : <div />}
+              <Button variant="primary" onClick={() => setBlockedDeleteTarget(null)}>
+                Đã hiểu
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            <p className="text-brand-text">
+              Hệ thống từ chối yêu cầu xóa đối với tenant <strong>{blockedDeleteTarget.tenant.name}</strong> (<code className="rounded bg-brand-surface-highest px-1.5 py-0.5 text-caption font-mono font-bold text-brand-primary">{blockedDeleteTarget.tenant.id}</code>) vì không thỏa mãn các điều kiện an toàn dữ liệu:
+            </p>
+
+            <div className="space-y-2 rounded-xl border border-amber-500/20 bg-amber-50/50 p-4 dark:border-amber-500/30 dark:bg-amber-950/30">
+              <p className="font-bold text-amber-900 dark:text-amber-200">Các vấn đề logic đang ngăn cản thao tác xóa:</p>
+              <ul className="space-y-2 pt-1">
+                {blockedDeleteTarget.eligibility.blockReasons.map((reason, index) => (
+                  <li key={index} className="flex items-start gap-2 text-amber-950 dark:text-amber-100">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[10px] font-black text-amber-900 dark:bg-amber-800 dark:text-amber-100">!</span>
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-brand-outline/40 bg-brand-surface-lowest p-3 text-caption text-brand-text-muted">
+              <p className="font-semibold text-brand-text mb-1">💡 Quy trình an toàn để xóa một tenant:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Đóng/chuyển giao và xóa toàn bộ các chi nhánh trực thuộc tenant.</li>
+                <li>Giải phóng hoặc điều chuyển toàn bộ nhân sự (số lượng nhân sự về 0).</li>
+                <li>Chuyển trạng thái tenant từ <strong>ACTIVE</strong> sang <strong>SUSPENDED</strong> (Khóa tạm thời).</li>
+                <li>Xử lý hoàn tất mọi yêu cầu nâng cấp gói dịch vụ liên quan.</li>
+              </ol>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL XÁC NHẬN XÓA TENANT VĨNH VIỄN (KHI ĐÃ THỎA MÃN ĐIỀU KIỆN LOGIC) */}
+      {confirmDeleteTarget && (
+        <Modal
+          open
+          onClose={() => setConfirmDeleteTarget(null)}
+          title="Xác nhận xóa vĩnh viễn Tenant"
+          eyebrow="Hành động nguy hiểm — Không thể hoàn tác"
+          icon={<Trash2 className="h-5 w-5 text-rose-500" />}
+          size="medium"
+          footer={
+            <div className="flex w-full items-center justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmDeleteTarget(null)}>
+                Hủy bỏ
+              </Button>
+              <Button
+                variant="danger"
+                disabled={!confirmDeleteAgreement || confirmDeleteInput.trim().toUpperCase() !== confirmDeleteTarget.id.toUpperCase()}
+                onClick={() => {
+                  const target = confirmDeleteTarget;
+                  onDeleteTenant(target.id);
+                  setConfirmDeleteTarget(null);
+                  showToast(`Tenant ${target.name} (${target.id}) đã được xóa vĩnh viễn khỏi hệ thống.`, 'success');
+                }}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                Xác nhận xóa vĩnh viễn
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            <div className="rounded-xl border border-rose-500/25 bg-rose-50/60 p-3.5 text-rose-950 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-200">
+              <p className="font-bold text-rose-800 dark:text-rose-300">⚠️ CẢNH BÁO NGUY HIỂM</p>
+              <p className="mt-1 leading-relaxed text-caption">
+                Tenant này đã thỏa mãn điều kiện logic để xóa (0 chi nhánh, 0 nhân viên, trạng thái không hoạt động). Tuy nhiên, thao tác xóa sẽ loại bỏ hoàn toàn hồ sơ, tài khoản Tenant Admin và toàn bộ lịch sử thanh toán, audit log liên quan. Thao tác này <strong>KHÔNG THỂ KHÔI PHỤC</strong>.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-brand-outline/40 bg-brand-surface-lowest p-3.5 space-y-2">
+              <div className="flex justify-between items-center text-caption">
+                <span className="text-brand-text-muted">Tên Tenant:</span>
+                <span className="font-bold text-brand-text">{confirmDeleteTarget.name}</span>
+              </div>
+              <div className="flex justify-between items-center text-caption">
+                <span className="text-brand-text-muted">Mã định danh (ID):</span>
+                <code className="font-mono font-bold text-brand-primary">{confirmDeleteTarget.id}</code>
+              </div>
+              <div className="flex justify-between items-center text-caption">
+                <span className="text-brand-text-muted">Gói dịch vụ:</span>
+                <span className="font-semibold text-brand-text">{confirmDeleteTarget.packageName}</span>
+              </div>
+              <div className="flex justify-between items-center text-caption">
+                <span className="text-brand-text-muted">Tenant Admin:</span>
+                <span className="text-brand-text">{confirmDeleteTarget.adminName} ({confirmDeleteTarget.adminEmail})</span>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2.5 cursor-pointer rounded-lg border border-brand-outline/35 bg-brand-surface p-3 select-none">
+              <input
+                type="checkbox"
+                checked={confirmDeleteAgreement}
+                onChange={(e) => setConfirmDeleteAgreement(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-brand-outline text-brand-primary focus:ring-brand-primary"
+              />
+              <span className="text-caption font-semibold text-brand-text">
+                Tôi hiểu rằng toàn bộ dữ liệu của tenant này sẽ bị xóa sạch và không thể khôi phục.
+              </span>
+            </label>
+
+            <div>
+              <label className="block text-caption font-bold text-brand-text mb-1.5">
+                Nhập chính xác mã Tenant <span className="font-mono text-rose-600 dark:text-rose-400 font-black">{confirmDeleteTarget.id}</span> để kích hoạt nút xóa:
+              </label>
+              <input
+                type="text"
+                value={confirmDeleteInput}
+                onChange={(e) => setConfirmDeleteInput(e.target.value)}
+                placeholder={confirmDeleteTarget.id}
+                className="w-full rounded-control border border-brand-outline bg-brand-surface px-3 py-2 text-xs font-mono font-bold text-brand-text focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-200"
+              />
+            </div>
+          </div>
         </Modal>
       )}
 
