@@ -42,6 +42,7 @@ import {
   getYearlyPackagePrice,
   normalizeSubscriptionPackage
 } from '../utils/subscriptions';
+import { Modal, useToast } from './ui';
 
 interface SubscriptionPackagesProps {
   packages: SubscriptionPackage[];
@@ -329,7 +330,7 @@ export default function SubscriptionPackages({
                       <div className="flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: pkg.color }} />
                         <h2 className="text-lg font-black text-brand-text truncate">{pkg.name}</h2>
-                        {pkg.isPopular && status === 'ACTIVE' && <span className="text-[8px] uppercase tracking-wider font-black px-2 py-1 rounded-full bg-brand-secondary text-brand-on-primary">Phổ biến</span>}
+                        {pkg.isPopular && status === 'ACTIVE' && <span className="ui-badge ui-badge--small ui-badge--success uppercase tracking-wider">Phổ biến</span>}
                       </div>
                       <div className="flex items-center gap-2 mt-2">
                         <span className={`inline-flex border rounded-full px-2 py-0.5 text-[9px] font-bold ${STATUS_META[status].classes}`}>{STATUS_META[status].label}</span>
@@ -428,10 +429,19 @@ export default function SubscriptionPackages({
       {deleteTarget && <ConfirmModal title={`Xóa gói ${deleteTarget.name}?`} description="Gói chưa có tenant sử dụng và sẽ bị xóa vĩnh viễn. Hành động này không ảnh hưởng các hóa đơn lịch sử." confirmLabel="Xóa vĩnh viễn" onClose={() => setDeleteTarget(null)} onConfirm={() => { onDeletePackage(deleteTarget.id); setDeleteTarget(null); }} />}
 
       {retirementTarget && (
-        <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden">
-            <ModalHeader title={`Ngừng đăng ký gói ${retirementTarget.name}`} onClose={() => setRetirementTarget(null)} />
-            <div className="p-6 space-y-4">
+        <Modal
+          open
+          onClose={() => setRetirementTarget(null)}
+          title={`Ngừng đăng ký gói ${retirementTarget.name}`}
+          size="medium"
+          footer={
+            <>
+              <button onClick={() => setRetirementTarget(null)} className="btn-secondary">Đóng</button>
+              <button disabled={!replacementPackageName} onClick={confirmRetirementRequest} className="bg-brand-warning text-white px-4 py-2 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Xác nhận ngừng đăng ký</button>
+            </>
+          }
+        >
+            <div className="space-y-4">
               <div className="rounded-xl bg-brand-warning/10 border border-brand-warning/25 p-4 text-xs text-brand-text leading-relaxed space-y-2">
                 <p>Gói sẽ <strong>ngừng nhận tenant mới ngay lập tức</strong>.</p>
                 <p><strong>{(tenantsByPackage.get(retirementTarget.id) || []).length} tenant hiện tại</strong> vẫn sử dụng bình thường đến ngày hết hạn riêng của từng tenant.</p>
@@ -447,12 +457,7 @@ export default function SubscriptionPackages({
                 <p className="text-[10px] text-brand-error">Chưa có gói đang hoạt động nào đủ hạn mức cho tất cả tenant. Hãy tạo hoặc nâng hạn mức một gói thay thế trước.</p>
               )}
             </div>
-            <div className="modal-footer">
-              <button onClick={() => setRetirementTarget(null)} className="btn-secondary">Đóng</button>
-              <button disabled={!replacementPackageName} onClick={confirmRetirementRequest} className="bg-brand-warning text-white px-4 py-2 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Xác nhận ngừng đăng ký</button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
     </div>
@@ -471,11 +476,8 @@ function MenuButton({ icon, label, onClick, danger = false, disabled = false, ti
   return <button type="button" onClick={onClick} disabled={disabled} title={title} className={`subscription-menu-item ${danger ? 'subscription-menu-item--danger' : ''}`}>{React.cloneElement(icon, { className: 'w-3.5 h-3.5 shrink-0' })}<span className="truncate">{label}</span></button>;
 }
 
-function ModalHeader({ title, onClose }: { title: string; onClose: () => void }) {
-  return <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/40 flex items-center justify-between"><h3 className="text-sm font-black text-brand-text">{title}</h3><button type="button" aria-label="Đóng" onClick={onClose} className="p-1 text-brand-text-muted hover:text-brand-text cursor-pointer"><X className="w-5 h-5" /></button></div>;
-}
-
 function PackageEditor({ editor, reportCurrency, onClose, onSave }: { editor: EditorState; reportCurrency: CurrencyCode; onClose: () => void; onSave: (pkg: SubscriptionPackage) => void }) {
+  const showToast = useToast();
   const [draft, setDraft] = useState(() => normalizeSubscriptionPackage(editor.pkg));
   const [section, setSection] = useState<'general' | 'features' | 'limits'>('general');
   const [showCapabilityForm, setShowCapabilityForm] = useState(false);
@@ -488,15 +490,15 @@ function PackageEditor({ editor, reportCurrency, onClose, onSave }: { editor: Ed
     const label = newCapabilityLabel.trim();
     const key = createCapabilityKey(newCapabilityKey || label);
     if (!label) {
-      alert('Vui lòng nhập tên tính năng.');
+      showToast('Vui lòng nhập tên tính năng.', 'error');
       return;
     }
     if (!key) {
-      alert('Mã tính năng không hợp lệ.');
+      showToast('Mã tính năng không hợp lệ.', 'error');
       return;
     }
     if ((draft.capabilities || []).some((capability) => capability.key === key)) {
-      alert(`Mã tính năng "${key}" đã tồn tại.`);
+      showToast(`Mã tính năng "${key}" đã tồn tại.`, 'error');
       return;
     }
     setDraft((current) => ({
@@ -516,12 +518,25 @@ function PackageEditor({ editor, reportCurrency, onClose, onSave }: { editor: Ed
     ...current,
     capabilities: (current.capabilities || []).filter((capability) => capability.key !== key)
   }));
-  const submit = (event: React.FormEvent) => { event.preventDefault(); if (!draft.name.trim()) { alert('Vui lòng nhập tên gói dịch vụ.'); return; } if (draft.price < 0 || getYearlyPackagePrice(draft) < 0) { alert('Giá gói dịch vụ không được nhỏ hơn 0.'); return; } const enabledCapabilities = (draft.capabilities || []).filter((capability) => capability.enabled); onSave({ ...draft, name: draft.name.trim(), description: draft.description?.trim(), features: enabledCapabilities.map((capability) => capability.label) }); };
+  const submit = (event: React.FormEvent) => { event.preventDefault(); if (!draft.name.trim()) { showToast('Vui lòng nhập tên gói dịch vụ.', 'error'); return; } if (draft.price < 0 || getYearlyPackagePrice(draft) < 0) { showToast('Giá gói dịch vụ không được nhỏ hơn 0.', 'error'); return; } const enabledCapabilities = (draft.capabilities || []).filter((capability) => capability.enabled); onSave({ ...draft, name: draft.name.trim(), description: draft.description?.trim(), features: enabledCapabilities.map((capability) => capability.label) }); };
 
   return (
-    <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-      <form onSubmit={submit} className="w-full max-w-5xl max-h-[94vh] bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-        <ModalHeader title={editor.mode === 'add' ? 'Tạo gói dịch vụ' : `Cấu hình gói ${editor.pkg.name}`} onClose={onClose} />
+    <Modal
+      open
+      onClose={onClose}
+      title={editor.mode === 'add' ? 'Tạo gói dịch vụ' : `Cấu hình gói ${editor.pkg.name}`}
+      size="fullscreen"
+      /* Biểu mẫu dài, bấm nhầm ra nền là mất hết những gì đã nhập. */
+      closeOnBackdrop={false}
+      bodyClassName="!p-0"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-secondary">Hủy</button>
+          <button type="submit" form="package-editor-form" className="bg-brand-primary text-brand-on-primary px-5 py-2.5 rounded-lg text-xs font-black hover:bg-brand-primary/90 cursor-pointer">{editor.mode === 'add' ? 'Tạo gói' : 'Lưu phiên bản mới'}</button>
+        </>
+      }
+    >
+      <form id="package-editor-form" onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
         <div className="px-5 pt-4 flex gap-2 overflow-x-auto border-b border-brand-outline/25">{([['general', 'Thông tin & giá'], ['features', 'Feature flags'], ['limits', 'Hạn mức']] as const).map(([key, label]) => <button key={key} type="button" onClick={() => setSection(key)} className={`px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap cursor-pointer ${section === key ? 'border-brand-primary text-brand-primary' : 'border-transparent text-brand-text-muted hover:text-brand-text'}`}>{label}</button>)}</div>
         <div className="p-5 sm:p-6 overflow-y-auto flex-1">
           {section === 'general' && <div className="space-y-5">
@@ -611,24 +626,23 @@ function PackageEditor({ editor, reportCurrency, onClose, onSave }: { editor: Ed
           </div>}
           {section === 'limits' && <div><div className="rounded-xl bg-brand-primary/5 border border-brand-primary/20 p-4 text-xs text-brand-text-muted mb-5">Để trống một hạn mức để biểu thị <strong className="text-brand-text">không giới hạn</strong>; nhập 0 để biểu thị <strong className="text-brand-text">không hỗ trợ</strong>.</div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{LIMIT_FIELDS.map((field) => { const value = draft.limits?.[field.key]; return <Field key={field.key} label={field.label}><input type="number" min="0" value={value === null ? '' : value ?? 0} placeholder="Không giới hạn" onChange={(event) => updateLimit(field.key, event.target.value)} className="form-control" /><p className="field-hint">Hiện tại: {formatSubscriptionLimit(value, field.suffix)}</p></Field>; })}</div></div>}
         </div>
-        <div className="modal-footer"><button type="button" onClick={onClose} className="btn-secondary">Hủy</button><button type="submit" className="bg-brand-primary text-brand-on-primary px-5 py-2.5 rounded-lg text-xs font-black hover:bg-brand-primary/90 cursor-pointer">{editor.mode === 'add' ? 'Tạo gói' : 'Lưu phiên bản mới'}</button></div>
       </form>
-    </div>
+    </Modal>
   );
 }
 
 function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) { return <div className={className}><label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">{label}</label>{children}</div>; }
 
 function ComparisonModal({ packages, onClose }: { packages: SubscriptionPackage[]; onClose: () => void }) {
-  return <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"><div className="w-full max-w-7xl max-h-[94vh] bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden flex flex-col"><ModalHeader title="So sánh quyền lợi và hạn mức" onClose={onClose} /><div className="overflow-auto flex-1"><table className="w-full min-w-[850px] text-xs"><thead className="sticky top-0 z-10 bg-brand-surface-highest"><tr><th className="text-left p-4 w-64 text-brand-text-muted">Tiêu chí</th>{packages.map((pkg) => <th key={pkg.id} className="p-4 text-center text-brand-text"><span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: pkg.color }} />{pkg.name}</th>)}</tr></thead><tbody className="divide-y divide-brand-outline/20"><ComparisonRow label="Trạng thái" values={packages.map((pkg) => STATUS_META[getPackageStatus(pkg)].label)} /><ComparisonRow label="Giá tháng" values={packages.map((pkg) => formatMoney(pkg.price, pkg.currency))} /><ComparisonRow label="Giá năm" values={packages.map((pkg) => formatMoney(getYearlyPackagePrice(pkg), pkg.currency))} /><ComparisonRow label="Nhân sự" values={packages.map((pkg) => pkg.maxStaff >= 999 ? 'Không giới hạn' : String(pkg.maxStaff))} /><ComparisonRow label="Chi nhánh" values={packages.map((pkg) => pkg.maxSalons >= 99 ? 'Không giới hạn' : String(pkg.maxSalons))} />{LIMIT_FIELDS.map((field) => <ComparisonRow key={field.key} label={field.label} values={packages.map((pkg) => formatSubscriptionLimit(pkg.limits?.[field.key], field.suffix))} />)}{SUBSCRIPTION_CAPABILITY_CATALOG.map((capability) => <tr key={capability.key}><td className="p-4 text-brand-text">{capability.label}<p className="text-[8px] font-mono text-brand-text-muted">{capability.key}</p></td>{packages.map((pkg) => { const enabled = pkg.capabilities?.some((item) => item.key === capability.key && item.enabled); return <td key={pkg.id} className="p-4 text-center">{enabled ? <Check className="w-4 h-4 text-brand-secondary mx-auto" /> : <span className="text-brand-text-muted">—</span>}</td>; })}</tr>)}</tbody></table></div></div></div>;
+  return <Modal open onClose={onClose} title="So sánh quyền lợi và hạn mức" size="fullscreen" bodyClassName="!p-0"><div className="overflow-auto"><table className="w-full min-w-[850px] text-xs"><thead className="sticky top-0 z-10 bg-brand-surface-highest"><tr><th className="text-left p-4 w-64 text-brand-text-muted">Tiêu chí</th>{packages.map((pkg) => <th key={pkg.id} className="p-4 text-center text-brand-text"><span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: pkg.color }} />{pkg.name}</th>)}</tr></thead><tbody className="divide-y divide-brand-outline/20"><ComparisonRow label="Trạng thái" values={packages.map((pkg) => STATUS_META[getPackageStatus(pkg)].label)} /><ComparisonRow label="Giá tháng" values={packages.map((pkg) => formatMoney(pkg.price, pkg.currency))} /><ComparisonRow label="Giá năm" values={packages.map((pkg) => formatMoney(getYearlyPackagePrice(pkg), pkg.currency))} /><ComparisonRow label="Nhân sự" values={packages.map((pkg) => pkg.maxStaff >= 999 ? 'Không giới hạn' : String(pkg.maxStaff))} /><ComparisonRow label="Chi nhánh" values={packages.map((pkg) => pkg.maxSalons >= 99 ? 'Không giới hạn' : String(pkg.maxSalons))} />{LIMIT_FIELDS.map((field) => <ComparisonRow key={field.key} label={field.label} values={packages.map((pkg) => formatSubscriptionLimit(pkg.limits?.[field.key], field.suffix))} />)}{SUBSCRIPTION_CAPABILITY_CATALOG.map((capability) => <tr key={capability.key}><td className="p-4 text-brand-text">{capability.label}<p className="text-[8px] font-mono text-brand-text-muted">{capability.key}</p></td>{packages.map((pkg) => { const enabled = pkg.capabilities?.some((item) => item.key === capability.key && item.enabled); return <td key={pkg.id} className="p-4 text-center">{enabled ? <Check className="w-4 h-4 text-brand-secondary mx-auto" /> : <span className="text-brand-text-muted">—</span>}</td>; })}</tr>)}</tbody></table></div></Modal>;
 }
 
 function ComparisonRow({ label, values }: { label: string; values: string[] }) { return <tr><td className="p-4 font-semibold text-brand-text">{label}</td>{values.map((value, index) => <td key={`${label}-${index}`} className="p-4 text-center text-brand-text-muted">{value}</td>)}</tr>; }
 
 function HistoryModal({ pkg, onClose }: { pkg: SubscriptionPackage; onClose: () => void }) {
-  return <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4"><div className="w-full max-w-2xl max-h-[88vh] bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden flex flex-col"><ModalHeader title={`Lịch sử giá · ${pkg.name}`} onClose={onClose} /><div className="p-6 overflow-y-auto space-y-3"><div className="rounded-xl border border-brand-secondary/25 bg-brand-secondary/5 p-4 flex items-center justify-between gap-3"><div><p className="text-[10px] text-brand-text-muted">GIÁ HIỆN TẠI · PHIÊN BẢN {pkg.version || 1}</p><p className="text-lg font-black text-brand-text">{formatMoney(pkg.price, pkg.currency)} / tháng</p></div><p className="text-xs font-bold text-brand-secondary">{formatMoney(getYearlyPackagePrice(pkg), pkg.currency)} / năm</p></div>{(pkg.priceHistory || []).length === 0 ? <p className="text-xs text-brand-text-muted text-center py-8">Chưa có lần thay đổi giá nào được ghi nhận.</p> : (pkg.priceHistory || []).map((entry) => <div key={entry.id} className="rounded-xl border border-brand-outline/30 p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-brand-text">{formatMoney(entry.monthlyPrice, entry.currency)} / tháng</p><p className="text-[10px] text-brand-text-muted">Hiệu lực {entry.effectiveFrom}</p></div><p className="text-[10px] text-brand-text-muted mt-2">{formatMoney(entry.yearlyPrice, entry.currency)} / năm · {entry.note}</p></div>)}</div></div></div>;
+  return <Modal open onClose={onClose} title={`Lịch sử giá · ${pkg.name}`} size="large"><div className="space-y-3"><div className="rounded-xl border border-brand-secondary/25 bg-brand-secondary/5 p-4 flex items-center justify-between gap-3"><div><p className="text-[10px] text-brand-text-muted">GIÁ HIỆN TẠI · PHIÊN BẢN {pkg.version || 1}</p><p className="text-lg font-black text-brand-text">{formatMoney(pkg.price, pkg.currency)} / tháng</p></div><p className="text-xs font-bold text-brand-secondary">{formatMoney(getYearlyPackagePrice(pkg), pkg.currency)} / năm</p></div>{(pkg.priceHistory || []).length === 0 ? <p className="text-xs text-brand-text-muted text-center py-8">Chưa có lần thay đổi giá nào được ghi nhận.</p> : (pkg.priceHistory || []).map((entry) => <div key={entry.id} className="rounded-xl border border-brand-outline/30 p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-brand-text">{formatMoney(entry.monthlyPrice, entry.currency)} / tháng</p><p className="text-[10px] text-brand-text-muted">Hiệu lực {entry.effectiveFrom}</p></div><p className="text-[10px] text-brand-text-muted mt-2">{formatMoney(entry.yearlyPrice, entry.currency)} / năm · {entry.note}</p></div>)}</div></Modal>;
 }
 
 function ConfirmModal({ title, description, confirmLabel, onClose, onConfirm }: { title: string; description: string; confirmLabel: string; onClose: () => void; onConfirm: () => void }) {
-  return <div className="sa-modal-backdrop fixed inset-0 z-50 bg-brand-bg/85 backdrop-blur-sm flex items-center justify-center p-4"><div className="w-full max-w-md bg-brand-surface border border-brand-outline rounded-2xl shadow-2xl overflow-hidden"><ModalHeader title={title} onClose={onClose} /><div className="p-6 flex gap-3"><AlertTriangle className="w-5 h-5 text-brand-warning shrink-0" /><p className="text-xs text-brand-text-muted leading-relaxed">{description}</p></div><div className="modal-footer"><button onClick={onClose} className="btn-secondary">Hủy</button><button onClick={onConfirm} className="btn-danger">{confirmLabel}</button></div></div></div>;
+  return <Modal open onClose={onClose} title={title} size="small" icon={<AlertTriangle className="w-5 h-5 text-brand-warning" />} footer={<><button onClick={onClose} className="btn-secondary">Hủy</button><button onClick={onConfirm} className="btn-danger">{confirmLabel}</button></>}><p className="text-xs text-brand-text-muted leading-relaxed">{description}</p></Modal>;
 }

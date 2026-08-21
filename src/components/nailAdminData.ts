@@ -55,6 +55,71 @@ export interface NailFormField {
   options?: string[];
 }
 
+/** Thông tin thương hiệu của tiệm — nhóm "Thông tin tiệm" trong Cài đặt. */
+export interface BrandInfo {
+  displayName: string;
+  legalName: string;
+  logoUrl: string;
+  hotline: string;
+  email: string;
+  address: string;
+  website: string;
+  timezone: string;
+  currency: 'VND' | 'USD';
+  language: string;
+}
+
+/** Một phương thức thanh toán — nhóm "Thanh toán" trong Cài đặt. */
+export interface PaymentMethod {
+  key: string;
+  label: string;
+  detail: string;
+  enabled: boolean;
+  /** Phương thức cần thao tác thêm trước khi bật được, ví dụ xác thực lại cổng. */
+  needsAttention?: boolean;
+}
+
+/** Cấu hình nhóm "Thanh toán". */
+export interface PaymentSettings {
+  methods: PaymentMethod[];
+  /** Cấp thấp nhất được duyệt hoàn tiền. */
+  refundApproval: string;
+}
+
+/**
+ * Nhóm hoặc trang mà nút hành động của một khuyến nghị dẫn tới.
+ *
+ * Dùng khoá ngữ nghĩa thay vì hàm điều hướng, để dữ liệu nội dung không cần
+ * biết trang Cài đặt được dựng thế nào. Trang tự ánh xạ khoá này sang đúng nhóm
+ * cấu hình hoặc đúng trang của portal.
+ */
+export type SettingsRecommendationTarget =
+  | 'brand'
+  | 'hours'
+  | 'policy'
+  | 'payment'
+  | 'notify'
+  | 'access'
+  | 'integration'
+  | 'security'
+  | 'branches';
+
+/** Một khuyến nghị hiển thị ở cuối một nhóm cấu hình. */
+export interface SettingsRecommendation {
+  title: string;
+  description: string;
+  /** Bỏ trống khi khuyến nghị chỉ là ghi chú, không có nơi nào để đi tới. */
+  target?: SettingsRecommendationTarget;
+  /** Nhãn nút. Phải nói rõ hành động, ví dụ "Mở nhóm Thanh toán". */
+  actionLabel?: string;
+}
+
+export const REFUND_APPROVAL_OPTIONS = [
+  'Cần Owner duyệt',
+  'Manager được duyệt',
+  'Lễ tân được duyệt dưới 500.000đ'
+];
+
 export interface NailModuleConfig {
   id: Exclude<NailPageId, 'overview' | 'subscription'>;
   eyebrow: string;
@@ -72,6 +137,18 @@ export interface NailModuleConfig {
   checklist: string[];
   formTitle: string;
   formFields: NailFormField[];
+  /** Chỉ nhóm "settings" dùng — dữ liệu cho tab "Thông tin tiệm". */
+  brandInfo?: BrandInfo;
+  /** Chỉ nhóm "settings" dùng — dữ liệu cho tab "Thanh toán". */
+  paymentSettings?: PaymentSettings;
+  /**
+   * Chỉ nhóm "settings" dùng — khuyến nghị riêng của TỪNG nhóm cấu hình.
+   *
+   * Trước đây cả 8 nhóm dùng chung một mảng `checklist`, nên trang Bảo mật
+   * hiện cả "Cập nhật giờ lễ" lẫn "Tải xuống bản sao lưu" — nội dung của nhóm
+   * khác. Khoá của map là tên nhóm trong `tabs`.
+   */
+  settingsRecommendations?: Record<string, SettingsRecommendation[]>;
 }
 
 const d = (label: string, value: string) => ({ label, value });
@@ -520,33 +597,132 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
     ]
   },
   settings: {
-    id: 'settings', eyebrow: 'Cấu hình hệ thống', title: 'Cài đặt tiệm', description: 'Thiết lập thương hiệu, chi nhánh, giờ mở cửa, chính sách, thanh toán, phân quyền và tích hợp.', primaryAction: 'Lưu thay đổi', secondaryAction: 'Nhật ký cấu hình',
+    id: 'settings',
+    eyebrow: 'Cấu hình tenant',
+    title: 'Cài đặt tiệm',
+    description: 'Thiết lập thương hiệu, giờ hoạt động, chính sách khách hàng, thanh toán, thông báo, phân quyền, tích hợp và bảo mật cho toàn bộ chi nhánh thuộc tenant.',
+    primaryAction: 'Thêm hạng mục cấu hình',
+    secondaryAction: 'Nhật ký cấu hình',
     stats: [
       { label: 'Chi nhánh', value: '2', detail: 'Quận 1 và Quận 3', tone: 'blue' },
       { label: 'Tài khoản quản trị', value: '6', detail: '1 Owner · 2 Manager · 3 Lễ tân', tone: 'violet' },
       { label: 'Tích hợp hoạt động', value: '8/9', detail: 'ZaloPay cần xác thực lại', tone: 'amber' },
-      { label: 'Điểm bảo mật', value: '92/100', detail: 'MFA đã bật cho quản lý', tone: 'emerald' }
+      { label: 'Chính sách bảo mật', value: '4', detail: 'Đăng nhập, mật khẩu, phiên, nhật ký', tone: 'emerald' }
     ],
-    tabs: ['Thông tin tiệm', 'Chi nhánh', 'Giờ hoạt động', 'Chính sách', 'Thanh toán', 'Thông báo', 'Phân quyền', 'Tích hợp'],
+    tabs: ['Thông tin tiệm', 'Giờ hoạt động', 'Chính sách', 'Thanh toán', 'Thông báo', 'Phân quyền', 'Tích hợp', 'Bảo mật'],
     columns: ['Hạng mục', 'Cấu hình hiện tại', 'Phạm vi', 'Cập nhật bởi', 'Cập nhật lúc', 'Trạng thái'],
+    brandInfo: {
+      displayName: 'Nailé Studio',
+      legalName: 'Công ty TNHH Nailé',
+      logoUrl: '',
+      hotline: '1900 6828',
+      email: 'hello@nailestudio.vn',
+      address: '95 Võ Văn Tần, Phường 6, Quận 3, TP. Hồ Chí Minh',
+      website: 'nailestudio.vn',
+      timezone: 'Asia/Ho_Chi_Minh',
+      currency: 'VND',
+      language: 'Tiếng Việt'
+    },
+    paymentSettings: {
+      methods: [
+        { key: 'cash', label: 'Tiền mặt', detail: 'Thu trực tiếp tại quầy lễ tân', enabled: true },
+        { key: 'bank', label: 'Chuyển khoản ngân hàng', detail: 'Tài khoản doanh nghiệp đã liên kết', enabled: true },
+        { key: 'card', label: 'Thẻ nội địa & quốc tế', detail: 'Máy POS đặt tại quầy thu ngân', enabled: true },
+        { key: 'momo', label: 'MoMo', detail: 'Ví điện tử, khách quét mã tại quầy', enabled: true },
+        { key: 'vnpay', label: 'VNPay', detail: 'Cổng VNPay QR', enabled: true },
+        { key: 'zalopay', label: 'ZaloPay', detail: 'Kết nối đã hết hạn, cần xác thực lại trước khi bật', enabled: false, needsAttention: true }
+      ],
+      refundApproval: 'Cần Owner duyệt'
+    },
     rows: [
-      { id: 'SET-BRAND', title: 'Thương hiệu Nailé Studio', subtitle: 'Logo, tên hiển thị và thông tin liên hệ', cells: ['Nailé Studio · nailestudio.vn', 'Toàn hệ thống', 'Lê Hoàng Nam', '15/07 · 18:42'], badge: 'Hoàn chỉnh', badgeTone: 'emerald', details: [d('Tên pháp lý', 'Công ty TNHH Nailé'), d('Hotline', '1900 6828'), d('Email', 'hello@nailestudio.vn'), d('Website', 'nailestudio.vn'), d('Múi giờ', 'Asia/Ho_Chi_Minh'), d('Ngôn ngữ', 'Tiếng Việt')] },
+      // ── Thông tin tiệm ─────────────────────────────────────────────────
+      { id: 'SET-BRAND-LEGAL', title: 'Hồ sơ pháp lý & xuất hoá đơn', subtitle: 'Thông tin được in trên hoá đơn gửi khách', cells: ['MST 0312345678 · Đã xác minh', 'Toàn tenant', 'Nguyễn Văn Boss', '02/08 · 09:20'], badge: 'Đã xác minh', badgeTone: 'emerald', details: [d('Mã số thuế', '0312345678'), d('Tên trên hoá đơn', 'Công ty TNHH Nailé'), d('Địa chỉ xuất hoá đơn', '95 Võ Văn Tần, Quận 3'), d('Người đại diện', 'Nguyễn Văn Boss'), d('Hình thức hoá đơn', 'Điện tử, gửi qua email'), d('Ngày xác minh', '02/08/2026')] },
+
+      // ── Giờ hoạt động ──────────────────────────────────────────────────
+      { id: 'SET-HOURS-SPECIAL', title: 'Ngày nghỉ & giờ đặc biệt', subtitle: 'Lịch nghỉ lễ và khung giờ rút gọn', cells: ['3 mốc đã khai báo', 'Tất cả chi nhánh', 'Khánh Vy', '05/08 · 16:40'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Nghỉ lễ 02/09', 'Đóng cửa cả ngày'), d('Mùng 1–3 Tết', 'Đóng cửa cả ngày'), d('Chủ nhật', 'Rút gọn 10:00–18:00'), d('Đặt lịch online ngày nghỉ', 'Tự động chặn'), d('Nhắc khách trước', '3 ngày'), d('Áp dụng cho', 'Cả 2 chi nhánh')] },
+      { id: 'SET-HOURS-SLOT', title: 'Khung giờ nhận lịch', subtitle: 'Bước khung giờ, thời gian đệm và giới hạn mỗi khung', cells: ['Bước 15 phút · Đệm 10 phút', 'Tất cả chi nhánh', 'Khánh Vy', '05/08 · 16:52'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Bước khung giờ', '15 phút'), d('Nhận lịch sớm nhất', 'Trước 30 ngày'), d('Nhận lịch trễ nhất', 'Trước 60 phút'), d('Đệm giữa hai lịch', '10 phút'), d('Tối đa mỗi khung', '4 khách'), d('Chốt sổ cuối ngày', '22:00')] },
+
+      // ── Chính sách ─────────────────────────────────────────────────────
       { id: 'SET-BOOKING', title: 'Chính sách đặt lịch', subtitle: 'Cọc, hủy, đổi lịch và khách không đến', cells: ['Cọc 30% · Hủy trước 12 giờ', 'Tất cả chi nhánh', 'Lê Hoàng Nam', '14/07 · 10:05'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Cọc mặc định', '30%'), d('Hủy miễn phí', 'Trước 12 giờ'), d('Đổi lịch', 'Tối đa 2 lần'), d('Không đến', 'Mất tiền cọc'), d('Trễ trên 15 phút', 'Có thể rút ngắn dịch vụ'), d('Tự động xác nhận', 'Dịch vụ dưới 90 phút')] },
-      { id: 'SET-PAYMENT', title: 'Phương thức thanh toán', subtitle: 'Tiền mặt, thẻ, chuyển khoản và ví điện tử', cells: ['6 phương thức', 'Toàn hệ thống', 'Lê Hoàng Nam', '12/07 · 16:20'], badge: '5/6 hoạt động', badgeTone: 'amber', details: [d('Tiền mặt', 'Hoạt động'), d('Chuyển khoản', 'Vietcombank **** 2868'), d('Thẻ', 'Stripe Terminal'), d('MoMo', 'Hoạt động'), d('ZaloPay', 'Cần xác thực lại'), d('Hoàn tiền', 'Cần Owner duyệt')] },
-      { id: 'SET-NOTIFY', title: 'SMS, Zalo & email', subtitle: 'Mẫu tin, hạn mức và quy tắc gửi', cells: ['12 mẫu tự động', 'Toàn hệ thống', 'Khánh Vy', '10/07 · 09:12'], badge: 'Đang hoạt động', badgeTone: 'emerald', details: [d('Zalo OA', 'Đã xác thực'), d('SMS Brandname', 'NAILE STUDIO'), d('Email', 'hello@nailestudio.vn'), d('Hạn mức SMS', '2.000/tháng'), d('Đã dùng', '1.246'), d('Giờ yên lặng', '21:00–08:00')] },
-      { id: 'SET-ACCESS', title: 'Vai trò & phân quyền', subtitle: 'Owner, Manager, Lễ tân, Kỹ thuật viên', cells: ['4 vai trò · 18 nhân viên', 'Theo chi nhánh', 'Lê Hoàng Nam', '08/07 · 14:30'], badge: 'MFA đã bật', badgeTone: 'emerald', details: [d('Owner', 'Toàn quyền'), d('Manager', 'Trừ cấu hình tài chính'), d('Lễ tân', 'Lịch, khách, POS'), d('Kỹ thuật viên', 'Lịch và hồ sơ được giao'), d('MFA', 'Bắt buộc Owner/Manager'), d('Phiên đăng nhập', '8 giờ')] }
+      { id: 'SET-POLICY-WARRANTY', title: 'Bảo hành & làm lại', subtitle: 'Điều kiện làm lại miễn phí cho khách', cells: ['Bảo hành 7 ngày', 'Tất cả chi nhánh', 'Lê Hoàng Nam', '20/07 · 11:15'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Bảo hành sơn gel', '7 ngày'), d('Bảo hành đắp bột', '10 ngày'), d('Làm lại miễn phí', 'Bong, tróc, lệch form'), d('Không áp dụng', 'Hư do va đập hoặc tự tháo'), d('Người duyệt', 'Quản lý chi nhánh'), d('Ghi nhận', 'Vào hồ sơ khách')] },
+      { id: 'SET-POLICY-DATA', title: 'Dữ liệu & quyền riêng tư khách', subtitle: 'Lưu ảnh mẫu, số điện thoại và quyền xem', cells: ['Ẩn 4 số cuối với lễ tân', 'Tất cả chi nhánh', 'Nguyễn Văn Boss', '22/07 · 08:30'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Lưu ảnh mẫu nail', 'Có, cần khách đồng ý'), d('Thời gian lưu ảnh', '24 tháng'), d('Xem số điện thoại đầy đủ', 'Owner và Manager'), d('Lễ tân nhìn thấy', '4 số cuối bị ẩn'), d('Xoá theo yêu cầu khách', 'Trong 7 ngày làm việc'), d('Xuất dữ liệu khách', 'Chỉ Owner')] },
+
+      // ── Thanh toán ─────────────────────────────────────────────────────
+      { id: 'SET-PAY-INVOICE', title: 'Hoá đơn & thuế', subtitle: 'Cách xuất hoá đơn cho khách tại quầy', cells: ['VAT 8% · Hoá đơn điện tử', 'Tất cả chi nhánh', 'Nguyễn Văn Boss', '02/08 · 09:25'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Xuất hoá đơn VAT', 'Khi khách yêu cầu'), d('Thuế suất', '8%'), d('Gửi hoá đơn qua', 'Email và Zalo'), d('Làm tròn hoá đơn', 'Đến 1.000đ'), d('Đơn vị tiền tệ', 'VND'), d('In hoá đơn giấy', 'Có, tại quầy')] },
+      { id: 'SET-PAY-EXTRA', title: 'Phụ thu & tiền tip', subtitle: 'Phụ thu ngoài giờ và cách chia tip cho kỹ thuật viên', cells: ['Phụ thu cuối tuần 10%', 'Tất cả chi nhánh', 'Khánh Vy', '28/07 · 15:10'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Phụ thu cuối tuần', '10%'), d('Phụ thu ngoài giờ', '15% sau 20:00'), d('Nhận tip qua thẻ', 'Có'), d('Tip về kỹ thuật viên', '100%'), d('Phí huỷ muộn', '50% tiền cọc'), d('Hiển thị trên hoá đơn', 'Tách dòng riêng')] },
+
+      // ── Thông báo ──────────────────────────────────────────────────────
+      { id: 'SET-NOTIFY', title: 'Nhắc lịch cho khách', subtitle: 'Mẫu tin SMS, Zalo, email và hạn mức gửi', cells: ['12 mẫu tự động', 'Tất cả chi nhánh', 'Khánh Vy', '10/07 · 09:12'], badge: 'Đang hoạt động', badgeTone: 'emerald', details: [d('Zalo OA', 'Đã xác thực'), d('SMS Brandname', 'NAILE STUDIO'), d('Email gửi đi', 'hello@nailestudio.vn'), d('Hạn mức SMS', '2.000/tháng'), d('Đã dùng tháng này', '1.246'), d('Giờ yên lặng', '21:00–08:00')] },
+      { id: 'SET-NOTIFY-STAFF', title: 'Thông báo nội bộ', subtitle: 'Cảnh báo gửi cho quản lý, lễ tân và kỹ thuật viên', cells: ['5 loại cảnh báo đang bật', 'Theo chi nhánh', 'Lê Hoàng Nam', '18/07 · 14:05'], badge: 'Đang hoạt động', badgeTone: 'emerald', details: [d('Nhắc ca làm', 'Trước 12 giờ'), d('Khách huỷ lịch', 'Ngay lập tức'), d('Lịch mới được gán', 'Ngay lập tức'), d('Vật tư dưới định mức', 'Mỗi sáng 08:00'), d('Kênh gửi', 'Zalo nhóm nội bộ'), d('Người nhận', 'Owner và Manager')] },
+
+      // ── Phân quyền ─────────────────────────────────────────────────────
+      { id: 'SET-ACCESS', title: 'Vai trò & phân quyền', subtitle: 'Owner, Manager, Lễ tân, Kỹ thuật viên', cells: ['4 vai trò · 18 nhân viên', 'Theo chi nhánh', 'Lê Hoàng Nam', '08/07 · 14:30'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Owner', 'Toàn quyền tenant'), d('Manager', 'Trừ cấu hình tài chính'), d('Lễ tân', 'Lịch, khách, POS'), d('Kỹ thuật viên', 'Lịch và hồ sơ được giao'), d('Tổng nhân sự', '18 người'), d('Duyệt cấp quyền', 'Owner')] },
+      { id: 'SET-ACCESS-SCOPE', title: 'Phạm vi theo chi nhánh', subtitle: 'Ai được xem và thao tác trên chi nhánh nào', cells: ['Giới hạn theo chi nhánh phụ trách', 'Theo chi nhánh', 'Nguyễn Văn Boss', '08/07 · 14:45'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Manager', 'Chỉ chi nhánh phụ trách'), d('Lễ tân', 'Chỉ chi nhánh đang trực'), d('Kỹ thuật viên', 'Chỉ lịch của mình'), d('Xem doanh thu chi nhánh khác', 'Chỉ Owner'), d('Chuyển khách giữa chi nhánh', 'Manager trở lên'), d('Đổi phạm vi', 'Cần Owner duyệt')] },
+
+      // ── Tích hợp ───────────────────────────────────────────────────────
+      { id: 'SET-INTEGRATION-CHANNEL', title: 'Kênh đặt lịch online', subtitle: 'Nơi khách tự đặt lịch và cách đồng bộ về hệ thống', cells: ['3/4 kênh đang kết nối', 'Toàn tenant', 'Khánh Vy', '30/07 · 10:00'], badge: 'Thiếu 1 kênh', badgeTone: 'amber', details: [d('Website tiệm', 'Đã kết nối'), d('Zalo OA', 'Đã kết nối'), d('Facebook Page', 'Đã kết nối'), d('Google Business', 'Chưa kết nối'), d('Đồng bộ lịch', 'Tự động, 5 phút một lần'), d('Xử lý trùng giờ', 'Ưu tiên lịch đặt tại quầy')] },
+      { id: 'SET-INTEGRATION-EXPORT', title: 'Xuất dữ liệu kế toán', subtitle: 'Kỳ xuất và định dạng gửi cho kế toán', cells: ['Hằng tháng · CSV', 'Toàn tenant', 'Nguyễn Văn Boss', '01/08 · 07:30'], badge: 'Đang hoạt động', badgeTone: 'emerald', details: [d('Định dạng', 'CSV'), d('Kỳ xuất', 'Ngày 1 hằng tháng'), d('Nội dung', 'Doanh thu, chi phí, hoá đơn'), d('Người nhận', 'ketoan@nailestudio.vn'), d('Lần xuất gần nhất', '01/08/2026'), d('Phạm vi', 'Cả 2 chi nhánh')] },
+
+      // ── Bảo mật ────────────────────────────────────────────────────────
+      // Chỉ chính sách đăng nhập và tài khoản. Sao lưu dữ liệu, giờ nghỉ lễ và
+      // xác thực cổng thanh toán KHÔNG thuộc nhóm này.
+      { id: 'SET-SECURITY-AUTH', title: 'Xác thực hai lớp', subtitle: 'Lớp bảo vệ thứ hai khi đăng nhập tài khoản quản trị', cells: ['Bắt buộc với Owner và Manager', 'Toàn tenant', 'Nguyễn Văn Boss', '08/07 · 14:30'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Bắt buộc với', 'Owner, Manager'), d('Tuỳ chọn với', 'Lễ tân'), d('Phương thức', 'Ứng dụng xác thực (TOTP)'), d('Mã dự phòng', '10 mã mỗi tài khoản'), d('Đã bật', '3/3 tài khoản bắt buộc'), d('Hạn thiết lập cho tài khoản mới', '7 ngày')] },
+      { id: 'SET-SECURITY-PASSWORD', title: 'Chính sách mật khẩu', subtitle: 'Độ mạnh, hạn đổi và khoá tài khoản khi sai nhiều lần', cells: ['Tối thiểu 10 ký tự · Đổi mỗi 90 ngày', 'Toàn tenant', 'Nguyễn Văn Boss', '08/07 · 14:34'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Độ dài tối thiểu', '10 ký tự'), d('Yêu cầu ký tự', 'Chữ hoa, chữ thường và số'), d('Đổi định kỳ', 'Mỗi 90 ngày'), d('Không dùng lại', '5 mật khẩu gần nhất'), d('Khoá sau', '5 lần sai liên tiếp'), d('Thời gian khoá', '30 phút')] },
+      { id: 'SET-SECURITY-SESSION', title: 'Phiên đăng nhập & thiết bị', subtitle: 'Thời hạn phiên và giới hạn thiết bị cho mỗi tài khoản', cells: ['Phiên 8 giờ · Tối đa 3 thiết bị', 'Toàn tenant', 'Nguyễn Văn Boss', '08/07 · 14:38'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Thời hạn phiên', '8 giờ'), d('Tự đăng xuất khi không thao tác', 'Sau 30 phút'), d('Thiết bị tối đa', '3 thiết bị mỗi tài khoản'), d('Ghi nhớ thiết bị', '30 ngày'), d('Đăng nhập đồng thời', 'Cho phép'), d('Khi đổi mật khẩu', 'Buộc đăng xuất mọi thiết bị')] },
+      { id: 'SET-SECURITY-AUDIT', title: 'Nhật ký truy cập & cảnh báo', subtitle: 'Những gì được ghi lại và ai nhận cảnh báo bất thường', cells: ['Lưu 12 tháng · Cảnh báo qua email', 'Toàn tenant', 'Nguyễn Văn Boss', '08/07 · 14:42'], badge: 'Đang áp dụng', badgeTone: 'emerald', details: [d('Thời gian lưu nhật ký', '12 tháng'), d('Ghi lại', 'Đăng nhập, đổi cấu hình, xuất dữ liệu'), d('Cảnh báo đăng nhập lạ', 'Bật'), d('Cảnh báo sai mật khẩu', 'Sau 3 lần liên tiếp'), d('Gửi cảnh báo tới', 'Owner'), d('Xuất nhật ký', 'Chỉ Owner')] }
     ],
-    insightTitle: 'Trạng thái hệ thống', insights: [
-      { label: 'Đồng bộ dữ liệu', value: 'Ổn định', detail: 'Lần cuối 14:32', tone: 'emerald' },
-      { label: 'Sao lưu gần nhất', value: '02:00', detail: '16/07/2026 · Thành công', tone: 'blue' },
-      { label: 'Cảnh báo tích hợp', value: '1', detail: 'ZaloPay cần xác thực', tone: 'amber' }
+    insightTitle: 'Trạng thái kết nối',
+    insights: [
+      { label: 'Kênh đặt lịch online', value: '3/4', detail: 'Google Business chưa kết nối', tone: 'amber' },
+      { label: 'Đồng bộ lịch hẹn', value: 'Ổn định', detail: 'Lần đồng bộ gần nhất 14:32', tone: 'emerald' },
+      { label: 'Kết nối cần xử lý', value: '1', detail: 'ZaloPay cần xác thực lại', tone: 'amber' }
     ],
-    checklistTitle: 'Khuyến nghị cấu hình', checklist: ['Xác thực lại ZaloPay', 'Cập nhật giờ lễ 02/09', 'Rà soát quyền của 2 nhân viên nghỉ', 'Tải xuống bản sao lưu tháng 7'],
-    formTitle: 'Cập nhật cấu hình', formFields: [
-      { key: 'section', label: 'Nhóm cấu hình', type: 'select', options: ['Thông tin tiệm', 'Chi nhánh', 'Chính sách đặt lịch', 'Thanh toán', 'Thông báo', 'Phân quyền'] },
-      { key: 'name', label: 'Tên cấu hình', type: 'text' }, { key: 'value', label: 'Giá trị mới', type: 'text' },
-      { key: 'scope', label: 'Phạm vi', type: 'select', options: ['Toàn hệ thống', 'Chi nhánh Quận 3', 'Chi nhánh Quận 1'] },
-      { key: 'reason', label: 'Lý do thay đổi', type: 'textarea' }
+    checklistTitle: 'Khuyến nghị cho nhóm này',
+    // Không còn dùng: khuyến nghị nay khai theo từng nhóm ở `settingsRecommendations`.
+    // Giữ mảng rỗng vì `checklist` là trường bắt buộc của NailModuleConfig.
+    checklist: [],
+    settingsRecommendations: {
+      'Thông tin tiệm': [
+        { title: 'Đối chiếu thông tin xuất hoá đơn', description: 'Tên pháp lý, mã số thuế và địa chỉ khai ở đây được in lên mọi hoá đơn gửi khách.', target: 'payment', actionLabel: 'Mở nhóm Thanh toán' },
+        { title: 'Kiểm tra giờ mở cửa từng chi nhánh', description: 'Địa chỉ và hotline khai ở đây, còn giờ mở cửa nằm trong hồ sơ từng chi nhánh.', target: 'branches', actionLabel: 'Mở trang Chi nhánh' }
+      ],
+      'Giờ hoạt động': [
+        { title: 'Khai báo ngày nghỉ lễ sắp tới', description: 'Giờ mở cửa và ngày nghỉ thuộc hồ sơ chi nhánh, được sửa tại trang Chi nhánh.', target: 'branches', actionLabel: 'Mở trang Chi nhánh' },
+        { title: 'Rà soát khung giờ nhận lịch online', description: 'Khung giờ ở đây quyết định slot mà khách nhìn thấy trên kênh đặt lịch.', target: 'integration', actionLabel: 'Mở nhóm Tích hợp' }
+      ],
+      'Chính sách': [
+        { title: 'Đối chiếu mức cọc với phương thức thu', description: 'Chính sách cọc chỉ chạy được nếu phương thức thu tiền tương ứng đang bật.', target: 'payment', actionLabel: 'Mở nhóm Thanh toán' },
+        { title: 'Báo chính sách mới cho khách', description: 'Thay đổi về cọc và hủy lịch nên được đưa vào mẫu tin nhắc lịch.', target: 'notify', actionLabel: 'Mở nhóm Thông báo' }
+      ],
+      'Thanh toán': [
+        { title: 'Xử lý cổng thanh toán đang chờ xác thực', description: 'Cổng chưa xác thực sẽ không nhận được tiền của khách.', target: 'integration', actionLabel: 'Xem trạng thái kết nối' },
+        { title: 'Xem lại cấp duyệt hoàn tiền', description: 'Cấp duyệt quyết định ai được hoàn tiền cho khách ngay tại quầy.', target: 'access', actionLabel: 'Mở nhóm Phân quyền' }
+      ],
+      'Thông báo': [
+        { title: 'Theo dõi hạn mức SMS còn lại', description: 'Hết hạn mức giữa tháng sẽ khiến khách không nhận được tin nhắc lịch.' },
+        { title: 'Rà soát người nhận thông báo nội bộ', description: 'Người nhận cảnh báo nội bộ được xác định theo vai trò.', target: 'access', actionLabel: 'Mở nhóm Phân quyền' }
+      ],
+      'Phân quyền': [
+        { title: 'Thu hồi quyền của nhân sự đã nghỉ', description: 'Tài khoản còn hiệu lực sau khi nghỉ việc là rủi ro truy cập dữ liệu khách.' },
+        { title: 'Bắt buộc xác thực hai lớp cho quản lý', description: 'Vai trò có quyền đổi cấu hình nên được bảo vệ bằng lớp xác thực thứ hai.', target: 'security', actionLabel: 'Mở nhóm Bảo mật' }
+      ],
+      'Tích hợp': [
+        { title: 'Kết nối kênh đặt lịch còn thiếu', description: 'Mỗi kênh chưa kết nối là một nguồn khách chưa được ghi nhận tự động.' },
+        { title: 'Xử lý cổng thanh toán mất kết nối', description: 'Bật lại cổng sau khi đã xác thực trong nhóm Thanh toán.', target: 'payment', actionLabel: 'Mở nhóm Thanh toán' }
+      ],
+      'Bảo mật': [
+        { title: 'Bật xác thực hai lớp cho toàn bộ quản lý', description: 'Tài khoản Owner và Manager có quyền đổi cấu hình và xem doanh thu toàn tenant.' },
+        { title: 'Rà soát vai trò được phép đổi cấu hình', description: 'Giới hạn số tài khoản có quyền cấu hình là cách giảm rủi ro nhanh nhất.', target: 'access', actionLabel: 'Mở nhóm Phân quyền' },
+        { title: 'Kiểm tra tài khoản lâu chưa đổi mật khẩu', description: 'Chính sách đổi định kỳ 90 ngày chỉ có tác dụng nếu được theo dõi.' }
+      ]
+    },
+    formTitle: 'Thêm hạng mục cấu hình',
+    formFields: [
+      { key: 'section', label: 'Nhóm cấu hình', type: 'select', options: ['Thông tin tiệm', 'Giờ hoạt động', 'Chính sách', 'Thanh toán', 'Thông báo', 'Phân quyền', 'Tích hợp', 'Bảo mật'] },
+      { key: 'name', label: 'Tên hạng mục', type: 'text', placeholder: 'Ví dụ: Chính sách khách VIP' },
+      { key: 'value', label: 'Cấu hình hiện tại', type: 'text', placeholder: 'Giá trị sẽ hiển thị trong danh sách' },
+      { key: 'scope', label: 'Phạm vi áp dụng', type: 'select', options: ['Tất cả chi nhánh'] },
+      { key: 'reason', label: 'Lý do thay đổi', type: 'textarea', placeholder: 'Ghi lại lý do để đối chiếu trong nhật ký cấu hình' }
     ]
   }
 };

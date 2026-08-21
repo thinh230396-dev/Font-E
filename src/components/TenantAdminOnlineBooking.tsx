@@ -1,4 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import { PageHeader } from './ui';
 import {
   AlertTriangle,
   ArrowRight,
@@ -8,6 +9,7 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleDollarSign,
   Clock,
@@ -45,6 +47,7 @@ import {
 import Modal from './Modal';
 import BeautifulSelect from './BeautifulSelect';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
+import { formatMoney as money, normalizeMoneyText } from '../utils/money';
 
 export type BranchCode = 'Q1' | 'Q3';
 
@@ -573,7 +576,6 @@ const initialTechniciansSeed: TechnicianAvailability[] = [
 
 const inputClass =
   'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
-const money = (value: number) => `${value.toLocaleString('vi-VN')}đ`;
 const depositMethodLabel = (method?: string) => {
   if (!method) return 'MoMo';
   switch (method) {
@@ -989,6 +991,14 @@ export default function TenantAdminOnlineBooking({
   const [notice, setNotice] = useState('');
   const [validationError, setValidationError] = useState('');
   const [assignmentNotice, setAssignmentNotice] = useState('');
+  /* Danh sách KTV là khối cao nhất trong hộp thoại (~310px cuộn) nhưng phần lớn
+     trường hợp KTV khách chọn đã rảnh và không ai đụng tới. Mặc định thu gọn còn
+     một dòng; chỉ bung khi người dùng bấm đổi, hoặc khi có xung đột cần xử lý. */
+  const [techPickerOpen, setTechPickerOpen] = useState(false);
+  // Mở hộp thoại của một yêu cầu khác thì bảng chọn KTV phải về trạng thái thu gọn.
+  useEffect(() => {
+    setTechPickerOpen(false);
+  }, [selectedBooking?.id]);
   const [pendingAction, setPendingAction] = useState<BookingActionConfirmation | null>(null);
 
   const canManage = accessMode === 'full';
@@ -1450,12 +1460,12 @@ export default function TenantAdminOnlineBooking({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Read-Only or Success Notification Banner */}
       {(notice || accessMode !== 'full') && (
-        <div className="flex items-start justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50/90 p-4 text-violet-900 shadow-sm">
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50 p-4 text-violet-900">
           <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-xs">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600">
               <Check className="h-4 w-4" />
             </span>
             <div>
@@ -1478,167 +1488,138 @@ export default function TenantAdminOnlineBooking({
       )}
 
       {/* Page Header */}
-      <section className="relative overflow-hidden rounded-3xl border border-pink-100/90 bg-gradient-to-r from-pink-500/10 via-rose-500/5 to-pink-50/30 p-6 shadow-xs">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between relative z-10">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-pink-100/80 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-pink-700 border border-pink-200/80">
-              <Smartphone className="h-3.5 w-3.5" />
-              Customer Mobile App Receiver
-            </div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-              Quản lý Lịch hẹn Online
-            </h1>
-            <p className="mt-1.5 max-w-2xl text-xs leading-5 text-slate-600 sm:text-sm font-medium">
-              Hệ thống điều phối lịch hẹn tự động từ Mobile App. Xử lý đặt chỗ, phân bổ kỹ thuật viên, theo dõi tiền cọc & duyệt lịch thời gian thực.
-            </p>
-          </div>
-
+      <PageHeader
+        title="Đặt lịch online"
+        actions={(
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText('https://app.salonsys.vn/customer-booking');
-                setNotice('Đã sao chép đường dẫn kết nối Customer Mobile App.');
-              }}
-              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-pink-200/80 bg-white px-4 text-xs font-bold text-slate-700 shadow-2xs hover:bg-pink-50/50 hover:border-pink-300 transition-all"
-            >
-              <Copy className="h-4 w-4 text-pink-500" />
-              Link Mobile App
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfigOpen(true)}
-              disabled={!canManage}
-              className="flex h-10 items-center justify-center gap-2 rounded-xl bg-pink-600 px-4 text-xs font-black text-white shadow-xs hover:bg-pink-700 transition-all"
-            >
-              <Settings2 className="h-4 w-4" />
-              Quy tắc duyệt
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText('https://app.salonsys.vn/customer-booking');
+              setNotice('Đã sao chép đường dẫn kết nối Customer Mobile App.');
+            }}
+            className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-semibold text-slate-600 shadow-sm transition-colors hover:border-pink-200 hover:bg-pink-50"
+          >
+            <Copy className="h-4 w-4 text-pink-500" />
+            Sao chép liên kết ứng dụng
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfigOpen(true)}
+            disabled={!canManage}
+            className="flex h-11 items-center justify-center gap-2 border border-pink-700 bg-pink-600 px-4 text-caption font-semibold text-white shadow-lg shadow-pink-200 transition-colors hover:bg-pink-700 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+          >
+            <Settings2 className="h-4 w-4" />
+            Quy tắc duyệt
+          </button>
           </div>
-        </div>
-      </section>
+        )}
+      />
+
 
       {/* SECTION 1: 4 Summary Cards */}
-      <section className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {/* Card 1: Tổng lịch hôm nay */}
         <button
           type="button"
           onClick={() => setDateFilter(dateFilter === 'TODAY' ? 'ALL' : 'TODAY')}
-          className={`group flex flex-col justify-between rounded-2xl border p-4.5 text-left transition-all duration-200 ${
+          className={`group flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-colors ${
             dateFilter === 'TODAY'
-              ? 'border-pink-500 bg-pink-500/10 ring-2 ring-pink-500/30 shadow-xs'
-              : 'border-pink-100/90 bg-white hover:border-pink-300 hover:shadow-sm'
+              ? 'border-pink-300 bg-pink-50'
+              : 'border-slate-200 hover:border-pink-200'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-pink-700">
+            <span className="text-caption font-bold text-slate-500">
               Tổng lịch hôm nay
             </span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-100/90 text-pink-600 shadow-2xs group-hover:scale-105 transition-transform">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-50 text-pink-600">
               <CalendarCheck2 className="h-4.5 w-4.5" />
             </span>
           </div>
-          <div className="mt-3.5 flex items-baseline justify-between">
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{stats.todayCount}</p>
-            <span className="text-[11px] font-bold text-pink-700 bg-pink-50 px-2.5 py-0.5 rounded-full border border-pink-100">
-              29/07/2026
-            </span>
-          </div>
+          <p className="mt-1.5 ta-metric-value text-slate-950">{stats.todayCount}</p>
+          <p className="mt-2 text-caption font-semibold text-slate-400">29/07/2026</p>
         </button>
 
         {/* Card 2: Chờ xác nhận */}
         <button
           type="button"
           onClick={() => setStatusFilter(statusFilter === 'PENDING' ? 'ALL' : 'PENDING')}
-          className={`group flex flex-col justify-between rounded-2xl border p-4.5 text-left transition-all duration-200 ${
+          className={`group flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-colors ${
             statusFilter === 'PENDING'
-              ? 'border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30 shadow-xs'
-              : 'border-pink-100/90 bg-white hover:border-amber-300 hover:shadow-sm'
+              ? 'border-amber-300 bg-amber-50'
+              : 'border-slate-200 hover:border-amber-200'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-amber-800">
+            <span className="text-caption font-bold text-slate-500">
               Chờ xác nhận
             </span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100/90 text-amber-700 shadow-2xs group-hover:scale-105 transition-transform">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
               <Clock3 className="h-4.5 w-4.5" />
             </span>
           </div>
-          <div className="mt-3.5 flex items-baseline justify-between">
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{stats.pending}</p>
-            <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200/80">
-              Cần duyệt ngay
-            </span>
-          </div>
+          <p className="mt-1.5 ta-metric-value text-slate-950">{stats.pending}</p>
+          <p className="mt-2 text-caption font-semibold text-slate-400">Cần duyệt ngay</p>
         </button>
 
         {/* Card 3: Cần xử lý */}
         <button
           type="button"
           onClick={() => setStatusFilter(statusFilter === 'NEEDS_ADJUSTMENT' ? 'ALL' : 'NEEDS_ADJUSTMENT')}
-          className={`group flex flex-col justify-between rounded-2xl border p-4.5 text-left transition-all duration-200 ${
+          className={`group flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-colors ${
             statusFilter === 'NEEDS_ADJUSTMENT'
-              ? 'border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/30 shadow-xs'
-              : 'border-pink-100/90 bg-white hover:border-orange-300 hover:shadow-sm'
+              ? 'border-orange-300 bg-orange-50'
+              : 'border-slate-200 hover:border-orange-200'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-orange-800">
+            <span className="text-caption font-bold text-slate-500">
               Cần xử lý
             </span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100/90 text-orange-700 shadow-2xs group-hover:scale-105 transition-transform">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
               <AlertTriangle className="h-4.5 w-4.5" />
             </span>
           </div>
-          <div className="mt-3.5 flex items-baseline justify-between">
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{stats.needsAdjustment}</p>
-            <span className="text-[11px] font-bold text-orange-700 bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-200/80">
-              Đổi giờ / Phản hồi
-            </span>
-          </div>
+          <p className="mt-1.5 ta-metric-value text-slate-950">{stats.needsAdjustment}</p>
+          <p className="mt-2 text-caption font-semibold text-slate-400">Đổi giờ / phản hồi</p>
         </button>
 
         {/* Card 4: Đã xác nhận */}
         <button
           type="button"
           onClick={() => setStatusFilter(statusFilter === 'CONFIRMED' ? 'ALL' : 'CONFIRMED')}
-          className={`group flex flex-col justify-between rounded-2xl border p-4.5 text-left transition-all duration-200 ${
+          className={`group flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-colors ${
             statusFilter === 'CONFIRMED'
-              ? 'border-sky-500 bg-sky-500/10 ring-2 ring-sky-500/30 shadow-xs'
-              : 'border-pink-100/90 bg-white hover:border-sky-300 hover:shadow-sm'
+              ? 'border-sky-300 bg-sky-50'
+              : 'border-slate-200 hover:border-sky-200'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-sky-800">
+            <span className="text-caption font-bold text-slate-500">
               Đã xác nhận
             </span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100/90 text-sky-700 shadow-2xs group-hover:scale-105 transition-transform">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
               <CheckCircle2 className="h-4.5 w-4.5" />
             </span>
           </div>
-          <div className="mt-3.5 flex items-baseline justify-between">
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              {stats.confirmed + stats.deposited}
-            </p>
-            <span className="text-[11px] font-bold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200/80">
-              Sẵn sàng phục vụ
-            </span>
-          </div>
+          <p className="mt-1.5 ta-metric-value text-slate-950">{stats.confirmed + stats.deposited}</p>
+          <p className="mt-2 text-caption font-semibold text-slate-400">Sẵn sàng phục vụ</p>
         </button>
       </section>
 
       {/* SECTION 2: Filter & Control Workspace */}
-      <section className="rounded-3xl border border-pink-100/90 bg-white p-4.5 sm:p-5 shadow-xs space-y-3.5">
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.035)]">
         {/* Filter Controls Bar: Search + Date + Branch + Tech + View Mode */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
           {/* Search Input */}
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
-              placeholder="Search khách hàng / mã booking..."
-              className={`${inputClass} pl-10 pr-9 font-medium text-slate-900 border-pink-100/90 focus:border-pink-400 focus:ring-pink-100 text-xs py-2`}
+              placeholder="Tìm khách hàng hoặc mã đặt lịch..."
+              className={`${inputClass} pl-10 pr-9`}
             />
             {searchQuery && (
               <button
@@ -1652,13 +1633,13 @@ export default function TenantAdminOnlineBooking({
           </div>
 
           {/* Select Controls Group */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:items-center lg:gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:flex 2xl:items-center 2xl:gap-2">
             {/* Date Select */}
             <div className="min-w-[130px]">
               <BeautifulSelect
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className={`${inputClass} border-pink-100/90 font-medium text-slate-800 text-xs py-2`}
+                className={inputClass}
               >
                 <option value="ALL">Tất cả ngày</option>
                 <option value="TODAY">Hôm nay (11/08)</option>
@@ -1666,25 +1647,12 @@ export default function TenantAdminOnlineBooking({
               </BeautifulSelect>
             </div>
 
-            {/* Branch Select */}
-            <div className="min-w-[140px]">
-              <BeautifulSelect
-                value={selectedBranch}
-                onChange={(e) => onSelectedBranchChange(e.target.value)}
-                className={`${inputClass} border-pink-100/90 font-medium text-slate-800 text-xs py-2`}
-              >
-                <option value="ALL">Tất cả chi nhánh</option>
-                <option value="Q1">Chi nhánh Quận 1</option>
-                <option value="Q3">Chi nhánh Quận 3</option>
-              </BeautifulSelect>
-            </div>
-
             {/* Technician Select */}
-            <div className="col-span-2 sm:col-span-1 min-w-[150px]">
+            <div className="min-w-[150px]">
               <BeautifulSelect
                 value={techFilter}
                 onChange={(e) => setTechFilter(e.target.value)}
-                className={`${inputClass} border-pink-100/90 font-medium text-slate-800 text-xs py-2`}
+                className={inputClass}
               >
                 <option value="ALL">Tất cả KTV</option>
                 <option value="ANY">Tự động phân bổ</option>
@@ -1698,14 +1666,14 @@ export default function TenantAdminOnlineBooking({
           </div>
 
           {/* View Mode Switcher */}
-          <div className="flex items-center gap-1 shrink-0 self-start lg:self-auto rounded-xl bg-pink-50/80 p-1 border border-pink-100">
+          <div className="flex shrink-0 items-center gap-1 self-start rounded-xl border border-slate-200 bg-slate-50 p-1 2xl:self-auto">
             <button
               type="button"
               onClick={() => setViewMode('cards')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+              className={`flex h-9 items-center gap-1.5 rounded-lg px-3 text-caption font-semibold transition-colors ${
                 viewMode === 'cards'
-                  ? 'bg-white text-pink-700 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-pink-700 shadow-sm'
+                  : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'
               }`}
             >
               <Layers className="h-3.5 w-3.5" />
@@ -1714,10 +1682,10 @@ export default function TenantAdminOnlineBooking({
             <button
               type="button"
               onClick={() => setViewMode('timeline')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+              className={`flex h-9 items-center gap-1.5 rounded-lg px-3 text-caption font-semibold transition-colors ${
                 viewMode === 'timeline'
-                  ? 'bg-white text-pink-700 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-pink-700 shadow-sm'
+                  : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'
               }`}
             >
               <CalendarClock className="h-3.5 w-3.5" />
@@ -1726,10 +1694,10 @@ export default function TenantAdminOnlineBooking({
             <button
               type="button"
               onClick={() => setViewMode('compact')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+              className={`flex h-9 items-center gap-1.5 rounded-lg px-3 text-caption font-semibold transition-colors ${
                 viewMode === 'compact'
-                  ? 'bg-white text-pink-700 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-pink-700 shadow-sm'
+                  : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'
               }`}
             >
               <FileText className="h-3.5 w-3.5" />
@@ -1739,7 +1707,7 @@ export default function TenantAdminOnlineBooking({
         </div>
 
         {/* Status Chips Row */}
-        <div className="pt-2 border-t border-pink-50/80 flex items-center justify-between gap-3 overflow-x-auto scrollbar-none pb-0.5">
+        <div className="flex items-center justify-between gap-3 overflow-x-auto border-t border-slate-100 pt-3 scrollbar-none">
           <div className="flex items-center gap-1.5 shrink-0">
             {[
               { id: 'ALL', label: 'Tất cả', count: statusCounts.ALL },
@@ -1755,16 +1723,16 @@ export default function TenantAdminOnlineBooking({
                   key={chip.id}
                   type="button"
                   onClick={() => setStatusFilter(chip.id)}
-                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-black transition-all ${
+                  className={`inline-flex h-9 items-center gap-1.5 whitespace-nowrap border px-3 text-caption font-semibold transition-colors ${
                     active
-                      ? 'bg-pink-600 text-white shadow-xs'
-                      : 'bg-pink-50/60 text-slate-700 hover:bg-pink-100/70 border border-pink-100/80'
+                      ? 'border-pink-200 bg-pink-50 text-pink-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-pink-200 hover:bg-pink-50/60'
                   }`}
                 >
                   <span>{chip.label}</span>
                   <span
-                    className={`ml-0.5 rounded-full px-2 py-0.2 text-[10px] font-black ${
-                      active ? 'bg-white/25 text-white' : 'bg-pink-100 text-pink-800'
+                    className={`ml-0.5 rounded-full px-2 py-0.2 text-caption font-black ${
+                      active ? 'bg-pink-100 text-pink-800' : 'bg-slate-100 text-slate-500'
                     }`}
                   >
                     {chip.count}
@@ -1785,7 +1753,7 @@ export default function TenantAdminOnlineBooking({
                 setDateFilter('ALL');
                 onSearchQueryChange('');
               }}
-              className="text-[11px] font-bold text-pink-600 hover:text-pink-800 hover:underline flex items-center gap-1 shrink-0 ml-auto"
+              className="text-body font-bold text-pink-600 hover:text-pink-800 hover:underline flex items-center gap-1 shrink-0 ml-auto"
             >
               <RefreshCcw className="h-3 w-3" /> Xóa bộ lọc
             </button>
@@ -1796,20 +1764,20 @@ export default function TenantAdminOnlineBooking({
       {/* SECTION 3: Main Appointment Display Workspace */}
       {/* SPOTLIGHT AREA: URGENT ACTION NEEDED BOOKINGS */}
       {actionNeededBookings.length > 0 && (
-        <section className="rounded-3xl border-2 border-amber-300/90 bg-gradient-to-br from-amber-50/80 via-orange-50/30 to-white p-4.5 sm:p-5 shadow-xs space-y-3.5 transition-all mb-4">
+        <section className="mb-4 space-y-3.5 rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-xs">
-                <AlertTriangle className="h-5 w-5 animate-bounce" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                <AlertTriangle className="h-4.5 w-4.5" />
               </span>
               <div>
-                <h3 className="text-sm font-black text-amber-950 uppercase tracking-wide flex items-center gap-2">
+                <h3 className="ta-card-title flex items-center gap-2 text-amber-950">
                   Cần xử lý ngay
-                  <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-black text-white shadow-2xs">
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-caption font-black text-amber-800 ring-1 ring-amber-200">
                     {actionNeededBookings.length}
                   </span>
                 </h3>
-                <p className="text-[11px] font-semibold text-amber-800/90">
+                <p className="text-body font-semibold text-amber-800/90">
                   Các lịch hẹn mới, chưa cọc, chưa xếp KTV hoặc yêu cầu điều chỉnh từ khách
                 </p>
               </div>
@@ -1824,7 +1792,7 @@ export default function TenantAdminOnlineBooking({
                 <div
                   key={`urgent-${booking.id}`}
                   onClick={() => setSelectedBooking(booking)}
-                  className="group relative flex flex-col justify-between rounded-2xl border-l-4 border-l-amber-500 border border-amber-200/90 bg-white p-3.5 shadow-2xs hover:shadow-md hover:border-amber-400 transition-all cursor-pointer space-y-2.5"
+                  className="group relative flex cursor-pointer flex-col justify-between space-y-2.5 rounded-2xl border border-amber-200 border-l-[3px] border-l-amber-500 bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.035)] transition-colors hover:border-amber-300"
                 >
                   <div className="space-y-2">
                     {/* Reason Badges */}
@@ -1832,13 +1800,13 @@ export default function TenantAdminOnlineBooking({
                       {reasons.map((r) => (
                         <span
                           key={r.id}
-                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-black border ${r.badgeClass}`}
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-caption font-black border ${r.badgeClass}`}
                         >
                           <span className={`h-1.5 w-1.5 rounded-full ${r.dotColor}`} />
                           {r.label}
                         </span>
                       ))}
-                      <span className="font-mono text-[9px] font-bold text-slate-400 ml-auto">
+                      <span className="font-mono text-caption font-bold text-slate-400 ml-auto">
                         #{booking.id.replace('BOOKING-', 'BK-')}
                       </span>
                     </div>
@@ -1849,19 +1817,19 @@ export default function TenantAdminOnlineBooking({
                         <p className="font-black text-slate-900 text-xs truncate group-hover:text-amber-700 transition-colors">
                           {booking.customerName}
                         </p>
-                        <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mt-0.5">
+                        <p className="text-body font-medium text-slate-500 flex items-center gap-1 mt-0.5">
                           <Phone className="h-3 w-3 text-slate-400 shrink-0" />
                           {booking.customerPhone}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
                         <span className="font-black text-slate-900 text-xs">{booking.time}</span>
-                        <p className="text-[10px] font-bold text-amber-700">{booking.date}</p>
+                        <p className="text-caption font-bold text-amber-700">{booking.date}</p>
                       </div>
                     </div>
 
                     {/* Service */}
-                    <p className="text-[11px] font-black text-slate-800 line-clamp-1 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100">
+                    <p className="text-body font-black text-slate-800 line-clamp-1 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100">
                       {booking.serviceName}
                     </p>
                   </div>
@@ -1879,7 +1847,7 @@ export default function TenantAdminOnlineBooking({
                     <button
                       type="button"
                       onClick={() => setSelectedBooking(booking)}
-                      className="flex-1 flex h-8 items-center justify-center gap-1 rounded-xl bg-amber-600 text-[11px] font-black text-white hover:bg-amber-700 transition-all shadow-2xs"
+                      className="flex h-8 flex-1 items-center justify-center gap-1 rounded-xl bg-amber-600 text-body font-black !text-white transition-colors hover:bg-amber-700"
                     >
                       Xử lý ngay
                       <ChevronRight className="h-3.5 w-3.5" />
@@ -1893,7 +1861,7 @@ export default function TenantAdminOnlineBooking({
       )}
 
       {filteredBookings.length === 0 ? (
-        <div className="rounded-3xl border border-pink-100/80 bg-white p-12 text-center shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-pink-500">
             <CalendarCheck2 className="h-7 w-7" />
           </div>
@@ -1911,7 +1879,7 @@ export default function TenantAdminOnlineBooking({
               setDateFilter('ALL');
               onSearchQueryChange('');
             }}
-            className="mt-4 rounded-xl bg-pink-600 px-4 py-2 text-xs font-black text-white hover:bg-pink-700 shadow-xs"
+            className="mt-4 h-10 rounded-xl border border-pink-700 bg-pink-600 px-4 text-caption font-black text-white shadow-sm transition-colors hover:bg-pink-700"
           >
             Xem tất cả lịch hẹn
           </button>
@@ -1922,24 +1890,24 @@ export default function TenantAdminOnlineBooking({
           {groupedByDate.map((group) => (
             <div key={group.dateStr} className="space-y-3.5">
               {/* Date Group Header */}
-              <div className="flex items-center justify-between rounded-2xl border border-pink-100/90 bg-gradient-to-r from-pink-50/90 via-rose-50/50 to-pink-50/90 px-4 py-2.5 shadow-2xs backdrop-blur-xs">
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black shadow-2xs shrink-0 ${
-                    group.isToday ? 'bg-pink-600 text-white' : group.isTomorrow ? 'bg-purple-600 text-white' : 'bg-slate-700 text-white'
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${
+                    group.isToday ? 'bg-pink-50 text-pink-600' : group.isTomorrow ? 'bg-violet-50 text-violet-600' : 'bg-slate-100 text-slate-600'
                   }`}>
                     <Calendar className="h-3.5 w-3.5" />
                   </span>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 truncate">
+                  <h3 className="truncate text-caption font-black text-slate-800">
                     {group.headerLabel}
                   </h3>
                 </div>
-                <span className="shrink-0 rounded-full bg-white px-3 py-0.5 text-xs font-extrabold text-pink-700 border border-pink-200/80 shadow-2xs">
+                <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-caption font-bold text-slate-600">
                   {group.items.length} lịch hẹn
                 </span>
               </div>
 
               {/* Cards Grid for Date Group */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {group.items.map((booking) => {
                   const statusMeta = bookingStatusMeta[booking.status];
                   const techName = booking.requestedTechnicianName || booking.assignedTechnicianName || 'Tự động phân bổ';
@@ -1952,23 +1920,23 @@ export default function TenantAdminOnlineBooking({
                     <div
                       key={booking.id}
                       onClick={() => setSelectedBooking(booking)}
-                      className={`group relative flex flex-col justify-between rounded-2xl p-4.5 shadow-2xs hover:shadow-md transition-all duration-200 cursor-pointer ${
+                      className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-colors ${
                         needsAction
-                          ? 'border-l-4 border-l-amber-500 border border-amber-200/90 bg-gradient-to-br from-amber-50/20 via-white to-white hover:border-amber-400'
-                          : 'border border-pink-100/80 bg-white hover:border-pink-300'
+                          ? 'border border-amber-200 border-l-[3px] border-l-amber-500 bg-white hover:border-amber-300'
+                          : 'border border-slate-200 bg-white hover:border-pink-200'
                       }`}
                     >
                       <div className="space-y-3.5">
                         {/* Action Reason Banner if required */}
                         {needsAction && (
                           <div className="flex items-center gap-1.5 flex-wrap pb-1 border-b border-amber-100">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1">
+                            <span className="text-caption font-black uppercase tracking-wider text-amber-800 flex items-center gap-1">
                               <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" /> Cần xử lý:
                             </span>
                             {actionReasons.map((r) => (
                               <span
                                 key={r.id}
-                                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.2 text-[10px] font-black border ${r.badgeClass}`}
+                                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.2 text-caption font-black border ${r.badgeClass}`}
                               >
                                 <span className={`h-1.5 w-1.5 rounded-full ${r.dotColor}`} />
                                 {r.label}
@@ -1980,8 +1948,8 @@ export default function TenantAdminOnlineBooking({
                         {/* 1. KHÁCH HÀNG & STATUS CHÍNH */}
                         <div className="flex items-start justify-between gap-2 border-b border-pink-50 pb-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-black text-white text-sm shadow-xs ${
-                              needsAction ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-400' : 'bg-gradient-to-tr from-pink-500 via-rose-500 to-pink-400'
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
+                              needsAction ? 'bg-amber-100 text-amber-700' : 'bg-pink-50 text-pink-700'
                             }`}>
                               {booking.customerName.charAt(booking.customerName.lastIndexOf(' ') + 1) || booking.customerName.charAt(0)}
                             </div>
@@ -1990,7 +1958,7 @@ export default function TenantAdminOnlineBooking({
                                 <p className="font-black text-slate-900 text-sm truncate group-hover:text-pink-600 transition-colors">
                                   {booking.customerName}
                                 </p>
-                                <span className="font-mono text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/60 shrink-0">
+                                <span className="font-mono text-caption font-bold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/60 shrink-0">
                                   #{booking.id.replace('BOOKING-', 'BK-')}
                                 </span>
                               </div>
@@ -2002,28 +1970,28 @@ export default function TenantAdminOnlineBooking({
                           </div>
 
                           {/* Status chính của booking */}
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black shrink-0 ${statusMeta.badge}`}>
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-caption font-black shrink-0 ${statusMeta.badge}`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
                             {statusMeta.label}
                           </span>
                         </div>
 
                         {/* 2. THỜI GIAN & CHI NHÁNH */}
-                        <div className="rounded-xl bg-gradient-to-r from-pink-50/90 via-white to-pink-50/30 p-3 border border-pink-100/80 flex items-center justify-between">
+                        <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="flex h-8.5 w-8.5 items-center justify-center rounded-xl bg-pink-100 text-pink-700 shadow-2xs">
+                            <div className="flex h-8.5 w-8.5 items-center justify-center rounded-xl bg-white text-pink-700">
                               <Clock3 className="h-4 w-4" />
                             </div>
                             <div>
                               <div className="flex items-baseline gap-1.5">
                                 <span className="font-black text-slate-900 text-sm">{booking.time}</span>
-                                <span className="text-[10px] font-bold text-pink-600">({booking.serviceDuration || 45} phút)</span>
+                                <span className="text-caption font-bold text-pink-600">({booking.serviceDuration || 45} phút)</span>
                               </div>
-                              <p className="text-[11px] font-semibold text-slate-500">{booking.date}</p>
+                              <p className="text-body font-semibold text-slate-500">{booking.date}</p>
                             </div>
                           </div>
 
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-pink-100 shadow-2xs">
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-body font-bold text-slate-700">
                             <MapPin className="h-3 w-3 text-pink-500" />
                             {branchName(booking.branch)}
                           </span>
@@ -2037,21 +2005,21 @@ export default function TenantAdminOnlineBooking({
                           </div>
 
                           {booking.nailDesignName && booking.nailDesignName !== 'Không chọn mẫu' ? (
-                            <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-pink-700 bg-pink-50 rounded-lg px-2 py-0.5 border border-pink-100/90">
+                            <div className="inline-flex items-center gap-1 text-body font-semibold text-pink-700 bg-pink-50 rounded-lg px-2 py-0.5 border border-pink-100/90">
                               <Sparkles className="h-3 w-3 shrink-0 text-pink-500" />
                               <span className="truncate max-w-[210px]">{booking.nailDesignName}</span>
                             </div>
                           ) : (
-                            <p className="text-[11px] text-slate-400 italic">Khách chưa chọn mẫu trước</p>
+                            <p className="text-body text-slate-400 italic">Khách chưa chọn mẫu trước</p>
                           )}
                         </div>
 
                         {/* 4. KTV & PHÂN CÔNG + 5. CỌC THANH TOÁN (DẠNG NHỎ) */}
-                        <div className="flex items-center justify-between text-[11px] pt-0.5">
+                        <div className="flex items-center justify-between text-body pt-0.5">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <UsersRound className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span className="font-bold text-slate-900 truncate">{techName}</span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                            <span className={`text-caption font-bold px-1.5 py-0.2 rounded shrink-0 ${
                               !isAssignedTech && !isRequestedTech ? 'text-amber-800 bg-amber-100 border border-amber-200' : 'text-slate-500 bg-slate-100'
                             }`}>
                               {isAssignedTech ? 'Đã phân công' : isRequestedTech ? 'Khách yêu cầu' : 'Chưa xếp KTV'}
@@ -2060,15 +2028,15 @@ export default function TenantAdminOnlineBooking({
 
                           {/* Trạng thái thanh toán dạng nhỏ */}
                           {booking.depositStatus === 'PAID' ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80 shrink-0">
+                            <span className="inline-flex items-center gap-1 text-caption font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80 shrink-0">
                               <Check className="h-3 w-3 text-emerald-600" /> Cọc {money(booking.depositAmount)}
                             </span>
                           ) : booking.depositStatus === 'PENDING_VERIFICATION' ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-300 shrink-0">
+                            <span className="inline-flex items-center gap-1 text-caption font-black text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-300 shrink-0">
                               <Clock className="h-3 w-3 text-amber-600 animate-pulse" /> Chờ xác minh
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 shrink-0">
+                            <span className="inline-flex items-center gap-1 text-caption font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 shrink-0">
                               Chưa cọc
                             </span>
                           )}
@@ -2080,7 +2048,7 @@ export default function TenantAdminOnlineBooking({
                         <button
                           type="button"
                           onClick={() => setCallingBooking(booking)}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-pink-100 bg-pink-50/60 text-pink-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all shadow-2xs"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
                           title={`Gọi điện cho ${booking.customerName}`}
                         >
                           <PhoneCall className="h-4 w-4" />
@@ -2089,7 +2057,7 @@ export default function TenantAdminOnlineBooking({
                         <button
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
-                          className={`flex-1 flex h-9 items-center justify-center gap-1.5 rounded-xl text-xs font-black text-white transition-all shadow-xs ${
+                          className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl text-caption font-black !text-white shadow-sm transition-colors ${
                             needsAction ? 'bg-amber-600 hover:bg-amber-700' : 'bg-pink-600 hover:bg-pink-700'
                           }`}
                         >
@@ -2108,13 +2076,13 @@ export default function TenantAdminOnlineBooking({
         /* MODE 2: TIMELINE VIEW GROUPED BY TIME */
         <div className="space-y-5">
           {groupedByTime.map((group) => (
-            <div key={group.time} className="rounded-3xl border border-pink-100/80 bg-white p-5 shadow-xs">
-              <div className="flex items-center gap-2 pb-4 border-b border-pink-50">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-pink-100 text-pink-700 font-black text-xs shadow-2xs">
+            <div key={group.time} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-pink-50 text-xs font-black text-pink-700">
                   <Clock3 className="h-4 w-4" />
                 </span>
                 <h3 className="font-black text-slate-900 text-base">Khung giờ {group.time}</h3>
-                <span className="ml-auto text-xs font-bold text-slate-500 bg-pink-50 px-2.5 py-1 rounded-full border border-pink-100">
+                <span className="ml-auto rounded-full bg-slate-100 px-2.5 py-1 text-caption font-bold text-slate-500">
                   {group.items.length} lịch hẹn
                 </span>
               </div>
@@ -2128,7 +2096,7 @@ export default function TenantAdminOnlineBooking({
                     <div
                       key={booking.id}
                       onClick={() => setSelectedBooking(booking)}
-                      className="group rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 hover:bg-white hover:border-pink-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between space-y-3"
+                      className="group flex cursor-pointer flex-col justify-between space-y-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-4 transition-colors hover:border-pink-200 hover:bg-white"
                     >
                       <div>
                         {/* Top Info */}
@@ -2137,12 +2105,12 @@ export default function TenantAdminOnlineBooking({
                             <p className="font-black text-slate-900 text-sm group-hover:text-pink-600 transition-colors">
                               {booking.customerName}
                             </p>
-                            <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+                            <p className="text-body text-slate-500 font-medium flex items-center gap-1 mt-0.5">
                               <Phone className="h-3 w-3 text-slate-400" />
                               {booking.customerPhone}
                             </p>
                           </div>
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${statusMeta.badge}`}>
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-black ${statusMeta.badge}`}>
                             {statusMeta.label}
                           </span>
                         </div>
@@ -2150,7 +2118,7 @@ export default function TenantAdminOnlineBooking({
                         {/* Service & Price */}
                         <div className="space-y-1 my-2">
                           <p className="text-xs font-black text-slate-900">{booking.serviceName}</p>
-                          <p className="text-[11px] text-slate-500">
+                          <p className="text-body text-slate-500">
                             KTV: <span className="font-bold text-slate-800">{techName}</span>
                           </p>
                         </div>
@@ -2191,18 +2159,18 @@ export default function TenantAdminOnlineBooking({
           {groupedByDate.map((group) => (
             <div key={group.dateStr} className="space-y-3">
               {/* Date Group Header */}
-              <div className="flex items-center justify-between rounded-2xl border border-pink-100/90 bg-gradient-to-r from-pink-50/90 via-rose-50/50 to-pink-50/90 px-4 py-2.5 shadow-2xs backdrop-blur-xs">
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black shadow-2xs shrink-0 ${
-                    group.isToday ? 'bg-pink-600 text-white' : group.isTomorrow ? 'bg-purple-600 text-white' : 'bg-slate-700 text-white'
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${
+                    group.isToday ? 'bg-pink-50 text-pink-600' : group.isTomorrow ? 'bg-violet-50 text-violet-600' : 'bg-slate-100 text-slate-600'
                   }`}>
                     <Calendar className="h-3.5 w-3.5" />
                   </span>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 truncate">
+                  <h3 className="truncate text-caption font-black text-slate-800">
                     {group.headerLabel}
                   </h3>
                 </div>
-                <span className="shrink-0 rounded-full bg-white px-3 py-0.5 text-xs font-extrabold text-pink-700 border border-pink-200/80 shadow-2xs">
+                <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-caption font-bold text-slate-600">
                   {group.items.length} lịch hẹn
                 </span>
               </div>
@@ -2221,16 +2189,16 @@ export default function TenantAdminOnlineBooking({
                     <div
                       key={booking.id}
                       onClick={() => setSelectedBooking(booking)}
-                      className={`group relative flex flex-col lg:flex-row lg:items-center justify-between rounded-2xl p-4 sm:p-4.5 shadow-2xs hover:shadow-md transition-all duration-200 gap-3.5 sm:gap-4 cursor-pointer overflow-hidden min-w-0 w-full max-w-full ${
+                      className={`group relative flex w-full max-w-full min-w-0 cursor-pointer flex-col justify-between gap-3.5 overflow-hidden rounded-2xl p-4 shadow-[0_8px_24px_rgba(15,23,42,0.035)] transition-colors sm:gap-4 lg:flex-row lg:items-center ${
                         needsAction
-                          ? 'border-l-4 border-l-amber-500 border border-amber-200/90 bg-gradient-to-r from-amber-50/20 via-white to-white hover:border-amber-400'
-                          : 'border border-pink-100/90 bg-white hover:border-pink-300'
+                          ? 'border border-amber-200 border-l-[3px] border-l-amber-500 bg-white hover:border-amber-300'
+                          : 'border border-slate-200 bg-white hover:border-pink-200'
                       }`}
                     >
                       {/* Section 1: KHÁCH HÀNG (Avatar + Tên + SĐT + Mã booking + Badges) */}
                       <div className="flex items-center gap-3.5 min-w-0 lg:min-w-[210px] shrink-0">
-                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-black text-white text-sm shadow-xs ${
-                          needsAction ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-400' : 'bg-gradient-to-tr from-pink-500 via-rose-500 to-pink-400'
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
+                          needsAction ? 'bg-amber-100 text-amber-700' : 'bg-pink-50 text-pink-700'
                         }`}>
                           {booking.customerName.charAt(booking.customerName.lastIndexOf(' ') + 1) || booking.customerName.charAt(0)}
                         </div>
@@ -2239,7 +2207,7 @@ export default function TenantAdminOnlineBooking({
                             <p className="font-black text-slate-900 text-sm truncate group-hover:text-pink-600 transition-colors">
                               {booking.customerName}
                             </p>
-                            <span className="font-mono text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/60 shrink-0">
+                            <span className="font-mono text-caption font-bold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/60 shrink-0">
                               #{booking.id.replace('BOOKING-', 'BK-')}
                             </span>
                           </div>
@@ -2254,7 +2222,7 @@ export default function TenantAdminOnlineBooking({
                               {actionReasons.map((r) => (
                                 <span
                                   key={r.id}
-                                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.2 text-[9px] font-black border ${r.badgeClass}`}
+                                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.2 text-caption font-black border ${r.badgeClass}`}
                                 >
                                   <span className={`h-1 w-1 rounded-full ${r.dotColor}`} />
                                   {r.label}
@@ -2266,7 +2234,7 @@ export default function TenantAdminOnlineBooking({
                       </div>
 
                       {/* Section 2: THỜI GIAN (Giờ + Ngày + Chi nhánh) */}
-                      <div className="flex items-center justify-between lg:justify-start gap-3 min-w-0 lg:min-w-[170px] shrink-0 bg-pink-50/50 lg:bg-transparent p-2.5 lg:p-0 rounded-xl border border-pink-100/70 lg:border-none">
+                      <div className="flex min-w-0 shrink-0 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-2.5 lg:min-w-[170px] lg:justify-start lg:border-none lg:bg-transparent lg:p-0">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-pink-100 text-pink-700 shrink-0">
                             <Clock3 className="h-4 w-4" />
@@ -2274,9 +2242,9 @@ export default function TenantAdminOnlineBooking({
                           <div className="min-w-0">
                             <div className="flex items-baseline gap-1.5">
                               <span className="font-black text-slate-900 text-sm">{booking.time}</span>
-                              <span className="text-[10px] font-bold text-pink-600">({booking.serviceDuration || 45}m)</span>
+                              <span className="text-caption font-bold text-pink-600">({booking.serviceDuration || 45}m)</span>
                             </div>
-                            <p className="text-[11px] font-semibold text-slate-500 truncate">{booking.date} · <span className="text-pink-700 font-bold">{branchName(booking.branch)}</span></p>
+                            <p className="text-body font-semibold text-slate-500 truncate">{booking.date} · <span className="text-pink-700 font-bold">{branchName(booking.branch)}</span></p>
                           </div>
                         </div>
                       </div>
@@ -2288,20 +2256,20 @@ export default function TenantAdminOnlineBooking({
                           <span className="font-black text-pink-600 text-xs lg:text-sm lg:mt-0.5 block shrink-0">{money(booking.totalEstimatedPrice)}</span>
                         </div>
                         {booking.nailDesignName && booking.nailDesignName !== 'Không chọn mẫu' ? (
-                          <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-pink-700 bg-pink-50 rounded px-1.5 py-0.2 border border-pink-100/80 mt-1 max-w-full">
+                          <div className="inline-flex items-center gap-1 text-body font-semibold text-pink-700 bg-pink-50 rounded px-1.5 py-0.2 border border-pink-100/80 mt-1 max-w-full">
                             <Sparkles className="h-3 w-3 shrink-0 text-pink-500" />
                             <span className="truncate max-w-[180px] sm:max-w-[260px]">{booking.nailDesignName}</span>
                           </div>
                         ) : (
-                          <p className="text-[10px] text-slate-400 italic mt-0.5">Khách chưa chọn mẫu</p>
+                          <p className="text-caption text-slate-400 italic mt-0.5">Khách chưa chọn mẫu</p>
                         )}
                       </div>
 
                       {/* Section 4: KTV & PHÂN CÔNG */}
                       <div className="min-w-0 lg:min-w-[150px] shrink-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Kỹ thuật viên</p>
+                        <p className="text-caption font-bold uppercase tracking-wider text-slate-400">Kỹ thuật viên</p>
                         <p className="text-xs font-black text-slate-800 truncate mt-0.5">{techName}</p>
-                        <span className={`inline-block text-[9px] font-bold px-1.5 py-0.2 rounded border mt-0.5 ${
+                        <span className={`inline-block text-caption font-bold px-1.5 py-0.2 rounded border mt-0.5 ${
                           !isAssignedTech && !isRequestedTech ? 'text-amber-800 bg-amber-100 border-amber-200' : 'text-slate-500 bg-slate-100 border-slate-200/50'
                         }`}>
                           {isAssignedTech ? 'Đã phân công' : isRequestedTech ? 'Khách yêu cầu' : 'Chưa xếp KTV'}
@@ -2310,22 +2278,22 @@ export default function TenantAdminOnlineBooking({
 
                       {/* Section 5: STATUS CHÍNH & THANH TOÁN (DẠNG NHỎ) */}
                       <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-1.5 shrink-0 min-w-0 lg:min-w-[130px]">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-black ${statusMeta.badge}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-body font-black ${statusMeta.badge}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
                           {statusMeta.label}
                         </span>
 
                         {/* Trạng thái thanh toán dạng nhỏ */}
                         {booking.depositStatus === 'PAID' ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.2 rounded-full border border-emerald-200/80">
+                          <span className="inline-flex items-center gap-1 text-caption font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.2 rounded-full border border-emerald-200/80">
                             <Check className="h-2.5 w-2.5 text-emerald-600" /> Cọc {money(booking.depositAmount)}
                           </span>
                         ) : booking.depositStatus === 'PENDING_VERIFICATION' ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-900 bg-amber-100/80 px-2 py-0.2 rounded-full border border-amber-300">
+                          <span className="inline-flex items-center gap-1 text-caption font-black text-amber-900 bg-amber-100/80 px-2 py-0.2 rounded-full border border-amber-300">
                             <Clock className="h-2.5 w-2.5 text-amber-600 animate-pulse" /> Chờ xác minh
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-50 px-2 py-0.2 rounded-full border border-rose-200">
+                          <span className="inline-flex items-center gap-1 text-caption font-bold text-rose-800 bg-rose-50 px-2 py-0.2 rounded-full border border-rose-200">
                             Chưa cọc
                           </span>
                         )}
@@ -2336,7 +2304,7 @@ export default function TenantAdminOnlineBooking({
                         <button
                           type="button"
                           onClick={() => setCallingBooking(booking)}
-                          className="flex h-9 w-9 items-center justify-center rounded-xl border border-pink-100 bg-pink-50/70 text-pink-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all shadow-2xs shrink-0"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
                           title={`Gọi điện cho ${booking.customerName}`}
                         >
                           <PhoneCall className="h-4 w-4" />
@@ -2345,7 +2313,7 @@ export default function TenantAdminOnlineBooking({
                         <button
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
-                          className={`flex h-9 items-center justify-center gap-1.5 rounded-xl px-3.5 text-xs font-black text-white transition-all shadow-xs flex-1 lg:flex-initial ${
+                          className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl px-3.5 text-caption font-black !text-white shadow-sm transition-colors lg:flex-initial ${
                             needsAction ? 'bg-amber-600 hover:bg-amber-700' : 'bg-pink-600 hover:bg-pink-700'
                           }`}
                         >
@@ -2368,33 +2336,41 @@ export default function TenantAdminOnlineBooking({
         <Modal
           isOpen={true}
           onClose={() => setSelectedBooking(null)}
-          maxWidth="3xl"
-          className="border border-pink-100 shadow-2xl bg-white"
-          headerClassName="border-b border-pink-100/80 bg-white"
-          footerClassName="border-t border-pink-100/80 bg-pink-50/20"
+          maxWidth="5xl"
+          className="border border-slate-200 shadow-2xl bg-white"
+          headerClassName="border-b border-slate-200 bg-white"
+          footerClassName="border-t border-slate-200 bg-slate-50"
+          /* Tên khách là thứ nhận diện yêu cầu này, nên nó phải là tiêu đề. Mã
+             BK và số điện thoại là siêu dữ liệu tra cứu — xuống dòng mô tả. */
           title={
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-base font-black text-pink-600">{selectedBooking.id}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span>{selectedBooking.customerName}</span>
               <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-black border ${
+                className={`rounded-full px-2.5 py-0.5 text-caption font-black border ${
                   bookingStatusMeta[selectedBooking.status].badge
                 }`}
               >
                 {bookingStatusMeta[selectedBooking.status].label}
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 border border-pink-100 px-2.5 py-0.5 text-[10px] font-extrabold text-pink-700">
-                <Smartphone className="h-3 w-3 text-pink-500" /> Mobile App
-              </span>
             </div>
           }
-          subtitle={`Yêu cầu từ khách hàng: ${selectedBooking.customerName} (${selectedBooking.customerPhone})`}
+          subtitle="Yêu cầu đặt lịch qua Mobile App"
+          description={
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-mono font-bold text-slate-600">{selectedBooking.id}</span>
+              <span aria-hidden="true">·</span>
+              <span>{selectedBooking.customerPhone}</span>
+              <span aria-hidden="true">·</span>
+              <span>{branchName(selectedBooking.branch)}</span>
+            </span>
+          }
           footer={
             <div className="flex flex-wrap items-center justify-between gap-2 w-full">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setCallingBooking(selectedBooking)}
-                  className="flex h-10 items-center gap-2 rounded-xl border border-pink-100 bg-white px-3.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-pink-50/50 hover:text-pink-600 transition-colors"
+                  className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-bold text-slate-700 shadow-none transition-colors hover:bg-slate-50"
                 >
                   <PhoneCall className="h-4 w-4 text-emerald-600" /> Gọi cho khách
                 </button>
@@ -2409,7 +2385,7 @@ export default function TenantAdminOnlineBooking({
                         setCancelOpen(true);
                         setProposeOpen(false);
                       }}
-                      className="flex h-10 items-center gap-1.5 rounded-xl border border-rose-200/80 bg-rose-50/60 px-3.5 text-xs font-bold text-rose-700 hover:bg-rose-100/80 transition-colors"
+                      className="flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-bold text-slate-700 shadow-none transition-colors hover:border-rose-200 hover:bg-rose-50/60 hover:text-rose-700"
                     >
                       <XCircle className="h-4 w-4 text-rose-500" /> Từ chối / Hủy lịch
                     </button>
@@ -2420,7 +2396,7 @@ export default function TenantAdminOnlineBooking({
                         setProposeOpen(true);
                         setCancelOpen(false);
                       }}
-                      className="flex h-10 items-center gap-1.5 rounded-xl border border-amber-200/80 bg-amber-50/60 px-3.5 text-xs font-bold text-amber-800 hover:bg-amber-100/80 transition-colors"
+                      className="flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-bold text-slate-700 shadow-none transition-colors hover:border-amber-200 hover:bg-amber-50/60 hover:text-amber-800"
                     >
                       <CalendarClock className="h-4 w-4 text-amber-600" /> Đề xuất giờ khác
                     </button>
@@ -2436,18 +2412,21 @@ export default function TenantAdminOnlineBooking({
                           <Check className="h-4 w-4" /> Xác nhận lịch hẹn
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          disabled
-                          className="inline-flex h-10 cursor-not-allowed items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 text-xs font-black text-amber-800"
+                        /* Hai nhãn dưới đây là TRẠNG THÁI, không bấm được. Trước
+                           đây chúng mang khổ và bo góc của nút nên trông giống
+                           hành động chính hơn cả nút thật — đổi sang dáng huy
+                           hiệu để chỉ còn đúng một thứ trong chân hộp thoại
+                           trông bấm được. */
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-caption font-bold text-amber-800 ring-1 ring-amber-200"
                           title="Khách cần thanh toán tiền cọc trước khi salon xác nhận lịch"
                         >
-                          <AlertTriangle className="h-4 w-4 text-amber-600" /> Chờ khách đặt cọc
-                        </button>
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> Chờ khách đặt cọc
+                        </span>
                       )
                     ) : (
-                      <span className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 text-xs font-black text-emerald-800">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Lịch đã được xác nhận
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-caption font-bold text-emerald-800 ring-1 ring-emerald-200">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Lịch đã được xác nhận
                       </span>
                     )}
                   </>
@@ -2475,7 +2454,7 @@ export default function TenantAdminOnlineBooking({
                         setChosenTechId(availTech ? availTech.id : 'ANY');
                         setValidationError('');
                       }}
-                      className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-bold text-rose-800 shadow-2xs hover:bg-rose-50"
+                      className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-body font-bold text-rose-800 shadow-2xs hover:bg-rose-50"
                     >
                       Đổi sang KTV rảnh khác
                     </button>
@@ -2485,7 +2464,7 @@ export default function TenantAdminOnlineBooking({
                         setProposeOpen(true);
                         setValidationError('');
                       }}
-                      className="rounded-lg bg-rose-100/80 px-3 py-1.5 text-[11px] font-bold text-rose-900 hover:bg-rose-200/80"
+                      className="rounded-lg bg-rose-100/80 px-3 py-1.5 text-body font-bold text-rose-900 hover:bg-rose-200/80"
                     >
                       Đề xuất giờ khác cho khách
                     </button>
@@ -2494,58 +2473,132 @@ export default function TenantAdminOnlineBooking({
               </div>
             )}
 
-            {/* Top Grid: Service & Customer Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Box 1: Dịch vụ & Mẫu Nail */}
-              <div className="rounded-2xl border border-pink-100 bg-pink-50/20 p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-pink-100/80 pb-2">
-                  <span className="font-black text-slate-800 uppercase tracking-wide text-[10px] flex items-center gap-1">
-                    <Sparkles className="h-3.5 w-3.5 text-pink-500" /> Dịch vụ do khách chọn
-                  </span>
-                  <span className="font-mono text-[11px] text-slate-400">{selectedBooking.serviceId}</span>
+            {/* ---- 1. Dải quyết định ------------------------------------------
+                Bốn con số quyết định "có xác nhận được không" trước đây nằm rải
+                ba khối khác nhau (tổng ở cột trái, đã cọc ở giữa, còn lại ở cột
+                phải). Gom về một dải để đọc một lượt, rồi một dòng kết luận nói
+                thẳng điều mà trước đây người dùng phải tự suy ra. */}
+            <section className="space-y-2">
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 sm:grid-cols-4">
+                <div className="bg-white p-3">
+                  <p className="text-caption font-semibold text-slate-500">Tổng tiền dự kiến</p>
+                  <p className="mt-1 text-base font-black text-slate-900">{money(selectedBooking.totalEstimatedPrice)}</p>
                 </div>
-
-                <div>
-                  <p className="text-sm font-black text-slate-900">{selectedBooking.serviceName}</p>
-                  <p className="text-slate-500 font-semibold mt-0.5">
-                    Giá dịch vụ nền: {money(selectedBooking.servicePrice)} · Thời lượng {selectedBooking.serviceDuration} phút
+                <div className="bg-white p-3">
+                  <p className="text-caption font-semibold text-slate-500">Đã đặt cọc</p>
+                  {/* Ba trạng thái, không phải hai: gộp "chờ xác minh" vào
+                      "chưa cọc" sẽ mâu thuẫn với khối bên dưới đang nói khách
+                      báo đã chuyển tiền. */}
+                  {selectedBooking.depositStatus === 'PAID' ? (
+                    <p className="mt-1 text-base font-black text-emerald-700">{money(selectedBooking.depositAmount)}</p>
+                  ) : selectedBooking.depositStatus === 'PENDING_VERIFICATION' ? (
+                    <>
+                      <p className="mt-1 text-base font-black text-amber-700">{money(selectedBooking.depositAmount || 300000)}</p>
+                      <p className="text-caption font-semibold text-amber-700">Chờ xác minh</p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-base font-black text-rose-600">Chưa cọc</p>
+                  )}
+                </div>
+                <div className="bg-white p-3">
+                  <p className="text-caption font-semibold text-slate-500">Còn lại tại quầy</p>
+                  <p className="mt-1 text-base font-black text-slate-900">
+                    {money(
+                      Math.max(
+                        0,
+                        selectedBooking.totalEstimatedPrice -
+                          (selectedBooking.depositStatus === 'PAID' ? selectedBooking.depositAmount : 0)
+                      )
+                    )}
                   </p>
                 </div>
-
-                {selectedBooking.nailDesignName && (
-                  <div className="rounded-xl border border-pink-200/80 bg-pink-50/60 p-3">
-                    <p className="font-extrabold text-pink-950 flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-pink-500" />
-                      Mẫu Nail: {selectedBooking.nailDesignName}
-                    </p>
-                    <div className="mt-1.5 flex items-center justify-between text-slate-600 font-semibold text-[11px]">
-                      <span>Phụ thu thiết kế / đính đá:</span>
-                      <span className="font-black text-pink-600">+{money(selectedBooking.nailDesignExtraFee)}</span>
-                    </div>
-                    {selectedBooking.nailColor && (
-                      <p className="mt-1 text-[11px] text-pink-700 font-medium">
-                        Màu sơn yêu cầu: <strong>{selectedBooking.nailColor}</strong>
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between border-t border-pink-100/80 pt-2 font-bold text-slate-900">
-                  <span>Tổng tiền dự kiến:</span>
-                  <span className="text-base font-black text-pink-600">{money(selectedBooking.totalEstimatedPrice)}</span>
+                <div className="bg-white p-3">
+                  <p className="text-caption font-semibold text-slate-500">Khung giờ hẹn</p>
+                  <p className="mt-1 text-base font-black text-slate-900">{selectedBooking.time}</p>
+                  <p className="text-caption font-semibold text-slate-500">{selectedBooking.date}</p>
                 </div>
               </div>
 
-              {/* Box 2: Tiền cọc & Chi nhánh */}
-              <div className="rounded-2xl border border-pink-100 bg-pink-50/20 p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-pink-100/80 pb-2">
-                  <span className="font-black text-slate-800 uppercase tracking-wide text-[10px] flex items-center gap-1">
-                    <CreditCard className="h-3.5 w-3.5 text-pink-600" /> Tiền cọc & Địa điểm
-                  </span>
-                  <span className="rounded-md bg-white px-2 py-0.5 font-bold text-slate-700 border border-pink-100">
-                    {branchName(selectedBooking.branch)}
-                  </span>
-                </div>
+              {(() => {
+                const station = checkStationAvailability(selectedBooking);
+                const tech = checkTechnicianAvailability(chosenTechId, selectedBooking);
+                const depositOk = selectedBooking.depositStatus === 'PAID';
+                const blockers: string[] = [];
+                if (!depositOk) {
+                  blockers.push(
+                    selectedBooking.depositStatus === 'PENDING_VERIFICATION'
+                      ? 'tiền cọc chưa được đối soát'
+                      : 'khách chưa hoàn tất tiền cọc'
+                  );
+                }
+                if (!station.ok) blockers.push(station.message);
+                if (!tech.ok) blockers.push(tech.message);
+
+                if (!blockers.length) {
+                  return (
+                    <p className="flex items-start gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 font-bold leading-5 text-emerald-800 ring-1 ring-emerald-200">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      Đủ điều kiện xác nhận — đã cọc, ghế và kỹ thuật viên đều sẵn sàng.
+                    </p>
+                  );
+                }
+                return (
+                  <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 font-bold leading-5 text-amber-900 ring-1 ring-amber-200">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <span>
+                      Chưa xác nhận được: {blockers.join(' · ')}
+                    </span>
+                  </p>
+                );
+              })()}
+            </section>
+
+            {/* Hai khối tham chiếu này ngắn và không phụ thuộc nhau, để cạnh
+                nhau thì hộp thoại thấp hơn hẳn so với xếp chồng. */}
+            <div className="grid gap-4 border-t border-slate-200 pt-4 md:grid-cols-2 md:gap-6 md:divide-x md:divide-slate-200">
+            {/* ---- 2. Dịch vụ khách chọn --------------------------------- */}
+            <section className="space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="flex items-center gap-1.5 text-sm font-black text-slate-900">
+                  <Sparkles className="h-4 w-4 text-pink-500" /> Dịch vụ khách chọn
+                </h3>
+                <span className="font-mono text-caption text-slate-400">{selectedBooking.serviceId}</span>
+              </div>
+
+              <div>
+                <p className="text-sm font-black text-slate-900">{selectedBooking.serviceName}</p>
+                <p className="mt-0.5 font-semibold text-slate-500">
+                  Giá dịch vụ nền {money(selectedBooking.servicePrice)} · Thời lượng {selectedBooking.serviceDuration} phút
+                </p>
+              </div>
+
+              {selectedBooking.nailDesignName && (
+                <dl className="divide-y divide-slate-100 rounded-xl bg-slate-50 px-3">
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <dt className="font-semibold text-slate-500">Mẫu nail</dt>
+                    <dd className="font-bold text-slate-900">{selectedBooking.nailDesignName}</dd>
+                  </div>
+                  {selectedBooking.nailDesignExtraFee > 0 && (
+                    <div className="flex items-center justify-between gap-3 py-2">
+                      <dt className="font-semibold text-slate-500">Phụ thu thiết kế / đính đá</dt>
+                      <dd className="font-black text-slate-900">+{money(selectedBooking.nailDesignExtraFee)}</dd>
+                    </div>
+                  )}
+                  {selectedBooking.nailColor && (
+                    <div className="flex items-center justify-between gap-3 py-2">
+                      <dt className="font-semibold text-slate-500">Màu sơn yêu cầu</dt>
+                      <dd className="font-bold text-slate-900">{selectedBooking.nailColor}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+            </section>
+
+            {/* ---- 3. Tiền cọc ------------------------------------------- */}
+            <section className="space-y-3 md:pl-6">
+              <h3 className="flex items-center gap-1.5 text-sm font-black text-slate-900">
+                <CreditCard className="h-4 w-4 text-pink-500" /> Tiền cọc
+              </h3>
 
                 <div className="space-y-3">
                   {/* Status Banner */}
@@ -2559,7 +2612,7 @@ export default function TenantAdminOnlineBooking({
                           type="button"
                           onClick={handleOpenAdjustModal}
                           disabled={!canManage}
-                          className="text-[11px] font-extrabold text-emerald-800 hover:text-emerald-950 hover:underline flex items-center gap-1 transition-colors bg-white px-2 py-1 rounded-lg border border-emerald-200/80 shadow-2xs"
+                          className="text-body font-extrabold text-emerald-800 hover:text-emerald-950 hover:underline flex items-center gap-1 transition-colors bg-white px-2 py-1 rounded-lg border border-emerald-200/80 shadow-2xs"
                         >
                           <RefreshCw className="h-3 w-3 text-emerald-600" /> Điều chỉnh / Hoàn cọc
                         </button>
@@ -2571,7 +2624,7 @@ export default function TenantAdminOnlineBooking({
                       </p>
 
                       {(selectedBooking.depositTransactionId || selectedBooking.depositPaidAt) && (
-                        <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-emerald-800 space-y-0.5">
+                        <div className="pt-2 border-t border-emerald-200/60 text-body text-emerald-800 space-y-0.5">
                           {selectedBooking.depositTransactionId && (
                             <p className="font-mono">Mã GD: #{selectedBooking.depositTransactionId}</p>
                           )}
@@ -2587,18 +2640,18 @@ export default function TenantAdminOnlineBooking({
                         <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <p className="font-black text-xs uppercase tracking-wide text-amber-900">
+                            <p className="text-xs font-black text-amber-900">
                               Chờ xác minh tiền cọc
                             </p>
-                            <span className="rounded-md bg-amber-200/70 px-2 py-0.5 text-[10px] font-black text-amber-900 border border-amber-300">
+                            <span className="rounded-md bg-amber-200/70 px-2 py-0.5 text-caption font-black text-amber-900 border border-amber-300">
                               Khách báo đã chuyển
                             </span>
                           </div>
-                          <p className="text-[11px] font-medium text-amber-900/90 mt-1 leading-4">
+                          <p className="text-body font-medium text-amber-900/90 mt-1 leading-4">
                             Khách thông báo đã chuyển khoản. Nhân viên vui lòng đối soát ngân hàng/ví trước khi xác nhận.
                           </p>
 
-                          <div className="mt-2 rounded-lg bg-white/80 p-2 border border-amber-200 text-[11px] space-y-1">
+                          <div className="mt-2 rounded-lg bg-white/80 p-2 border border-amber-200 text-body space-y-1">
                             <div className="flex justify-between font-bold text-slate-900">
                               <span>Số tiền báo cọc:</span>
                               <span className="text-pink-600 font-black">{money(selectedBooking.depositAmount || 300000)}</span>
@@ -2608,7 +2661,7 @@ export default function TenantAdminOnlineBooking({
                               <span className="font-semibold">{depositMethodLabel(selectedBooking.depositMethod)}</span>
                             </div>
                             {selectedBooking.depositTransactionId && (
-                              <div className="flex justify-between font-mono text-[10px] text-slate-500">
+                              <div className="flex justify-between font-mono text-caption text-slate-500">
                                 <span>Mã GD khách gửi:</span>
                                 <span>#{selectedBooking.depositTransactionId}</span>
                               </div>
@@ -2641,10 +2694,10 @@ export default function TenantAdminOnlineBooking({
                       <div className="flex items-start gap-2 text-rose-950">
                         <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-black text-xs text-rose-900 uppercase tracking-wide">
+                          <p className="text-xs font-black text-rose-900">
                             Chưa thanh toán tiền cọc
                           </p>
-                          <p className="text-[11px] font-medium text-rose-800/90 mt-0.5 leading-4">
+                          <p className="text-body font-medium text-rose-800/90 mt-0.5 leading-4">
                             Khách chưa cọc trên ứng dụng. Cập nhật ngay khi khách chuyển khoản hoặc thu tiền cọc tại quầy.
                           </p>
                         </div>
@@ -2671,169 +2724,208 @@ export default function TenantAdminOnlineBooking({
                     </div>
                   )}
 
-                  {/* Remaining Balance */}
-                  <div className="flex items-center justify-between pt-2 border-t border-pink-100/80 text-xs">
-                    <span className="text-slate-600 font-bold">Còn lại thanh toán tại quầy:</span>
-                    <span className="font-black text-pink-600 text-sm bg-white px-2.5 py-1 rounded-lg border border-pink-100 shadow-2xs">
-                      {money(
-                        Math.max(
-                          0,
-                          selectedBooking.totalEstimatedPrice -
-                            (selectedBooking.depositStatus === 'PAID' ? selectedBooking.depositAmount : 0)
-                        )
-                      )}
-                    </span>
-                  </div>
+                  {/* Lịch sử tiền cọc — chỉ dựng khối khi thật sự có bản ghi.
+                      Trước đây khối này luôn hiện kèm câu "Chưa có lịch sử thay
+                      đổi tiền cọc", tốn nguyên một ô có viền cho một thông tin
+                      không giúp gì cho quyết định. */}
+                  {selectedBooking.depositHistory && selectedBooking.depositHistory.length > 0 && (
+                    <div className="space-y-2 border-t border-slate-200 pt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1 font-black text-slate-800">
+                          <History className="h-3.5 w-3.5 text-pink-500" /> Lịch sử tiền cọc
+                        </span>
+                        <span className="flex items-center gap-1 text-caption font-semibold text-slate-400">
+                          <Lock className="h-3 w-3" /> Lưu vết minh bạch
+                        </span>
+                      </div>
 
-                  {/* Deposit Audit History Log */}
-                  <div className="pt-2 border-t border-pink-100/80 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1">
-                        <History className="h-3.5 w-3.5 text-pink-600" /> Lịch sử tiền cọc
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                        <Lock className="h-3 w-3" /> Lưu vết minh bạch
-                      </span>
-                    </div>
-
-                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
-                      {(!selectedBooking.depositHistory || selectedBooking.depositHistory.length === 0) ? (
-                        <p className="text-[11px] text-slate-400 italic bg-white/60 p-2 rounded-lg border border-pink-50 text-center">
-                          Chưa có lịch sử thay đổi tiền cọc.
-                        </p>
-                      ) : (
-                        selectedBooking.depositHistory.map((log) => (
-                          <div key={log.id} className="rounded-xl bg-white p-2.5 border border-pink-100/80 text-[11px] space-y-1 shadow-2xs">
+                      <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1 scrollbar-thin">
+                        {selectedBooking.depositHistory.map((log) => (
+                          <div key={log.id} className="space-y-1 rounded-xl border border-slate-200 bg-white p-2.5 text-body">
                             <div className="flex items-center justify-between gap-1">
-                              <span className="font-black text-slate-800 text-[10px] uppercase tracking-wide">
+                              <span className="font-black text-slate-800">
                                 {log.actionLabel || log.action}
                               </span>
-                              <span className="font-mono text-[10px] text-slate-400">{log.timestamp}</span>
+                              <span className="font-mono text-caption text-slate-400">{log.timestamp}</span>
                             </div>
                             <div className="flex items-center justify-between text-slate-600">
                               <span>{log.staffName || 'Nhân viên'}</span>
                               <span className={`font-black ${log.amount < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
-                                {log.amount > 0 ? `+${money(log.amount)}` : log.amount < 0 ? money(log.amount) : '0đ'}
+                                {log.amount > 0 ? `+${money(log.amount)}` : log.amount < 0 ? money(log.amount) : money(0)}
                               </span>
                             </div>
                             {(log.method || log.transactionId || log.note) && (
-                              <div className="pt-1 border-t border-slate-100 text-[10px] text-slate-500 space-y-0.5">
+                              <div className="space-y-0.5 border-t border-slate-100 pt-1 text-caption text-slate-500">
                                 {log.method && <span>Cổng: {depositMethodLabel(log.method)} {log.transactionId ? `(#${log.transactionId})` : ''}</span>}
-                                {log.note && <p className="italic text-slate-600">Ghi chú: {log.note}</p>}
+                                {log.note && <p className="italic text-slate-600">Ghi chú: {normalizeMoneyText(log.note)}</p>}
                               </div>
                             )}
                           </div>
-                        ))
-                      )}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </div>
+            </section>
             </div>
 
-            {/* Live Availability Verification Panel */}
-            <div className="rounded-2xl border border-pink-100 bg-white p-4 space-y-3">
-              <h3 className="font-black text-slate-800 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
-                <ShieldCheck className="h-4 w-4 text-pink-600" /> Kiểm tra điều kiện giữ chỗ & kỹ thuật viên
+            {/* ---- 4. Điều kiện giữ chỗ ---------------------------------- */}
+            <section className="space-y-3 border-t border-slate-200 pt-4">
+              <h3 className="flex items-center gap-1.5 text-sm font-black text-slate-900">
+                <ShieldCheck className="h-4 w-4 text-pink-500" /> Điều kiện giữ chỗ
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Check 1: Khung giờ */}
-                <div className="rounded-xl bg-pink-50/30 border border-pink-100 p-3 space-y-1">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                    <Clock3 className="h-3 w-3 text-pink-500" /> Khung giờ hẹn
-                  </p>
-                  <p className="font-black text-slate-900 text-sm">{selectedBooking.time} · {selectedBooking.date}</p>
-                  <p className="text-[10px] font-semibold text-emerald-600">Trong giờ mở cửa salon</p>
+              {/* Ba dòng dữ liệu, không phải ba thẻ tô màu: chúng chỉ là thông
+                  tin nền, phần kết luận đã nằm ở dải trên đầu. */}
+              <dl className="divide-y divide-slate-100 rounded-xl bg-slate-50 px-3">
+                <div className="flex items-start justify-between gap-3 py-2">
+                  <dt className="flex items-center gap-1.5 font-semibold text-slate-500">
+                    <Clock3 className="h-3.5 w-3.5 text-slate-400" /> Khung giờ hẹn
+                  </dt>
+                  <dd className="text-right">
+                    <span className="font-bold text-slate-900">{selectedBooking.time} · {selectedBooking.date}</span>
+                    <span className="block text-caption font-semibold text-emerald-600">Trong giờ mở cửa salon</span>
+                  </dd>
                 </div>
-
-                {/* Check 2: Ghế làm */}
-                <div className="rounded-xl bg-pink-50/30 border border-pink-100 p-3 space-y-1">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                    <Layers className="h-3 w-3 text-pink-500" /> Ghế / Khu vực làm
-                  </p>
-                  <p className="font-black text-slate-900 text-sm">
-                    {selectedBooking.assignedStation || (selectedBooking.branch === 'Q1' ? 'Bàn Nail #02' : 'Ghế Spa #03')}
-                  </p>
-                  <p className="text-[10px] font-semibold text-emerald-600">
-                    {checkStationAvailability(selectedBooking).message}
-                  </p>
+                <div className="flex items-start justify-between gap-3 py-2">
+                  <dt className="flex items-center gap-1.5 font-semibold text-slate-500">
+                    <Layers className="h-3.5 w-3.5 text-slate-400" /> Ghế / khu vực làm
+                  </dt>
+                  <dd className="text-right">
+                    <span className="font-bold text-slate-900">
+                      {selectedBooking.assignedStation || (selectedBooking.branch === 'Q1' ? 'Bàn Nail #02' : 'Ghế Spa #03')}
+                    </span>
+                    <span className={`block text-caption font-semibold ${checkStationAvailability(selectedBooking).ok ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {checkStationAvailability(selectedBooking).message}
+                    </span>
+                  </dd>
                 </div>
-
-                {/* Check 3: KTV Yêu cầu vs Phân bổ */}
-                <div className="rounded-xl bg-pink-50/30 border border-pink-100 p-3 space-y-1">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                    <UsersRound className="h-3 w-3 text-pink-500" /> KTV do khách chọn
-                  </p>
-                  <p className="font-black text-slate-900 text-sm">
-                    {selectedBooking.requestedTechnicianName || 'Tự động gán'}
-                  </p>
-                  <p className="text-[10px] font-semibold text-slate-500">
-                    Yêu cầu ban đầu từ Mobile App
-                  </p>
+                <div className="flex items-start justify-between gap-3 py-2">
+                  <dt className="flex items-center gap-1.5 font-semibold text-slate-500">
+                    <UsersRound className="h-3.5 w-3.5 text-slate-400" /> KTV khách yêu cầu
+                  </dt>
+                  <dd className="text-right">
+                    <span className="font-bold text-slate-900">
+                      {selectedBooking.requestedTechnicianName || 'Tự động gán'}
+                    </span>
+                    <span className="block text-caption font-semibold text-slate-500">Yêu cầu ban đầu từ Mobile App</span>
+                  </dd>
                 </div>
-              </div>
+              </dl>
 
               {/* Technician Cards Selector */}
-              <div className="pt-2 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="block font-bold text-slate-800 text-xs">
-                    Gán hoặc Đổi Kỹ thuật viên phụ trách:
-                  </label>
-                  <span className="text-[10px] font-semibold text-slate-500">
-                    {branchName(selectedBooking.branch)}
-                  </span>
-                </div>
+              <div className="space-y-2.5">
+                {(() => {
+                  const assigned = technicians.find((tech) => tech.id === chosenTechId);
+                  const check = checkTechnicianAvailability(chosenTechId, selectedBooking);
+                  /* Bung sẵn khi KTV đang gán không nhận được ca — lúc đó người
+                     dùng buộc phải đổi, giấu danh sách chỉ tốn thêm một cú bấm. */
+                  const expanded = techPickerOpen || !check.ok;
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="text-caption font-semibold text-slate-500">Kỹ thuật viên phụ trách</p>
+                          <p className="mt-0.5 flex flex-wrap items-center gap-2">
+                            <span className="font-black text-slate-900">
+                              {assigned ? assigned.name : 'Tự động phân bổ KTV'}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${
+                                check.ok
+                                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 ring-rose-200'
+                              }`}
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full ${check.ok ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              {check.ok ? 'Sẵn sàng' : 'Không nhận được ca'}
+                            </span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setTechPickerOpen((current) => !current)}
+                          aria-expanded={expanded}
+                          className="ui-row-action inline-flex shrink-0 items-center gap-1.5 border border-slate-200 bg-white px-2.5 font-bold text-slate-700"
+                        >
+                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                          {expanded ? 'Thu gọn' : 'Đổi KTV'}
+                        </button>
+                      </div>
 
-                {/* Cards List Container - Scrollable */}
-                <div className="max-h-[310px] overflow-y-auto rounded-2xl border border-pink-100 bg-pink-50/20 p-2.5 space-y-2.5">
-                  {/* Option Card 1: Tự động phân bổ KTV */}
-                  <div
+                      {!expanded && (
+                        <p className="text-caption font-semibold text-slate-400">
+                          {branchName(selectedBooking.branch)} · bấm “Đổi KTV” để xem toàn bộ kỹ thuật viên đang rảnh.
+                        </p>
+                      )}
+
+                      {expanded && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <label className="block text-xs font-bold text-slate-800">
+                              Gán hoặc đổi kỹ thuật viên phụ trách
+                            </label>
+                            <span className="text-caption font-semibold text-slate-500">
+                              {branchName(selectedBooking.branch)}
+                            </span>
+                          </div>
+
+                {/* Danh sách chọn KTV.
+
+                    Trước đây mỗi KTV là một "thẻ" cao thấp khác nhau tuỳ theo có
+                    lý do bận hay không, xếp 2 cột nên hàng nào cũng so le và mép
+                    dưới vùng cuộn luôn cắt ngang một thẻ. Nay mỗi KTV là một
+                    DÒNG cao bằng nhau (h-[68px]): radio ở đầu dòng ngay cạnh tên,
+                    trạng thái ở cuối dòng, chi tiết dồn vào một dòng phụ. Nhờ đó
+                    quét mắt theo cột thẳng và bấm vào đâu trong dòng cũng trúng. */}
+                {/* 340px = đúng 4 hàng 68px + khoảng cách + đệm, nên với danh
+                    sách cỡ thường không phải cuộn, và khi cuộn thì mép dưới rơi
+                    vào khe giữa hai hàng chứ không cắt ngang một hàng. */}
+                <div className="max-h-[340px] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2">
+                  <div className="grid gap-2 lg:grid-cols-2">
+                  {/* Option Row: Tự động phân bổ KTV */}
+                  <button
+                    type="button"
                     onClick={() => {
                       setChosenTechId('ANY');
                       setValidationError('');
                       setAssignmentNotice('');
                     }}
-                    className={`group relative flex cursor-pointer items-start justify-between rounded-xl border p-3 transition-all ${
+                    aria-pressed={chosenTechId === 'ANY'}
+                    className={`ui-pick-row group flex h-[68px] w-full items-center gap-3 border px-3 text-left shadow-none transition-colors lg:col-span-2 ${
                       chosenTechId === 'ANY'
-                        ? 'border-2 border-pink-600 bg-pink-50/90 ring-2 ring-pink-500/20'
-                        : 'border-pink-100 bg-white hover:border-pink-300 hover:bg-pink-50/40'
+                        ? 'border-pink-500 bg-pink-50 ring-1 ring-pink-500'
+                        : 'border-slate-200 bg-white hover:border-pink-300 hover:bg-pink-50/40'
                     }`}
                   >
-                    <div className="flex items-start gap-3 min-w-0 pr-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-pink-500 via-rose-500 to-pink-400 text-white shadow-2xs">
-                        <Sparkles className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-black text-slate-900 text-xs">Tự động phân bổ KTV</p>
-                          <span className="rounded-full bg-pink-100 px-2 py-0.5 text-[9px] font-extrabold text-pink-700">
-                            Hệ thống
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] font-medium leading-4 text-slate-600">
-                          Hệ thống tự chọn KTV phù hợp dựa trên chuyên môn và thời gian rảnh.
-                        </p>
-                        <p className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-pink-700">
-                          <UserCheck className="h-3 w-3 text-pink-500" /> Tự động chọn người rảnh nhất khi xác nhận
-                        </p>
-                      </div>
-                    </div>
+                    {chosenTechId === 'ANY' ? (
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-600 text-white">
+                        <Check className="h-3.5 w-3.5 stroke-[3]" />
+                      </span>
+                    ) : (
+                      <span className="h-5 w-5 shrink-0 rounded-full border-2 border-slate-300 group-hover:border-pink-400" />
+                    )}
 
-                    <div className="shrink-0 pt-0.5">
-                      {chosenTechId === 'ANY' ? (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-pink-600 text-white shadow-2xs">
-                          <Check className="h-3.5 w-3.5 stroke-[3]" />
-                        </div>
-                      ) : (
-                        <div className="h-5 w-5 rounded-full border-2 border-pink-200 group-hover:border-pink-400" />
-                      )}
-                    </div>
-                  </div>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-pink-100 text-pink-600">
+                      <Sparkles className="h-4 w-4" />
+                    </span>
 
-                  {/* Individual Technician Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {technicians
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate text-xs font-black text-slate-900">Tự động phân bổ KTV</span>
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-caption font-bold text-slate-600">
+                          Hệ thống
+                        </span>
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-1 text-caption font-semibold text-slate-500">
+                        <UserCheck className="h-3 w-3 shrink-0 text-slate-400" />
+                        Chọn người rảnh nhất tại thời điểm xác nhận
+                      </span>
+                    </span>
+                  </button>
+
+                  {/* Individual Technician Rows */}
+                  {technicians
                       .filter((tech) => tech.branch === selectedBooking.branch)
                       .map((tech) => {
                         const check = checkTechnicianAvailability(tech.id, selectedBooking);
@@ -2858,8 +2950,11 @@ export default function TenantAdminOnlineBooking({
                         }
 
                         return (
-                          <div
+                          <button
                             key={tech.id}
+                            type="button"
+                            aria-pressed={isSelected}
+                            title={!isAvailable && reasonText ? reasonText : undefined}
                             onClick={() => {
                               if (!isAvailable) {
                                 setAssignmentNotice(
@@ -2871,79 +2966,68 @@ export default function TenantAdminOnlineBooking({
                               setValidationError('');
                               setAssignmentNotice('');
                             }}
-                            className={`group relative flex flex-col justify-between rounded-xl border p-3 transition-all ${
+                            className={`ui-pick-row group flex h-[68px] w-full items-center gap-3 border px-3 text-left shadow-none transition-colors ${
                               isSelected
-                                ? 'border-2 border-pink-600 bg-pink-50/90 ring-2 ring-pink-500/20'
+                                ? 'border-pink-500 bg-pink-50 ring-1 ring-pink-500'
                                 : isAvailable
-                                ? 'border-pink-100 bg-white hover:border-pink-300 hover:bg-pink-50/40 cursor-pointer'
-                                : 'border-slate-200/80 bg-slate-50/80 opacity-60 cursor-not-allowed'
+                                ? 'cursor-pointer border-slate-200 bg-white hover:border-pink-300 hover:bg-pink-50/40'
+                                : 'cursor-not-allowed border-slate-200 bg-slate-50'
                             }`}
                           >
-                            <div>
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <div
-                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-black text-xs border ${
-                                      isSelected
-                                        ? 'bg-pink-600 text-white border-pink-600'
-                                        : isAvailable
-                                        ? 'bg-pink-100 text-pink-700 border-pink-200/80'
-                                        : 'bg-slate-200 text-slate-500 border-slate-300'
-                                    }`}
-                                  >
-                                    {tech.name.charAt(tech.name.lastIndexOf(' ') + 1) || tech.name.charAt(0)}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="font-black text-slate-900 text-xs truncate">{tech.name}</p>
-                                    <p className="text-[10px] font-medium text-slate-500 truncate">{tech.specialty}</p>
-                                  </div>
-                                </div>
+                            {isSelected ? (
+                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-600 text-white">
+                                <Check className="h-3.5 w-3.5 stroke-[3]" />
+                              </span>
+                            ) : isAvailable ? (
+                              <span className="h-5 w-5 shrink-0 rounded-full border-2 border-slate-300 group-hover:border-pink-400" />
+                            ) : (
+                              <span className="h-5 w-5 shrink-0 rounded-full border-2 border-slate-200 bg-slate-100" />
+                            )}
 
-                                <div className="shrink-0">
-                                  {isSelected ? (
-                                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-pink-600 text-white shadow-2xs">
-                                      <Check className="h-3.5 w-3.5 stroke-[3]" />
-                                    </div>
-                                  ) : isAvailable ? (
-                                    <div className="h-5 w-5 rounded-full border-2 border-pink-200 group-hover:border-pink-400" />
-                                  ) : (
-                                    <div className="h-5 w-5 rounded-full border-2 border-slate-200 bg-slate-200" />
-                                  )}
-                                </div>
-                              </div>
+                            <span
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black ${
+                                isSelected
+                                  ? 'bg-pink-600 text-white'
+                                  : isAvailable
+                                  ? 'bg-pink-100 text-pink-700'
+                                  : 'bg-slate-200 text-slate-500'
+                              }`}
+                            >
+                              {tech.name.charAt(tech.name.lastIndexOf(' ') + 1) || tech.name.charAt(0)}
+                            </span>
 
-                              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                                {isAvailable ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700 ring-1 ring-emerald-200/80">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                    Sẵn sàng
-                                  </span>
-                                ) : isOff ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-extrabold text-rose-700 ring-1 ring-rose-200/80">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                                    Nghỉ làm
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-extrabold text-amber-700 ring-1 ring-amber-200/80">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                                    Không sẵn sàng
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                            <span className="min-w-0 flex-1">
+                              <span className={`block truncate text-xs font-black ${isAvailable ? 'text-slate-900' : 'text-slate-500'}`}>
+                                {tech.name}
+                              </span>
+                              {/* Chuyên môn và thời điểm nhận ca gộp vào một dòng
+                                  phụ: trước đây chúng là hai khối tách nhau nên
+                                  mỗi thẻ cao thấp khác nhau tuỳ có lý do bận. */}
+                              <span className="mt-0.5 flex items-center gap-1 truncate text-caption font-semibold text-slate-500">
+                                <Clock3 className="h-3 w-3 shrink-0 text-slate-400" />
+                                <span className="truncate">
+                                  {tech.specialty} · {isAvailable ? earliestText.replace('Sớm nhất: ', '') : reasonText || earliestText}
+                                </span>
+                              </span>
+                            </span>
 
-                            <div className="mt-2.5 border-t border-pink-50 pt-2 text-[10px]">
-                              <p className={`font-semibold flex items-center gap-1 ${isAvailable ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                <Clock3 className="h-3 w-3 shrink-0" />
-                                {earliestText}
-                              </p>
-                              {!isAvailable && reasonText && (
-                                <p className="mt-0.5 text-rose-600 font-semibold truncate" title={reasonText}>
-                                  Lý do: {reasonText}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                            {isAvailable ? (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-caption font-bold text-emerald-700 ring-1 ring-emerald-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                Sẵn sàng
+                              </span>
+                            ) : isOff ? (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-caption font-bold text-rose-700 ring-1 ring-rose-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                                Nghỉ làm
+                              </span>
+                            ) : (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-caption font-bold text-amber-700 ring-1 ring-amber-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                Bận ca
+                              </span>
+                            )}
+                          </button>
                         );
                       })}
                   </div>
@@ -2951,13 +3035,13 @@ export default function TenantAdminOnlineBooking({
 
                 {/* Auto Assignment Result Box if 'ANY' selected */}
                 {chosenTechId === 'ANY' && (
-                  <div className="rounded-xl border border-pink-200 bg-pink-50/80 p-3 text-xs animate-fadeIn">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs animate-fadeIn">
                     <div className="flex items-start gap-2.5">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-pink-600 text-white shadow-2xs">
                         <Sparkles className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-black uppercase tracking-wider text-pink-700">
+                        <p className="text-caption font-bold text-slate-500">
                           Kết quả tự động chọn từ hệ thống
                         </p>
                         {(() => {
@@ -2982,20 +3066,26 @@ export default function TenantAdminOnlineBooking({
                   </div>
                 )}
 
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+
                 {assignmentNotice && (
-                  <div className="flex items-start gap-2 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2.5 text-[11px] font-semibold leading-5 text-amber-800">
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2.5 text-body font-semibold leading-5 text-amber-800">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
                     <span>{assignmentNotice}</span>
                   </div>
                 )}
               </div>
-            </div>
+            </section>
 
             {/* Notes from customer */}
             {selectedBooking.customerNotes && (
-              <div className="rounded-2xl border border-pink-100 bg-pink-50/40 p-3.5 text-slate-800">
-                <p className="font-extrabold text-[11px] uppercase tracking-wide flex items-center gap-1.5 text-pink-700">
-                  <Sparkles className="h-3.5 w-3.5 text-pink-500" /> Ghi chú từ khách hàng (Mobile App)
+              <div className="border-t border-slate-200 pt-4 text-slate-800">
+                <p className="flex items-center gap-1.5 text-sm font-black text-slate-900">
+                  <Sparkles className="h-4 w-4 text-pink-500" /> Ghi chú từ khách hàng
                 </p>
                 <p className="mt-1 leading-5 text-slate-700 font-medium">{selectedBooking.customerNotes}</p>
               </div>
@@ -3004,7 +3094,7 @@ export default function TenantAdminOnlineBooking({
             {/* Rejection or Proposed Time Notes */}
             {selectedBooking.receptionistNotes && (
               <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-3.5 text-amber-900">
-                <p className="font-extrabold text-[11px] uppercase tracking-wide flex items-center gap-1.5 text-amber-800">
+                <p className="flex items-center gap-1.5 text-body font-black text-amber-800">
                   <Info className="h-3.5 w-3.5 text-amber-600" /> Ghi chú điều chỉnh từ salon
                 </p>
                 <p className="mt-1 leading-5 font-semibold">{selectedBooking.receptionistNotes}</p>
@@ -3013,7 +3103,7 @@ export default function TenantAdminOnlineBooking({
 
             {selectedBooking.rejectionReason && (
               <div className="rounded-2xl border border-rose-200/80 bg-rose-50/60 p-3.5 text-rose-900">
-                <p className="font-extrabold text-[11px] uppercase tracking-wide flex items-center gap-1.5 text-rose-800">
+                <p className="flex items-center gap-1.5 text-body font-black text-rose-800">
                   <XCircle className="h-3.5 w-3.5 text-rose-600" /> Lý do từ chối / Hủy lịch
                 </p>
                 <p className="mt-1 leading-5 font-semibold">{selectedBooking.rejectionReason}</p>
@@ -3041,7 +3131,7 @@ export default function TenantAdminOnlineBooking({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Ngày đề xuất</label>
+                    <label className="block text-body font-bold text-slate-700 mb-1">Ngày đề xuất</label>
                     <input
                       type="text"
                       value={proposeDate}
@@ -3052,7 +3142,7 @@ export default function TenantAdminOnlineBooking({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Giờ đề xuất</label>
+                    <label className="block text-body font-bold text-slate-700 mb-1">Giờ đề xuất</label>
                     <input
                       type="text"
                       value={proposeTime}
@@ -3064,7 +3154,7 @@ export default function TenantAdminOnlineBooking({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-body font-bold text-slate-700 mb-1">
                     Lời nhắn / Lời giải thích gửi đến Customer App
                   </label>
                   <textarea
@@ -3113,7 +3203,7 @@ export default function TenantAdminOnlineBooking({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Lý do từ chối chính:</label>
+                  <label className="block text-body font-bold text-slate-700 mb-1">Lý do từ chối chính:</label>
                   <BeautifulSelect
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
@@ -3129,7 +3219,7 @@ export default function TenantAdminOnlineBooking({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-body font-bold text-slate-700 mb-1">
                     Ghi chú chi tiết (nếu có):
                   </label>
                   <textarea
@@ -3289,7 +3379,7 @@ export default function TenantAdminOnlineBooking({
               <div>
                 <p className="font-black text-emerald-950 text-sm">{callingBooking.customerName}</p>
                 <p className="font-mono text-emerald-700 font-bold">{callingBooking.customerPhone}</p>
-                <p className="text-[11px] text-emerald-600 mt-0.5">Mã booking: {callingBooking.id}</p>
+                <p className="text-body text-emerald-600 mt-0.5">Mã booking: {callingBooking.id}</p>
               </div>
             </div>
 
@@ -3304,25 +3394,25 @@ export default function TenantAdminOnlineBooking({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-[11px] font-bold text-slate-500">Mẫu nhanh:</span>
+              <span className="text-body font-bold text-slate-500">Mẫu nhanh:</span>
               <button
                 type="button"
                 onClick={() => setCallNote('Khách đồng ý xác nhận lịch hẹn đúng giờ.')}
-                className="rounded-lg bg-pink-50 border border-pink-100 px-2.5 py-1 text-[11px] font-bold text-pink-700 hover:bg-pink-100/70"
+                className="rounded-lg bg-pink-50 border border-pink-100 px-2.5 py-1 text-body font-bold text-pink-700 hover:bg-pink-100/70"
               >
                 + Khách chốt lịch
               </button>
               <button
                 type="button"
                 onClick={() => setCallNote('Khách xin đổi giờ sang ca chiều.')}
-                className="rounded-lg bg-pink-50 border border-pink-100 px-2.5 py-1 text-[11px] font-bold text-pink-700 hover:bg-pink-100/70"
+                className="rounded-lg bg-pink-50 border border-pink-100 px-2.5 py-1 text-body font-bold text-pink-700 hover:bg-pink-100/70"
               >
                 + Khách muốn đổi giờ
               </button>
               <button
                 type="button"
                 onClick={() => setCallNote('Không nhấc máy lần 1.')}
-                className="rounded-lg bg-pink-50 border border-pink-100 px-2.5 py-1 text-[11px] font-bold text-pink-700 hover:bg-pink-100/70"
+                className="rounded-lg bg-pink-50 border border-pink-100 px-2.5 py-1 text-body font-bold text-pink-700 hover:bg-pink-100/70"
               >
                 + Không nghe máy
               </button>
@@ -3368,7 +3458,7 @@ export default function TenantAdminOnlineBooking({
             <div className="flex items-center justify-between rounded-xl bg-pink-50/30 p-3 border border-pink-100">
               <div>
                 <p className="font-extrabold text-slate-900">Tự động duyệt khi đủ điều kiện</p>
-                <p className="text-[11px] text-slate-500">Tự động chuyển 'Đã xác nhận' nếu còn ghế & KTV rảnh</p>
+                <p className="text-body text-slate-500">Tự động chuyển 'Đã xác nhận' nếu còn ghế & KTV rảnh</p>
               </div>
               <input
                 type="checkbox"
@@ -3390,7 +3480,7 @@ export default function TenantAdminOnlineBooking({
                 className={inputClass}
               >
                 <option value="Mandatory">Bắt buộc cọc cho tất cả dịch vụ online</option>
-                <option value="HighValueOnly">Chỉ bắt buộc cọc cho hóa đơn trên 500.000đ</option>
+                <option value="HighValueOnly">{`Chỉ bắt buộc cọc cho hóa đơn trên ${money(500_000)}`}</option>
                 <option value="Optional">Tùy chọn (Khách có thể bỏ qua cọc)</option>
               </BeautifulSelect>
             </div>
@@ -3505,13 +3595,13 @@ export default function TenantAdminOnlineBooking({
 
               {/* Quick Amount Preset Chips */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-[10px] font-semibold text-slate-400">Gợi ý nhanh:</span>
+                <span className="text-caption font-semibold text-slate-400">Gợi ý nhanh:</span>
                 {[100000, 200000, 300000, 500000].map((amt) => (
                   <button
                     key={amt}
                     type="button"
                     onClick={() => setDepositInputAmount(amt)}
-                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-all ${
+                    className={`rounded-lg border px-2.5 py-1 text-body font-bold transition-all ${
                       depositInputAmount === amt
                         ? 'border-pink-500 bg-pink-50 text-pink-700 shadow-2xs'
                         : 'border-slate-200 bg-white text-slate-600 hover:bg-pink-50/50'
@@ -3528,7 +3618,7 @@ export default function TenantAdminOnlineBooking({
                         Math.round((selectedBooking.totalEstimatedPrice * 0.3) / 10000) * 10000 || 300000
                       )
                     }
-                    className="rounded-lg border border-pink-200 bg-pink-50/80 px-2.5 py-1 text-[11px] font-bold text-pink-700 hover:bg-pink-100"
+                    className="rounded-lg border border-pink-200 bg-pink-50/80 px-2.5 py-1 text-body font-bold text-pink-700 hover:bg-pink-100"
                   >
                     30% Tổng đơn
                   </button>
@@ -3561,7 +3651,7 @@ export default function TenantAdminOnlineBooking({
                       }`}
                     >
                       <span className="text-xs font-black">{m.label}</span>
-                      <span className="text-[10px] font-medium text-slate-500 mt-0.5">{m.sub}</span>
+                      <span className="text-caption font-medium text-slate-500 mt-0.5">{m.sub}</span>
                     </button>
                   );
                 })}
@@ -3590,7 +3680,7 @@ export default function TenantAdminOnlineBooking({
                     const min = String(now.getMinutes()).padStart(2, '0');
                     setDepositInputPaidAt(`${dd}/${mm}/${yyyy} · ${hh}:${min}`);
                   }}
-                  className="shrink-0 rounded-xl border border-pink-100 bg-pink-50 px-3 py-2 text-[11px] font-bold text-pink-700 hover:bg-pink-100 transition-colors"
+                  className="shrink-0 rounded-xl border border-pink-100 bg-pink-50 px-3 py-2 text-body font-bold text-pink-700 hover:bg-pink-100 transition-colors"
                 >
                   Hiện tại
                 </button>
@@ -3659,30 +3749,30 @@ export default function TenantAdminOnlineBooking({
         >
           <div className="space-y-3.5 text-xs">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-2">
-              <p className="text-[11px] font-bold text-emerald-800 uppercase tracking-wide">
+              <p className="text-body font-bold text-emerald-800 uppercase tracking-wide">
                 Chi tiết tiền cọc xác nhận
               </p>
               <div className="grid grid-cols-2 gap-2 text-slate-800">
                 <div>
-                  <span className="text-[11px] text-slate-500">Khách hàng:</span>
+                  <span className="text-body text-slate-500">Khách hàng:</span>
                   <p className="font-extrabold text-slate-900">{selectedBooking.customerName}</p>
                 </div>
                 <div>
-                  <span className="text-[11px] text-slate-500">Mã đặt lịch:</span>
+                  <span className="text-body text-slate-500">Mã đặt lịch:</span>
                   <p className="font-mono font-bold text-pink-600">#{selectedBooking.id}</p>
                 </div>
                 <div>
-                  <span className="text-[11px] text-slate-500">Số tiền cọc:</span>
+                  <span className="text-body text-slate-500">Số tiền cọc:</span>
                   <p className="text-base font-black text-emerald-700">{money(depositInputAmount)}</p>
                 </div>
                 <div>
-                  <span className="text-[11px] text-slate-500">Phương thức:</span>
+                  <span className="text-body text-slate-500">Phương thức:</span>
                   <p className="font-extrabold text-slate-800">{depositMethodLabel(depositInputMethod)}</p>
                 </div>
               </div>
 
               {depositInputTxId && (
-                <div className="pt-2 border-t border-emerald-200/80 text-[11px] font-mono text-emerald-900">
+                <div className="pt-2 border-t border-emerald-200/80 text-body font-mono text-emerald-900">
                   Mã giao dịch: <strong>#{depositInputTxId}</strong>
                 </div>
               )}
@@ -3690,7 +3780,7 @@ export default function TenantAdminOnlineBooking({
 
             <div className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 border border-amber-200/80 text-amber-900">
               <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] leading-4 font-medium">
+              <p className="text-body leading-4 font-medium">
                 Thao tác này sẽ chuyển lịch sang <strong>✓ Đã đặt cọc</strong> và tự động ghi log minh bạch vào lịch sử giao dịch.
               </p>
             </div>

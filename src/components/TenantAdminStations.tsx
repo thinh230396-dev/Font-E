@@ -1,11 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
-  Activity, AlertTriangle, Armchair, CalendarClock, Check, ChevronRight, CircleAlert,
-  Clock3, Grid3X3, LayoutList, MapPin, Pencil, Plus, Search, ShieldCheck, Sparkles,
+  Activity, Armchair, CalendarClock, Check, ChevronRight, CircleAlert,
+  Grid3X3, LayoutList, MapPin, Pencil, Plus, Search, ShieldCheck, Sparkles,
   SprayCan, UserRound, Wrench, X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader } from './ui';
 
 type StationArea = string;
 type StationStatus = 'READY' | 'OCCUPIED' | 'RESERVED' | 'CLEANING' | 'MAINTENANCE' | 'OUT_OF_SERVICE';
@@ -64,10 +65,11 @@ interface TenantAdminStationsProps {
   onNotify?: (message: string) => void;
 }
 
-const areaMeta: Record<string, { label: string; short: string; className: string }> = {
-  MANICURE: { label: 'Khu Manicure', short: 'M', className: 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200' },
-  PEDICURE: { label: 'Khu Pedicure', short: 'P', className: 'bg-cyan-50 text-cyan-700 ring-cyan-200' },
-  VIP: { label: 'Khu VIP', short: 'V', className: 'bg-violet-50 text-violet-700 ring-violet-200' }
+/** Nhãn mặc định của các khu vực dựng sẵn. Màu sắc do design token đảm nhiệm. */
+const areaMeta: Record<string, { label: string; short: string }> = {
+  MANICURE: { label: 'Khu Manicure', short: 'M' },
+  PEDICURE: { label: 'Khu Pedicure', short: 'P' },
+  VIP: { label: 'Khu VIP', short: 'V' }
 };
 
 const defaultAreas: TenantArea[] = (['Q3', 'Q1'] as BranchCode[]).flatMap((branch) => [
@@ -76,14 +78,23 @@ const defaultAreas: TenantArea[] = (['Q3', 'Q1'] as BranchCode[]).flatMap((branc
   { id: 'VIP', label: 'Khu VIP', branch }
 ]);
 
-const statusMeta: Record<StationStatus, { label: string; short: string; card: string; badge: string; dot: string }> = {
-  READY: { label: 'Sẵn sàng', short: 'Trống', card: 'border-emerald-200 bg-emerald-50/45', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
-  OCCUPIED: { label: 'Đang sử dụng', short: 'Đang làm', card: 'border-violet-200 bg-violet-50/55', badge: 'bg-violet-50 text-violet-700 ring-violet-200', dot: 'bg-violet-500' },
-  RESERVED: { label: 'Đã giữ chỗ', short: 'Đã giữ', card: 'border-blue-200 bg-blue-50/55', badge: 'bg-blue-50 text-blue-700 ring-blue-200', dot: 'bg-blue-500' },
-  CLEANING: { label: 'Đang vệ sinh', short: 'Vệ sinh', card: 'border-cyan-200 bg-cyan-50/55', badge: 'bg-cyan-50 text-cyan-700 ring-cyan-200', dot: 'bg-cyan-500' },
-  MAINTENANCE: { label: 'Đang bảo trì', short: 'Bảo trì', card: 'border-amber-200 bg-amber-50/60', badge: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-500' },
-  OUT_OF_SERVICE: { label: 'Ngừng sử dụng', short: 'Đã khóa', card: 'border-rose-200 bg-rose-50/55', badge: 'bg-rose-50 text-rose-700 ring-rose-200', dot: 'bg-rose-500' }
+/**
+ * Nhãn và tông của trạng thái ghế do StatusBadge quản lý (một nơi duy nhất).
+ * Ở đây chỉ giữ nhãn rút gọn dùng cho chú giải sơ đồ — thứ StatusBadge không có.
+ */
+const statusShortLabel: Record<StationStatus, string> = {
+  READY: 'Trống',
+  OCCUPIED: 'Đang làm',
+  RESERVED: 'Đã giữ',
+  CLEANING: 'Vệ sinh',
+  MAINTENANCE: 'Bảo trì',
+  OUT_OF_SERVICE: 'Đã khóa'
 };
+
+const statusOrder: StationStatus[] = ['READY', 'OCCUPIED', 'RESERVED', 'CLEANING', 'MAINTENANCE', 'OUT_OF_SERVICE'];
+
+const statusLabel = (status: StationStatus) => getStatusDefinition(status).label;
+const statusTone = (status: StationStatus) => getStatusDefinition(status).tone;
 
 const stationActions: Record<StationStatus, StationAction[]> = {
   READY: [
@@ -191,12 +202,7 @@ export default function TenantAdminStations({
   useEffect(() => { window.localStorage.setItem(storageKey, JSON.stringify(stations)); }, [stations, storageKey]);
   useEffect(() => { window.localStorage.setItem(areaStorageKey, JSON.stringify(areas)); }, [areaStorageKey, areas]);
   useEffect(() => { setStationAction(''); }, [selectedStation?.id, selectedStation?.status]);
-  useEffect(() => {
-    if (!selectedStation && !createOpen && !areaManagerOpen) return;
-    const previous = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { if (createOpen) setCreateOpen(false); else if (areaManagerOpen) setAreaManagerOpen(false); else if (appointmentAction) setAppointmentAction(null); else setSelectedStation(null); } };
-    window.addEventListener('keydown', close); return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', close); };
-  }, [appointmentAction, areaManagerOpen, createOpen, selectedStation]);
+  // Escape và khoá cuộn nền do <Modal> đảm nhiệm, không cần xử lý thủ công ở đây.
 
   const requireManage = () => {
     if (canManage) return true;
@@ -232,11 +238,10 @@ export default function TenantAdminStations({
       const fallback = areaMeta[areaId];
       return {
         label: configured.label,
-        short: fallback?.short || configured.label.trim().charAt(0).toUpperCase(),
-        className: fallback?.className || 'bg-pink-50 text-pink-700 ring-pink-200'
+        short: fallback?.short || configured.label.trim().charAt(0).toUpperCase()
       };
     }
-    return areaMeta[areaId] || { label: areaId, short: areaId.trim().charAt(0).toUpperCase(), className: 'bg-pink-50 text-pink-700 ring-pink-200' };
+    return areaMeta[areaId] || { label: areaId, short: areaId.trim().charAt(0).toUpperCase() };
   };
 
   const getActionBlockReason = (station: TenantStation, action: StationAction) => {
@@ -440,37 +445,719 @@ export default function TenantAdminStations({
     setStations((current) => [...current, station]); setSelectedStation(station); setCreateOpen(false); onNotify?.(`Đã thêm ${station.name}.`);
   };
 
+  const branchName = (branch: BranchCode) => branch === 'Q3' ? 'Quận 3' : 'Quận 1';
+
   return (
     <div className="space-y-5">
-      <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div><div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-violet-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Trạng thái không gian · Cập nhật 14:32<span className="text-slate-300">•</span><span className="text-slate-500">{tenantName}</span></div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Ghế & khu vực</h1><p className="mt-2 text-[11px] text-slate-500">Điều phối vị trí phục vụ, vệ sinh, khử khuẩn, lịch sử dụng và bảo trì thiết bị.</p></div>
-        <div className="flex flex-col gap-2 sm:flex-row"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold shadow-sm sm:w-48"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect><button type="button" onClick={openAreaManager} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-pink-200 bg-white px-4 text-[10px] font-black text-pink-600 shadow-sm disabled:border-slate-200 disabled:text-slate-300"><Pencil className="h-4 w-4" />Quản lý khu vực</button><button type="button" onClick={openCreate} disabled={!canManage || branchLocked} title={branchLocked ? 'Receptionist không có quyền thay đổi cấu hình ghế/phòng' : undefined} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Thêm vị trí</button></div>
+      {/* Đầu trang: tiêu đề, phạm vi chi nhánh và hành động chính (README §8.2, §8.3) */}
+      <PageHeader
+        title="Ghế & khu vực"
+        actions={(
+          <>
+          <BeautifulSelect
+            value={selectedBranch}
+            onChange={(event) => onSelectedBranchChange(event.target.value)}
+            disabled={branchLocked}
+            aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'}
+            className="w-full sm:w-48"
+          >
+            <option value="ALL">Tất cả chi nhánh</option>
+            <option value="Q3">Chi nhánh Quận 3</option>
+            <option value="Q1">Chi nhánh Quận 1</option>
+          </BeautifulSelect>
+          <Button variant="secondary" onClick={openAreaManager} disabled={!canManage} iconLeading={<Pencil />}>
+            Quản lý khu vực
+          </Button>
+          <Button
+            variant="primary"
+            onClick={openCreate}
+            disabled={!canManage || branchLocked}
+            title={branchLocked ? 'Receptionist không có quyền thay đổi cấu hình ghế/phòng' : undefined}
+            iconLeading={<Plus />}
+          >
+            Thêm vị trí
+          </Button>
+          </>
+        )}
+      />
+
+
+      {/* Chỉ số tổng quan */}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Tổng vị trí', value: scopedStations.length, detail: `${scopedStations.filter((item) => item.area === 'MANICURE').length} Manicure · ${scopedStations.filter((item) => item.area === 'PEDICURE').length} Pedicure · ${scopedStations.filter((item) => item.area === 'VIP').length} VIP`, icon: Armchair },
+          { label: 'Đang sử dụng', value: occupiedCount, detail: `${Math.round(occupiedCount / Math.max(1, scopedStations.length) * 100)}% công suất tức thời`, icon: Activity },
+          { label: 'Sẵn sàng', value: readyCount, detail: 'Đã hoàn tất vệ sinh & checklist', icon: Sparkles },
+          { label: 'Cần xử lý', value: attentionCount, detail: `${averageUtilization}% công suất trung bình ngày`, icon: Wrench }
+        ].map(({ label, value, detail, icon: Icon }) => (
+          <article key={label} className="rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-caption font-bold text-brand-text-muted">{label}</p>
+                <p className="ta-metric-value mt-1.5 text-brand-text">{value}</p>
+              </div>
+              <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-primary/10 text-brand-primary">
+                <Icon className="h-[18px] w-[18px]" />
+              </span>
+            </div>
+            <p className="mt-2 text-caption text-brand-text-muted">{detail}</p>
+          </article>
+        ))}
       </section>
 
-      <section className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? 'border-violet-100 bg-gradient-to-r from-violet-50 to-white' : 'border-amber-200 bg-amber-50'}`}><div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? 'bg-violet-600 text-white' : 'bg-amber-100 text-amber-700'}`}><ShieldCheck className="h-4.5 w-4.5" /></span><div><p className="text-[10px] font-black text-slate-800">Phạm vi quyền: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{canManage ? 'Được thêm vị trí, đổi trạng thái vận hành, xác nhận vệ sinh và đóng/mở bảo trì trong tenant.' : readOnlyReason || 'Chỉ được xem sơ đồ và tình trạng thiết bị.'}</p></div></div><span className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-100 text-amber-800 ring-amber-200'}`}>{canManage ? 'Toàn quyền vận hành' : 'Chỉ xem'}</span></section>
+      <section className="overflow-hidden rounded-card border border-brand-outline bg-brand-surface shadow-card">
+        {/* Thanh công cụ: tìm kiếm, lọc trạng thái, đổi cách xem */}
+        <div className="flex flex-col gap-3 border-b border-brand-outline p-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative w-full xl:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" />
+            <input
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+              placeholder="Tìm mã ghế, khu vực, khách..."
+              aria-label="Tìm vị trí"
+              className="h-[var(--size-control)] w-full rounded-control border border-brand-outline bg-brand-surface-lowest pl-9 pr-9 text-body outline-none focus:border-brand-primary"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchQueryChange('')}
+                aria-label="Xóa tìm kiếm"
+                className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-brand-text-muted shadow-none"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <BeautifulSelect
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as 'ALL' | StationStatus)}
+              aria-label="Lọc theo trạng thái"
+              className="w-44"
+            >
+              <option value="ALL">Tất cả trạng thái</option>
+              {statusOrder.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}
+            </BeautifulSelect>
+            <div className="flex items-center gap-1 rounded-control border border-brand-outline p-1">
+              <Button
+                size="small"
+                variant={viewMode === 'FLOOR' ? 'primary' : 'ghost'}
+                iconOnly
+                aria-label="Xem sơ đồ"
+                aria-pressed={viewMode === 'FLOOR'}
+                onClick={() => setViewMode('FLOOR')}
+              >
+                <Grid3X3 />
+              </Button>
+              <Button
+                size="small"
+                variant={viewMode === 'LIST' ? 'primary' : 'ghost'}
+                iconOnly
+                aria-label="Xem danh sách"
+                aria-pressed={viewMode === 'LIST'}
+                onClick={() => setViewMode('LIST')}
+              >
+                <LayoutList />
+              </Button>
+            </div>
+          </div>
+        </div>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
-        { label: 'Tổng vị trí', value: scopedStations.length, detail: `${scopedStations.filter((item) => item.area === 'MANICURE').length} Manicure · ${scopedStations.filter((item) => item.area === 'PEDICURE').length} Pedicure · ${scopedStations.filter((item) => item.area === 'VIP').length} VIP`, icon: Armchair, tone: 'bg-blue-50 text-blue-600' },
-        { label: 'Đang sử dụng', value: occupiedCount, detail: `${Math.round(occupiedCount / Math.max(1, scopedStations.length) * 100)}% công suất tức thời`, icon: Activity, tone: 'bg-violet-50 text-violet-600' },
-        { label: 'Sẵn sàng', value: readyCount, detail: 'Đã hoàn tất vệ sinh & checklist', icon: Sparkles, tone: 'bg-emerald-50 text-emerald-600' },
-        { label: 'Cần xử lý', value: attentionCount, detail: `${averageUtilization}% công suất trung bình ngày`, icon: Wrench, tone: 'bg-amber-50 text-amber-600' }
-      ].map(({ label, value, detail, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between"><div><p className="text-[9px] font-bold text-slate-500">{label}</p><p className="mt-1.5 text-xl font-black text-slate-950">{value}</p></div><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4.5 w-4.5" /></span></div><p className="mt-2 text-[8px] font-semibold text-slate-400">{detail}</p></article>)}</section>
+        {/* Lọc theo khu vực + chú giải trạng thái */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-brand-outline bg-brand-surface-high px-4 py-3">
+          {(['ALL', ...visibleAreas.map((area) => area.id)] as StationArea[]).map((area) => {
+            const count = area === 'ALL' ? scopedStations.length : scopedStations.filter((station) => station.area === area).length;
+            return (
+              <Button
+                key={area}
+                size="small"
+                variant={areaFilter === area ? 'primary' : 'secondary'}
+                aria-pressed={areaFilter === area}
+                onClick={() => setAreaFilter(area)}
+              >
+                {area === 'ALL' ? 'Tất cả khu vực' : getAreaPresentation(area).label}
+                <span className="ml-1.5 tabular-nums opacity-70">{count}</span>
+              </Button>
+            );
+          })}
+          <span className="ml-auto hidden flex-wrap items-center gap-3 text-caption text-brand-text-muted lg:flex">
+            {statusOrder.slice(0, 5).map((status) => (
+              <StatusBadge key={status} status={status} label={statusShortLabel[status]} size="small" />
+            ))}
+          </span>
+        </div>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between"><div className="relative w-full xl:w-72"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm mã ghế, khu vực, khách..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[10px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />{searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}</div><div className="flex flex-wrap items-center gap-2"><BeautifulSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'ALL' | StationStatus)} className="h-10 w-44 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả trạng thái</option>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect><div className="flex items-center rounded-xl border border-slate-200 p-1"><button type="button" onClick={() => setViewMode('FLOOR')} aria-label="Xem sơ đồ" className={`flex h-8 w-9 items-center justify-center border-0 p-0 shadow-none ${viewMode === 'FLOOR' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><Grid3X3 className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setViewMode('LIST')} aria-label="Xem danh sách" className={`flex h-8 w-9 items-center justify-center border-0 p-0 shadow-none ${viewMode === 'LIST' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutList className="h-3.5 w-3.5" /></button></div></div></div>
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-3">{(['ALL', ...visibleAreas.map((area) => area.id)] as StationArea[]).map((area) => { const count = area === 'ALL' ? scopedStations.length : scopedStations.filter((station) => station.area === area).length; return <button key={area} type="button" onClick={() => setAreaFilter(area)} className={`flex h-8 items-center gap-2 border px-3 text-[8px] font-black shadow-sm ${areaFilter === area ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'}`}>{area === 'ALL' ? 'Tất cả khu vực' : getAreaPresentation(area).label}<span className="rounded-full bg-white px-1.5 py-0.5 text-[7px]">{count}</span></button>; })}<span className="ml-auto hidden items-center gap-3 text-[7px] font-bold text-slate-400 lg:flex">{(['READY', 'OCCUPIED', 'RESERVED', 'CLEANING', 'MAINTENANCE'] as StationStatus[]).map((status) => <span key={status} className="flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${statusMeta[status].dot}`} />{statusMeta[status].short}</span>)}</span></div>
+        {viewMode === 'FLOOR' ? (
+          <div className="space-y-5 p-4 sm:p-5">
+            {visibleAreas.map((item) => item.id).map((area) => {
+              const areaPresentation = getAreaPresentation(area);
+              const areaStations = filteredStations.filter((station) => station.area === area);
+              if (!areaStations.length) return null;
+              return (
+                <section key={area}>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-primary/10 text-caption font-black text-brand-primary">
+                        {areaPresentation.short}
+                      </span>
+                      <div>
+                        <h2 className="text-body font-bold text-brand-text">{areaPresentation.label}</h2>
+                        <p className="mt-0.5 text-caption text-brand-text-muted">
+                          {areaStations.length} vị trí · {areaStations.filter((station) => station.status === 'READY').length} sẵn sàng
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-caption font-bold tabular-nums text-brand-text-muted">
+                      Công suất {formatPercent(Math.round(areaStations.reduce((sum, station) => sum + station.utilization, 0) / areaStations.length))}
+                    </span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {areaStations.map((station) => (
+                      <button
+                        key={station.id}
+                        type="button"
+                        onClick={() => setSelectedStation(station)}
+                        aria-label={`${station.id} ${station.name} — ${statusLabel(station.status)}`}
+                        className={`group h-auto min-h-48 p-4 text-left shadow-card ui-tone ui-tone--${statusTone(station.status)}`}
+                      >
+                        <span className="flex items-start justify-between gap-3">
+                          <span>
+                            <span className="text-caption font-black uppercase tracking-wide text-brand-text-muted">{station.id}</span>
+                            <span className="mt-1 block text-body font-bold text-brand-text">{station.name}</span>
+                            <span className="mt-1 flex items-center gap-1 text-caption text-brand-text-muted">
+                              <MapPin className="h-3 w-3" />{station.location}
+                            </span>
+                          </span>
+                          <StatusBadge status={station.status} label={statusShortLabel[station.status]} size="small" />
+                        </span>
+                        {station.current ? (
+                          <span className="mt-4 block rounded-control bg-brand-surface p-3">
+                            <span className="flex items-center justify-between text-caption">
+                              <span className="font-black tabular-nums text-brand-primary">{station.current.start}–{station.current.end}</span>
+                              <span className="font-bold text-brand-text-muted">Đang phục vụ</span>
+                            </span>
+                            <span className="mt-1.5 block truncate text-body font-bold text-brand-text">{station.current.customer}</span>
+                            <span className="mt-1 block truncate text-caption text-brand-text-muted">{station.current.service} · {station.current.technician}</span>
+                          </span>
+                        ) : (
+                          <span className="mt-4 flex min-h-16 items-center justify-center rounded-control border border-dashed border-brand-outline bg-brand-surface/60 text-caption font-bold text-brand-text-muted">
+                            {station.status === 'READY' ? 'Sẵn sàng nhận khách' : station.issue || statusLabel(station.status)}
+                          </span>
+                        )}
+                        <span className="mt-3 flex items-center justify-between">
+                          <span className="text-caption text-brand-text-muted">{station.next ? `Tiếp theo ${station.next.start}` : 'Không còn lịch'}</span>
+                          <span className="flex items-center gap-1 text-caption font-bold tabular-nums text-brand-text">
+                            {station.bookingsToday} lượt<ChevronRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+            {!filteredStations.length && (
+              <div className="py-16 text-center">
+                <Armchair className="mx-auto h-8 w-8 text-brand-text-muted" />
+                <p className="mt-3 text-body font-bold text-brand-text">Không tìm thấy vị trí phù hợp</p>
+                <p className="mt-1 text-caption text-brand-text-muted">Thử bỏ bớt bộ lọc khu vực hoặc trạng thái.</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4 sm:p-5">
+            <DataTable<TenantStation>
+              rows={filteredStations}
+              rowKey={(station) => station.id}
+              onRowClick={(station) => setSelectedStation(station)}
+              emptyTitle="Không tìm thấy vị trí phù hợp"
+              emptyDescription="Thử bỏ bớt bộ lọc khu vực hoặc trạng thái."
+              columns={[
+                {
+                  key: 'station',
+                  header: 'Vị trí',
+                  cell: (station) => (
+                    <>
+                      <p className="font-bold text-brand-text">{station.id} · {station.name}</p>
+                      <p className="mt-1 text-caption text-brand-text-muted">{station.location}</p>
+                    </>
+                  )
+                },
+                { key: 'area', header: 'Khu vực', hideBelow: 'md', cell: (station) => getAreaPresentation(station.area).label },
+                {
+                  key: 'current',
+                  header: 'Lịch hiện tại',
+                  cell: (station) => station.current ? (
+                    <>
+                      <p className="font-bold text-brand-text">{station.current.customer}</p>
+                      <p className="mt-1 text-caption tabular-nums text-brand-text-muted">{station.current.start}–{station.current.end} · {station.current.technician}</p>
+                    </>
+                  ) : null
+                },
+                { key: 'next', header: 'Lịch tiếp theo', hideBelow: 'lg', cell: (station) => station.next ? `${station.next.start} · ${station.next.customer}` : null },
+                {
+                  key: 'utilization',
+                  header: 'Công suất',
+                  numeric: true,
+                  cell: (station) => (
+                    <>
+                      <p className="font-bold text-brand-text">{formatPercent(station.utilization)}</p>
+                      <div className="mt-1.5 ml-auto h-1.5 w-20 overflow-hidden rounded-pill bg-brand-surface-highest">
+                        <div className="h-full rounded-pill bg-brand-primary" style={{ width: formatPercent(station.utilization) }} />
+                      </div>
+                    </>
+                  )
+                },
+                {
+                  key: 'sanitized',
+                  header: 'Vệ sinh',
+                  hideBelow: 'lg',
+                  cell: (station) => (
+                    <>
+                      {station.sanitizedAt || 'Chưa ghi nhận'}
+                      <p className="mt-1 text-caption text-brand-text-muted">Checklist {station.checklist}</p>
+                    </>
+                  )
+                },
+                { key: 'status', header: 'Trạng thái', actions: true, cell: (station) => <StatusBadge status={station.status} size="small" /> }
+              ]}
+            />
+          </div>
+        )}
 
-        {viewMode === 'FLOOR' ? <div className="space-y-5 p-4 sm:p-5">{visibleAreas.map((item) => item.id).map((area) => { const areaPresentation = getAreaPresentation(area); const areaStations = filteredStations.filter((station) => station.area === area); if (!areaStations.length) return null; return <section key={area}><div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className={`flex h-8 w-8 items-center justify-center rounded-xl text-[9px] font-black ring-1 ${areaPresentation.className}`}>{areaPresentation.short}</span><div><h2 className="text-[11px] font-black text-slate-800">{areaPresentation.label}</h2><p className="mt-0.5 text-[8px] text-slate-400">{areaStations.length} vị trí · {areaStations.filter((station) => station.status === 'READY').length} sẵn sàng</p></div></div><span className="text-[8px] font-black text-slate-400">Công suất {formatPercent(Math.round(areaStations.reduce((sum, station) => sum + station.utilization, 0) / areaStations.length))}</span></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{areaStations.map((station) => { const meta = statusMeta[station.status]; return <button key={station.id} type="button" onClick={() => setSelectedStation(station)} className={`group h-auto min-h-48 border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${meta.card}`}><span className="flex items-start justify-between gap-3"><span><span className="text-[8px] font-black uppercase tracking-wide text-slate-400">{station.id}</span><span className="mt-1 block text-[11px] font-black text-slate-900">{station.name}</span><span className="mt-1 flex items-center gap-1 text-[8px] text-slate-400"><MapPin className="h-3 w-3" />{station.location}</span></span><span className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[7px] font-bold ring-1 ${meta.badge}`}><span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />{meta.short}</span></span>{station.current ? <span className="mt-4 block rounded-xl bg-white/80 p-3 ring-1 ring-black/5"><span className="flex items-center justify-between text-[8px]"><span className="font-black text-violet-600">{station.current.start}–{station.current.end}</span><span className="font-bold text-slate-400">Đang phục vụ</span></span><span className="mt-1.5 block truncate text-[10px] font-black text-slate-800">{station.current.customer}</span><span className="mt-1 block truncate text-[8px] text-slate-500">{station.current.service} · {station.current.technician}</span></span> : <span className="mt-4 flex min-h-16 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 text-[8px] font-bold text-slate-400">{station.status === 'READY' ? 'Sẵn sàng nhận khách' : station.issue || meta.label}</span>}<span className="mt-3 flex items-center justify-between"><span className="text-[8px] text-slate-400">{station.next ? `Tiếp theo ${station.next.start}` : 'Không còn lịch'}</span><span className="flex items-center gap-1 text-[8px] font-black text-slate-600">{station.bookingsToday} lượt<ChevronRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span></span></button>; })}</div></section>; })}{!filteredStations.length && <div className="py-16 text-center"><Armchair className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-600">Không tìm thấy vị trí phù hợp</p></div>}</div> : <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left"><thead><tr className="border-b border-slate-100 bg-slate-50 text-[8px] font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Vị trí</th><th className="px-4 py-3">Khu vực</th><th className="px-4 py-3">Lịch hiện tại</th><th className="px-4 py-3">Lịch tiếp theo</th><th className="px-4 py-3">Công suất</th><th className="px-4 py-3">Vệ sinh</th><th className="px-5 py-3 text-right">Trạng thái</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredStations.map((station) => <tr key={station.id} onClick={() => setSelectedStation(station)} className="cursor-pointer text-[9px] text-slate-600 hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{station.id} · {station.name}</p><p className="mt-1 text-[8px] text-slate-400">{station.location}</p></td><td className="px-4 py-4">{getAreaPresentation(station.area).label}</td><td className="px-4 py-4">{station.current ? <><p className="font-black text-slate-800">{station.current.customer}</p><p className="mt-1 text-[8px] text-slate-400">{station.current.start}–{station.current.end} · {station.current.technician}</p></> : '—'}</td><td className="px-4 py-4">{station.next ? `${station.next.start} · ${station.next.customer}` : '—'}</td><td className="px-4 py-4"><p className="font-black text-slate-800">{formatPercent(station.utilization)}</p><div className="mt-1.5 h-1.5 w-20 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-violet-500" style={{ width: formatPercent(station.utilization) }} /></div></td><td className="px-4 py-4">{station.sanitizedAt || 'Chưa ghi nhận'}<p className="mt-1 text-[8px] text-slate-400">Checklist {station.checklist}</p></td><td className="px-5 py-4 text-right"><span className={`inline-flex rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[station.status].badge}`}>{statusMeta[station.status].label}</span></td></tr>)}</tbody></table></div>}
-        <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-[8px] text-slate-400">Hiển thị <strong className="text-slate-600">{filteredStations.length}</strong> trên {scopedStations.length} vị trí thuộc phạm vi đang chọn</p><p className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400"><ShieldCheck className="h-3.5 w-3.5" />Dữ liệu vận hành được lưu theo tenant</p></div>
+        <div className="flex flex-col gap-2 border-t border-brand-outline bg-brand-surface-high px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-caption text-brand-text-muted">
+            Hiển thị <strong className="tabular-nums text-brand-text">{filteredStations.length}</strong> trên {scopedStations.length} vị trí thuộc phạm vi đang chọn
+          </p>
+          <p className="flex items-center gap-1.5 text-caption text-brand-text-muted">
+            <ShieldCheck className="h-3.5 w-3.5" />Dữ liệu vận hành được lưu theo tenant
+          </p>
+        </div>
       </section>
 
-      {selectedStation && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><button type="button" aria-label="Đóng chi tiết vị trí" onClick={() => setSelectedStation(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><section role="dialog" aria-modal="true" aria-labelledby="station-detail-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7"><div><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-black uppercase tracking-wide text-violet-600">{selectedStation.id}</span><span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[selectedStation.status].badge}`}>{statusMeta[selectedStation.status].label}</span></div><h2 id="station-detail-title" className="mt-2 text-xl font-black text-slate-950">{selectedStation.name}</h2><p className="mt-1 flex items-center gap-1.5 text-[9px] text-slate-400"><MapPin className="h-3.5 w-3.5" />{selectedStation.location} · Chi nhánh {selectedStation.branch === 'Q3' ? 'Quận 3' : 'Quận 1'}</p></div><button type="button" onClick={() => setSelectedStation(null)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7"><div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]"><div className="space-y-4"><div className={`rounded-2xl border p-5 ${statusMeta[selectedStation.status].card}`}><div className="flex items-start justify-between"><div><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Trạng thái trực tiếp</p><p className="mt-2 text-2xl font-black text-slate-950">{statusMeta[selectedStation.status].label}</p><p className="mt-2 text-[9px] text-slate-500">{selectedStation.current ? `Đang phục vụ ${selectedStation.current.customer}` : selectedStation.issue || 'Vị trí không có khách hiện tại'}</p></div><span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${selectedStation.status === 'MAINTENANCE' ? 'bg-amber-100 text-amber-700' : 'bg-white text-violet-600'}`}>{selectedStation.status === 'MAINTENANCE' ? <Wrench className="h-5 w-5" /> : <Armchair className="h-5 w-5" />}</span></div><div className="mt-5 grid grid-cols-3 gap-2"><div className="rounded-xl bg-white/75 p-3"><p className="text-[7px] text-slate-400">Công suất</p><p className="mt-1 text-[12px] font-black text-slate-800">{formatPercent(selectedStation.utilization)}</p></div><div className="rounded-xl bg-white/75 p-3"><p className="text-[7px] text-slate-400">Lượt hôm nay</p><p className="mt-1 text-[12px] font-black text-slate-800">{selectedStation.bookingsToday}</p></div><div className="rounded-xl bg-white/75 p-3"><p className="text-[7px] text-slate-400">Checklist</p><p className="mt-1 text-[12px] font-black text-slate-800">{selectedStation.checklist}</p></div></div></div>{selectedStation.current && <div className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start justify-between"><div><p className="text-[8px] font-black uppercase text-violet-500">Lịch đang phục vụ</p><p className="mt-2 text-sm font-black text-slate-900">{selectedStation.current.customer}</p><p className="mt-1 text-[9px] text-slate-500">{selectedStation.current.service}</p></div><span className="rounded-xl bg-violet-50 px-3 py-2 text-[10px] font-black text-violet-700">{selectedStation.current.start}–{selectedStation.current.end}</span></div><div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-[9px] font-bold text-slate-600"><UserRound className="h-4 w-4 text-violet-500" />{selectedStation.current.technician}<span className="ml-auto text-[8px] text-slate-400">{selectedStation.current.id}</span></div></div>}{selectedStation.next && <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4"><div className="flex items-start gap-3"><CalendarClock className="mt-0.5 h-4 w-4 text-blue-600" /><div><p className="text-[8px] font-black uppercase text-blue-500">Lịch tiếp theo · {selectedStation.next.start}</p><p className="mt-1.5 text-[10px] font-black text-slate-800">{selectedStation.next.customer}</p><p className="mt-1 text-[8px] text-slate-500">{selectedStation.next.service} · {selectedStation.next.technician}</p></div></div></div>}</div><div className="space-y-4"><div className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start justify-between"><div><p className="text-[8px] font-black uppercase text-slate-400">Vệ sinh & khử khuẩn</p><p className="mt-2 text-[12px] font-black text-slate-800">{selectedStation.sanitizedAt || 'Chưa ghi nhận'}</p><p className="mt-1 text-[8px] text-slate-400">Checklist hiện tại {selectedStation.checklist}</p></div><SprayCan className="h-5 w-5 text-cyan-500" /></div></div><div className="rounded-2xl border border-slate-200 p-4"><p className="text-[8px] font-black uppercase text-slate-400">Thiết bị đi kèm</p><div className="mt-3 flex flex-wrap gap-2">{selectedStation.equipment.map((item) => <span key={item} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[8px] font-bold text-slate-600">{item}</span>)}</div></div><div className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start gap-3"><Wrench className="mt-0.5 h-4 w-4 text-amber-500" /><div><p className="text-[9px] font-black text-slate-700">Bảo trì thiết bị</p><p className="mt-1 text-[8px] text-slate-400">Gần nhất: {selectedStation.lastMaintenance}</p><p className="mt-1 text-[8px] text-slate-400">Kế tiếp: {selectedStation.nextMaintenance}</p>{selectedStation.issue && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-[8px] font-bold leading-4 text-amber-800">{selectedStation.issue}</p>}</div></div></div>{selectedStation.note && <div className="rounded-2xl bg-violet-50 p-4"><p className="text-[8px] font-black uppercase text-violet-500">Ghi chú vận hành</p><p className="mt-2 text-[9px] leading-5 text-violet-700">{selectedStation.note}</p></div>}</div></div></div><footer className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><p className="text-[8px] font-semibold text-slate-400">Thao tác được ghi nhận dưới quyền {roleLabel}</p><div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><BeautifulSelect value={stationAction} onChange={(event) => setStationAction(event.target.value as StationStatus | '')} disabled={!canManage} aria-label="Chọn thao tác cho vị trí" className="h-10 w-full rounded-xl border border-pink-200 bg-white px-3 text-[9px] font-bold text-slate-700 shadow-sm sm:w-52"><option value="">Chọn thao tác</option>{stationActions[selectedStation.status].map((action) => { const blockReason = getActionBlockReason(selectedStation, action); return <option key={`${action.target}-${action.label}`} value={action.target} disabled={Boolean(blockReason)}>{action.label}{blockReason ? ' · Chưa khả dụng' : ''}</option>; })}</BeautifulSelect><button type="button" onClick={applyStationAction} disabled={!canManage || !stationAction} className="flex h-10 items-center justify-center gap-2 border border-pink-600 bg-pink-600 px-4 text-[9px] font-black text-white shadow-sm shadow-pink-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Check className="h-3.5 w-3.5" />Áp dụng</button></div></footer></section></div>}
+      {/* Hộp thoại 1 — Chi tiết vị trí */}
+      <Modal
+        open={Boolean(selectedStation)}
+        onClose={() => setSelectedStation(null)}
+        size="large"
+        eyebrow={selectedStation?.id}
+        title={selectedStation?.name ?? ''}
+        description={selectedStation ? `${selectedStation.location} · Chi nhánh ${branchName(selectedStation.branch)}` : undefined}
+        headerAside={selectedStation ? <StatusBadge status={selectedStation.status} size="small" /> : undefined}
+        icon={selectedStation?.status === 'MAINTENANCE' ? <Wrench /> : <Armchair />}
+        footer={selectedStation ? (
+          <>
+            <p className="mr-auto text-caption text-brand-text-muted">Thao tác được ghi nhận dưới quyền {roleLabel}</p>
+            <BeautifulSelect
+              value={stationAction}
+              onChange={(event) => setStationAction(event.target.value as StationStatus | '')}
+              disabled={!canManage}
+              aria-label="Chọn thao tác cho vị trí"
+              className="w-full sm:w-52"
+            >
+              <option value="">Chọn thao tác</option>
+              {stationActions[selectedStation.status].map((action) => {
+                const blockReason = getActionBlockReason(selectedStation, action);
+                return (
+                  <option key={`${action.target}-${action.label}`} value={action.target} disabled={Boolean(blockReason)}>
+                    {action.label}{blockReason ? ' · Chưa khả dụng' : ''}
+                  </option>
+                );
+              })}
+            </BeautifulSelect>
+            <Button variant="primary" onClick={applyStationAction} disabled={!canManage || !stationAction} iconLeading={<Check />}>
+              Áp dụng
+            </Button>
+          </>
+        ) : undefined}
+      >
+        {selectedStation && (
+          <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="space-y-4">
+              <div className={`p-5 ui-tone ui-tone--${statusTone(selectedStation.status)}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-caption font-black uppercase tracking-wide text-brand-text-muted">Trạng thái trực tiếp</p>
+                    <p className="mt-2 text-2xl font-black text-brand-text">{statusLabel(selectedStation.status)}</p>
+                    <p className="mt-2 text-body text-brand-text-muted">
+                      {selectedStation.current ? `Đang phục vụ ${selectedStation.current.customer}` : selectedStation.issue || 'Vị trí không có khách hiện tại'}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-5 grid grid-cols-3 gap-2">
+                  <div className="rounded-control bg-brand-surface p-3">
+                    <p className="text-caption text-brand-text-muted">Công suất</p>
+                    <p className="mt-1 text-body font-bold tabular-nums text-brand-text">{formatPercent(selectedStation.utilization)}</p>
+                  </div>
+                  <div className="rounded-control bg-brand-surface p-3">
+                    <p className="text-caption text-brand-text-muted">Lượt hôm nay</p>
+                    <p className="mt-1 text-body font-bold tabular-nums text-brand-text">{selectedStation.bookingsToday}</p>
+                  </div>
+                  <div className="rounded-control bg-brand-surface p-3">
+                    <p className="text-caption text-brand-text-muted">Checklist</p>
+                    <p className="mt-1 text-body font-bold tabular-nums text-brand-text">{selectedStation.checklist}</p>
+                  </div>
+                </div>
+              </div>
 
-      {areaManagerOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng quản lý khu vực" onClick={() => setAreaManagerOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><section role="dialog" aria-modal="true" aria-labelledby="area-manager-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-pink-100 px-5 py-5 sm:px-6"><div><p className="text-[9px] font-black uppercase tracking-wide text-pink-600">Thiết lập không gian</p><h2 id="area-manager-title" className="mt-1 text-lg font-black text-slate-950">Quản lý khu vực</h2><p className="mt-1 text-[9px] text-slate-500">Thêm, đổi tên hoặc xóa khu vực riêng cho từng chi nhánh.</p></div><button type="button" onClick={() => setAreaManagerOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh quản lý</span><BeautifulSelect value={areaManagerBranch} onChange={(event) => { setAreaManagerBranch(event.target.value as BranchCode); setEditingAreaId(null); setDeleteConfirmAreaId(null); setAreaManagerError(''); }} className="h-11 w-full rounded-xl border border-pink-100 bg-pink-50/40 px-3 text-[10px] font-bold"><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><div className="mt-4 rounded-2xl border border-pink-100 bg-pink-50/40 p-4"><p className="text-[9px] font-black text-slate-700">Thêm khu vực mới</p><div className="mt-2 flex flex-col gap-2 sm:flex-row"><input value={areaManagerName} onChange={(event) => setAreaManagerName(event.target.value)} placeholder="Ví dụ: Khu nối mi" aria-label="Tên khu vực mới" className="h-10 min-w-0 flex-1 rounded-xl border border-pink-200 bg-white px-3 text-[9px] outline-none focus:border-pink-400 focus:ring-4 focus:ring-pink-100" /><button type="button" onClick={addManagedArea} className="flex h-10 items-center justify-center gap-2 border border-pink-600 bg-pink-600 px-4 text-[8px] font-black text-white shadow-sm"><Plus className="h-3.5 w-3.5" />Thêm khu vực</button></div></div>{areaManagerError && <div className="mt-4 flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="h-4 w-4 shrink-0" />{areaManagerError}</div>}<div className="mt-4 space-y-2">{areas.filter((area) => area.branch === areaManagerBranch).map((area) => { const usedCount = stations.filter((station) => station.branch === area.branch && station.area === area.id).length; const isEditing = editingAreaId === area.id; const isConfirmingDelete = deleteConfirmAreaId === area.id; return <article key={`${area.branch}-${area.id}`} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">{isEditing ? <div className="flex flex-col gap-2 sm:flex-row"><input autoFocus value={editingAreaName} onChange={(event) => setEditingAreaName(event.target.value)} aria-label={`Đổi tên ${area.label}`} className="h-10 min-w-0 flex-1 rounded-xl border border-pink-200 bg-pink-50/30 px-3 text-[9px] outline-none focus:border-pink-400 focus:ring-4 focus:ring-pink-100" /><button type="button" onClick={() => saveAreaName(area)} className="flex h-10 items-center justify-center gap-1.5 border border-emerald-600 bg-emerald-600 px-3 text-[8px] font-black text-white"><Check className="h-3.5 w-3.5" />Lưu</button><button type="button" onClick={() => setEditingAreaId(null)} className="h-10 border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600">Hủy</button></div> : <><div className="flex flex-wrap items-center gap-2"><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black text-slate-800">{area.label}</p><p className="mt-1 text-[8px] text-slate-400">{usedCount} vị trí đang sử dụng khu vực này</p></div><button type="button" onClick={() => { setEditingAreaId(area.id); setEditingAreaName(area.label); setDeleteConfirmAreaId(null); setAreaManagerError(''); }} className="flex h-9 items-center gap-1.5 border border-pink-200 bg-pink-50 px-3 text-[8px] font-black text-pink-600 shadow-none"><Pencil className="h-3.5 w-3.5" />Sửa</button><button type="button" onClick={() => { setDeleteConfirmAreaId(area.id); setEditingAreaId(null); setAreaManagerError(''); }} className="flex h-9 items-center gap-1.5 border border-rose-200 bg-rose-50 px-3 text-[8px] font-black text-rose-600 shadow-none"><X className="h-3.5 w-3.5" />Xóa</button></div>{isConfirmingDelete && <div className="mt-3 flex flex-col gap-2 rounded-xl bg-rose-50 p-3 sm:flex-row sm:items-center"><p className="flex-1 text-[8px] font-bold text-rose-700">{usedCount ? `Khu vực còn ${usedCount} vị trí nên chưa thể xóa.` : 'Xác nhận xóa khu vực này?'}</p>{!usedCount && <button type="button" onClick={() => deleteArea(area)} className="h-8 border border-rose-600 bg-rose-600 px-3 text-[8px] font-black text-white">Xác nhận xóa</button>}<button type="button" onClick={() => setDeleteConfirmAreaId(null)} className="h-8 border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600">Hủy</button></div>}</>}</article>; })}</div></div><footer className="flex justify-end border-t border-pink-100 bg-pink-50/40 px-5 py-4 sm:px-6"><button type="button" onClick={() => setAreaManagerOpen(false)} className="border border-pink-600 bg-pink-600 px-5 text-[9px] font-black text-white shadow-sm shadow-pink-200">Hoàn tất</button></footer></section></div>}
+              {selectedStation.current && (
+                <div className="rounded-card border border-brand-outline p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-caption font-black uppercase text-brand-primary">Lịch đang phục vụ</p>
+                      <p className="mt-2 text-body font-bold text-brand-text">{selectedStation.current.customer}</p>
+                      <p className="mt-1 text-body text-brand-text-muted">{selectedStation.current.service}</p>
+                    </div>
+                    <span className="rounded-control bg-brand-primary/10 px-3 py-2 text-body font-bold tabular-nums text-brand-primary">
+                      {selectedStation.current.start}–{selectedStation.current.end}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex items-center gap-2 rounded-control bg-brand-surface-high p-3 text-body font-bold text-brand-text">
+                    <UserRound className="h-4 w-4 text-brand-primary" />{selectedStation.current.technician}
+                    <span className="ml-auto text-caption font-normal text-brand-text-muted">{selectedStation.current.id}</span>
+                  </div>
+                </div>
+              )}
 
-      {appointmentAction && selectedStation && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu lịch hẹn" onClick={() => setAppointmentAction(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitAppointmentAction} className="relative max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-pink-100 px-5 py-5 sm:px-6"><div><p className="text-[9px] font-black uppercase tracking-wide text-pink-600">{selectedStation.id} · {selectedStation.name}</p><h2 className="mt-1 text-lg font-black text-slate-950">{appointmentAction === 'RESERVED' ? 'Đặt lịch cho ghế' : 'Bắt đầu phục vụ'}</h2><p className="mt-1 text-[9px] text-slate-500">Nhập thông tin khách và dịch vụ để cập nhật trạng thái ghế.</p></div><button type="button" onClick={() => setAppointmentAction(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">{appointmentError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700 sm:col-span-2"><CircleAlert className="h-4 w-4 shrink-0" />{appointmentError}</div>}<label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên khách hàng *</span><input autoFocus value={appointmentForm.customer} onChange={(event) => setAppointmentForm((current) => ({ ...current, customer: event.target.value }))} placeholder="Nhập tên khách hàng" className="h-11 w-full rounded-xl border border-pink-100 bg-pink-50/40 px-3 text-[10px] outline-none focus:border-pink-400 focus:bg-white focus:ring-4 focus:ring-pink-100" /></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Dịch vụ *</span><input value={appointmentForm.service} onChange={(event) => setAppointmentForm((current) => ({ ...current, service: event.target.value }))} placeholder="Ví dụ: Sơn gel Hàn Quốc" className="h-11 w-full rounded-xl border border-pink-100 bg-pink-50/40 px-3 text-[10px] outline-none focus:border-pink-400 focus:bg-white focus:ring-4 focus:ring-pink-100" /></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kỹ thuật viên *</span><input value={appointmentForm.technician} onChange={(event) => setAppointmentForm((current) => ({ ...current, technician: event.target.value }))} placeholder="Nhập tên kỹ thuật viên" className="h-11 w-full rounded-xl border border-pink-100 bg-pink-50/40 px-3 text-[10px] outline-none focus:border-pink-400 focus:bg-white focus:ring-4 focus:ring-pink-100" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Bắt đầu *</span><input type="time" value={appointmentForm.start} onChange={(event) => setAppointmentForm((current) => ({ ...current, start: event.target.value }))} className="h-11 w-full rounded-xl border border-pink-100 bg-pink-50/40 px-3 text-[10px] outline-none focus:border-pink-400 focus:bg-white focus:ring-4 focus:ring-pink-100" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kết thúc *</span><input type="time" value={appointmentForm.end} onChange={(event) => setAppointmentForm((current) => ({ ...current, end: event.target.value }))} className="h-11 w-full rounded-xl border border-pink-100 bg-pink-50/40 px-3 text-[10px] outline-none focus:border-pink-400 focus:bg-white focus:ring-4 focus:ring-pink-100" /></label></div><footer className="flex justify-end gap-2 border-t border-pink-100 bg-pink-50/40 px-5 py-4 sm:px-6"><button type="button" onClick={() => setAppointmentAction(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-pink-600 bg-pink-600 px-5 text-[9px] font-black text-white shadow-lg shadow-pink-200"><Check className="h-4 w-4" />{appointmentAction === 'RESERVED' ? 'Lưu lịch hẹn' : 'Bắt đầu phục vụ'}</button></footer></form></div>}
+              {selectedStation.next && (
+                <div className="p-4 ui-tone ui-tone--info">
+                  <div className="flex items-start gap-3">
+                    <CalendarClock className="mt-0.5 h-4 w-4 text-brand-primary" />
+                    <div>
+                      <p className="text-caption font-black uppercase text-brand-primary">Lịch tiếp theo · {selectedStation.next.start}</p>
+                      <p className="mt-1.5 text-body font-bold text-brand-text">{selectedStation.next.customer}</p>
+                      <p className="mt-1 text-caption text-brand-text-muted">{selectedStation.next.service} · {selectedStation.next.technician}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
-      {createOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitCreate} className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div><p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Thiết lập không gian</p><h2 className="mt-1 text-lg font-black text-slate-900">Thêm vị trí phục vụ</h2><p className="mt-1 text-[9px] text-slate-500">Vị trí mới mặc định ở trạng thái sẵn sàng sau khi lưu.</p></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">{formError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700 sm:col-span-2"><CircleAlert className="h-4 w-4 shrink-0" />{formError}</div>}<label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mã vị trí *</span><input value={form.id} onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))} placeholder="Ví dụ: M-07" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên vị trí *</span><input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Bàn Manicure 07" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label><div><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Khu vực *</span><BeautifulSelect value={form.area} onChange={(event) => setForm((current) => ({ ...current, area: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]">{formAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}</BeautifulSelect><button type="button" onClick={() => { setAddingArea((current) => !current); setNewAreaName(''); setFormError(''); }} className="mt-2 h-auto border-0 bg-transparent p-0 text-[8px] font-black text-pink-600 shadow-none">{addingArea ? 'Đóng thêm khu vực' : '+ Thêm khu vực mới'}</button>{addingArea && <div className="mt-2 flex gap-2"><input value={newAreaName} onChange={(event) => setNewAreaName(event.target.value)} placeholder="Tên khu vực mới" aria-label="Tên khu vực mới" className="h-10 min-w-0 flex-1 rounded-xl border border-pink-200 bg-pink-50/40 px-3 text-[9px] outline-none focus:border-pink-400 focus:bg-white focus:ring-4 focus:ring-pink-100" /><button type="button" onClick={addArea} className="h-10 shrink-0 border border-pink-600 bg-pink-600 px-3 text-[8px] font-black text-white shadow-sm">Thêm</button></div>}</div><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={form.branch} onChange={(event) => { const branch = event.target.value as BranchCode; setForm((current) => ({ ...current, branch, area: areas.find((area) => area.branch === branch)?.id || 'MANICURE' })); setAddingArea(false); setNewAreaName(''); }} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]"><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Vị trí trong mặt bằng *</span><input value={form.location} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} placeholder="Ví dụ: Khu A · Gần cửa sổ" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Thiết bị đi kèm *</span><textarea value={form.equipment} onChange={(event) => setForm((current) => ({ ...current, equipment: event.target.value }))} placeholder="Đèn UV, máy mài, máy hút bụi..." className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label></div><footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><Check className="h-4 w-4" />Lưu vị trí</button></footer></form></div>}
+            <div className="space-y-4">
+              <div className="rounded-card border border-brand-outline p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-caption font-black uppercase text-brand-text-muted">Vệ sinh &amp; khử khuẩn</p>
+                    <p className="mt-2 text-body font-bold text-brand-text">{selectedStation.sanitizedAt || 'Chưa ghi nhận'}</p>
+                    <p className="mt-1 text-caption text-brand-text-muted">Checklist hiện tại {selectedStation.checklist}</p>
+                  </div>
+                  <SprayCan className="h-5 w-5 text-brand-secondary" />
+                </div>
+              </div>
+
+              <div className="rounded-card border border-brand-outline p-4">
+                <p className="text-caption font-black uppercase text-brand-text-muted">Thiết bị đi kèm</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedStation.equipment.map((item) => (
+                    <span key={item} className="rounded-control bg-brand-surface-high px-2.5 py-1.5 text-caption font-bold text-brand-text">{item}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-card border border-brand-outline p-4">
+                <div className="flex items-start gap-3">
+                  <Wrench className="mt-0.5 h-4 w-4 text-brand-tertiary" />
+                  <div>
+                    <p className="text-body font-bold text-brand-text">Bảo trì thiết bị</p>
+                    <p className="mt-1 text-caption text-brand-text-muted">Gần nhất: {selectedStation.lastMaintenance}</p>
+                    <p className="mt-1 text-caption text-brand-text-muted">Kế tiếp: {selectedStation.nextMaintenance}</p>
+                    {selectedStation.issue && (
+                      <p className="mt-3 p-3 text-caption font-bold leading-5 text-brand-text ui-tone ui-tone--warning">{selectedStation.issue}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {selectedStation.note && (
+                <div className="p-4 ui-tone ui-tone--info">
+                  <p className="text-caption font-black uppercase text-brand-primary">Ghi chú vận hành</p>
+                  <p className="mt-2 text-body leading-6 text-brand-text">{selectedStation.note}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Hộp thoại 2 — Quản lý khu vực */}
+      <Modal
+        open={areaManagerOpen}
+        onClose={() => setAreaManagerOpen(false)}
+        size="medium"
+        eyebrow="Thiết lập không gian"
+        title="Quản lý khu vực"
+        description="Thêm, đổi tên hoặc xóa khu vực riêng cho từng chi nhánh."
+        icon={<Pencil />}
+        footer={<Button variant="primary" onClick={() => setAreaManagerOpen(false)}>Hoàn tất</Button>}
+      >
+        <div className="space-y-4">
+          <Field label="Chi nhánh quản lý">
+            <BeautifulSelect
+              value={areaManagerBranch}
+              onChange={(event) => {
+                setAreaManagerBranch(event.target.value as BranchCode);
+                setEditingAreaId(null);
+                setDeleteConfirmAreaId(null);
+                setAreaManagerError('');
+              }}
+            >
+              <option value="Q3">Chi nhánh Quận 3</option>
+              <option value="Q1">Chi nhánh Quận 1</option>
+            </BeautifulSelect>
+          </Field>
+
+          <div className="rounded-card border border-brand-outline bg-brand-surface-high p-4">
+            <p className="text-body font-bold text-brand-text">Thêm khu vực mới</p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <Field label="Tên khu vực mới" labelHidden className="min-w-0 flex-1">
+                <input
+                  value={areaManagerName}
+                  onChange={(event) => setAreaManagerName(event.target.value)}
+                  placeholder="Ví dụ: Khu nối mi"
+                />
+              </Field>
+              <Button variant="primary" onClick={addManagedArea} iconLeading={<Plus />}>Thêm khu vực</Button>
+            </div>
+          </div>
+
+          {areaManagerError && (
+            <p role="alert" className="flex items-start gap-2 p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger">
+              <CircleAlert className="h-4 w-4 shrink-0" />{areaManagerError}
+            </p>
+          )}
+
+          <div className="space-y-2">
+            {areas.filter((area) => area.branch === areaManagerBranch).map((area) => {
+              const usedCount = stations.filter((station) => station.branch === area.branch && station.area === area.id).length;
+              const isEditing = editingAreaId === area.id;
+              const isConfirmingDelete = deleteConfirmAreaId === area.id;
+              return (
+                <article key={`${area.branch}-${area.id}`} className="rounded-card border border-brand-outline bg-brand-surface p-3">
+                  {isEditing ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                      <Field label={`Đổi tên ${area.label}`} labelHidden className="min-w-0 flex-1">
+                        <input
+                          autoFocus
+                          value={editingAreaName}
+                          onChange={(event) => setEditingAreaName(event.target.value)}
+                        />
+                      </Field>
+                      <Button variant="primary" onClick={() => saveAreaName(area)} iconLeading={<Check />}>Lưu</Button>
+                      <Button variant="secondary" onClick={() => setEditingAreaId(null)}>Hủy</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-body font-bold text-brand-text">{area.label}</p>
+                          <p className="mt-1 text-caption tabular-nums text-brand-text-muted">{usedCount} vị trí đang sử dụng khu vực này</p>
+                        </div>
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          iconLeading={<Pencil />}
+                          onClick={() => {
+                            setEditingAreaId(area.id);
+                            setEditingAreaName(area.label);
+                            setDeleteConfirmAreaId(null);
+                            setAreaManagerError('');
+                          }}
+                        >
+                          Sửa
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="danger"
+                          iconLeading={<X />}
+                          onClick={() => {
+                            setDeleteConfirmAreaId(area.id);
+                            setEditingAreaId(null);
+                            setAreaManagerError('');
+                          }}
+                        >
+                          Xóa
+                        </Button>
+                      </div>
+                      {isConfirmingDelete && (
+                        <div className="mt-3 flex flex-col gap-2 p-3 sm:flex-row sm:items-center ui-tone ui-tone--danger">
+                          <p className="flex-1 text-caption font-bold text-brand-text">
+                            {usedCount ? `Khu vực còn ${usedCount} vị trí nên chưa thể xóa.` : 'Xác nhận xóa khu vực này?'}
+                          </p>
+                          {!usedCount && (
+                            <Button size="small" variant="danger" onClick={() => deleteArea(area)}>Xác nhận xóa</Button>
+                          )}
+                          <Button size="small" variant="secondary" onClick={() => setDeleteConfirmAreaId(null)}>Hủy</Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Hộp thoại 3 — Biểu mẫu lịch hẹn (mở chồng lên chi tiết vị trí) */}
+      <Modal
+        open={Boolean(appointmentAction && selectedStation)}
+        onClose={() => setAppointmentAction(null)}
+        size="medium"
+        eyebrow={selectedStation ? `${selectedStation.id} · ${selectedStation.name}` : undefined}
+        title={appointmentAction === 'RESERVED' ? 'Đặt lịch cho ghế' : 'Bắt đầu phục vụ'}
+        description="Nhập thông tin khách và dịch vụ để cập nhật trạng thái ghế."
+        icon={<CalendarClock />}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAppointmentAction(null)}>Hủy</Button>
+            <Button type="submit" form="station-appointment-form" variant="primary" iconLeading={<Check />}>
+              {appointmentAction === 'RESERVED' ? 'Lưu lịch hẹn' : 'Bắt đầu phục vụ'}
+            </Button>
+          </>
+        }
+      >
+        <form id="station-appointment-form" onSubmit={submitAppointmentAction} noValidate className="grid gap-4 sm:grid-cols-2">
+          {appointmentError && (
+            <p role="alert" className="flex items-start gap-2 p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger sm:col-span-2">
+              <CircleAlert className="h-4 w-4 shrink-0" />{appointmentError}
+            </p>
+          )}
+          <Field label="Tên khách hàng" required className="sm:col-span-2">
+            <input
+              autoFocus
+              value={appointmentForm.customer}
+              onChange={(event) => setAppointmentForm((current) => ({ ...current, customer: event.target.value }))}
+              placeholder="Nhập tên khách hàng"
+            />
+          </Field>
+          <Field label="Dịch vụ" required className="sm:col-span-2">
+            <input
+              value={appointmentForm.service}
+              onChange={(event) => setAppointmentForm((current) => ({ ...current, service: event.target.value }))}
+              placeholder="Ví dụ: Sơn gel Hàn Quốc"
+            />
+          </Field>
+          <Field label="Kỹ thuật viên" required className="sm:col-span-2">
+            <input
+              value={appointmentForm.technician}
+              onChange={(event) => setAppointmentForm((current) => ({ ...current, technician: event.target.value }))}
+              placeholder="Nhập tên kỹ thuật viên"
+            />
+          </Field>
+          <Field label="Bắt đầu" required>
+            <input
+              type="time"
+              value={appointmentForm.start}
+              onChange={(event) => setAppointmentForm((current) => ({ ...current, start: event.target.value }))}
+            />
+          </Field>
+          <Field label="Kết thúc" required helper="Giờ kết thúc phải sau giờ bắt đầu.">
+            <input
+              type="time"
+              value={appointmentForm.end}
+              onChange={(event) => setAppointmentForm((current) => ({ ...current, end: event.target.value }))}
+            />
+          </Field>
+        </form>
+      </Modal>
+
+      {/* Hộp thoại 4 — Thêm vị trí phục vụ */}
+      <Modal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        size="medium"
+        eyebrow="Thiết lập không gian"
+        title="Thêm vị trí phục vụ"
+        description="Vị trí mới mặc định ở trạng thái sẵn sàng sau khi lưu."
+        icon={<Plus />}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCreateOpen(false)}>Hủy</Button>
+            <Button type="submit" form="station-create-form" variant="primary" iconLeading={<Check />}>Lưu vị trí</Button>
+          </>
+        }
+      >
+        <form id="station-create-form" onSubmit={submitCreate} noValidate className="grid gap-4 sm:grid-cols-2">
+          {formError && (
+            <p role="alert" className="flex items-start gap-2 p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger sm:col-span-2">
+              <CircleAlert className="h-4 w-4 shrink-0" />{formError}
+            </p>
+          )}
+          <Field label="Mã vị trí" required helper="Mã phải là duy nhất trong tenant.">
+            <input
+              value={form.id}
+              onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))}
+              placeholder="Ví dụ: M-07"
+            />
+          </Field>
+          <Field label="Tên vị trí" required>
+            <input
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              placeholder="Bàn Manicure 07"
+            />
+          </Field>
+          <div>
+            <Field label="Khu vực" required>
+              <BeautifulSelect
+                value={form.area}
+                onChange={(event) => setForm((current) => ({ ...current, area: event.target.value }))}
+              >
+                {formAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
+              </BeautifulSelect>
+            </Field>
+            <Button
+              variant="link"
+              size="small"
+              className="mt-2"
+              onClick={() => { setAddingArea((current) => !current); setNewAreaName(''); setFormError(''); }}
+            >
+              {addingArea ? 'Đóng thêm khu vực' : '+ Thêm khu vực mới'}
+            </Button>
+            {addingArea && (
+              <div className="mt-2 flex gap-2 sm:items-end">
+                <Field label="Tên khu vực mới" labelHidden className="min-w-0 flex-1">
+                  <input
+                    value={newAreaName}
+                    onChange={(event) => setNewAreaName(event.target.value)}
+                    placeholder="Tên khu vực mới"
+                  />
+                </Field>
+                <Button variant="primary" size="small" onClick={addArea}>Thêm</Button>
+              </div>
+            )}
+          </div>
+          <Field label="Chi nhánh" required>
+            <BeautifulSelect
+              value={form.branch}
+              onChange={(event) => {
+                const branch = event.target.value as BranchCode;
+                setForm((current) => ({ ...current, branch, area: areas.find((area) => area.branch === branch)?.id || 'MANICURE' }));
+                setAddingArea(false);
+                setNewAreaName('');
+              }}
+            >
+              <option value="Q3">Chi nhánh Quận 3</option>
+              <option value="Q1">Chi nhánh Quận 1</option>
+            </BeautifulSelect>
+          </Field>
+          <Field label="Vị trí trong mặt bằng" required className="sm:col-span-2">
+            <input
+              value={form.location}
+              onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+              placeholder="Ví dụ: Khu A · Gần cửa sổ"
+            />
+          </Field>
+          <Field label="Thiết bị đi kèm" required helper="Ngăn cách bằng dấu phẩy." className="sm:col-span-2">
+            <textarea
+              value={form.equipment}
+              onChange={(event) => setForm((current) => ({ ...current, equipment: event.target.value }))}
+              placeholder="Đèn UV, máy mài, máy hút bụi..."
+              className="min-h-24 resize-y py-3"
+            />
+          </Field>
+        </form>
+      </Modal>
     </div>
   );
 }

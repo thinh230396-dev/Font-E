@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { PageHeader } from './ui';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   syncColorsWithInventory,
@@ -39,6 +40,7 @@ import {
   X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { formatMoney as money } from '../utils/money';
 import { SalonService, serviceSeed } from './TenantAdminServices';
 
 type BranchCode = 'Q1' | 'Q3';
@@ -127,7 +129,6 @@ const previewBackgrounds = [
 ];
 
 const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
-const money = (value: number) => `${value.toLocaleString('vi-VN')}đ`;
 const branchLabel = (code: BranchCode) => code === 'Q1' ? 'Quận 1' : 'Quận 3';
 
 function NailPreview({ design, compact = false }: { design: NailDesign; compact?: boolean }) {
@@ -140,7 +141,7 @@ function NailPreview({ design, compact = false }: { design: NailDesign; compact?
           className="h-full w-full object-cover"
         />
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-950/50 to-transparent" />
-        <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black text-slate-700 shadow-sm backdrop-blur">
+        <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-caption font-black text-slate-700 shadow-sm backdrop-blur">
           {design.collection}
         </span>
       </div>
@@ -157,7 +158,7 @@ function NailPreview({ design, compact = false }: { design: NailDesign; compact?
           return <span key={index} className={`${compact ? 'h-14 w-7' : 'h-24 w-11'} relative block origin-bottom rounded-[55%_55%_28%_28%] border border-white/70 shadow-[0_8px_18px_rgba(15,23,42,0.14)]`} style={{ background: design.preview === 5 ? `linear-gradient(${125 + index * 9}deg, ${base} 0 58%, ${accent} 59% 66%, ${base} 67%)` : design.preview === 3 ? `radial-gradient(circle at ${25 + index * 12}% 28%, ${accent} 0 9%, transparent 10%), linear-gradient(145deg, ${base}, ${accent})` : `linear-gradient(${140 + index * 7}deg, ${base} 0 55%, ${accent} 56% 72%, ${palette[2]} 73%)`, transform: `rotate(${(index - 2) * 4}deg) translateY(${Math.abs(index - 2) * 4}px)` }} />;
         })}
       </div>
-      <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black text-slate-700 shadow-sm backdrop-blur">{design.collection}</span>
+      <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-caption font-black text-slate-700 shadow-sm backdrop-blur">{design.collection}</span>
     </div>
   );
 }
@@ -696,18 +697,10 @@ export default function TenantAdminNailGallery({
         </div>
       )}
 
-      <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="tenant-page-kicker mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-violet-600">
-            <Palette className="h-4 w-4" />
-            Thư viện sáng tạo
-          </div>
-          <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Màu & mẫu Nail</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            Thư viện mẫu Nail thiết kế và bảng màu sơn cho khách chọn. Mỗi mẫu Nail được liên kết với 1 dịch vụ nền từ “Dịch vụ & giá” (Giá tổng = Dịch vụ nền + Phụ thu mẫu).
-          </p>
-        </div>
-        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 xl:w-auto">
+      <PageHeader
+        title="Màu & mẫu Nail"
+        actions={(
+          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 xl:w-auto">
           <button
             type="button"
             onClick={exportLibrary}
@@ -734,8 +727,9 @@ export default function TenantAdminNailGallery({
             <Plus className="h-4 w-4 shrink-0" />
             <span>Thêm mẫu Nail</span>
           </button>
-        </div>
-      </section>
+          </div>
+        )}
+      />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -748,7 +742,7 @@ export default function TenantAdminNailGallery({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold text-slate-500">{label}</p>
-                <p className="mt-1.5 text-xl font-black tracking-tight text-slate-950">{value}</p>
+                <p className="ta-metric-value mt-1.5 text-slate-950">{value}</p>
               </div>
               <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}>
                 <Icon className="h-5 w-5" />
@@ -769,7 +763,7 @@ export default function TenantAdminNailGallery({
                 className={`flex h-9 items-center gap-2 border-0 px-4 text-xs font-black shadow-none ${tab === 'DESIGNS' ? 'bg-white text-violet-700 shadow-sm' : 'bg-transparent text-slate-500'}`}
               >
                 <Image className="h-4 w-4" />
-                Thư viện mẫu Nail <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700">{branchDesigns.length}</span>
+                Thư viện mẫu Nail <span className="rounded-full bg-violet-50 px-2 py-0.5 text-caption text-violet-700">{branchDesigns.length}</span>
               </button>
               <button
                 type="button"
@@ -777,7 +771,7 @@ export default function TenantAdminNailGallery({
                 className={`flex h-9 items-center gap-2 border-0 px-4 text-xs font-black shadow-none ${tab === 'COLORS' ? 'bg-white text-violet-700 shadow-sm' : 'bg-transparent text-slate-500'}`}
               >
                 <Palette className="h-4 w-4" />
-                Bảng màu sơn <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700">{branchColors.length}</span>
+                Bảng màu sơn <span className="rounded-full bg-violet-50 px-2 py-0.5 text-caption text-violet-700">{branchColors.length}</span>
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -788,7 +782,7 @@ export default function TenantAdminNailGallery({
               >
                 <Filter className="h-4 w-4" />
                 Bộ lọc
-                {activeFilterCount > 0 && <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] text-white">{activeFilterCount}</span>}
+                {activeFilterCount > 0 && <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-caption text-white">{activeFilterCount}</span>}
               </button>
               <div className="flex rounded-xl border border-slate-200 bg-white p-1">
                 <button
@@ -895,23 +889,23 @@ export default function TenantAdminNailGallery({
                         <div className="p-4">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-violet-600">{design.id}</span>
+                              <span className="text-caption font-black uppercase tracking-wider text-violet-600">{design.id}</span>
                               <h3 className="mt-0.5 truncate text-base font-black text-slate-900">{design.name}</h3>
                             </div>
-                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${designStatusMeta[design.status].badge}`}>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${designStatusMeta[design.status].badge}`}>
                               {designStatusMeta[design.status].label}
                             </span>
                           </div>
 
                           {/* Base service linkage banner */}
-                          <div className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-violet-50/80 px-2.5 py-1.5 text-[11px] font-bold text-violet-900">
+                          <div className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-violet-50/80 px-2.5 py-1.5 text-body font-bold text-violet-900">
                             <Link2 className="h-3.5 w-3.5 shrink-0 text-violet-600" />
                             <span className="truncate">Nền: <span className="font-extrabold">{baseSvc.name}</span> ({money(baseSvc.price)})</span>
                           </div>
 
                           <div className="mt-3 flex flex-wrap gap-1">
                             {design.styles.map((style) => (
-                              <span key={style} className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                              <span key={style} className="rounded-md bg-slate-100 px-2 py-0.5 text-caption font-bold text-slate-600">
                                 {style}
                               </span>
                             ))}
@@ -919,11 +913,11 @@ export default function TenantAdminNailGallery({
 
                           <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2.5">
                             <div>
-                              <p className="text-[10px] font-semibold text-slate-400">Phụ thu mẫu</p>
+                              <p className="text-caption font-semibold text-slate-400">Phụ thu mẫu</p>
                               <p className="mt-0.5 text-xs font-black text-violet-700">+{money(design.surcharge)}</p>
                             </div>
                             <div className="border-l border-slate-200 pl-2">
-                              <p className="text-[10px] font-semibold text-slate-400">Tổng giá dự kiến</p>
+                              <p className="text-caption font-semibold text-slate-400">Tổng giá dự kiến</p>
                               <p className="mt-0.5 text-xs font-black text-emerald-600">{money(totalPrice)}</p>
                             </div>
                           </div>
@@ -941,7 +935,7 @@ export default function TenantAdminNailGallery({
                             />
                           ))}
                         </div>
-                        <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500">
+                        <div className="flex items-center gap-3 text-body font-bold text-slate-500">
                           <span>+{design.duration} phút</span>
                           <span className="flex items-center gap-1 text-amber-600">
                             <Star className="h-3.5 w-3.5 fill-amber-400" />
@@ -970,7 +964,7 @@ export default function TenantAdminNailGallery({
                         <NailPreview design={design} compact />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[10px] font-black text-violet-600">{design.id}</p>
+                        <p className="text-caption font-black text-violet-600">{design.id}</p>
                         <p className="mt-0.5 truncate text-sm font-black text-slate-900">{design.name}</p>
                         <p className="mt-0.5 truncate text-xs text-slate-400">{design.collection}</p>
                       </div>
@@ -979,13 +973,13 @@ export default function TenantAdminNailGallery({
                           <Link2 className="h-3 w-3 shrink-0 text-violet-600" />
                           <span className="truncate">{baseSvc.name} ({money(baseSvc.price)})</span>
                         </div>
-                        <p className="mt-1 text-[11px] text-slate-500">Độ khó cấp {design.level} · +{design.duration} phút</p>
+                        <p className="mt-1 text-body text-slate-500">Độ khó cấp {design.level} · +{design.duration} phút</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-medium text-slate-400">Phụ thu: +{money(design.surcharge)}</p>
+                        <p className="text-caption font-medium text-slate-400">Phụ thu: +{money(design.surcharge)}</p>
                         <p className="text-xs font-black text-emerald-600">Tổng: {money(totalPrice)}</p>
                       </div>
-                      <span className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${designStatusMeta[design.status].badge}`}>
+                      <span className={`w-fit rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${designStatusMeta[design.status].badge}`}>
                         {designStatusMeta[design.status].label}
                       </span>
                     </button>
@@ -1004,20 +998,20 @@ export default function TenantAdminNailGallery({
                 >
                   <div className="flex items-start justify-between">
                     <span className="h-14 w-14 rounded-2xl border-4 border-white shadow-md ring-1 ring-slate-200" style={{ backgroundColor: color.hex }} />
-                    <span className={`rounded-full px-2 py-1 text-[10px] font-bold ring-1 ${colorStatusMeta[color.status].badge}`}>
+                    <span className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${colorStatusMeta[color.status].badge}`}>
                       {colorStatusMeta[color.status].label}
                     </span>
                   </div>
-                  <p className="mt-3 text-[10px] font-black uppercase tracking-wide text-slate-400">{color.brand} · {color.code}</p>
+                  <p className="mt-3 text-caption font-black uppercase tracking-wide text-slate-400">{color.brand} · {color.code}</p>
                   <h3 className="mt-1 text-base font-black text-slate-900">{color.name}</h3>
                   <p className="mt-0.5 text-xs text-slate-500">{color.finish}</p>
                   <div className="mt-3.5 flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs">
                     <div>
-                      <p className="text-[10px] text-slate-400">Tồn kho</p>
+                      <p className="text-caption text-slate-400">Tồn kho</p>
                       <p className="mt-0.5 font-black text-slate-800">{color.stock} chai</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] text-slate-400">Mẫu liên kết</p>
+                      <p className="text-caption text-slate-400">Mẫu liên kết</p>
                       <p className="mt-0.5 font-black text-violet-700">{color.linkedDesigns}</p>
                     </div>
                   </div>
@@ -1036,11 +1030,11 @@ export default function TenantAdminNailGallery({
                   <span className="h-11 w-11 rounded-xl border-2 border-white shadow ring-1 ring-slate-200" style={{ backgroundColor: color.hex }} />
                   <div>
                     <p className="text-xs font-black text-slate-900">{color.name}</p>
-                    <p className="mt-0.5 text-[10px] text-slate-400">{color.brand} · {color.code}</p>
+                    <p className="mt-0.5 text-caption text-slate-400">{color.brand} · {color.code}</p>
                   </div>
                   <p className="text-xs font-bold text-slate-600">{color.finish}</p>
                   <p className="text-xs font-black text-slate-800">{color.stock} chai</p>
-                  <span className={`w-fit rounded-full px-2 py-1 text-[10px] font-bold ring-1 ${colorStatusMeta[color.status].badge}`}>
+                  <span className={`w-fit rounded-full px-2 py-1 text-caption font-bold ring-1 ${colorStatusMeta[color.status].badge}`}>
                     {colorStatusMeta[color.status].label}
                   </span>
                 </button>
@@ -1099,15 +1093,15 @@ export default function TenantAdminNailGallery({
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-emerald-50 p-3">
               <p className="text-xl font-black text-emerald-700">92%</p>
-              <p className="mt-1 text-[10px] font-bold text-emerald-600">Có đủ màu</p>
+              <p className="mt-1 text-caption font-bold text-emerald-600">Có đủ màu</p>
             </div>
             <div className="rounded-xl bg-blue-50 p-3">
               <p className="text-xl font-black text-blue-700">84%</p>
-              <p className="mt-1 text-[10px] font-bold text-blue-600">Đủ KTV</p>
+              <p className="mt-1 text-caption font-bold text-blue-600">Đủ KTV</p>
             </div>
             <div className="rounded-xl bg-violet-50 p-3">
               <p className="text-xl font-black text-violet-700">76%</p>
-              <p className="mt-1 text-[10px] font-bold text-violet-600">Đã mở online</p>
+              <p className="mt-1 text-caption font-bold text-violet-600">Đã mở online</p>
             </div>
           </div>
           <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500">
@@ -1165,14 +1159,14 @@ export default function TenantAdminNailGallery({
 
                 <div className="p-5 sm:p-6 pb-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-md bg-violet-100/80 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide text-violet-700">
+                    <span className="rounded-md bg-violet-100/80 px-2.5 py-0.5 text-body font-black uppercase tracking-wide text-violet-700">
                       {selectedDesign.id}
                     </span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ${designStatusMeta[selectedDesign.status].badge}`}>
+                    <span className={`rounded-full px-2.5 py-0.5 text-body font-bold ring-1 ${designStatusMeta[selectedDesign.status].badge}`}>
                       {designStatusMeta[selectedDesign.status].label}
                     </span>
                     {selectedDesign.online && (
-                      <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 ring-1 ring-blue-200">
+                      <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-body font-bold text-blue-700 ring-1 ring-blue-200">
                         Đang hiển thị online
                       </span>
                     )}
@@ -1193,22 +1187,22 @@ export default function TenantAdminNailGallery({
 
                   <div className="mt-3.5 grid gap-3 sm:grid-cols-3 bg-white/80 rounded-xl p-3.5 border border-violet-100 shadow-xs text-xs">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Dịch vụ nền áp dụng</p>
+                      <p className="text-caption font-bold uppercase tracking-wider text-slate-400">Dịch vụ nền áp dụng</p>
                       <p className="mt-1 font-extrabold text-slate-900">{baseSvc.name}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">Mã: {baseSvc.id} · {money(baseSvc.price)}</p>
+                      <p className="mt-0.5 text-body text-slate-500">Mã: {baseSvc.id} · {money(baseSvc.price)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-600">Phụ thu mẫu Nail</p>
+                      <p className="text-caption font-bold uppercase tracking-wider text-violet-600">Phụ thu mẫu Nail</p>
                       <p className="mt-1 font-black text-violet-700 text-sm">+{money(selectedDesign.surcharge)}</p>
-                      <p className="mt-0.5 text-[11px] text-violet-500">Chi phí thiết kế thêm</p>
+                      <p className="mt-0.5 text-body text-violet-500">Chi phí thiết kế thêm</p>
                     </div>
                     <div className="rounded-xl bg-violet-600 p-2.5 text-white sm:text-right flex flex-col justify-center">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-200">Tổng giá dự kiến</p>
+                      <p className="text-caption font-bold uppercase tracking-wider text-violet-200">Tổng giá dự kiến</p>
                       <p className="mt-0.5 text-base font-black">{money(totalPrice)}</p>
                     </div>
                   </div>
 
-                  <p className="mt-2.5 text-[11px] leading-4 text-violet-700/80">
+                  <p className="mt-2.5 text-body leading-4 text-violet-700/80">
                     * Mẫu Nail áp dụng kèm theo dịch vụ nền đã liên kết. Khách đặt mẫu sẽ được tính tổng chi phí dự kiến bao gồm dịch vụ nền và phụ thu mẫu.
                   </p>
                 </section>
@@ -1217,22 +1211,22 @@ export default function TenantAdminNailGallery({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5">
                     <Clock3 className="h-4 w-4 text-blue-500" />
-                    <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Thời gian làm thêm</p>
+                    <p className="mt-2 text-caption font-bold text-slate-400 uppercase tracking-wider">Thời gian làm thêm</p>
                     <p className="mt-1 text-sm font-black text-slate-900">+{selectedDesign.duration} phút</p>
                   </div>
                   <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3.5">
                     <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
-                    <p className="mt-2 text-[10px] font-bold text-amber-600 uppercase tracking-wider">Độ khó & Đánh giá</p>
+                    <p className="mt-2 text-caption font-bold text-amber-600 uppercase tracking-wider">Độ khó & Đánh giá</p>
                     <p className="mt-1 text-sm font-black text-amber-900">Cấp {selectedDesign.level} · {selectedDesign.rating || '—'}/5⭐</p>
                   </div>
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3.5">
                     <TrendingUp className="h-4 w-4 text-emerald-500" />
-                    <p className="mt-2 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Lượt đặt hàng</p>
+                    <p className="mt-2 text-caption font-bold text-emerald-600 uppercase tracking-wider">Lượt đặt hàng</p>
                     <p className="mt-1 text-sm font-black text-emerald-900">{selectedDesign.bookings} lượt</p>
                   </div>
                   <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-3.5">
                     <Store className="h-4 w-4 text-violet-500" />
-                    <p className="mt-2 text-[10px] font-bold text-violet-600 uppercase tracking-wider">Chi nhánh áp dụng</p>
+                    <p className="mt-2 text-caption font-bold text-violet-600 uppercase tracking-wider">Chi nhánh áp dụng</p>
                     <p className="mt-1 text-xs font-black text-violet-900">{selectedDesign.branches.map(branchLabel).join(', ')}</p>
                   </div>
                 </div>
@@ -1249,7 +1243,7 @@ export default function TenantAdminNailGallery({
                         <span className="h-9 w-9 shrink-0 rounded-xl border-2 border-white shadow-xs ring-1 ring-slate-200" style={{ backgroundColor: color.hex }} />
                         <div className="min-w-0">
                           <p className="truncate text-xs font-black text-slate-800">{color.name}</p>
-                          <p className="mt-0.5 text-[10px] font-mono text-slate-400">{color.code}</p>
+                          <p className="mt-0.5 text-caption font-mono text-slate-400">{color.code}</p>
                         </div>
                       </div>
                     ))}
@@ -1282,7 +1276,7 @@ export default function TenantAdminNailGallery({
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {selectedDesign.technicians.length ? selectedDesign.technicians.map((item) => (
-                        <span key={item} className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700">{item}</span>
+                        <span key={item} className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-body font-bold text-blue-700">{item}</span>
                       )) : <span className="text-xs text-rose-600">Chưa gắn kỹ thuật viên</span>}
                     </div>
                   </section>
@@ -1290,7 +1284,7 @@ export default function TenantAdminNailGallery({
 
                 {/* Block 5: Style tags */}
                 <section className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 p-3.5 border border-slate-100">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Phong cách/Tag:</span>
+                  <span className="text-body font-bold text-slate-400 uppercase tracking-wider">Phong cách/Tag:</span>
                   {selectedDesign.styles.map((style) => (
                     <span key={style} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700 border border-slate-200 shadow-xs">
                       #{style}
@@ -1300,11 +1294,11 @@ export default function TenantAdminNailGallery({
 
                 {/* Block 6: Notes */}
                 <section className="rounded-2xl bg-amber-50/90 border border-amber-200/80 p-4">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-amber-700">Lưu ý tư vấn & vận hành</p>
+                  <p className="text-caption font-black uppercase tracking-wider text-amber-700">Lưu ý tư vấn & vận hành</p>
                   <p className="mt-1.5 text-xs leading-relaxed font-medium text-amber-900">{selectedDesign.notes || 'Chưa có lưu ý cho mẫu này.'}</p>
                 </section>
 
-                <p className="text-[10px] text-slate-400 text-center sm:text-left">
+                <p className="text-caption text-slate-400 text-center sm:text-left">
                   Cập nhật gần nhất: {selectedDesign.updatedAt} · Chi nhánh: {selectedDesign.branches.map(branchLabel).join(', ')}
                 </p>
               </div>
@@ -1354,10 +1348,10 @@ export default function TenantAdminNailGallery({
                 />
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ring-1 ${colorStatusMeta[selectedColor.status].badge}`}>
+                    <span className={`rounded-full px-2.5 py-0.5 text-caption font-bold ring-1 ${colorStatusMeta[selectedColor.status].badge}`}>
                       {colorStatusMeta[selectedColor.status].label}
                     </span>
-                    <span className="text-[11px] font-mono font-bold text-slate-400 uppercase">{selectedColor.id}</span>
+                    <span className="text-body font-mono font-bold text-slate-400 uppercase">{selectedColor.id}</span>
                   </div>
                   <h2 className="mt-1.5 text-2xl font-black text-slate-900 tracking-tight">{selectedColor.name}</h2>
                   <p className="mt-0.5 text-xs font-medium text-slate-500">{selectedColor.brand} · Mã màu: <span className="font-bold text-slate-700">{selectedColor.code}</span></p>
@@ -1379,7 +1373,7 @@ export default function TenantAdminNailGallery({
               <div className="rounded-2xl border border-slate-200 p-4 sm:p-5">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Mã màu nội bộ</p>
+                    <p className="text-caption font-bold uppercase tracking-wider text-slate-400">Mã màu nội bộ</p>
                     <p className="mt-0.5 text-base font-black text-slate-900">{selectedColor.id}</p>
                   </div>
                   <div className="flex items-center gap-2 bg-slate-900 text-white px-3 py-1.5 rounded-xl">
@@ -1390,27 +1384,27 @@ export default function TenantAdminNailGallery({
 
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hiệu ứng</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Hiệu ứng</p>
                     <p className="mt-1 text-xs font-black text-slate-800">{selectedColor.finish}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bộ sưu tập</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Bộ sưu tập</p>
                     <p className="mt-1 text-xs font-black text-slate-800">{selectedColor.collection}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vị trí lưu</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Vị trí lưu</p>
                     <p className="mt-1 text-xs font-black text-slate-800">{selectedColor.location}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Định mức / lượt</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Định mức / lượt</p>
                     <p className="mt-1 text-xs font-black text-slate-800">{selectedColor.dosagePerServiceMl || 5} ml</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mẫu liên kết</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Mẫu liên kết</p>
                     <p className="mt-1 text-xs font-black text-violet-700">{selectedColor.linkedDesigns} mẫu</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phạm vi sử dụng</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Phạm vi sử dụng</p>
                     <p className="mt-1 text-xs font-black text-slate-800">{selectedColor.branches.map(branchLabel).join(' · ')}</p>
                   </div>
                 </div>
@@ -1424,7 +1418,7 @@ export default function TenantAdminNailGallery({
                   <p className="mt-1 text-sm font-black text-slate-900">
                     {inventory.find((i) => i.id === selectedColor.inventoryItemId)?.name || selectedColor.inventoryItemId || 'Chưa liên kết'}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
+                  <p className="mt-0.5 text-body text-slate-500">
                     Mã kho: {selectedColor.inventoryItemId || '—'} · Dung tích chai: {selectedColor.capacityMl || 15} ml
                   </p>
                 </div>
@@ -1484,7 +1478,7 @@ export default function TenantAdminNailGallery({
           <form onSubmit={formMode === 'DESIGN' ? submitDesign : submitColor} className="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">{tenantName} · {roleLabel}</p>
+                <p className="text-caption font-black uppercase tracking-[0.12em] text-violet-600">{tenantName} · {roleLabel}</p>
                 <h2 className="mt-1 text-lg font-black text-slate-900">
                   {formMode === 'DESIGN' ? (selectedDesign ? `Chỉnh sửa ${selectedDesign.id}` : 'Thêm mẫu Nail mới') : 'Thêm màu sơn mới'}
                 </h2>
@@ -1573,7 +1567,7 @@ export default function TenantAdminNailGallery({
                           <p className="mt-2 text-xs font-black text-slate-800">
                             Bấm để chọn ảnh hoặc kéo thả ảnh vào đây
                           </p>
-                          <p className="mt-1 text-[11px] text-slate-400">
+                          <p className="mt-1 text-body text-slate-400">
                             Định dạng: <span className="font-bold text-slate-600">JPG, JPEG, PNG, WEBP</span> · Dung lượng tối đa: <span className="font-bold text-slate-600">5MB</span>
                           </p>
                         </div>
@@ -1657,7 +1651,7 @@ export default function TenantAdminNailGallery({
                       </label>
 
                       <label>
-                        <span className="mb-1.5 block text-xs font-bold text-slate-600">Phụ thu mẫu Nail (đ) *</span>
+                        <span className="mb-1.5 block text-xs font-bold text-slate-600">Phụ thu mẫu Nail (₫) *</span>
                         <input
                           type="number"
                           min="0"
@@ -1697,17 +1691,17 @@ export default function TenantAdminNailGallery({
                       <div className="sm:col-span-3 rounded-2xl border border-violet-200 bg-violet-50/70 p-3.5 text-xs">
                         <div className="flex flex-wrap items-center justify-between gap-3 font-semibold text-slate-700">
                           <div>
-                            <span className="text-[10px] uppercase font-bold text-slate-500 block">Giá dịch vụ nền</span>
+                            <span className="text-caption uppercase font-bold text-slate-500 block">Giá dịch vụ nền</span>
                             <span className="text-sm font-black text-slate-900">{selectedBaseServiceInForm ? selectedBaseServiceInForm.name : 'Sơn gel'} ({money(selectedBaseServiceInForm?.price || 0)})</span>
                           </div>
                           <span className="text-xl font-bold text-violet-400">+</span>
                           <div>
-                            <span className="text-[10px] uppercase font-bold text-slate-500 block">Phụ thu mẫu</span>
+                            <span className="text-caption uppercase font-bold text-slate-500 block">Phụ thu mẫu</span>
                             <span className="text-sm font-black text-violet-700">{money(Number(designForm.surcharge) || 0)}</span>
                           </div>
                           <span className="text-xl font-bold text-violet-400">=</span>
                           <div className="rounded-xl bg-violet-600 px-3.5 py-2 text-white shadow-sm">
-                            <span className="text-[10px] uppercase font-bold text-violet-200 block">Tổng giá dự kiến</span>
+                            <span className="text-caption uppercase font-bold text-violet-200 block">Tổng giá dự kiến</span>
                             <span className="text-base font-black">{money((selectedBaseServiceInForm?.price || 0) + (Number(designForm.surcharge) || 0))}</span>
                           </div>
                         </div>
@@ -1892,7 +1886,7 @@ export default function TenantAdminNailGallery({
                             </option>
                           ))}
                         </BeautifulSelect>
-                        <p className="mt-1 text-[11px] text-slate-500">
+                        <p className="mt-1 text-body text-slate-500">
                           Tồn kho và trạng thái còn/hết hàng của màu sơn sẽ tự động cập nhật theo sản phẩm này.
                         </p>
                       </label>

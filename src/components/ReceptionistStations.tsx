@@ -4,10 +4,8 @@ import {
   AlertTriangle,
   Armchair,
   CalendarClock,
-  Check,
   CheckCircle2,
   ChevronRight,
-  CircleAlert,
   Clock3,
   Grid3X3,
   LayoutList,
@@ -24,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
 type StationArea = 'MANICURE' | 'PEDICURE' | 'VIP';
@@ -76,86 +75,45 @@ interface ReceptionistStationsProps {
   onNotify?: (message: string) => void;
 }
 
-const areaMeta: Record<
-  StationArea,
-  { label: string; short: string; badge: string; iconTone: string; description: string }
-> = {
-  MANICURE: {
-    label: 'Khu Manicure',
-    short: 'M',
-    badge: 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200',
-    iconTone: 'bg-fuchsia-500',
-    description: 'Bàn làm móng tay & Nail Art',
-  },
-  PEDICURE: {
-    label: 'Khu Pedicure',
-    short: 'P',
-    badge: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
-    iconTone: 'bg-cyan-500',
-    description: 'Ghế spa chân & bồn ngâm',
-  },
-  VIP: {
-    label: 'Phòng VIP',
-    short: 'V',
-    badge: 'bg-violet-50 text-violet-700 ring-violet-200',
-    iconTone: 'bg-violet-500',
-    description: 'Không gian riêng tư cao cấp',
-  },
+const areaMeta: Record<StationArea, { label: string; short: string; description: string }> = {
+  MANICURE: { label: 'Khu Manicure', short: 'M', description: 'Bàn làm móng tay & Nail Art' },
+  PEDICURE: { label: 'Khu Pedicure', short: 'P', description: 'Ghế spa chân & bồn ngâm' },
+  VIP: { label: 'Phòng VIP', short: 'V', description: 'Không gian riêng tư cao cấp' },
 };
 
-const statusMeta: Record<
-  StationStatus,
-  { label: string; short: string; badge: string; card: string; dot: string; icon: typeof Armchair }
-> = {
-  READY: {
-    label: 'Sẵn sàng',
-    short: 'Trống',
-    badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    card: 'border-emerald-200 bg-emerald-50/30',
-    dot: 'bg-emerald-500',
-    icon: CheckCircle2,
-  },
-  OCCUPIED: {
-    label: 'Đang phục vụ',
-    short: 'Đang làm',
-    badge: 'bg-violet-50 text-violet-700 ring-violet-200',
-    card: 'border-violet-200 bg-violet-50/55',
-    dot: 'bg-violet-500',
-    icon: Activity,
-  },
-  RESERVED: {
-    label: 'Đã xếp khách',
-    short: 'Đã giữ',
-    badge: 'bg-blue-50 text-blue-700 ring-blue-200',
-    card: 'border-blue-200 bg-blue-50/50',
-    dot: 'bg-blue-500',
-    icon: CalendarClock,
-  },
-  CLEANING: {
-    label: 'Chờ vệ sinh',
-    short: 'Vệ sinh',
-    badge: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
-    card: 'border-cyan-200 bg-cyan-50/55',
-    dot: 'bg-cyan-500',
-    icon: SprayCan,
-  },
-  MAINTENANCE: {
-    label: 'Đang bảo trì',
-    short: 'Bảo trì',
-    badge: 'bg-amber-50 text-amber-700 ring-amber-200',
-    card: 'border-amber-200 bg-amber-50/60',
-    dot: 'bg-amber-500',
-    icon: Wrench,
-  },
-  OUT_OF_SERVICE: {
-    label: 'Ngừng sử dụng',
-    short: 'Đã khóa',
-    badge: 'bg-rose-50 text-rose-700 ring-rose-200',
-    card: 'border-rose-200 bg-rose-50/55',
-    dot: 'bg-rose-500',
-    icon: CircleAlert,
-  },
+/**
+ * Tông màu và icon của trạng thái lấy từ STATUS_MAP dùng chung (một nguồn duy nhất).
+ * Ở đây chỉ giữ hai bảng nhãn theo ngữ cảnh quầy lễ tân — thứ STATUS_MAP không có:
+ * cách gọi tại quầy ("Đang phục vụ") và nhãn rút gọn cho chú giải sơ đồ.
+ */
+const receptionStatusLabel: Record<StationStatus, string> = {
+  READY: 'Sẵn sàng',
+  OCCUPIED: 'Đang phục vụ',
+  RESERVED: 'Đã xếp khách',
+  CLEANING: 'Chờ vệ sinh',
+  MAINTENANCE: 'Đang bảo trì',
+  OUT_OF_SERVICE: 'Ngừng sử dụng',
 };
+
+const statusShortLabel: Record<StationStatus, string> = {
+  READY: 'Trống',
+  OCCUPIED: 'Đang làm',
+  RESERVED: 'Đã giữ',
+  CLEANING: 'Vệ sinh',
+  MAINTENANCE: 'Bảo trì',
+  OUT_OF_SERVICE: 'Đã khóa',
+};
+
+const statusOrder: StationStatus[] = [
+  'READY',
+  'OCCUPIED',
+  'RESERVED',
+  'CLEANING',
+  'MAINTENANCE',
+  'OUT_OF_SERVICE',
+];
+
+const statusTone = (status: StationStatus) => getStatusDefinition(status).tone;
 
 const localDateKey = () => {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -462,6 +420,8 @@ export default function ReceptionistStations({
   const [issueStation, setIssueStation] = useState<Station | null>(null);
   const [issueForm, setIssueForm] = useState({ issue: '', severity: 'MAINTENANCE' as 'MAINTENANCE' | 'OUT_OF_SERVICE', note: '' });
   const [formError, setFormError] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [dataError, setDataError] = useState('');
 
   useEffect(() => {
     localStorage.setItem(stationStorageKey, JSON.stringify(stations));
@@ -472,8 +432,11 @@ export default function ReceptionistStations({
   }, [appointmentStorageKey, appointments]);
 
   useEffect(() => {
-    const syncAppointments = () =>
+    const syncAppointments = () => {
+      setIsSyncing(true);
       setAppointments(readStorage<LinkedAppointment[]>(appointmentStorageKey, []));
+      setIsSyncing(false);
+    };
     window.addEventListener('focus', syncAppointments);
     window.addEventListener('storage', syncAppointments);
     return () => {
@@ -482,24 +445,19 @@ export default function ReceptionistStations({
     };
   }, [appointmentStorageKey]);
 
+  // Phát hiện dữ liệu hỏng để báo cho người dùng. Không đổi hành vi đọc:
+  // readStorage vẫn trả về giá trị mặc định như trước.
   useEffect(() => {
-    if (!selectedStation && !assignAppointment && !cleaningStation && !issueStation) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setSelectedStation(null);
-        setAssignAppointment(null);
-        setCleaningStation(null);
-        setIssueStation(null);
-      }
-    };
-    addEventListener('keydown', close);
-    return () => {
-      document.body.style.overflow = previous;
-      removeEventListener('keydown', close);
-    };
-  }, [assignAppointment, cleaningStation, issueStation, selectedStation]);
+    try {
+      const raw = localStorage.getItem(appointmentStorageKey);
+      if (raw) JSON.parse(raw);
+      setDataError('');
+    } catch {
+      setDataError('Dữ liệu lịch hẹn trong máy bị lỗi nên chưa hiển thị được. Hãy tải lại trang.');
+    }
+  }, [appointmentStorageKey]);
+
+  // Escape và khoá cuộn nền do <Modal> đảm nhiệm.
 
   const dayAppointments = useMemo(
     () =>
@@ -711,78 +669,75 @@ export default function ReceptionistStations({
       ]
     : [];
 
+  const detailStatus = selectedStation ? effectiveStatus(selectedStation) : null;
+  const detailCurrent = selectedStation ? currentAppointment(selectedStation) : undefined;
+  const detailNext = selectedStation ? nextAppointment(selectedStation) : undefined;
+  const cleaningRequired = cleaningStation
+    ? cleaningStation.area === 'PEDICURE' ? 5 : cleaningStation.area === 'VIP' ? 6 : 4
+    : 0;
+
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#052e2b] via-[#075e54] to-[#0f766e] p-5 text-white shadow-[0_20px_55px_rgba(6,78,70,0.24)] sm:p-6">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-emerald-300/15 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-1/3 h-32 w-80 rounded-full bg-cyan-300/10 blur-3xl" />
-        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-emerald-100">
-              <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_0_5px_rgba(110,231,183,0.12)]" />
-              Sơ đồ vận hành trực tiếp · Chi nhánh {branchName(branch)}
-              <span className="text-white/30">•</span>
-              <span className="normal-case tracking-normal text-white/65">Cập nhật {nowTime()}</span>
-            </div>
-            <h1 className="mt-3 text-2xl font-black tracking-[-0.04em] sm:text-3xl">
-              Ghế & phòng phục vụ
-            </h1>
-            <p className="mt-2 max-w-2xl text-[10px] leading-5 text-emerald-50/75">
-              Theo dõi ghế trống, khách đang làm, thời gian dự kiến, vệ sinh và sự cố để điều phối
-              tại quầy nhanh, chính xác.
-            </p>
+      {/* Đầu trang theo README §8.2: tên màn hình, mô tả, hành động chính bên phải. */}
+      <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 text-caption font-bold text-brand-secondary">
+            <span className="h-2 w-2 rounded-pill bg-brand-secondary" />
+            Sơ đồ vận hành trực tiếp · Chi nhánh {branchName(branch)}
+            <span className="text-brand-text-muted">•</span>
+            <span className="font-normal text-brand-text-muted">Cập nhật {nowTime()}</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setAreaFilter('ALL');
-                setStatusFilter('READY');
-                setViewMode('MAP');
-              }}
-              className="flex h-11 items-center gap-2 border border-white/20 bg-white/10 px-4 text-[9px] font-black text-white shadow-sm backdrop-blur"
-            >
-              <Sparkles className="h-4 w-4" />
-              Tìm ghế trống
-            </button>
-            {waitingAppointments[0] ? (
-              <button
-                type="button"
-                onClick={() => openAssign(waitingAppointments[0])}
-                className="flex h-11 items-center gap-2 border border-white bg-white px-4 text-[9px] font-black text-emerald-900 shadow-lg"
-              >
-                <UserRound className="h-4 w-4" />
-                Xếp khách đang chờ
-              </button>
-            ) : (
-              <span className="flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-[9px] font-black text-emerald-50">
-                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                Không có khách chờ ghế
-              </span>
-            )}
-          </div>
+          <h1 className="mt-2 text-2xl font-black tracking-[-0.035em] text-brand-text sm:text-3xl">
+            Ghế &amp; phòng phục vụ
+          </h1>
+          <p className="mt-2 max-w-2xl text-body text-brand-text-muted">
+            Theo dõi ghế trống, khách đang làm, thời gian dự kiến, vệ sinh và sự cố để điều phối tại
+            quầy nhanh, chính xác.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            iconLeading={<Sparkles />}
+            onClick={() => {
+              setAreaFilter('ALL');
+              setStatusFilter('READY');
+              setViewMode('MAP');
+            }}
+          >
+            Tìm ghế trống
+          </Button>
+          {waitingAppointments[0] ? (
+            <Button variant="primary" iconLeading={<UserRound />} onClick={() => openAssign(waitingAppointments[0])}>
+              Xếp khách đang chờ
+            </Button>
+          ) : (
+            <StatusBadge status="READY" label="Không có khách chờ ghế" />
+          )}
         </div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Phạm vi quyền */}
+      <section className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between ui-tone ui-tone--success">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
-            <ShieldCheck className="h-4.5 w-4.5" />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-brand-secondary text-brand-on-primary">
+            <ShieldCheck className="h-[18px] w-[18px]" />
           </span>
           <div>
-            <p className="text-[10px] font-black text-slate-800">Quyền thao tác: {roleLabel}</p>
-            <p className="mt-1 text-[8px] leading-4 text-slate-500">
+            <p className="text-body font-bold text-brand-text">Quyền thao tác: {roleLabel}</p>
+            <p className="mt-1 text-caption leading-5 text-brand-text-muted">
               Được xếp khách vào ghế trống, xác nhận vệ sinh và báo sự cố tại chi nhánh được phân
               công. Không được thêm/xóa vị trí, thay cấu hình hoặc tự mở lại ghế đang khóa.
             </p>
           </div>
         </div>
-        <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[8px] font-black text-emerald-700 ring-1 ring-emerald-200">
-          <MapPin className="mr-1 inline h-3 w-3" />
+        <span className="flex w-fit items-center gap-1.5 rounded-pill border border-brand-outline bg-brand-surface px-3 py-1.5 text-caption font-bold text-brand-text">
+          <MapPin className="h-3.5 w-3.5" />
           {branchLocked ? 'Chi nhánh đã khóa' : branchName(branch)}
         </span>
       </section>
 
+      {/* Chỉ số tổng quan */}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {[
           {
@@ -790,69 +745,67 @@ export default function ReceptionistStations({
             value: scopedStations.length,
             detail: `${scopedStations.filter((item) => item.area === 'MANICURE').length} bàn · ${scopedStations.filter((item) => item.area === 'PEDICURE').length} ghế · ${scopedStations.filter((item) => item.area === 'VIP').length} phòng`,
             icon: Armchair,
-            tone: 'bg-blue-50 text-blue-600',
           },
           {
             label: 'Sẵn sàng',
             value: readyStations.length,
             detail: 'Đã vệ sinh, có thể xếp khách',
             icon: Sparkles,
-            tone: 'bg-emerald-50 text-emerald-600',
           },
           {
             label: 'Đang phục vụ',
             value: occupiedStations.length,
             detail: `${dayAppointments.filter((item) => item.status === 'IN_SERVICE').length} dịch vụ đang diễn ra`,
             icon: Activity,
-            tone: 'bg-violet-50 text-violet-600',
           },
           {
             label: 'Chờ vệ sinh',
             value: cleaningStations.length,
             detail: 'Cần hoàn tất checklist',
             icon: SprayCan,
-            tone: 'bg-cyan-50 text-cyan-600',
           },
           {
             label: 'Cần xử lý',
             value: attentionStations.length,
             detail: `${waitingAppointments.length} khách đang chờ xếp ghế`,
             icon: AlertTriangle,
-            tone: 'bg-amber-50 text-amber-600',
           },
-        ].map(({ label, value, detail, icon: Icon, tone }) => (
-          <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        ].map(({ label, value, detail, icon: Icon }) => (
+          <article key={label} className="rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[9px] font-bold text-slate-500">{label}</p>
-                <p className="mt-1.5 text-xl font-black text-slate-950">{value}</p>
+                <p className="text-caption font-bold text-brand-text-muted">{label}</p>
+                <p className="mt-1.5 text-2xl font-black tabular-nums text-brand-text">{value}</p>
               </div>
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
-                <Icon className="h-4.5 w-4.5" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-brand-secondary/12 text-brand-secondary">
+                <Icon className="h-[18px] w-[18px]" />
               </span>
             </div>
-            <p className="mt-2 text-[8px] font-semibold text-slate-400">{detail}</p>
+            <p className="mt-2 text-caption text-brand-text-muted">{detail}</p>
           </article>
         ))}
       </section>
 
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
+      {/* grid-cols-1 ở mobile để track là 1fr; nếu không, cột ngầm co giãn theo
+          nội dung và làm cả trang tràn ngang. */}
+      <div className="grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="min-w-0 overflow-hidden rounded-card border border-brand-outline bg-brand-surface shadow-card">
+          {/* Thanh công cụ */}
+          <div className="flex flex-col gap-3 border-b border-brand-outline p-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="relative w-full xl:w-80">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" />
               <input
                 value={searchQuery}
                 onChange={(event) => onSearchQueryChange(event.target.value)}
                 placeholder="Tìm mã ghế, khách hoặc kỹ thuật viên..."
                 aria-label="Tìm kiếm ghế và phòng"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-[10px] font-semibold outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                className="h-[var(--size-control)] w-full rounded-control border border-brand-outline bg-brand-surface-lowest pl-10 pr-10 text-body outline-none focus:border-brand-secondary"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => onSearchQueryChange('')}
-                  className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"
+                  className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-brand-text-muted shadow-none"
                   aria-label="Xóa tìm kiếm"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -863,68 +816,68 @@ export default function ReceptionistStations({
               <BeautifulSelect
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as 'ALL' | StationStatus)}
-                className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+                className="w-44"
                 aria-label="Lọc trạng thái ghế"
               >
                 <option value="ALL">Mọi trạng thái</option>
-                {Object.entries(statusMeta).map(([key, meta]) => (
+                {statusOrder.map((key) => (
                   <option key={key} value={key}>
-                    {meta.label}
+                    {receptionStatusLabel[key]}
                   </option>
                 ))}
               </BeautifulSelect>
-              <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('MAP')}
-                  aria-label="Xem sơ đồ"
+              <div className="flex gap-1 rounded-control border border-brand-outline p-1">
+                <Button
+                  size="small"
+                  variant={viewMode === 'MAP' ? 'primary' : 'ghost'}
+                  iconLeading={<Grid3X3 />}
                   aria-pressed={viewMode === 'MAP'}
-                  className={`flex h-8 min-h-8 items-center gap-1.5 border-0 px-2.5 text-[8px] font-black shadow-none ${
-                    viewMode === 'MAP' ? 'bg-white text-emerald-700 shadow-sm' : 'bg-transparent text-slate-400'
-                  }`}
+                  onClick={() => setViewMode('MAP')}
                 >
-                  <Grid3X3 className="h-3.5 w-3.5" />
                   Sơ đồ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('LIST')}
-                  aria-label="Xem danh sách"
+                </Button>
+                <Button
+                  size="small"
+                  variant={viewMode === 'LIST' ? 'primary' : 'ghost'}
+                  iconLeading={<LayoutList />}
                   aria-pressed={viewMode === 'LIST'}
-                  className={`flex h-8 min-h-8 items-center gap-1.5 border-0 px-2.5 text-[8px] font-black shadow-none ${
-                    viewMode === 'LIST' ? 'bg-white text-emerald-700 shadow-sm' : 'bg-transparent text-slate-400'
-                  }`}
+                  onClick={() => setViewMode('LIST')}
                 >
-                  <LayoutList className="h-3.5 w-3.5" />
                   Danh sách
-                </button>
+                </Button>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+          {/* Lọc theo khu vực */}
+          <div className="flex gap-2 overflow-x-auto border-b border-brand-outline bg-brand-surface-high px-4 py-3">
             {(['ALL', 'MANICURE', 'PEDICURE', 'VIP'] as const).map((area) => {
               const count =
                 area === 'ALL'
                   ? scopedStations.length
                   : scopedStations.filter((station) => station.area === area).length;
               return (
-                <button
+                <Button
                   key={area}
-                  type="button"
+                  size="small"
+                  variant={areaFilter === area ? 'primary' : 'secondary'}
+                  aria-pressed={areaFilter === area}
                   onClick={() => setAreaFilter(area)}
-                  className={`h-8 shrink-0 border px-3 text-[8px] font-black shadow-sm ${
-                    areaFilter === area
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                      : 'border-slate-200 bg-white text-slate-500'
-                  }`}
+                  className="shrink-0"
                 >
                   {area === 'ALL' ? 'Tổng quan mặt bằng' : areaMeta[area].label}
-                  <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-[7px]">{count}</span>
-                </button>
+                  <span className="ml-1.5 tabular-nums opacity-70">{count}</span>
+                </Button>
               );
             })}
           </div>
+
+          {dataError && (
+            <p role="alert" className="m-4 flex items-start gap-2 p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {dataError}
+            </p>
+          )}
 
           {viewMode === 'MAP' ? (
             <div className="space-y-6 p-4 sm:p-5">
@@ -938,92 +891,80 @@ export default function ReceptionistStations({
                   <section key={area}>
                     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
-                        <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-[10px] font-black text-white ${areaMeta[area].iconTone}`}>
+                        <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-secondary/12 text-body font-black text-brand-secondary">
                           {areaMeta[area].short}
                         </span>
                         <div>
-                          <h2 className="text-[11px] font-black text-slate-800">
-                            {areaMeta[area].label}
-                          </h2>
-                          <p className="mt-0.5 text-[8px] text-slate-400">
+                          <h2 className="text-body font-bold text-brand-text">{areaMeta[area].label}</h2>
+                          <p className="mt-0.5 text-caption text-brand-text-muted">
                             {areaMeta[area].description} · {areaReady}/{areaStations.length} sẵn sàng
                           </p>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-3 text-[7px] font-bold text-slate-400">
-                        {(['READY', 'OCCUPIED', 'RESERVED', 'CLEANING', 'MAINTENANCE'] as StationStatus[]).map(
-                          (status) => (
-                            <span key={status} className="flex items-center gap-1.5">
-                              <span className={`h-2 w-2 rounded-full ${statusMeta[status].dot}`} />
-                              {statusMeta[status].short}
-                            </span>
-                          ),
-                        )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {statusOrder.slice(0, 5).map((status) => (
+                          <StatusBadge
+                            key={status}
+                            status={status}
+                            label={statusShortLabel[status]}
+                            size="small"
+                          />
+                        ))}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                       {areaStations.map((station) => {
                         const status = effectiveStatus(station);
-                        const meta = statusMeta[status];
                         const current = currentAppointment(station);
                         const next = nextAppointment(station);
-                        const StatusIcon = meta.icon;
                         return (
                           <button
                             key={station.id}
                             type="button"
                             onClick={() => setSelectedStation(station)}
-                            className={`group relative h-auto min-h-[176px] overflow-hidden border p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:p-4 ${meta.card} ${
-                              area === 'PEDICURE' ? 'rounded-[24px]' : area === 'VIP' ? 'rounded-xl' : 'rounded-2xl'
-                            }`}
+                            aria-label={`${station.id} ${station.name} — ${receptionStatusLabel[status]}`}
+                            className={`group h-auto min-h-[176px] p-4 text-left shadow-card ui-tone ui-tone--${statusTone(status)}`}
                           >
-                            <span className={`absolute left-0 top-0 h-full w-1 ${meta.dot}`} />
                             <span className="flex items-start justify-between gap-2">
-                              <span>
-                                <span className="block text-[8px] font-black uppercase tracking-[0.12em] text-slate-400">
+                              <span className="min-w-0">
+                                <span className="block text-caption font-black uppercase tracking-wide text-brand-text-muted">
                                   {station.id}
                                 </span>
-                                <span className="mt-1 block text-[10px] font-black text-slate-900">
+                                <span className="mt-1 block truncate text-body font-bold text-brand-text">
                                   {station.name}
                                 </span>
                               </span>
-                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${meta.badge}`}>
-                                <StatusIcon className="h-3.5 w-3.5" />
-                              </span>
-                            </span>
-                            <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[7px] font-black ring-1 ${meta.badge}`}>
-                              <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-                              {meta.label}
+                              <StatusBadge status={status} label={statusShortLabel[status]} size="small" />
                             </span>
                             {current ? (
-                              <span className="mt-3 block rounded-xl bg-white/60 p-2.5 ring-1 ring-black/5">
+                              <span className="mt-3 block rounded-control bg-brand-surface p-3">
                                 <span className="flex items-center justify-between gap-2">
-                                  <span className="truncate text-[9px] font-black text-slate-800">
+                                  <span className="truncate text-body font-bold text-brand-text">
                                     {current.customer}
                                   </span>
-                                  <span className="shrink-0 text-[7px] font-black text-violet-600">
+                                  <span className="shrink-0 text-caption font-black tabular-nums text-brand-secondary">
                                     {current.start}–{endTime(current)}
                                   </span>
                                 </span>
-                                <span className="mt-1 block truncate text-[7px] text-slate-500">
+                                <span className="mt-1 block truncate text-caption text-brand-text-muted">
                                   {current.staff} · {current.service}
                                 </span>
                               </span>
                             ) : (
-                              <span className="mt-3 flex min-h-11 items-center rounded-xl border border-dashed border-slate-200 bg-white/40 px-2.5 text-[7px] font-bold text-slate-500">
+                              <span className="mt-3 flex min-h-12 items-center rounded-control border border-dashed border-brand-outline bg-brand-surface/60 px-3 text-caption font-bold text-brand-text-muted">
                                 {status === 'READY'
                                   ? next
                                     ? `Lịch kế tiếp ${next.start} · ${next.customer}`
                                     : 'Sẵn sàng nhận khách'
-                                  : station.issue || station.note || meta.label}
+                                  : station.issue || station.note || receptionStatusLabel[status]}
                               </span>
                             )}
                             <span className="mt-3 flex items-center justify-between gap-2">
-                              <span className="flex items-center gap-1 text-[7px] text-slate-400">
-                                <SprayCan className="h-3 w-3" />
+                              <span className="flex items-center gap-1 text-caption text-brand-text-muted">
+                                <SprayCan className="h-3.5 w-3.5" />
                                 {station.sanitizedAt}
                               </span>
-                              <ChevronRight className="h-3.5 w-3.5 text-slate-400 transition group-hover:translate-x-0.5" />
+                              <ChevronRight className="h-4 w-4 text-brand-text-muted transition group-hover:translate-x-0.5" />
                             </span>
                           </button>
                         );
@@ -1034,90 +975,144 @@ export default function ReceptionistStations({
               })}
               {!filteredStations.length && (
                 <div className="py-16 text-center">
-                  <Armchair className="mx-auto h-8 w-8 text-slate-300" />
-                  <p className="mt-3 text-[10px] font-black text-slate-600">
-                    Không tìm thấy vị trí phù hợp
+                  <Armchair className="mx-auto h-8 w-8 text-brand-text-muted" />
+                  <p className="mt-3 text-body font-bold text-brand-text">Không tìm thấy vị trí phù hợp</p>
+                  <p className="mt-1 text-caption text-brand-text-muted">
+                    Thử bỏ bớt bộ lọc khu vực hoặc trạng thái.
                   </p>
                 </div>
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50 text-[8px] font-black uppercase tracking-wide text-slate-400">
-                    <th className="px-5 py-3">Vị trí</th>
-                    <th className="px-4 py-3">Trạng thái</th>
-                    <th className="px-4 py-3">Khách hiện tại</th>
-                    <th className="px-4 py-3">Lịch kế tiếp</th>
-                    <th className="px-4 py-3">Vệ sinh</th>
-                    <th className="px-5 py-3 text-right">Công suất</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredStations.map((station) => {
-                    const status = effectiveStatus(station);
-                    const current = currentAppointment(station);
-                    const next = nextAppointment(station);
-                    return (
-                      <tr
-                        key={station.id}
-                        onClick={() => setSelectedStation(station)}
-                        className="cursor-pointer text-[9px] text-slate-600 hover:bg-slate-50"
-                      >
-                        <td className="px-5 py-4">
-                          <p className="font-black text-slate-900">
-                            {station.id} · {station.name}
+            <div className="p-4 sm:p-5">
+              <DataTable<Station>
+                rows={filteredStations}
+                rowKey={(station) => station.id}
+                loading={isSyncing}
+                error={dataError || undefined}
+                onRowClick={(station) => setSelectedStation(station)}
+                emptyTitle="Không tìm thấy vị trí phù hợp"
+                emptyDescription="Thử bỏ bớt bộ lọc khu vực hoặc trạng thái."
+                columns={[
+                  {
+                    key: 'station',
+                    header: 'Vị trí',
+                    cell: (station) => (
+                      <>
+                        <p className="font-bold text-brand-text">{station.id} · {station.name}</p>
+                        <p className="mt-1 text-caption text-brand-text-muted">{station.location}</p>
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'status',
+                    header: 'Trạng thái',
+                    cell: (station) => {
+                      const status = effectiveStatus(station);
+                      return <StatusBadge status={status} label={receptionStatusLabel[status]} size="small" />;
+                    },
+                  },
+                  {
+                    key: 'current',
+                    header: 'Khách hiện tại',
+                    cell: (station) => {
+                      const current = currentAppointment(station);
+                      if (!current) return null;
+                      return (
+                        <>
+                          <p className="font-bold text-brand-text">{current.customer}</p>
+                          <p className="mt-1 text-caption tabular-nums text-brand-text-muted">
+                            {current.start}–{endTime(current)} · {current.staff}
                           </p>
-                          <p className="mt-1 text-[8px] text-slate-400">{station.location}</p>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[status].badge}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${statusMeta[status].dot}`} />
-                            {statusMeta[status].label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          {current ? (
-                            <>
-                              <p className="font-black text-slate-800">{current.customer}</p>
-                              <p className="mt-1 text-[8px] text-slate-400">
-                                {current.start}–{endTime(current)} · {current.staff}
-                              </p>
-                            </>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td className="px-4 py-4">
-                          {next ? `${next.start} · ${next.customer}` : '—'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <p className="font-bold text-slate-700">{station.sanitizedAt}</p>
-                          <p className="mt-1 text-[8px] text-slate-400">
-                            Checklist {station.checklist}
-                          </p>
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <p className="font-black text-slate-800">{utilization(station)}%</p>
-                          <p className="mt-1 text-[8px] text-slate-400">
-                            {stationAppointments(station).length} lịch hôm nay
-                          </p>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </>
+                      );
+                    },
+                  },
+                  {
+                    key: 'next',
+                    header: 'Lịch kế tiếp',
+                    hideBelow: 'lg',
+                    cell: (station) => {
+                      const next = nextAppointment(station);
+                      return next ? `${next.start} · ${next.customer}` : null;
+                    },
+                  },
+                  {
+                    key: 'sanitized',
+                    header: 'Vệ sinh',
+                    hideBelow: 'md',
+                    cell: (station) => (
+                      <>
+                        <p className="font-bold text-brand-text">{station.sanitizedAt}</p>
+                        <p className="mt-1 text-caption text-brand-text-muted">Checklist {station.checklist}</p>
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'utilization',
+                    header: 'Công suất',
+                    numeric: true,
+                    hideBelow: 'md',
+                    cell: (station) => (
+                      <>
+                        <p className="font-bold text-brand-text">{utilization(station)}%</p>
+                        <p className="mt-1 text-caption text-brand-text-muted">
+                          {stationAppointments(station).length} lịch hôm nay
+                        </p>
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'actions',
+                    header: 'Thao tác',
+                    actions: true,
+                    headerSrOnly: true,
+                    cell: (station) => {
+                      const status = effectiveStatus(station);
+                      if (status === 'CLEANING') {
+                        return (
+                          <Button
+                            size="small"
+                            variant="secondary"
+                            onClick={(event) => { event.stopPropagation(); openCleaning(station); }}
+                          >
+                            Hoàn tất vệ sinh
+                          </Button>
+                        );
+                      }
+                      if (status === 'READY' && waitingAppointments.length > 0) {
+                        return (
+                          <Button
+                            size="small"
+                            variant="primary"
+                            onClick={(event) => { event.stopPropagation(); openAssign(waitingAppointments[0], station.id); }}
+                          >
+                            Xếp khách
+                          </Button>
+                        );
+                      }
+                      return (
+                        <Button
+                          size="small"
+                          variant="ghost"
+                          onClick={(event) => { event.stopPropagation(); setSelectedStation(station); }}
+                        >
+                          Xem
+                        </Button>
+                      );
+                    },
+                  },
+                ]}
+              />
             </div>
           )}
 
-          <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[8px] text-slate-400">
-              Hiển thị <strong className="text-slate-600">{filteredStations.length}</strong> trên{' '}
+          <div className="flex flex-col gap-2 border-t border-brand-outline bg-brand-surface-high px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-caption text-brand-text-muted">
+              Hiển thị <strong className="tabular-nums text-brand-text">{filteredStations.length}</strong> trên{' '}
               {scopedStations.length} vị trí
             </p>
-            <p className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400">
+            <p className="flex items-center gap-1.5 text-caption text-brand-text-muted">
               <ShieldCheck className="h-3.5 w-3.5" />
               Đồng bộ lịch hẹn trong ngày
             </p>
@@ -1125,64 +1120,61 @@ export default function ReceptionistStations({
         </section>
 
         <aside className="space-y-4">
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.1em] text-amber-600">
+                <p className="text-caption font-black uppercase tracking-wide text-brand-tertiary">
                   Ưu tiên tại quầy
                 </p>
-                <h2 className="mt-1 text-sm font-black text-slate-900">Khách đang chờ ghế</h2>
+                <h2 className="mt-1 text-card-title font-bold text-brand-text">Khách đang chờ ghế</h2>
               </div>
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+              <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-tertiary/15 text-brand-tertiary">
                 <TimerReset className="h-4 w-4" />
               </span>
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-2" aria-live="polite">
               {waitingAppointments.map((appointment) => (
-                <article key={appointment.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
+                <article key={appointment.id} className="p-3 ui-tone ui-tone--warning">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-[9px] font-black text-slate-900">
-                        {appointment.customer}
-                      </p>
-                      <p className="mt-1 truncate text-[8px] text-slate-500">
+                      <p className="truncate text-body font-bold text-brand-text">{appointment.customer}</p>
+                      <p className="mt-1 truncate text-caption text-brand-text-muted">
                         {appointment.start} · {appointment.service}
                       </p>
                     </div>
-                    <span className="rounded-full bg-white px-2 py-1 text-[7px] font-black text-amber-700">
-                      Đã đến
-                    </span>
+                    <StatusBadge status="CONFIRMED" label="Đã đến" size="small" />
                   </div>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    block
+                    className="mt-3"
+                    iconLeading={<Armchair />}
                     onClick={() => openAssign(appointment)}
-                    className="mt-3 flex h-9 w-full items-center justify-center gap-2 border border-amber-300 bg-white text-[8px] font-black text-amber-700 shadow-sm"
                   >
-                    <Armchair className="h-3.5 w-3.5" />
                     Xếp ghế phù hợp
-                  </button>
+                  </Button>
                 </article>
               ))}
               {!waitingAppointments.length && (
-                <div className="rounded-xl border border-dashed border-slate-200 py-7 text-center">
-                  <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-500" />
-                  <p className="mt-2 text-[8px] font-black text-slate-600">
-                    Không có khách chờ ghế
-                  </p>
+                <div className="rounded-card border border-dashed border-brand-outline py-7 text-center">
+                  <CheckCircle2 className="mx-auto h-6 w-6 text-brand-secondary" />
+                  <p className="mt-2 text-body font-bold text-brand-text">Không có khách chờ ghế</p>
+                  <p className="mt-1 text-caption text-brand-text-muted">Mọi khách đã đến đều có chỗ.</p>
                 </div>
               )}
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
+          <section className="rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.1em] text-cyan-600">
+                <p className="text-caption font-black uppercase tracking-wide text-brand-text-muted">
                   Việc cần xử lý
                 </p>
-                <h2 className="mt-1 text-sm font-black text-slate-900">Vệ sinh & sự cố</h2>
+                <h2 className="mt-1 text-card-title font-bold text-brand-text">Vệ sinh &amp; sự cố</h2>
               </div>
-              <SprayCan className="h-4 w-4 text-cyan-500" />
+              <SprayCan className="h-4 w-4 text-brand-text-muted" />
             </div>
             <div className="mt-4 space-y-2">
               {cleaningStations.map((station) => (
@@ -1190,18 +1182,19 @@ export default function ReceptionistStations({
                   key={station.id}
                   type="button"
                   onClick={() => openCleaning(station)}
-                  className="flex h-auto w-full items-center gap-3 border border-cyan-200 bg-cyan-50/55 p-3 text-left shadow-none"
+                  aria-label={`Hoàn tất vệ sinh ${station.id}`}
+                  className="flex h-auto w-full items-center gap-3 p-3 text-left shadow-none ui-tone ui-tone--info"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-cyan-600">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-brand-surface text-brand-secondary">
                     <SprayCan className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[9px] font-black text-slate-800">{station.id}</span>
-                    <span className="mt-1 block truncate text-[7px] text-slate-500">
+                    <span className="block text-body font-bold text-brand-text">{station.id}</span>
+                    <span className="mt-1 block truncate text-caption text-brand-text-muted">
                       Checklist {station.checklist} · Cần xác nhận sạch
                     </span>
                   </span>
-                  <ChevronRight className="h-4 w-4 text-cyan-500" />
+                  <ChevronRight className="h-4 w-4 text-brand-text-muted" />
                 </button>
               ))}
               {attentionStations.map((station) => (
@@ -1209,599 +1202,495 @@ export default function ReceptionistStations({
                   key={station.id}
                   type="button"
                   onClick={() => setSelectedStation(station)}
-                  className="flex h-auto w-full items-center gap-3 border border-amber-200 bg-amber-50/60 p-3 text-left shadow-none"
+                  aria-label={`Xem sự cố ${station.id}`}
+                  className="flex h-auto w-full items-center gap-3 p-3 text-left shadow-none ui-tone ui-tone--warning"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-amber-600">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-brand-surface text-brand-tertiary">
                     <Wrench className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[9px] font-black text-slate-800">{station.id}</span>
-                    <span className="mt-1 block truncate text-[7px] text-slate-500">
+                    <span className="block text-body font-bold text-brand-text">{station.id}</span>
+                    <span className="mt-1 block truncate text-caption text-brand-text-muted">
                       {station.issue || 'Đang chờ xử lý'}
                     </span>
                   </span>
-                  <ChevronRight className="h-4 w-4 text-amber-500" />
+                  <ChevronRight className="h-4 w-4 text-brand-text-muted" />
                 </button>
               ))}
               {!cleaningStations.length && !attentionStations.length && (
-                <p className="rounded-xl bg-emerald-50 px-3 py-4 text-center text-[8px] font-bold text-emerald-700">
-                  Tất cả vị trí đang đạt điều kiện vận hành.
-                </p>
+                <div className="rounded-card border border-dashed border-brand-outline py-7 text-center">
+                  <CheckCircle2 className="mx-auto h-6 w-6 text-brand-secondary" />
+                  <p className="mt-2 text-body font-bold text-brand-text">
+                    Tất cả vị trí đạt điều kiện vận hành
+                  </p>
+                </div>
               )}
             </div>
           </section>
         </aside>
       </div>
 
-      {selectedStation && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6">
-          <button
-            type="button"
-            onClick={() => setSelectedStation(null)}
-            className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
-            aria-label="Đóng chi tiết vị trí"
-          />
-          {(() => {
-            const status = effectiveStatus(selectedStation);
-            const meta = statusMeta[status];
-            const current = currentAppointment(selectedStation);
-            const next = nextAppointment(selectedStation);
-            const StatusIcon = meta.icon;
-            return (
-              <aside
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="station-detail-title"
-                className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/15 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
-              >
-                <header className="border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white px-5 py-5 sm:px-7">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex min-w-0 items-start gap-4">
-                      <span className={`flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl ${meta.badge}`}>
-                        <StatusIcon className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[9px] font-black uppercase tracking-wide text-emerald-700">
-                            {selectedStation.id}
-                          </span>
-                          <span className={`rounded-full px-2.5 py-1 text-[8px] font-black ring-1 ${meta.badge}`}>
-                            {meta.label}
-                          </span>
-                        </div>
-                        <h2 id="station-detail-title" className="mt-2 text-xl font-black text-slate-950">
-                          {selectedStation.name}
-                        </h2>
-                        <p className="mt-1 flex items-center gap-1.5 text-[9px] text-slate-500">
-                          <MapPin className="h-3.5 w-3.5" />
-                          {selectedStation.location}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStation(null)}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
-                      aria-label="Đóng"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </header>
-
-                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
-                  <section className={`rounded-2xl border p-4 ${meta.card}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[8px] font-black uppercase tracking-wide text-slate-500">
-                          Trạng thái trực tiếp
-                        </p>
-                        <p className="mt-2 text-xl font-black text-slate-950">{meta.label}</p>
-                        <p className="mt-1 text-[8px] text-slate-500">
-                          {current
-                            ? `Đang phục vụ ${current.customer}`
-                            : selectedStation.issue || 'Không có khách tại vị trí'}
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-right">
-                        <div className="rounded-xl bg-white/60 px-3 py-2">
-                          <p className="text-[7px] text-slate-400">Công suất</p>
-                          <p className="mt-1 text-[10px] font-black text-slate-800">
-                            {utilization(selectedStation)}%
-                          </p>
-                        </div>
-                        <div className="rounded-xl bg-white/60 px-3 py-2">
-                          <p className="text-[7px] text-slate-400">Lịch hôm nay</p>
-                          <p className="mt-1 text-[10px] font-black text-slate-800">
-                            {stationAppointments(selectedStation).length}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-
-                  {current && (
-                    <section className="rounded-2xl border border-violet-200 bg-violet-50/55 p-4">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="text-[8px] font-black uppercase tracking-wide text-violet-600">
-                            {current.status === 'IN_SERVICE' ? 'Đang phục vụ' : 'Khách đã đến'}
-                          </p>
-                          <p className="mt-2 text-sm font-black text-slate-900">{current.customer}</p>
-                          <p className="mt-1 text-[9px] text-slate-500">{current.service}</p>
-                          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[8px] font-bold text-slate-600">
-                            <span className="flex items-center gap-1.5">
-                              <Clock3 className="h-3.5 w-3.5 text-violet-500" />
-                              {current.start}–{endTime(current)}
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <UserRound className="h-3.5 w-3.5 text-violet-500" />
-                              {current.staff}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <a
-                            href={`tel:${current.phone.replace(/\D/g, '')}`}
-                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-200 bg-white text-violet-600"
-                            aria-label={`Gọi ${current.customer}`}
-                          >
-                            <Phone className="h-3.5 w-3.5" />
-                          </a>
-                          <a
-                            href={`sms:${current.phone.replace(/\D/g, '')}`}
-                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-200 bg-white text-violet-600"
-                            aria-label={`Nhắn ${current.customer}`}
-                          >
-                            <MessageCircle className="h-3.5 w-3.5" />
-                          </a>
-                        </div>
-                      </div>
-                      {current.note && (
-                        <p className="mt-3 rounded-xl bg-white/60 p-3 text-[8px] leading-4 text-slate-600">
-                          <strong>Lưu ý:</strong> {current.note}
-                        </p>
-                      )}
-                    </section>
-                  )}
-
-                  {next && (
-                    <section className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600">
-                        <CalendarClock className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <p className="text-[8px] font-black uppercase text-blue-600">
-                          Lịch kế tiếp · {next.start}
-                        </p>
-                        <p className="mt-1.5 text-[10px] font-black text-slate-800">{next.customer}</p>
-                        <p className="mt-1 text-[8px] text-slate-500">
-                          {next.service} · {next.staff}
-                        </p>
-                      </div>
-                    </section>
-                  )}
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <section className="rounded-2xl border border-slate-200 p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-[8px] font-black uppercase text-slate-400">
-                            Vệ sinh & khử khuẩn
-                          </p>
-                          <p className="mt-2 text-[11px] font-black text-slate-800">
-                            {selectedStation.sanitizedAt}
-                          </p>
-                          <p className="mt-1 text-[8px] text-slate-400">
-                            Checklist {selectedStation.checklist}
-                          </p>
-                        </div>
-                        <SprayCan className="h-5 w-5 text-cyan-500" />
-                      </div>
-                    </section>
-                    <section className="rounded-2xl border border-slate-200 p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-[8px] font-black uppercase text-slate-400">
-                            Bảo trì thiết bị
-                          </p>
-                          <p className="mt-2 text-[9px] font-black text-slate-700">
-                            Tiếp theo {selectedStation.nextMaintenance}
-                          </p>
-                          <p className="mt-1 text-[8px] text-slate-400">
-                            Gần nhất {selectedStation.lastMaintenance}
-                          </p>
-                        </div>
-                        <Wrench className="h-5 w-5 text-amber-500" />
-                      </div>
-                    </section>
-                  </div>
-
-                  <section className="rounded-2xl border border-slate-200 p-4">
-                    <p className="text-[8px] font-black uppercase text-slate-400">Thiết bị đi kèm</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedStation.equipment.map((item) => (
-                        <span key={item} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[8px] font-bold text-slate-600">
-                          {item}
-                        </span>
-                      ))}
-                    </div>
-                  </section>
-
-                  {selectedStation.issue && (
-                    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                        <div>
-                          <p className="text-[9px] font-black text-slate-800">
-                            {selectedStation.issue}
-                          </p>
-                          <p className="mt-1 text-[8px] text-slate-500">
-                            Báo lúc {selectedStation.issueReportedAt || 'Chưa rõ'}
-                          </p>
-                          {selectedStation.note && (
-                            <p className="mt-2 text-[8px] leading-4 text-slate-600">
-                              {selectedStation.note}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </section>
-                  )}
-                </div>
-
-                <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-                  <p className="flex items-center gap-1.5 text-[8px] text-slate-400">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    Mọi thao tác được lưu theo tài khoản lễ tân
-                  </p>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {status === 'READY' && waitingAppointments.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => openAssign(waitingAppointments[0], selectedStation.id)}
-                        className="flex h-10 items-center gap-2 border border-emerald-700 bg-emerald-600 px-4 text-[8px] font-black text-white shadow-sm"
-                      >
-                        <UserRound className="h-3.5 w-3.5" />
-                        Xếp khách vào đây
-                      </button>
-                    )}
-                    {status === 'CLEANING' && (
-                      <button
-                        type="button"
-                        onClick={() => openCleaning(selectedStation)}
-                        className="flex h-10 items-center gap-2 border border-cyan-200 bg-cyan-50 px-4 text-[8px] font-black text-cyan-700 shadow-sm"
-                      >
-                        <SprayCan className="h-3.5 w-3.5" />
-                        Hoàn tất vệ sinh
-                      </button>
-                    )}
-                    {!['MAINTENANCE', 'OUT_OF_SERVICE'].includes(status) && (
-                      <button
-                        type="button"
-                        onClick={() => openIssue(selectedStation)}
-                        className="flex h-10 items-center gap-2 border border-amber-200 bg-amber-50 px-4 text-[8px] font-black text-amber-700 shadow-sm"
-                      >
-                        <Wrench className="h-3.5 w-3.5" />
-                        Báo sự cố
-                      </button>
-                    )}
-                  </div>
-                </footer>
-              </aside>
-            );
-          })()}
-        </div>
-      )}
-
-      {assignAppointment && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setAssignAppointment(null)}
-            className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
-            aria-label="Đóng xếp ghế"
-          />
-          <form onSubmit={submitAssign} className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-emerald-600">
-                  Điều phối khách tại quầy
-                </p>
-                <h2 className="mt-1 text-lg font-black text-slate-900">Xếp ghế phù hợp</h2>
-                <p className="mt-1 text-[9px] text-slate-500">
-                  {assignAppointment.customer} · {assignAppointment.service}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAssignAppointment(null)}
-                className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
-                aria-label="Đóng"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </header>
-            <div className="space-y-4 p-5 sm:p-6">
-              {formError && (
-                <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {formError}
-                </div>
+      {/* Hộp thoại 1 — Chi tiết ghế */}
+      <Modal
+        open={Boolean(selectedStation)}
+        onClose={() => setSelectedStation(null)}
+        size="large"
+        eyebrow={selectedStation?.id}
+        title={selectedStation?.name ?? ''}
+        description={selectedStation?.location}
+        headerAside={
+          detailStatus ? (
+            <StatusBadge status={detailStatus} label={receptionStatusLabel[detailStatus]} size="small" />
+          ) : undefined
+        }
+        icon={<Armchair />}
+        footer={
+          selectedStation && detailStatus ? (
+            <>
+              <p className="mr-auto flex items-center gap-1.5 text-caption text-brand-text-muted">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Mọi thao tác được lưu theo tài khoản lễ tân
+              </p>
+              {detailStatus === 'READY' && waitingAppointments.length > 0 && (
+                <Button
+                  variant="primary"
+                  iconLeading={<UserRound />}
+                  onClick={() => openAssign(waitingAppointments[0], selectedStation.id)}
+                >
+                  Xếp khách vào đây
+                </Button>
               )}
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { label: 'Giờ hẹn', value: assignAppointment.start },
-                  { label: 'Thời lượng', value: `${assignAppointment.duration} phút` },
-                  { label: 'Kỹ thuật viên', value: assignAppointment.staff },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[7px] text-slate-400">{item.label}</p>
-                    <p className="mt-1 text-[9px] font-black text-slate-700">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-              <fieldset>
-                <legend className="text-[9px] font-black text-slate-700">
-                  Vị trí đang sẵn sàng ({suitableStations.length})
-                </legend>
-                <p className="mt-1 text-[8px] text-slate-400">
-                  Chỉ hiển thị ghế/phòng phù hợp với loại dịch vụ.
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {suitableStations.map((station) => {
-                    const active = assignStationId === station.id;
-                    return (
-                      <button
-                        key={station.id}
-                        type="button"
-                        onClick={() => setAssignStationId(station.id)}
-                        aria-pressed={active}
-                        className={`h-auto min-h-24 border p-3 text-left shadow-sm ${
-                          active
-                            ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/20'
-                            : 'border-slate-200 bg-white'
-                        }`}
-                      >
-                        <span className="flex items-start justify-between gap-2">
-                          <span>
-                            <span className="block text-[9px] font-black text-slate-900">
-                              {station.id}
-                            </span>
-                            <span className="mt-1 block text-[7px] text-slate-400">
-                              {areaMeta[station.area].label}
-                            </span>
-                          </span>
-                          {active && (
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white">
-                              <Check className="h-3.5 w-3.5" />
-                            </span>
-                          )}
-                        </span>
-                        <span className="mt-2 flex items-center gap-1 text-[7px] font-bold text-emerald-600">
-                          <Sparkles className="h-3 w-3" />
-                          Đã vệ sinh {station.sanitizedAt}
-                        </span>
-                      </button>
-                    );
-                  })}
+              {detailStatus === 'CLEANING' && (
+                <Button variant="primary" iconLeading={<SprayCan />} onClick={() => openCleaning(selectedStation)}>
+                  Hoàn tất vệ sinh
+                </Button>
+              )}
+              {!['MAINTENANCE', 'OUT_OF_SERVICE'].includes(detailStatus) && (
+                <Button variant="secondary" iconLeading={<Wrench />} onClick={() => openIssue(selectedStation)}>
+                  Báo sự cố
+                </Button>
+              )}
+            </>
+          ) : undefined
+        }
+      >
+        {selectedStation && detailStatus && (
+          <div className="space-y-4">
+            <section className={`p-4 ui-tone ui-tone--${statusTone(detailStatus)}`}>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-caption font-black uppercase tracking-wide text-brand-text-muted">
+                    Trạng thái trực tiếp
+                  </p>
+                  <p className="mt-2 text-2xl font-black text-brand-text">
+                    {receptionStatusLabel[detailStatus]}
+                  </p>
+                  <p className="mt-1 text-body text-brand-text-muted">
+                    {detailCurrent
+                      ? `Đang phục vụ ${detailCurrent.customer}`
+                      : selectedStation.issue || 'Không có khách tại vị trí'}
+                  </p>
                 </div>
-                {!suitableStations.length && (
-                  <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50 py-8 text-center">
-                    <AlertTriangle className="mx-auto h-6 w-6 text-amber-500" />
-                    <p className="mt-2 text-[8px] font-black text-amber-700">
-                      Chưa có vị trí phù hợp đang sẵn sàng
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-control bg-brand-surface px-3 py-2">
+                    <p className="text-caption text-brand-text-muted">Công suất</p>
+                    <p className="mt-1 text-body font-bold tabular-nums text-brand-text">
+                      {utilization(selectedStation)}%
                     </p>
                   </div>
-                )}
-              </fieldset>
-            </div>
-            <footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6">
-              <button
-                type="button"
-                onClick={() => setAssignAppointment(null)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={!assignStationId}
-                className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-[9px] font-black text-white shadow-sm disabled:opacity-50"
-              >
-                <Armchair className="h-4 w-4" />
-                Xác nhận xếp ghế
-              </button>
-            </footer>
-          </form>
-        </div>
-      )}
-
-      {cleaningStation && (
-        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setCleaningStation(null)}
-            className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
-            aria-label="Đóng checklist vệ sinh"
-          />
-          <form onSubmit={completeCleaning} className="relative w-full max-w-xl rounded-3xl bg-white shadow-2xl">
-            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-cyan-600">
-                  Checklist vệ sinh
-                </p>
-                <h2 className="mt-1 text-lg font-black text-slate-900">{cleaningStation.name}</h2>
-                <p className="mt-1 text-[9px] text-slate-500">
-                  Hoàn thành đầy đủ trước khi chuyển sang sẵn sàng.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCleaningStation(null)}
-                className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
-                aria-label="Đóng"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </header>
-            <div className="space-y-3 p-5">
-              {formError && (
-                <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {formError}
+                  <div className="rounded-control bg-brand-surface px-3 py-2">
+                    <p className="text-caption text-brand-text-muted">Lịch hôm nay</p>
+                    <p className="mt-1 text-body font-bold tabular-nums text-brand-text">
+                      {stationAppointments(selectedStation).length}
+                    </p>
+                  </div>
                 </div>
-              )}
-              {cleaningItems.map((item, index) => {
-                const checked = cleaningChecks.includes(item);
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => toggleCleaningCheck(item)}
-                    aria-pressed={checked}
-                    className={`flex h-auto w-full items-center gap-3 border p-3 text-left shadow-none ${
-                      checked
-                        ? 'border-emerald-200 bg-emerald-50'
-                        : 'border-slate-200 bg-white'
-                    }`}
-                  >
-                    <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[8px] font-black ${
-                        checked ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
-                      }`}
+              </div>
+            </section>
+
+            {detailCurrent && (
+              <section className="p-4 ui-tone ui-tone--info">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-caption font-black uppercase tracking-wide text-brand-secondary">
+                      {detailCurrent.status === 'IN_SERVICE' ? 'Đang phục vụ' : 'Khách đã đến'}
+                    </p>
+                    <p className="mt-2 text-card-title font-bold text-brand-text">{detailCurrent.customer}</p>
+                    <p className="mt-1 text-body text-brand-text-muted">{detailCurrent.service}</p>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-body font-bold text-brand-text">
+                      <span className="flex items-center gap-1.5">
+                        <Clock3 className="h-4 w-4 text-brand-secondary" />
+                        <span className="tabular-nums">{detailCurrent.start}–{endTime(detailCurrent)}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <UserRound className="h-4 w-4 text-brand-secondary" />
+                        {detailCurrent.staff}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <a
+                      href={`tel:${detailCurrent.phone.replace(/\D/g, '')}`}
+                      className="flex h-[var(--size-control-sm)] w-[var(--size-control-sm)] items-center justify-center rounded-control border border-brand-outline bg-brand-surface text-brand-secondary"
+                      aria-label={`Gọi ${detailCurrent.customer}`}
                     >
-                      {checked ? <Check className="h-4 w-4" /> : index + 1}
-                    </span>
-                    <span className={`text-[9px] font-bold ${checked ? 'text-emerald-700' : 'text-slate-700'}`}>
-                      {item}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4">
-              <p className="text-[8px] font-bold text-slate-400">
-                {cleaningChecks.length}/{cleaningItems.length} hoàn thành
-              </p>
-              <button
-                type="submit"
-                disabled={cleaningChecks.length !== cleaningItems.length}
-                className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-[9px] font-black text-white shadow-sm disabled:opacity-50"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Xác nhận sạch
-              </button>
-            </footer>
-          </form>
-        </div>
-      )}
+                      <Phone className="h-4 w-4" />
+                    </a>
+                    <a
+                      href={`sms:${detailCurrent.phone.replace(/\D/g, '')}`}
+                      className="flex h-[var(--size-control-sm)] w-[var(--size-control-sm)] items-center justify-center rounded-control border border-brand-outline bg-brand-surface text-brand-secondary"
+                      aria-label={`Nhắn ${detailCurrent.customer}`}
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </a>
+                  </div>
+                </div>
+                {detailCurrent.note && (
+                  <p className="mt-3 rounded-control bg-brand-surface p-3 text-body leading-5 text-brand-text">
+                    <strong>Lưu ý:</strong> {detailCurrent.note}
+                  </p>
+                )}
+              </section>
+            )}
 
-      {issueStation && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setIssueStation(null)}
-            className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
-            aria-label="Đóng báo sự cố"
-          />
-          <form onSubmit={submitIssue} className="relative w-full max-w-xl rounded-3xl bg-white shadow-2xl">
-            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-amber-600">
-                  Báo sự cố vị trí
-                </p>
-                <h2 className="mt-1 text-lg font-black text-slate-900">{issueStation.name}</h2>
-                <p className="mt-1 text-[9px] text-slate-500">
-                  Vị trí sẽ ngừng nhận khách ngay sau khi gửi.
-                </p>
+            {detailNext && (
+              <section className="flex items-start gap-3 p-4 ui-tone ui-tone--info">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-brand-surface text-brand-secondary">
+                  <CalendarClock className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-caption font-black uppercase text-brand-secondary">
+                    Lịch kế tiếp · {detailNext.start}
+                  </p>
+                  <p className="mt-1.5 text-body font-bold text-brand-text">{detailNext.customer}</p>
+                  <p className="mt-1 text-caption text-brand-text-muted">
+                    {detailNext.service} · {detailNext.staff}
+                  </p>
+                </div>
+              </section>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <section className="rounded-card border border-brand-outline p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-caption font-black uppercase text-brand-text-muted">
+                      Vệ sinh &amp; khử khuẩn
+                    </p>
+                    <p className="mt-2 text-body font-bold text-brand-text">{selectedStation.sanitizedAt}</p>
+                    <p className="mt-1 text-caption text-brand-text-muted">
+                      Checklist {selectedStation.checklist}
+                    </p>
+                  </div>
+                  <SprayCan className="h-5 w-5 text-brand-secondary" />
+                </div>
+              </section>
+              <section className="rounded-card border border-brand-outline p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-caption font-black uppercase text-brand-text-muted">Bảo trì thiết bị</p>
+                    <p className="mt-2 text-body font-bold text-brand-text">
+                      Tiếp theo {selectedStation.nextMaintenance}
+                    </p>
+                    <p className="mt-1 text-caption text-brand-text-muted">
+                      Gần nhất {selectedStation.lastMaintenance}
+                    </p>
+                  </div>
+                  <Wrench className="h-5 w-5 text-brand-tertiary" />
+                </div>
+              </section>
+            </div>
+
+            <section className="rounded-card border border-brand-outline p-4">
+              <p className="text-caption font-black uppercase text-brand-text-muted">Thiết bị đi kèm</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {selectedStation.equipment.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-control bg-brand-surface-high px-2.5 py-1.5 text-caption font-bold text-brand-text"
+                  >
+                    {item}
+                  </span>
+                ))}
               </div>
-              <button
-                type="button"
-                onClick={() => setIssueStation(null)}
-                className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
-                aria-label="Đóng"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </header>
-            <div className="space-y-4 p-5">
+            </section>
+
+            {selectedStation.issue && (
+              <section className="p-4 ui-tone ui-tone--warning">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-brand-tertiary" />
+                  <div>
+                    <p className="text-body font-bold text-brand-text">{selectedStation.issue}</p>
+                    <p className="mt-1 text-caption text-brand-text-muted">
+                      Báo lúc {selectedStation.issueReportedAt || 'Chưa rõ'}
+                    </p>
+                    {selectedStation.note && (
+                      <p className="mt-2 text-caption leading-5 text-brand-text-muted">
+                        {selectedStation.note}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Hộp thoại 2 — Xếp khách vào ghế */}
+      <Modal
+        open={Boolean(assignAppointment)}
+        onClose={() => setAssignAppointment(null)}
+        size="medium"
+        eyebrow="Điều phối khách tại quầy"
+        title="Xếp ghế phù hợp"
+        description={
+          assignAppointment ? `${assignAppointment.customer} · ${assignAppointment.service}` : undefined
+        }
+        icon={<Armchair />}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAssignAppointment(null)}>
+              Hủy
+            </Button>
+            <Button
+              type="submit"
+              form="reception-assign-form"
+              variant="primary"
+              disabled={!assignStationId}
+              iconLeading={<Armchair />}
+            >
+              Xác nhận xếp ghế
+            </Button>
+          </>
+        }
+      >
+        {assignAppointment && (
+          <form id="reception-assign-form" onSubmit={submitAssign} noValidate className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { label: 'Giờ hẹn', value: assignAppointment.start },
+                { label: 'Thời lượng', value: `${assignAppointment.duration} phút` },
+                { label: 'Kỹ thuật viên', value: assignAppointment.staff },
+              ].map((item) => (
+                <div key={item.label} className="rounded-control bg-brand-surface-high p-3">
+                  <p className="text-caption text-brand-text-muted">{item.label}</p>
+                  <p className="mt-1 text-body font-bold text-brand-text">{item.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <fieldset
+              aria-describedby={formError ? 'assign-error' : 'assign-hint'}
+              aria-invalid={formError ? true : undefined}
+            >
+              <legend className="text-body font-bold text-brand-text">
+                Vị trí đang sẵn sàng ({suitableStations.length})
+              </legend>
+              <p id="assign-hint" className="mt-1 text-caption text-brand-text-muted">
+                Chỉ hiển thị ghế/phòng phù hợp với loại dịch vụ.
+              </p>
+
               {formError && (
-                <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700">
+                <p
+                  id="assign-error"
+                  role="alert"
+                  className="mt-3 flex items-start gap-2 p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger"
+                >
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   {formError}
+                </p>
+              )}
+
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {suitableStations.map((station) => {
+                  const active = assignStationId === station.id;
+                  return (
+                    <label
+                      key={station.id}
+                      className={`flex cursor-pointer flex-col gap-2 p-3 ui-tone ${active ? 'ui-tone--success' : ''}`}
+                    >
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="block text-body font-bold text-brand-text">{station.id}</span>
+                          <span className="mt-1 block truncate text-caption text-brand-text-muted">
+                            {areaMeta[station.area].label}
+                          </span>
+                        </span>
+                        <input
+                          type="radio"
+                          name="assign-station"
+                          value={station.id}
+                          checked={active}
+                          onChange={() => setAssignStationId(station.id)}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                        />
+                      </span>
+                      <span className="flex items-center gap-1 text-caption font-bold text-brand-secondary">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Đã vệ sinh {station.sanitizedAt}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {!suitableStations.length && (
+                <div className="mt-3 border border-dashed p-6 text-center ui-tone ui-tone--warning">
+                  <AlertTriangle className="mx-auto h-6 w-6 text-brand-tertiary" />
+                  <p className="mt-2 text-body font-bold text-brand-text">
+                    Chưa có vị trí phù hợp đang sẵn sàng
+                  </p>
+                  <p className="mt-1 text-caption text-brand-text-muted">
+                    Hoàn tất vệ sinh một ghế hoặc chờ khách hiện tại xong.
+                  </p>
                 </div>
               )}
-              <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
-                  Mức độ khóa vị trí
-                </span>
-                <BeautifulSelect
-                  value={issueForm.severity}
-                  onChange={(event) =>
-                    setIssueForm((current) => ({
-                      ...current,
-                      severity: event.target.value as 'MAINTENANCE' | 'OUT_OF_SERVICE',
-                    }))
-                  }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]"
-                  aria-label="Mức độ sự cố"
-                >
-                  <option value="MAINTENANCE">Bảo trì tạm thời</option>
-                  <option value="OUT_OF_SERVICE">Ngừng sử dụng vì an toàn</option>
-                </BeautifulSelect>
-              </label>
-              <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
-                  Mô tả sự cố *
-                </span>
-                <textarea
-                  value={issueForm.issue}
-                  onChange={(event) =>
-                    setIssueForm((current) => ({ ...current, issue: event.target.value }))
-                  }
-                  placeholder="Ví dụ: đèn UV không hoạt động, bồn ngâm rò nước..."
-                  className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
-                />
-              </label>
-              <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
-                  Ghi chú xử lý ban đầu
-                </span>
-                <textarea
-                  value={issueForm.note}
-                  onChange={(event) =>
-                    setIssueForm((current) => ({ ...current, note: event.target.value }))
-                  }
-                  placeholder="Đã ngắt điện, đặt biển cảnh báo, liên hệ kỹ thuật..."
-                  className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
-                />
-              </label>
-              <div className="flex gap-2 rounded-xl bg-amber-50 p-3 text-[8px] leading-4 text-amber-700">
-                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Receptionist có thể khóa vị trí và báo sự cố; chỉ quản lý mới được xác nhận sửa xong
-                và mở lại.
-              </div>
-            </div>
-            <footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4">
-              <button
-                type="button"
-                onClick={() => setIssueStation(null)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                className="flex items-center gap-2 border border-amber-700 bg-amber-600 px-5 text-[9px] font-black text-white shadow-sm"
-              >
-                <Wrench className="h-4 w-4" />
-                Khóa & gửi cảnh báo
-              </button>
-            </footer>
+            </fieldset>
           </form>
-        </div>
-      )}
+        )}
+      </Modal>
+
+      {/* Hộp thoại 3 — Checklist vệ sinh */}
+      <Modal
+        open={Boolean(cleaningStation)}
+        onClose={() => setCleaningStation(null)}
+        size="medium"
+        eyebrow="Checklist vệ sinh"
+        title={cleaningStation?.name ?? ''}
+        description="Hoàn thành đầy đủ trước khi chuyển sang sẵn sàng."
+        icon={<SprayCan />}
+        footer={
+          <>
+            <p className="mr-auto text-caption font-bold tabular-nums text-brand-text-muted">
+              {cleaningChecks.length}/{cleaningItems.length} hoàn thành
+            </p>
+            <Button variant="secondary" onClick={() => setCleaningStation(null)}>
+              Hủy
+            </Button>
+            <Button
+              type="submit"
+              form="reception-cleaning-form"
+              variant="primary"
+              disabled={cleaningChecks.length !== cleaningItems.length}
+              iconLeading={<CheckCircle2 />}
+            >
+              Xác nhận sạch
+            </Button>
+          </>
+        }
+      >
+        {cleaningStation && (
+          <form id="reception-cleaning-form" onSubmit={completeCleaning} noValidate>
+            {formError && (
+              <p
+                role="alert"
+                className="mb-4 flex items-start gap-2 p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {formError}
+              </p>
+            )}
+            <fieldset>
+              <legend className="sr-only">Các bước vệ sinh bắt buộc</legend>
+              <div className="space-y-2">
+                {cleaningItems.map((item, index) => {
+                  const checked = cleaningChecks.includes(item);
+                  return (
+                    <label
+                      key={item}
+                      className={`flex cursor-pointer items-center gap-3 p-3 ui-tone ${checked ? 'ui-tone--success' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCleaningCheck(item)}
+                        className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                      />
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-brand-surface-high text-caption font-black text-brand-text-muted">
+                        {index + 1}
+                      </span>
+                      <span className="text-body font-bold text-brand-text">{item}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <p className="mt-4 text-caption text-brand-text-muted">
+              Cần đủ {cleaningRequired} bước để chuyển vị trí sang trạng thái sẵn sàng.
+            </p>
+          </form>
+        )}
+      </Modal>
+
+      {/* Hộp thoại 4 — Báo sự cố */}
+      <Modal
+        open={Boolean(issueStation)}
+        onClose={() => setIssueStation(null)}
+        size="medium"
+        eyebrow="Báo sự cố vị trí"
+        title={issueStation?.name ?? ''}
+        description="Vị trí sẽ ngừng nhận khách ngay sau khi gửi."
+        icon={<Wrench />}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIssueStation(null)}>
+              Hủy
+            </Button>
+            <Button type="submit" form="reception-issue-form" variant="danger" iconLeading={<Wrench />}>
+              Khóa &amp; gửi cảnh báo
+            </Button>
+          </>
+        }
+      >
+        {issueStation && (
+          <form id="reception-issue-form" onSubmit={submitIssue} noValidate className="space-y-4">
+            <Field label="Mức độ khóa vị trí" required>
+              <BeautifulSelect
+                value={issueForm.severity}
+                onChange={(event) =>
+                  setIssueForm((current) => ({
+                    ...current,
+                    severity: event.target.value as 'MAINTENANCE' | 'OUT_OF_SERVICE',
+                  }))
+                }
+              >
+                <option value="MAINTENANCE">Bảo trì tạm thời</option>
+                <option value="OUT_OF_SERVICE">Ngừng sử dụng vì an toàn</option>
+              </BeautifulSelect>
+            </Field>
+
+            <Field
+              label="Mô tả sự cố"
+              required
+              error={formError || undefined}
+              helper="Mô tả rõ để kỹ thuật xử lý đúng, ít nhất 5 ký tự."
+            >
+              <textarea
+                value={issueForm.issue}
+                onChange={(event) => setIssueForm((current) => ({ ...current, issue: event.target.value }))}
+                placeholder="Ví dụ: đèn UV không hoạt động, bồn ngâm rò nước..."
+                className="min-h-20 resize-y py-3"
+              />
+            </Field>
+
+            <Field label="Ghi chú xử lý ban đầu" helper="Không bắt buộc.">
+              <textarea
+                value={issueForm.note}
+                onChange={(event) => setIssueForm((current) => ({ ...current, note: event.target.value }))}
+                placeholder="Đã ngắt điện, đặt biển cảnh báo, liên hệ kỹ thuật..."
+                className="min-h-20 resize-y py-3"
+              />
+            </Field>
+
+            <p className="flex gap-2 p-3 text-caption leading-5 text-brand-text ui-tone ui-tone--warning">
+              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Receptionist có thể khóa vị trí và báo sự cố; chỉ quản lý mới được xác nhận sửa xong và
+              mở lại.
+            </p>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

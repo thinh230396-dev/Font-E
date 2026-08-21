@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import { PageHeader } from './ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertCircle,
@@ -51,6 +52,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import BeautifulSelect from './BeautifulSelect';
+import { formatCompactMoney, formatMoney as money } from '../utils/money';
 import Modal from './Modal';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 
@@ -91,6 +93,7 @@ export interface TenantAdminFinanceProps {
   selectedBranch: string;
   onSelectedBranchChange: (value: string) => void;
   tenantName?: string;
+  /** Vẫn nhận để đồng bộ với các màn hình khác, nhưng màn này không hiển thị vai trò. */
   roleLabel?: string;
   accessMode?: 'full' | 'limited' | 'locked';
   readOnlyReason?: string;
@@ -423,9 +426,7 @@ export const INITIAL_TRANSACTIONS: FinanceTransaction[] = [
   },
 ];
 
-const money = (val: number) => `${val.toLocaleString('vi-VN')}đ`;
-const shortMoney = (val: number) =>
-  `${(val / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tr`;
+const shortMoney = (val: number) => formatCompactMoney(val);
 
 const methodLabels: Record<PaymentMethod, string> = {
   CASH: 'Tiền mặt',
@@ -581,7 +582,7 @@ function FinanceFilterChip({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex h-8 items-center gap-1.5 rounded-xl border px-3 text-[11px] font-black transition-all ${
+      className={`inline-flex h-8 items-center gap-1.5 rounded-xl border px-3 text-body font-black transition-all ${
         active
           ? 'border-pink-500 bg-pink-600 text-white shadow-2xs'
           : 'border-pink-100/90 bg-white text-slate-700 hover:border-pink-200 hover:bg-pink-50/40'
@@ -589,7 +590,7 @@ function FinanceFilterChip({
     >
       {children}
       {typeof count === 'number' && (
-        <span className={`rounded-md px-1.5 py-0.2 text-[10px] ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+        <span className={`rounded-md px-1.5 py-0.2 text-caption ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
           {count}
         </span>
       )}
@@ -608,7 +609,7 @@ function CustomCashFlowTooltip({ active, payload, label }: any) {
       <div className="rounded-2xl border border-pink-100 bg-white p-3.5 shadow-xl text-xs space-y-2 font-sans min-w-[200px]">
         <div className="border-b border-pink-100/80 pb-1.5 flex items-center justify-between">
           <span className="font-black text-slate-900">{label}</span>
-          <span className="text-[10px] font-bold text-slate-400">Dòng tiền</span>
+          <span className="text-caption font-bold text-slate-400">Dòng tiền</span>
         </div>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-emerald-700 font-extrabold">
@@ -706,7 +707,7 @@ function FinanceTransactionRow({
             </span>
           )}
         </div>
-        <p className="mt-1 text-[11px] font-semibold text-slate-500">
+        <p className="mt-1 text-body font-semibold text-slate-500">
           {tx.date} <span className="text-slate-400">({tx.time})</span>
         </p>
       </td>
@@ -714,7 +715,7 @@ function FinanceTransactionRow({
       {/* 3. Badge THU / CHI */}
       <td className="px-3 py-3.5 align-middle whitespace-nowrap min-w-[90px]">
         <span
-          className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-black uppercase tracking-wider ${
+          className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-body font-black uppercase tracking-wider ${
             isInc
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
               : 'bg-rose-50 text-rose-700 border border-rose-200/80'
@@ -752,7 +753,7 @@ function FinanceTransactionRow({
       {/* 7. Trạng thái */}
       <td className="px-3 py-3.5 align-middle text-center whitespace-nowrap min-w-[110px]">
         <span
-          className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] border ${st.tone}`}
+          className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-body border ${st.tone}`}
         >
           {st.label}
         </span>
@@ -821,7 +822,6 @@ export default function TenantAdminFinanceCompact({
   selectedBranch,
   onSelectedBranchChange,
   tenantName = 'Lumière Nail Studio',
-  roleLabel = 'Owner · Tenant Admin',
   accessMode = 'full',
   readOnlyReason,
   onNotify,
@@ -998,7 +998,7 @@ export default function TenantAdminFinanceCompact({
     e.preventDefault();
     const numericAmount = parseFloat(formAmount.replace(/[^0-9.]/g, ''));
     if (isNaN(numericAmount) || numericAmount <= 0) {
-      setFormError('Vui lòng nhập số tiền hợp lệ (> 0đ).');
+      setFormError(`Vui lòng nhập số tiền hợp lệ (> ${money(0)}).`);
       return;
     }
     if (!formDescription.trim()) {
@@ -1457,20 +1457,10 @@ export default function TenantAdminFinanceCompact({
   return (
     <div className="space-y-5 p-1 sm:p-2 font-sans text-slate-900">
       {/* HEADER BANNER */}
-      <header className="rounded-2xl border border-pink-100/80 bg-gradient-to-r from-white via-pink-50/20 to-white p-5 shadow-2xs flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <PageHeader
+        title="Thu & Chi"
+        actions={(
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-black tracking-tight text-slate-900">Quản Lý Thu Chi & Dòng Tiền</h1>
-            <span className="rounded-full bg-pink-100 px-2.5 py-0.5 text-[10px] font-black text-pink-700 uppercase tracking-wider">
-              {roleLabel}
-            </span>
-          </div>
-          <p className="mt-1 text-xs font-semibold text-slate-500">
-            Sổ nhật ký tài chính, theo dõi doanh thu - chi phí và chốt sổ chi nhánh
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={exportExcel}
@@ -1494,21 +1484,22 @@ export default function TenantAdminFinanceCompact({
           >
             <Plus className="h-4 w-4" /> Tạo phiếu thu / chi
           </button>
-        </div>
-      </header>
+          </div>
+        )}
+      />
 
       {/* CASH FLOW DASHBOARD KPI GRID */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* KPI 1: TỔNG THU */}
         <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/60 to-white p-4 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-900">Tổng thu</span>
+            <span className="text-body font-black uppercase tracking-wider text-emerald-900">Tổng thu</span>
             <div className="rounded-xl bg-emerald-100 p-2 text-emerald-700">
               <ArrowDownLeft className="h-4 w-4" />
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-950 tabular-nums">
+            <p className="ta-metric-value text-emerald-950">
               {money(kpiData.totalIncome)}
             </p>
             <p className="mt-1 text-xs font-semibold text-emerald-700/90">
@@ -1520,13 +1511,13 @@ export default function TenantAdminFinanceCompact({
         {/* KPI 2: TỔNG CHI */}
         <div className="rounded-2xl border border-rose-200/80 bg-gradient-to-br from-rose-50/60 to-white p-4 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-rose-900">Tổng chi</span>
+            <span className="text-body font-black uppercase tracking-wider text-rose-900">Tổng chi</span>
             <div className="rounded-xl bg-rose-100 p-2 text-rose-700">
               <ArrowUpRight className="h-4 w-4" />
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-black tracking-tight text-rose-950 tabular-nums">
+            <p className="ta-metric-value text-rose-950">
               {money(kpiData.totalExpense)}
             </p>
             <p className="mt-1 text-xs font-semibold text-rose-700/90">
@@ -1538,13 +1529,13 @@ export default function TenantAdminFinanceCompact({
         {/* KPI 3: THU - CHI */}
         <div className="rounded-2xl border border-pink-200 bg-gradient-to-br from-white via-pink-50/40 to-white p-4 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-800">Thu - Chi</span>
+            <span className="text-body font-black uppercase tracking-wider text-slate-800">Thu - Chi</span>
             <div className="rounded-xl bg-pink-100 p-2 text-pink-600">
               <Scale className="h-4 w-4" />
             </div>
           </div>
           <div className="mt-3">
-            <p className={`text-2xl sm:text-3xl font-black tracking-tight tabular-nums ${kpiData.netCashFlow >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+            <p className={`ta-metric-value ${kpiData.netCashFlow >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
               {kpiData.netCashFlow >= 0 ? '+' : ''}{money(kpiData.netCashFlow)}
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-600">
@@ -1556,13 +1547,13 @@ export default function TenantAdminFinanceCompact({
         {/* KPI 4: GIAO DỊCH CẦN XỬ LÝ */}
         <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/60 to-white p-4 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-amber-950">Giao dịch cần xử lý</span>
+            <span className="text-body font-black uppercase tracking-wider text-amber-950">Giao dịch cần xử lý</span>
             <div className="rounded-xl bg-amber-100 p-2 text-amber-800">
               <AlertCircle className="h-4 w-4" />
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-black tracking-tight text-amber-950 tabular-nums">
+            <p className="ta-metric-value text-amber-950">
               {money(kpiData.pendingAmount)}
             </p>
             <p className="mt-1 text-xs font-semibold text-amber-800">
@@ -1576,8 +1567,8 @@ export default function TenantAdminFinanceCompact({
       <section className="rounded-2xl border border-pink-100/80 bg-white p-5 shadow-2xs space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-pink-100/60 pb-3">
           <div>
-            <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-pink-600" /> Biểu Đồ Thu vs Chi Theo Thời Gian
+            <h2 className="ta-card-title flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-pink-600" /> Biểu đồ thu và chi theo thời gian
             </h2>
             <p className="text-xs font-semibold text-slate-500 mt-0.5">
               So sánh biến động doanh thu (Thu) và chi phí (Chi) giúp theo dõi nhanh tình hình dòng tiền
@@ -1648,7 +1639,7 @@ export default function TenantAdminFinanceCompact({
           <p className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
             <Wallet className="h-4 w-4 text-pink-600" /> Tồn quỹ theo phương thức thanh toán
           </p>
-          <span className="text-[11px] font-bold text-slate-500">Chỉ tính giao dịch đã hoàn thành</span>
+          <span className="text-body font-bold text-slate-500">Chỉ tính giao dịch đã hoàn thành</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1662,7 +1653,7 @@ export default function TenantAdminFinanceCompact({
                     <RowIcon className="h-4 w-4" />
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-slate-600 block">{row.label}</span>
+                    <span className="text-body font-bold text-slate-600 block">{row.label}</span>
                     <span className={`text-xs font-black tabular-nums ${val < 0 ? 'text-rose-600' : 'text-slate-900'}`}>
                       {val < 0 ? '−' : ''}{money(Math.abs(val))}
                     </span>
@@ -1825,7 +1816,7 @@ export default function TenantAdminFinanceCompact({
               <SlidersHorizontal className="h-3.5 w-3.5 text-pink-600" />
               <span>Bộ lọc nâng cao</span>
               {secondaryActiveCount > 0 && (
-                <span className="h-5 w-5 rounded-full bg-pink-600 text-white text-[10px] font-black flex items-center justify-center">
+                <span className="h-5 w-5 rounded-full bg-pink-600 text-white text-caption font-black flex items-center justify-center">
                   {secondaryActiveCount}
                 </span>
               )}
@@ -1877,7 +1868,7 @@ export default function TenantAdminFinanceCompact({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               {/* Chi nhánh */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Chi nhánh</label>
+                <label className="block text-body font-bold text-slate-600 mb-1">Chi nhánh</label>
                 <FinanceSegmented
                   value={selectedBranch}
                   onChange={onSelectedBranchChange}
@@ -1891,7 +1882,7 @@ export default function TenantAdminFinanceCompact({
 
               {/* Danh mục */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Danh mục</label>
+                <label className="block text-body font-bold text-slate-600 mb-1">Danh mục</label>
                 <BeautifulSelect
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
@@ -1922,7 +1913,7 @@ export default function TenantAdminFinanceCompact({
 
               {/* Phương thức thanh toán */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Phương thức thanh toán</label>
+                <label className="block text-body font-bold text-slate-600 mb-1">Phương thức thanh toán</label>
                 <BeautifulSelect
                   value={methodFilter}
                   onChange={(e) => setMethodFilter(e.target.value as 'ALL' | PaymentMethod)}
@@ -1939,7 +1930,7 @@ export default function TenantAdminFinanceCompact({
 
               {/* Trạng thái chi tiết */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Trạng thái phiếu</label>
+                <label className="block text-body font-bold text-slate-600 mb-1">Trạng thái phiếu</label>
                 <div className="flex flex-wrap gap-1">
                   {STATUS_CHIPS.map((s) => (
                     <FinanceFilterChip
@@ -1966,7 +1957,7 @@ export default function TenantAdminFinanceCompact({
         {/* Global Clear Filter Link if not expanded */}
         {!showAdvancedFilters && hasActiveFilters && (
           <div className="flex items-center justify-between border-t border-pink-100/60 pt-2 text-xs">
-            <span className="text-[11px] font-semibold text-slate-500">
+            <span className="text-body font-semibold text-slate-500">
               Đang áp dụng bộ lọc tùy chỉnh
             </span>
             <button
@@ -1985,13 +1976,13 @@ export default function TenantAdminFinanceCompact({
         {/* Table Title Bar */}
         <div className="flex flex-col gap-2 border-b border-pink-100/80 bg-white px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
+            <h2 className="ta-card-title flex items-center gap-2">
               Danh sách phiếu giao dịch
-              <span className="rounded-full bg-pink-100 px-2 py-0.5 text-[11px] font-extrabold text-pink-800">
+              <span className="rounded-full bg-pink-100 px-2 py-0.5 text-body font-extrabold text-pink-800">
                 {filteredTransactions.length} phiếu
               </span>
             </h2>
-            <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+            <p className="mt-0.5 text-body font-medium text-slate-500">
               Sổ nhật ký giao dịch tài chính ghi nhận tự động và thủ công
             </p>
           </div>
@@ -2023,7 +2014,7 @@ export default function TenantAdminFinanceCompact({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[765px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-pink-100/80 bg-pink-50/40 text-[10px] font-black uppercase tracking-wider text-slate-600">
+              <tr className="border-b border-pink-100/80 bg-pink-50/40 text-caption font-black uppercase tracking-wider text-slate-600">
                 <th className="w-10 py-3.5 pl-4 pr-2">
                   <button
                     type="button"
@@ -2067,7 +2058,7 @@ export default function TenantAdminFinanceCompact({
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-xs font-semibold text-slate-400 bg-white">
                     <p className="font-bold text-slate-600">Không tìm thấy giao dịch nào phù hợp</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Thử điều chỉnh lại bộ lọc tìm kiếm hoặc chọn khoảng thời gian khác.</p>
+                    <p className="text-body text-slate-400 mt-1">Thử điều chỉnh lại bộ lọc tìm kiếm hoặc chọn khoảng thời gian khác.</p>
                   </td>
                 </tr>
               )}
@@ -2135,7 +2126,7 @@ export default function TenantAdminFinanceCompact({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
                 {/* 1. Toggle Thu / Chi */}
                 <div className="md:col-span-1">
-                  <label className="mb-1 block font-bold text-slate-700 text-[11px] uppercase tracking-wider">
+                  <label className="mb-1 block font-bold text-slate-700 text-body uppercase tracking-wider">
                     Loại chứng từ <span className="text-rose-500">*</span>
                   </label>
                   <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white p-1 border border-pink-100 shadow-2xs">
@@ -2166,7 +2157,7 @@ export default function TenantAdminFinanceCompact({
 
                 {/* 2. Mã phiếu */}
                 <div>
-                  <label className="mb-1 block font-bold text-slate-700 text-[11px] uppercase tracking-wider">
+                  <label className="mb-1 block font-bold text-slate-700 text-body uppercase tracking-wider">
                     Mã phiếu <span className="text-slate-400 font-normal lowercase">(tự động)</span>
                   </label>
                   <input
@@ -2180,7 +2171,7 @@ export default function TenantAdminFinanceCompact({
 
                 {/* 3. Danh mục */}
                 <div>
-                  <label className="mb-1 block font-bold text-slate-700 text-[11px] uppercase tracking-wider">
+                  <label className="mb-1 block font-bold text-slate-700 text-body uppercase tracking-wider">
                     Danh mục {formType === 'INCOME' ? 'thu' : 'chi'} <span className="text-rose-500">*</span>
                   </label>
                   <BeautifulSelect
@@ -2203,7 +2194,7 @@ export default function TenantAdminFinanceCompact({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* CỘT TRÁI */}
               <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-2xs">
-                <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
+                <p className="text-body font-black uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
                   Thông tin hành chính & địa điểm
                 </p>
 
@@ -2276,7 +2267,7 @@ export default function TenantAdminFinanceCompact({
 
               {/* CỘT PHẢI */}
               <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-2xs">
-                <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
+                <p className="text-body font-black uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
                   Thông tin tài chính & nhân sự
                 </p>
 
@@ -2583,7 +2574,7 @@ export default function TenantAdminFinanceCompact({
               {/* Số tiền thật lớn & Ngày giờ */}
               <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-body font-black uppercase tracking-wider text-slate-400 block mb-1">
                     Ngày hạch toán chứng từ
                   </span>
                   <p className="font-extrabold text-slate-900 flex items-center gap-2 text-sm">
@@ -2594,7 +2585,7 @@ export default function TenantAdminFinanceCompact({
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                  <span className="text-body font-black uppercase tracking-wider text-slate-400 block mb-1">
                     Số tiền giao dịch chính thức
                   </span>
                   <p
@@ -2701,7 +2692,7 @@ export default function TenantAdminFinanceCompact({
 
             {/* FULL WIDTH: NỘI DUNG DIỄN GIẢI GIAO DỊCH */}
             <div className="rounded-2xl border border-pink-100 bg-white p-5 space-y-2 shadow-2xs">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block">
+              <span className="text-body font-black uppercase tracking-wider text-slate-400 block">
                 Diễn giải nội dung chi tiết
               </span>
               <p className="font-bold text-slate-900 text-sm leading-relaxed bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/70">
@@ -2718,13 +2709,13 @@ export default function TenantAdminFinanceCompact({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                 {/* Người khởi tạo */}
                 <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Người khởi tạo</span>
+                  <span className="text-caption font-bold uppercase text-slate-400 block">Người khởi tạo</span>
                   <p className="font-bold text-slate-900 mt-0.5">{detailTransaction.createdBy}</p>
                 </div>
 
                 {/* Thời gian tạo */}
                 <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Thời gian tạo phiếu</span>
+                  <span className="text-caption font-bold uppercase text-slate-400 block">Thời gian tạo phiếu</span>
                   <p className="font-bold text-slate-900 mt-0.5">
                     {detailTransaction.date} lúc {detailTransaction.time}
                   </p>
@@ -2732,7 +2723,7 @@ export default function TenantAdminFinanceCompact({
 
                 {/* Người duyệt / đối soát */}
                 <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Người duyệt / chốt sổ</span>
+                  <span className="text-caption font-bold uppercase text-slate-400 block">Người duyệt / chốt sổ</span>
                   <p className="font-bold text-slate-900 mt-0.5">
                     {detailTransaction.approvedBy || '— Chờ phê duyệt'}
                   </p>
@@ -2742,7 +2733,7 @@ export default function TenantAdminFinanceCompact({
               {/* System Note */}
               {detailTransaction.note && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs">
-                  <span className="text-[10px] font-bold uppercase text-amber-900 block mb-0.5">
+                  <span className="text-caption font-bold uppercase text-amber-900 block mb-0.5">
                     Ghi chú hệ thống
                   </span>
                   <p className="font-semibold text-amber-950 italic">{detailTransaction.note}</p>
@@ -2751,7 +2742,7 @@ export default function TenantAdminFinanceCompact({
 
               {/* Audit Trail List */}
               <div className="space-y-2 pt-1">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 block">
+                <span className="text-body font-black uppercase tracking-wider text-slate-500 block">
                   Nhật ký thao tác chi tiết (Audit Trail)
                 </span>
                 <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
@@ -2763,9 +2754,9 @@ export default function TenantAdminFinanceCompact({
                       >
                         <div>
                           <p className="font-bold text-slate-900">{item.action}</p>
-                          <span className="text-[10px] text-slate-400">{item.time}</span>
+                          <span className="text-caption text-slate-400">{item.time}</span>
                         </div>
-                        <span className="font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 text-[11px]">
+                        <span className="font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 text-body">
                           {item.actor}
                         </span>
                       </div>
@@ -2819,7 +2810,7 @@ export default function TenantAdminFinanceCompact({
               <strong className="font-mono font-black text-rose-600">#{deleteConfirmTx.id}</strong> (
               {deleteConfirmTx.category} - {money(deleteConfirmTx.amount)}) không?
             </p>
-            <div className="rounded-xl bg-rose-50 p-3 border border-rose-200 text-rose-900 text-[11px] font-medium">
+            <div className="rounded-xl bg-rose-50 p-3 border border-rose-200 text-rose-900 text-body font-medium">
               Lưu ý: Thao tác này sẽ gỡ phiếu khỏi sổ thu chi và không thể hoàn tác.
             </div>
           </div>

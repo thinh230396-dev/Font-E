@@ -9,11 +9,11 @@ import {
   PackageCheck,
   Search,
   UserRound,
-  X,
   XCircle
 } from 'lucide-react';
 import type { PackageUpgradeRequest, PackageUpgradeRequestStatus } from '../types';
 import BeautifulSelect from './BeautifulSelect';
+import { Modal } from './ui';
 
 interface PackageUpgradeRequestsProps {
   requests: PackageUpgradeRequest[];
@@ -180,14 +180,24 @@ export default function PackageUpgradeRequests({ requests, onReview }: PackageUp
         )}
       </section>
 
-      {reviewing && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <button type="button" aria-label="Đóng" onClick={() => setReviewing(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-          <section className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className={`p-6 text-white ${decision === 'APPROVED' ? 'bg-gradient-to-br from-emerald-700 to-emerald-950' : 'bg-gradient-to-br from-rose-700 to-rose-950'}`}>
-              <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-white/70">{decision === 'APPROVED' ? 'Phê duyệt nâng cấp' : 'Từ chối yêu cầu'}</p><h2 className="mt-2 text-xl font-black">{reviewing.tenantName}</h2><p className="mt-1 text-xs text-white/70">{reviewing.currentPackageName} → {reviewing.requestedPackageName}</p></div><button type="button" onClick={() => setReviewing(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center rounded-xl border-0 bg-white/10 p-0 text-white shadow-none"><X className="h-4 w-4" /></button></div>
-            </div>
-            <div className="space-y-4 p-6">
+      <Modal
+        open={Boolean(reviewing)}
+        onClose={() => setReviewing(null)}
+        eyebrow={decision === 'APPROVED' ? 'Phê duyệt nâng cấp' : 'Từ chối yêu cầu'}
+        title={reviewing?.tenantName || ''}
+        description={reviewing ? `${reviewing.currentPackageName} → ${reviewing.requestedPackageName}` : undefined}
+        size="medium"
+        /* Đang có ghi chú soạn dở thì bấm nhầm ra nền không được làm mất. */
+        closeOnBackdrop={false}
+        footer={reviewing && (
+          <>
+            <button type="button" disabled={isSubmitting} onClick={() => setReviewing(null)} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 disabled:opacity-50">Hủy</button>
+            <button type="button" disabled={isSubmitting} onClick={submitReview} className={`h-10 rounded-lg px-5 text-xs font-black text-white disabled:cursor-wait disabled:opacity-60 ${decision === 'APPROVED' ? 'bg-emerald-600' : 'bg-rose-600'}`}>{isSubmitting ? 'Đang lưu...' : decision === 'APPROVED' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'}</button>
+          </>
+        )}
+      >
+        {reviewing && (
+            <div className="space-y-4">
               {formError && <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{formError}</div>}
               {decision === 'APPROVED' && (
                 <fieldset>
@@ -200,10 +210,8 @@ export default function PackageUpgradeRequests({ requests, onReview }: PackageUp
               <label><span className="mb-1.5 block text-xs font-black text-slate-700">{decision === 'REJECTED' ? 'Lý do từ chối *' : 'Ghi chú phê duyệt'}</span><textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 outline-none focus:border-violet-400 focus:bg-white" placeholder={decision === 'REJECTED' ? 'Nêu rõ lý do để Tenant Admin biết cần bổ sung gì...' : 'Ghi chú cho bộ phận thanh toán hoặc tenant...'} /></label>
               {decision === 'APPROVED' && <div className="rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-700">{effectiveDate === 'immediate' ? 'Hệ thống sẽ cập nhật gói ngay, tạo hóa đơn chờ thanh toán và ghi nhật ký phê duyệt.' : 'Hệ thống sẽ tạo hóa đơn và lên lịch áp dụng quyền gói mới khi chu kỳ hiện tại kết thúc.'}</div>}
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 p-5"><button type="button" disabled={isSubmitting} onClick={() => setReviewing(null)} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 disabled:opacity-50">Hủy</button><button type="button" disabled={isSubmitting} onClick={submitReview} className={`h-10 rounded-lg px-5 text-xs font-black text-white disabled:cursor-wait disabled:opacity-60 ${decision === 'APPROVED' ? 'bg-emerald-600' : 'bg-rose-600'}`}>{isSubmitting ? 'Đang lưu...' : decision === 'APPROVED' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'}</button></div>
-          </section>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

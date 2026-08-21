@@ -49,6 +49,7 @@ import {
   isUnlimitedBranches,
   isUnlimitedStaff
 } from '../utils/subscriptions';
+import { Button, Modal, StatusBadge, useToast } from './ui';
 
 interface TenantDetailModalProps {
   tenant: Tenant;
@@ -411,6 +412,7 @@ export default function TenantDetailModal({
   initialTab = 'overview',
   initialViewMode = 'quick'
 }: TenantDetailModalProps) {
+  const showToast = useToast();
   const [viewMode, setViewMode] = useState<'quick' | 'full'>(initialViewMode);
   const [activeTab, setActiveTab] = useState<'overview' | 'billing' | 'branches' | 'activities' | 'config'>(initialTab);
   
@@ -424,8 +426,6 @@ export default function TenantDetailModal({
   const [showSendNotification, setShowSendNotification] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState('');
   
-  const [toast, setToast] = useState<string | null>(null);
-
   // System logs/activities localized state
   const [localActivities, setLocalActivities] = useState<any[]>([]);
 
@@ -523,11 +523,6 @@ export default function TenantDetailModal({
     setSelectedPlan(tenant.packageName);
   }, [tenant, supportsOnlineBooking]);
 
-  const triggerToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
-
   const resetAddBranchForm = () => {
     setNewBranchCode('');
     setNewBranchName('');
@@ -546,7 +541,7 @@ export default function TenantDetailModal({
 
   const handleOpenAddBranchModal = () => {
     if (!canAddBranch) {
-      alert(`Gói ${tenant.packageName} chỉ hỗ trợ tối đa ${currentBranchLimitLabel}. Vui lòng nâng gói trước khi thêm chi nhánh mới.`);
+      showToast(`Gói ${tenant.packageName} chỉ hỗ trợ tối đa ${currentBranchLimitLabel}. Vui lòng nâng gói trước khi thêm chi nhánh mới.`, 'error');
       return;
     }
 
@@ -572,7 +567,7 @@ export default function TenantDetailModal({
     e.preventDefault();
 
     if (!canAddBranch) {
-      alert(`Gói ${tenant.packageName} chỉ hỗ trợ tối đa ${currentBranchLimitLabel}. Vui lòng nâng gói trước khi thêm chi nhánh mới.`);
+      showToast(`Gói ${tenant.packageName} chỉ hỗ trợ tối đa ${currentBranchLimitLabel}. Vui lòng nâng gói trước khi thêm chi nhánh mới.`, 'error');
       return;
     }
 
@@ -582,7 +577,7 @@ export default function TenantDetailModal({
     const staffCount = Math.max(0, Number(newBranchStaffCount || 0));
 
     if (!newBranchValidation.isValid || !branchCode || details.branches.some((branch) => branch.id.toUpperCase() === branchCode || branch.code?.toUpperCase() === branchCode)) {
-      alert(!branchCode ? 'Không thể sinh mã chi nhánh. Vui lòng kiểm tra tên chi nhánh.' : 'Thông tin chi nhánh chưa hợp lệ. Vui lòng kiểm tra các cảnh báo trong biểu mẫu.');
+      showToast(!branchCode ? 'Không thể sinh mã chi nhánh. Vui lòng kiểm tra tên chi nhánh.' : 'Thông tin chi nhánh chưa hợp lệ. Vui lòng kiểm tra các cảnh báo trong biểu mẫu.', 'error');
       return;
     }
 
@@ -592,7 +587,7 @@ export default function TenantDetailModal({
 
     const existingStaffCount = existingBranches.reduce((sum, branch) => sum + Number(branch.staffUsed || branch.staffCount || 0), 0);
     if (currentStaffLimit < 999 && existingStaffCount + staffCount > currentStaffLimit) {
-      alert(`Gói ${tenant.packageName} chỉ hỗ trợ tối đa ${currentStaffLimit} thợ toàn tenant. Tenant hiện có ${existingStaffCount} thợ, chi nhánh mới chỉ có thể thêm tối đa ${Math.max(0, currentStaffLimit - existingStaffCount)} thợ.`);
+      showToast(`Gói ${tenant.packageName} chỉ hỗ trợ tối đa ${currentStaffLimit} thợ toàn tenant. Tenant hiện có ${existingStaffCount} thợ, chi nhánh mới chỉ có thể thêm tối đa ${Math.max(0, currentStaffLimit - existingStaffCount)} thợ.`, 'error');
       return;
     }
 
@@ -650,7 +645,7 @@ export default function TenantDetailModal({
     setLocalActivities(prev => [newActivity, ...prev]);
     resetAddBranchForm();
     setPendingBranch(null);
-    triggerToast(`Đã thêm chi nhánh "${pendingBranch.name}" cho tenant ${tenant.name}.`);
+    showToast(`Đã thêm chi nhánh "${pendingBranch.name}" cho tenant ${tenant.name}.`);
   };
 
   const handleToggleBranchStatus = (branchId: string, nextStatus: 'ACTIVE' | 'INACTIVE') => {
@@ -658,7 +653,7 @@ export default function TenantDetailModal({
     const targetBranch = sourceBranches.find(branch => branch.id === branchId);
 
     if (!targetBranch) {
-      alert('Không tìm thấy chi nhánh cần cập nhật.');
+      showToast('Không tìm thấy chi nhánh cần cập nhật.', 'error');
       return;
     }
 
@@ -683,7 +678,7 @@ export default function TenantDetailModal({
     });
 
     setLocalActivities(prev => [newActivity, ...prev]);
-    triggerToast(`${isLocking ? 'Đã khóa tạm thời' : 'Đã mở lại'} chi nhánh "${targetBranch.name}".`);
+    showToast(`${isLocking ? 'Đã khóa tạm thời' : 'Đã mở lại'} chi nhánh "${targetBranch.name}".`);
   };
 
   const handleDeleteBranch = (branchId: string) => {
@@ -691,12 +686,12 @@ export default function TenantDetailModal({
     const targetBranch = sourceBranches.find(branch => branch.id === branchId);
 
     if (!targetBranch) {
-      alert('Không tìm thấy chi nhánh cần xóa.');
+      showToast('Không tìm thấy chi nhánh cần xóa.', 'error');
       return;
     }
 
     if (sourceBranches.length <= 1) {
-      alert('Không thể xóa chi nhánh cuối cùng. Tenant cần ít nhất 1 chi nhánh đại diện.');
+      showToast('Không thể xóa chi nhánh cuối cùng. Tenant cần ít nhất 1 chi nhánh đại diện.', 'error');
       return;
     }
 
@@ -723,7 +718,7 @@ export default function TenantDetailModal({
     });
 
     setLocalActivities(prev => [newActivity, ...prev]);
-    triggerToast(`Đã xóa chi nhánh "${targetBranch.name}".`);
+    showToast(`Đã xóa chi nhánh "${targetBranch.name}".`);
   };
 
   // Execute confirmation action
@@ -743,7 +738,7 @@ export default function TenantDetailModal({
         newActivity,
         ...prev
       ]);
-      triggerToast("Đã tạm khóa tenant thành công!");
+      showToast("Đã tạm khóa tenant thành công!");
     } else if (type === 'unlock') {
       const newActivity = { date: nowStr, user: 'Superadmin', type: 'status', description: 'Superadmin đã kích hoạt lại hoạt động cho tenant' };
       onUpdateTenant(tenant.id, {
@@ -754,7 +749,7 @@ export default function TenantDetailModal({
         newActivity,
         ...prev
       ]);
-      triggerToast("Đã kích hoạt hoạt động cho tenant!");
+      showToast("Đã kích hoạt hoạt động cho tenant!");
     } else if (type === 'renew') {
       if (payload) {
         const { duration, paymentStatus: rPayStatus, paymentMethod: rPayMethod, transactionId: rTxId, note: rNote } = payload;
@@ -857,19 +852,19 @@ export default function TenantDetailModal({
           ...prev
         ]);
 
-        triggerToast(`Đã gia hạn thành công gói cước ${tenant.packageName} thêm ${durationText}!`);
+        showToast(`Đã gia hạn thành công gói cước ${tenant.packageName} thêm ${durationText}!`);
       } else {
         setLocalActivities(prev => [
           { date: nowStr, user: 'Superadmin', type: 'payment', description: `Superadmin gia hạn thủ công gói cước ${tenant.packageName} thêm 30 ngày` },
           ...prev
         ]);
-        triggerToast(`Đã gia hạn gói dịch vụ ${tenant.packageName} thêm 30 ngày thành công!`);
+        showToast(`Đã gia hạn gói dịch vụ ${tenant.packageName} thêm 30 ngày thành công!`);
       }
     } else if (type === 'change-plan') {
       if (payload) {
         const packageBlockReason = getPackageChangeBlockReason(tenant, payload, packages);
         if (packageBlockReason) {
-          alert(packageBlockReason);
+          showToast(packageBlockReason, 'error');
           setConfirmAction(null);
           return;
         }
@@ -1003,7 +998,7 @@ export default function TenantDetailModal({
           ...prev
         ]);
 
-        triggerToast(effectiveDate === 'next_cycle'
+        showToast(effectiveDate === 'next_cycle'
           ? `Đã lên lịch chuyển sang gói ${payload} vào ${scheduledEffectiveAt}.`
           : `Đã chuyển đổi thành công sang gói ${payload}!`);
       }
@@ -1088,29 +1083,166 @@ export default function TenantDetailModal({
       internalNotes,
       paymentGatewayConfigured
     });
-    triggerToast("Đã lưu cấu hình Tenant thành công!");
+    showToast("Đã lưu cấu hình Tenant thành công!");
   };
+  const renewPlanActions = (
+    <>
+              <button 
+                type="button"
+                onClick={() => setShowRenewPlanModal(false)}
+                className="bg-brand-surface hover:bg-brand-surface-highest text-brand-text-muted px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border border-brand-outline/35"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                type="button"
+                disabled={!isPaymentEntryValid(renewPaymentStatus, renewPaymentMethod, renewTransactionId)}
+                onClick={() => {
+                  if (!isPaymentEntryValid(renewPaymentStatus, renewPaymentMethod, renewTransactionId)) {
+                    showToast('Vui lòng nhập mã giao dịch cho phương thức thanh toán điện tử.', 'error');
+                    return;
+                  }
+                  setShowRenewPlanModal(false);
+                  
+                  let durationText = '1 tháng';
+                  let addedDays = 30;
+                  if (renewDuration === '3_months') { durationText = '3 tháng'; addedDays = 90; }
+                  else if (renewDuration === '6_months') { durationText = '6 tháng'; addedDays = 180; }
+                  else if (renewDuration === '1_year') { durationText = '1 năm'; addedDays = 365; }
 
-  return (
-    <div className="fixed inset-0 bg-brand-bg/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn select-none">
-      
-      {/* Toast Alert */}
-      {toast && (
-        <div className="fixed top-6 right-6 z-[60] bg-brand-surface-high border-2 border-brand-primary text-brand-text px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 animate-slideIn">
-          <CheckCircle className="w-5 h-5 text-brand-primary" />
-          <span className="text-xs font-semibold">{toast}</span>
-        </div>
+                  const currentDaysRemaining = tenant.daysRemaining !== undefined ? tenant.daysRemaining : details.daysRemaining;
+                  const newDaysRemaining = currentDaysRemaining + addedDays;
+                  const newExpDateStr = getExpirationDateStr(newDaysRemaining);
+
+                  const targetCurrency = normalizeCurrency(tenant.currency);
+                  const price = getRenewPrice(packages, tenant, renewDuration, targetCurrency);
+                  const amountFormatted = formatMoney(price, targetCurrency);
+
+                  const methodText = renewPaymentMethod === 'bank_transfer' ? 'Chuyển khoản' : renewPaymentMethod === 'cash' ? 'Tiền mặt' : renewPaymentMethod === 'card' ? 'Thẻ' : 'Khác';
+                  const statusText = renewPaymentStatus === 'paid' ? 'Đã thu tiền' : renewPaymentStatus === 'unpaid' ? 'Chưa thu tiền' : renewPaymentStatus === 'auto' ? 'Thu tự động thành công' : 'Gia hạn & gửi invoice chờ';
+                  const txnInfo = renewTransactionId.trim() ? ` (Mã GD: ${renewTransactionId.trim()})` : '';
+
+                  setConfirmAction({
+                    type: 'renew',
+                    message: `Bạn chắc chắn muốn gia hạn gói dịch vụ "${tenant.packageName}" của Tenant "${tenant.name}" thêm ${durationText}?\n\n• Ngày hết hạn mới: ${newExpDateStr}\n• Số tiền cần thu: ${amountFormatted}\n• Trạng thái chi trả: ${statusText} qua ${methodText}${txnInfo}.`,
+                    payload: {
+                      duration: renewDuration,
+                      paymentStatus: renewPaymentStatus,
+                      paymentMethod: renewPaymentMethod,
+                      transactionId: renewTransactionId,
+                      note: renewNote
+                    }
+                  });
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${isPaymentEntryValid(renewPaymentStatus, renewPaymentMethod, renewTransactionId) ? 'bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 shadow-md cursor-pointer' : 'bg-brand-outline text-brand-text-muted cursor-not-allowed'}`}
+              >
+                Áp dụng gia hạn
+              </button>
+    </>
+  );
+  const changePlanActions = (
+    <>
+              <button 
+                type="button"
+                onClick={() => setShowChangePlanModal(false)}
+                className="bg-brand-surface hover:bg-brand-surface-highest text-brand-text-muted px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border border-brand-outline/35"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                type="button"
+                disabled={selectedPlan === tenant.packageName || !!selectedPlanBlockReason || !isPaymentEntryValid(paymentStatusOption, paymentMethod, transactionId)}
+                onClick={() => {
+                  if (selectedPlanBlockReason) {
+                    showToast(selectedPlanBlockReason, 'error');
+                    return;
+                  }
+                  if (!isPaymentEntryValid(paymentStatusOption, paymentMethod, transactionId)) {
+                    showToast('Vui lòng nhập mã giao dịch cho phương thức thanh toán điện tử.', 'error');
+                    return;
+                  }
+
+                  setShowChangePlanModal(false);
+                  
+                  // Construct a descriptive system message including selected cycle/payment details
+                  const cycleText = billingCycle === 'yearly' ? 'Hàng năm (Giảm 20%)' : 'Hàng tháng';
+                  const dateText = effectiveDate === 'immediate' ? 'áp dụng ngay lập tức' : 'áp dụng từ chu kỳ tiếp theo';
+                  const methodText = paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : paymentMethod === 'cash' ? 'Tiền mặt' : paymentMethod === 'card' ? 'Thẻ' : 'Khác';
+                  const statusText = paymentStatusOption === 'paid' ? 'Đã thanh toán' : paymentStatusOption === 'unpaid' ? 'Chưa thanh toán' : paymentStatusOption === 'auto' ? 'Trừ thẻ tự động' : 'Đã ra hóa đơn chờ';
+                  const txnInfo = transactionId.trim() ? ` (Mã GD: ${transactionId.trim()})` : '';
+
+                  setConfirmAction({
+                    type: 'change-plan',
+                    message: `Bạn chắc chắn muốn thay đổi gói dịch vụ của Tenant "${tenant.name}" từ gói "${tenant.packageName}" sang gói "${selectedPlan}"? \n\n• Hình thức chu kỳ: ${cycleText}\n• Thời gian hiệu lực: ${dateText}\n• Trạng thái chi trả: ${statusText} qua ${methodText}${txnInfo}.`,
+                    payload: selectedPlan
+                  });
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${selectedPlan === tenant.packageName || selectedPlanBlockReason || !isPaymentEntryValid(paymentStatusOption, paymentMethod, transactionId) ? 'bg-brand-outline text-brand-text-muted cursor-not-allowed' : 'bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 shadow-md cursor-pointer'}`}
+              >
+                Áp dụng đổi gói
+              </button>
+    </>
+  );
+
+  const detailFooter = (
+    <>
+      <span className="mr-auto text-brand-text-muted">
+        {viewMode === 'full'
+          ? <>Đang xem chi tiết vận hành đầy đủ của <strong className="text-brand-text">{tenant.name}</strong></>
+          : <>Xem tóm tắt thông tin của <strong className="text-brand-text">{tenant.name}</strong></>}
+      </span>
+
+      {viewMode === 'full' && (
+        tenant.status === 'SUSPENDED' ? (
+          <Button
+            variant="secondary"
+            iconLeading={<Unlock />}
+            onClick={() => setConfirmAction({
+              type: 'unlock',
+              message: `Bạn chắc chắn muốn MỞ KHÓA dịch vụ hoạt động cho Tenant "${tenant.name}"? Hệ thống sẽ kích hoạt lại quyền truy cập.`
+            })}
+          >
+            Mở khóa
+          </Button>
+        ) : (
+          <Button
+            variant="danger"
+            iconLeading={<Lock />}
+            onClick={() => setConfirmAction({
+              type: 'lock',
+              message: `Bạn chắc chắn muốn KHÓA TẠM THỜI hoạt động của Tenant "${tenant.name}"? Tenant Admin và toàn bộ nhân viên sẽ bị mất quyền truy cập hệ thống ngay lập tức.`
+            })}
+          >
+            Khóa tạm thời
+          </Button>
+        )
       )}
 
+      <Button variant="secondary" onClick={onClose}>Đóng lại</Button>
+      <Button variant="primary" iconLeading={<Edit />} onClick={() => { onEditClick(); onClose(); }}>
+        Sửa Tenant
+      </Button>
+    </>
+  );
+
+  return (
+    <>
       {/* Dynamic Confirmation Dialog */}
       {confirmAction && (
-        <div className="fixed inset-0 z-[60] bg-brand-bg/95 flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-brand-surface border border-brand-outline rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="px-5 py-4 bg-brand-surface-high border-b border-brand-outline/40 flex items-center gap-2 text-brand-warning">
-              <AlertOctagon className="w-5 h-5" />
-              <span className="text-sm font-bold text-brand-text">Xác nhận tác vụ hệ thống</span>
-            </div>
-            <div className="p-5 text-xs text-brand-text space-y-3">
+        <Modal
+          open
+          onClose={() => setConfirmAction(null)}
+          icon={<AlertOctagon className="w-5 h-5" />}
+          title="Xác nhận tác vụ hệ thống"
+          size="small"
+          footer={
+            <>
+              <button onClick={() => setConfirmAction(null)} className="bg-brand-surface hover:bg-brand-surface-highest text-brand-text-muted px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer">Hủy bỏ</button>
+              <button onClick={handleConfirmAction} className="bg-brand-primary hover:bg-brand-primary/95 text-brand-on-primary px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer">Xác nhận thực hiện</button>
+            </>
+          }
+        >
+            <div className="text-xs text-brand-text space-y-3">
               <p>{confirmAction.message}</p>
               
               {confirmAction.type === 'lock' && (
@@ -1131,44 +1263,21 @@ export default function TenantDetailModal({
                 </div>
               )}
             </div>
-            <div className="px-5 py-3.5 bg-brand-surface-high border-t border-brand-outline/30 flex justify-end gap-2">
-              <button 
-                onClick={() => setConfirmAction(null)}
-                className="bg-brand-surface hover:bg-brand-surface-highest text-brand-text-muted px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Hủy bỏ
-              </button>
-              <button 
-                onClick={handleConfirmAction}
-                className="bg-brand-primary hover:bg-brand-primary/95 text-brand-on-primary px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Xác nhận thực hiện
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Change Plan Modal Overlay */}
       {showChangePlanModal && (
-        <div className="fixed inset-0 z-[60] bg-brand-bg/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-brand-surface border border-brand-outline rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/40 flex justify-between items-center">
-              <div className="flex items-center gap-2 text-brand-primary">
-                <Sliders className="w-5 h-5 animate-pulse" />
-                <span className="text-sm font-bold text-brand-text">Nâng cấp & Thay đổi gói cước</span>
-              </div>
-              <button 
-                onClick={() => setShowChangePlanModal(false)}
-                className="text-brand-text-muted hover:text-brand-text p-1.5 rounded-lg hover:bg-brand-surface-high transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Body (Scrollable) */}
-            <div className="p-6 overflow-y-auto space-y-5 text-xs text-brand-text">
+        <Modal
+          open
+          onClose={() => setShowChangePlanModal(false)}
+          icon={<Sliders className="w-5 h-5" />}
+          title="Nâng cấp & Thay đổi gói cước"
+          size="medium"
+          closeOnBackdrop={false}
+          footer={changePlanActions}
+        >
+            <div className="space-y-5 text-xs text-brand-text">
               {/* Note / Tenant Info */}
               <div className="bg-brand-surface-high/40 border border-brand-outline/10 p-3 rounded-xl flex justify-between items-center gap-3">
                 <div>
@@ -1333,73 +1442,21 @@ export default function TenantDetailModal({
                 </div>
               </div>
             </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex justify-end gap-2">
-              <button 
-                type="button"
-                onClick={() => setShowChangePlanModal(false)}
-                className="bg-brand-surface hover:bg-brand-surface-highest text-brand-text-muted px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border border-brand-outline/35"
-              >
-                Hủy bỏ
-              </button>
-              <button 
-                type="button"
-                disabled={selectedPlan === tenant.packageName || !!selectedPlanBlockReason || !isPaymentEntryValid(paymentStatusOption, paymentMethod, transactionId)}
-                onClick={() => {
-                  if (selectedPlanBlockReason) {
-                    alert(selectedPlanBlockReason);
-                    return;
-                  }
-                  if (!isPaymentEntryValid(paymentStatusOption, paymentMethod, transactionId)) {
-                    alert('Vui lòng nhập mã giao dịch cho phương thức thanh toán điện tử.');
-                    return;
-                  }
-
-                  setShowChangePlanModal(false);
-                  
-                  // Construct a descriptive system message including selected cycle/payment details
-                  const cycleText = billingCycle === 'yearly' ? 'Hàng năm (Giảm 20%)' : 'Hàng tháng';
-                  const dateText = effectiveDate === 'immediate' ? 'áp dụng ngay lập tức' : 'áp dụng từ chu kỳ tiếp theo';
-                  const methodText = paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : paymentMethod === 'cash' ? 'Tiền mặt' : paymentMethod === 'card' ? 'Thẻ' : 'Khác';
-                  const statusText = paymentStatusOption === 'paid' ? 'Đã thanh toán' : paymentStatusOption === 'unpaid' ? 'Chưa thanh toán' : paymentStatusOption === 'auto' ? 'Trừ thẻ tự động' : 'Đã ra hóa đơn chờ';
-                  const txnInfo = transactionId.trim() ? ` (Mã GD: ${transactionId.trim()})` : '';
-
-                  setConfirmAction({
-                    type: 'change-plan',
-                    message: `Bạn chắc chắn muốn thay đổi gói dịch vụ của Tenant "${tenant.name}" từ gói "${tenant.packageName}" sang gói "${selectedPlan}"? \n\n• Hình thức chu kỳ: ${cycleText}\n• Thời gian hiệu lực: ${dateText}\n• Trạng thái chi trả: ${statusText} qua ${methodText}${txnInfo}.`,
-                    payload: selectedPlan
-                  });
-                }}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${selectedPlan === tenant.packageName || selectedPlanBlockReason || !isPaymentEntryValid(paymentStatusOption, paymentMethod, transactionId) ? 'bg-brand-outline text-brand-text-muted cursor-not-allowed' : 'bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 shadow-md cursor-pointer'}`}
-              >
-                Áp dụng đổi gói
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Renew Plan Modal Overlay */}
       {showRenewPlanModal && (
-        <div className="fixed inset-0 z-[60] bg-brand-bg/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-brand-surface border border-brand-outline rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/40 flex justify-between items-center">
-              <div className="flex items-center gap-2 text-brand-primary">
-                <RefreshCw className="w-5 h-5 animate-spin" style={{ animationDuration: '6s' }} />
-                <span className="text-sm font-bold text-brand-text">Gia hạn gói dịch vụ</span>
-              </div>
-              <button 
-                onClick={() => setShowRenewPlanModal(false)}
-                className="text-brand-text-muted hover:text-brand-text p-1.5 rounded-lg hover:bg-brand-surface-high transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Body (Scrollable) */}
-            <div className="p-6 overflow-y-auto space-y-5 text-xs text-brand-text">
+        <Modal
+          open
+          onClose={() => setShowRenewPlanModal(false)}
+          icon={<RefreshCw className="w-5 h-5" />}
+          title="Gia hạn gói dịch vụ"
+          size="medium"
+          closeOnBackdrop={false}
+          footer={renewPlanActions}
+        >
+            <div className="space-y-5 text-xs text-brand-text">
               {/* Tenant and Subscription Summary */}
               <div className="bg-brand-surface-high/40 border border-brand-outline/15 p-4 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -1567,96 +1624,46 @@ export default function TenantDetailModal({
                 </div>
               </div>
             </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex justify-end gap-2">
-              <button 
-                type="button"
-                onClick={() => setShowRenewPlanModal(false)}
-                className="bg-brand-surface hover:bg-brand-surface-highest text-brand-text-muted px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border border-brand-outline/35"
-              >
-                Hủy bỏ
-              </button>
-              <button 
-                type="button"
-                disabled={!isPaymentEntryValid(renewPaymentStatus, renewPaymentMethod, renewTransactionId)}
-                onClick={() => {
-                  if (!isPaymentEntryValid(renewPaymentStatus, renewPaymentMethod, renewTransactionId)) {
-                    alert('Vui lòng nhập mã giao dịch cho phương thức thanh toán điện tử.');
-                    return;
-                  }
-                  setShowRenewPlanModal(false);
-                  
-                  let durationText = '1 tháng';
-                  let addedDays = 30;
-                  if (renewDuration === '3_months') { durationText = '3 tháng'; addedDays = 90; }
-                  else if (renewDuration === '6_months') { durationText = '6 tháng'; addedDays = 180; }
-                  else if (renewDuration === '1_year') { durationText = '1 năm'; addedDays = 365; }
-
-                  const currentDaysRemaining = tenant.daysRemaining !== undefined ? tenant.daysRemaining : details.daysRemaining;
-                  const newDaysRemaining = currentDaysRemaining + addedDays;
-                  const newExpDateStr = getExpirationDateStr(newDaysRemaining);
-
-                  const targetCurrency = normalizeCurrency(tenant.currency);
-                  const price = getRenewPrice(packages, tenant, renewDuration, targetCurrency);
-                  const amountFormatted = formatMoney(price, targetCurrency);
-
-                  const methodText = renewPaymentMethod === 'bank_transfer' ? 'Chuyển khoản' : renewPaymentMethod === 'cash' ? 'Tiền mặt' : renewPaymentMethod === 'card' ? 'Thẻ' : 'Khác';
-                  const statusText = renewPaymentStatus === 'paid' ? 'Đã thu tiền' : renewPaymentStatus === 'unpaid' ? 'Chưa thu tiền' : renewPaymentStatus === 'auto' ? 'Thu tự động thành công' : 'Gia hạn & gửi invoice chờ';
-                  const txnInfo = renewTransactionId.trim() ? ` (Mã GD: ${renewTransactionId.trim()})` : '';
-
-                  setConfirmAction({
-                    type: 'renew',
-                    message: `Bạn chắc chắn muốn gia hạn gói dịch vụ "${tenant.packageName}" của Tenant "${tenant.name}" thêm ${durationText}?\n\n• Ngày hết hạn mới: ${newExpDateStr}\n• Số tiền cần thu: ${amountFormatted}\n• Trạng thái chi trả: ${statusText} qua ${methodText}${txnInfo}.`,
-                    payload: {
-                      duration: renewDuration,
-                      paymentStatus: renewPaymentStatus,
-                      paymentMethod: renewPaymentMethod,
-                      transactionId: renewTransactionId,
-                      note: renewNote
-                    }
-                  });
-                }}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${isPaymentEntryValid(renewPaymentStatus, renewPaymentMethod, renewTransactionId) ? 'bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 shadow-md cursor-pointer' : 'bg-brand-outline text-brand-text-muted cursor-not-allowed'}`}
-              >
-                Áp dụng gia hạn
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {pendingBranch && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-bg/90 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl">
-            <div className="border-b border-brand-outline/40 bg-brand-surface-high px-6 py-5"><p className="text-[10px] font-black uppercase tracking-wider text-brand-primary">Bước xác nhận cuối</p><h3 className="mt-1 text-lg font-black text-brand-text">Xác nhận thêm chi nhánh</h3><p className="mt-1 text-xs text-brand-text-muted">Kiểm tra thông tin trước khi đồng bộ cho Super Admin và Tenant Admin.</p></div>
-            <div className="space-y-4 p-6"><div className="rounded-2xl border border-brand-primary/20 bg-brand-primary/10 p-4"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-black text-brand-primary">{pendingBranch.code}</span><span className="rounded-full bg-brand-surface px-2 py-1 text-[9px] font-bold text-brand-text-muted">{getBranchModelLabel(pendingBranch.model)}</span>{pendingBranch.isPrimary && <span className="rounded-full bg-slate-900 px-2 py-1 text-[9px] font-bold text-white">Chi nhánh chính</span>}</div><p className="mt-2 text-base font-black text-brand-text">{pendingBranch.name}</p><p className="mt-1 text-xs text-brand-text-muted">{pendingBranch.address}</p></div><div className="grid grid-cols-2 gap-3 text-xs"><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Quản lý</p><p className="mt-1 font-bold text-brand-text">{pendingBranch.managerName}</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Trạng thái</p><p className="mt-1 font-bold text-brand-text">{getBranchStatusLabel(pendingBranch.status)}</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Nguồn lực</p><p className="mt-1 font-bold text-brand-text">{pendingBranch.staffUsed} nhân sự · {pendingBranch.stationCount} vị trí</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Hạn mức sau thêm</p><p className="mt-1 font-bold text-brand-text">{details.branches.length + 1} / {currentBranchLimitLabel}</p></div></div><div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-[10px] leading-5 text-brand-text-muted">Sau khi xác nhận, chi nhánh sẽ xuất hiện đồng thời ở Super Admin và Tenant Admin. Nếu đặt làm chi nhánh chính, chi nhánh chính hiện tại sẽ chuyển thành chi nhánh thành viên.</div></div>
-            <div className="flex justify-end gap-2 border-t border-brand-outline/40 bg-brand-surface-high px-6 py-4"><button type="button" onClick={() => { setPendingBranch(null); setShowAddBranchModal(true); }} className="rounded-lg border border-brand-outline/40 bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text">Quay lại chỉnh sửa</button><button type="button" onClick={confirmAddBranch} className="rounded-lg bg-brand-primary px-5 py-2 text-xs font-black text-brand-on-primary shadow-md">Xác nhận thêm chi nhánh</button></div>
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setPendingBranch(null)}
+          eyebrow="Bước xác nhận cuối"
+          title="Xác nhận thêm chi nhánh"
+          description="Kiểm tra thông tin trước khi đồng bộ cho Super Admin và Tenant Admin."
+          size="medium"
+          closeOnBackdrop={false}
+          footer={
+            <>
+              <button type="button" onClick={() => { setPendingBranch(null); setShowAddBranchModal(true); }} className="rounded-lg border border-brand-outline/40 bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text">Quay lại chỉnh sửa</button>
+              <button type="button" onClick={confirmAddBranch} className="rounded-lg bg-brand-primary px-5 py-2 text-xs font-black text-brand-on-primary shadow-md">Xác nhận thêm chi nhánh</button>
+            </>
+          }
+        >
+            <div className="space-y-4"><div className="rounded-2xl border border-brand-primary/20 bg-brand-primary/10 p-4"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-black text-brand-primary">{pendingBranch.code}</span><span className="rounded-full bg-brand-surface px-2 py-1 text-[9px] font-bold text-brand-text-muted">{getBranchModelLabel(pendingBranch.model)}</span>{pendingBranch.isPrimary && <span className="rounded-full bg-slate-900 px-2 py-1 text-[9px] font-bold text-white">Chi nhánh chính</span>}</div><p className="mt-2 text-base font-black text-brand-text">{pendingBranch.name}</p><p className="mt-1 text-xs text-brand-text-muted">{pendingBranch.address}</p></div><div className="grid grid-cols-2 gap-3 text-xs"><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Quản lý</p><p className="mt-1 font-bold text-brand-text">{pendingBranch.managerName}</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Trạng thái</p><p className="mt-1 font-bold text-brand-text">{getBranchStatusLabel(pendingBranch.status)}</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Nguồn lực</p><p className="mt-1 font-bold text-brand-text">{pendingBranch.staffUsed} nhân sự · {pendingBranch.stationCount} vị trí</p></div><div className="rounded-xl bg-brand-surface-high p-3"><p className="text-[9px] font-bold uppercase text-brand-text-muted">Hạn mức sau thêm</p><p className="mt-1 font-bold text-brand-text">{details.branches.length + 1} / {currentBranchLimitLabel}</p></div></div><div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-[10px] leading-5 text-brand-text-muted">Sau khi xác nhận, chi nhánh sẽ xuất hiện đồng thời ở Super Admin và Tenant Admin. Nếu đặt làm chi nhánh chính, chi nhánh chính hiện tại sẽ chuyển thành chi nhánh thành viên.</div></div>
+        </Modal>
       )}
 
       {showAddBranchModal && (
-        <div className="fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fadeIn">
-          <form onSubmit={handleAddBranch} className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl">
-            <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/45 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Store className="w-5 h-5 text-brand-primary" />
-                <span className="text-sm font-bold text-brand-text">Thêm chi nhánh cho tenant</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  resetAddBranchForm();
-                  setShowAddBranchModal(false);
-                }}
-                className="text-brand-text-muted hover:text-brand-text p-1.5 rounded-lg hover:bg-brand-surface-highest/80 transition-all cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 overflow-y-auto p-6">
+        <Modal
+          open
+          onClose={() => { resetAddBranchForm(); setShowAddBranchModal(false); }}
+          icon={<Store className="w-5 h-5" />}
+          title="Thêm chi nhánh cho tenant"
+          size="large"
+          closeOnBackdrop={false}
+          footer={
+            <>
+              <button type="button" onClick={() => { resetAddBranchForm(); setShowAddBranchModal(false); }} className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer">Hủy</button>
+              <button type="submit" form="add-branch-form" disabled={!newBranchValidation.isValid || !newBranchCode} className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-colors ${!newBranchValidation.isValid || !newBranchCode ? 'cursor-not-allowed bg-brand-surface-highest text-brand-text-muted' : 'cursor-pointer bg-brand-primary text-brand-on-primary hover:bg-brand-primary/90'}`}><Plus className="w-3.5 h-3.5 stroke-[3]" /><span>Kiểm tra & xác nhận</span></button>
+            </>
+          }
+        >
+          <form id="add-branch-form" onSubmit={handleAddBranch}>
+            <div className="space-y-4">
               <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/10 p-3 text-xs">
                 <p className="font-bold text-brand-text">{tenant.name}</p>
                 <p className="text-brand-text-muted mt-0.5">
@@ -1751,104 +1758,73 @@ export default function TenantDetailModal({
               </div>
               <div className={`rounded-xl border p-3 ${newBranchValidation.isValid ? 'border-emerald-500/25 bg-emerald-500/10' : 'border-amber-500/25 bg-amber-500/10'}`}><p className={`text-xs font-bold ${newBranchValidation.isValid ? 'text-emerald-500' : 'text-amber-500'}`}>{newBranchValidation.isValid ? 'Thông tin hợp lệ — sẵn sàng xác nhận' : `Cần hoàn thiện ${Object.keys(newBranchValidation.errors).length} điều kiện`}</p>{!newBranchValidation.isValid && <ul className="mt-2 space-y-1 text-[10px] leading-4 text-brand-text-muted">{Object.values(newBranchValidation.errors).map((error) => <li key={error}>• {error}</li>)}</ul>}</div>
             </div>
-
-            <div className="px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  resetAddBranchForm();
-                  setShowAddBranchModal(false);
-                }}
-                className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={!newBranchValidation.isValid || !newBranchCode}
-                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-colors ${newBranchValidation.isValid && newBranchCode ? 'cursor-pointer bg-brand-primary text-brand-on-primary shadow-md hover:bg-brand-primary/90' : 'cursor-not-allowed bg-brand-outline text-brand-text-muted'}`}
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Kiểm tra & xác nhận</span>
-              </button>
-            </div>
           </form>
-        </div>
+        </Modal>
       )}
 
-      {/* Main Container */}
-      <div className={`bg-brand-surface border border-brand-outline rounded-3xl w-full overflow-hidden shadow-2xl flex flex-col transition-all duration-300 ${viewMode === 'full' ? 'max-w-6xl h-[90vh]' : 'max-w-xl h-auto max-h-[85vh]'}`}>
-        
-        {/* Header (Static) */}
-        <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/40 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex gap-4 items-center">
-            {tenant.logoUrl ? (
-              <img
-                src={tenant.logoUrl}
-                alt={`Ảnh đại diện ${tenant.name}`}
-                className="w-12 h-12 rounded-2xl object-cover border border-brand-outline/45 bg-brand-surface shadow-sm"
-              />
+      {/* Hộp thoại chi tiết tenant.
+          Trước đây đây là overlay `fixed inset-0` tự dựng: không có role dialog,
+          Escape không đóng được, focus không vào trong và Tab đi thẳng ra nền.
+          Nay dùng `ui/Modal` như phần còn lại của hệ thống. */}
+      <Modal
+        open
+        onClose={onClose}
+        size={viewMode === 'full' ? 'fullscreen' : 'large'}
+        title={tenant.name}
+        description={(
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-brand-secondary">Gói {tenant.packageName}</span>
+            <span aria-hidden="true">•</span>
+            {details.daysRemaining > 0 ? (
+              <span>Còn <strong className="font-bold text-brand-text">{details.daysRemaining} ngày</strong></span>
             ) : (
-              <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary border border-brand-primary/25 text-sm font-black">
-                {getTenantInitials(tenant.name)}
-              </div>
+              <span className="font-bold text-brand-error">Hết hạn {Math.abs(details.daysRemaining)} ngày</span>
             )}
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-extrabold text-brand-text tracking-tight">{tenant.name}</h3>
-                <span className="text-[10px] text-brand-text-muted font-mono bg-brand-surface px-2 py-0.5 rounded border border-brand-outline/40">{tenant.id}</span>
-                {getStatusBadge(tenant.status)}
-              </div>
-              <div className="flex items-center gap-2 mt-1.5 text-xs text-brand-text-muted flex-wrap">
-                <span className="font-semibold text-brand-secondary">Gói {tenant.packageName}</span>
-                <span>•</span>
-                {details.daysRemaining > 0 ? (
-                  <span>Còn <strong className="text-brand-text font-bold">{details.daysRemaining} ngày</strong></span>
-                ) : (
-                  <span className="text-brand-error font-bold">Hết hạn {Math.abs(details.daysRemaining)} ngày</span>
-                )}
-                <span>•</span>
-                <span className="text-brand-text font-semibold">{getPaymentStatusText(details.paymentStatus)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-stretch md:self-auto justify-between md:justify-end border-t md:border-t-0 pt-2.5 md:pt-0 border-brand-outline/10">
-            {/* View Mode Switcher */}
-            <div className="bg-brand-surface p-1 rounded-xl border border-brand-outline/30 flex items-center gap-0.5 text-xs">
-              <button 
+            <span aria-hidden="true">•</span>
+            <span className="font-semibold text-brand-text">{getPaymentStatusText(details.paymentStatus)}</span>
+          </span>
+        )}
+        icon={tenant.logoUrl
+          ? <img src={tenant.logoUrl} alt="" className="h-full w-full rounded-control object-cover" />
+          : <span className="font-black">{getTenantInitials(tenant.name)}</span>}
+        headerAside={(
+          <span className="flex items-center gap-2">
+            <span className="rounded border border-brand-outline bg-brand-surface-high px-2 py-0.5 text-caption text-brand-text-muted">{tenant.id}</span>
+            <StatusBadge status={tenant.status} size="small" />
+          </span>
+        )}
+        bodyClassName="!p-0"
+        footer={detailFooter}
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
+        {/* Dải điều khiển: chế độ xem và các chỉ số đồng bộ. */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-outline bg-brand-surface-high/60 px-6 py-2.5 text-brand-text-muted">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-0.5 rounded-control border border-brand-outline bg-brand-surface p-1" role="group" aria-label="Chế độ xem">
+              <button
+                type="button"
                 onClick={() => setViewMode('quick')}
-                className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${viewMode === 'quick' ? 'bg-brand-primary/15 text-brand-primary' : 'text-brand-text-muted hover:text-brand-text'}`}
+                aria-pressed={viewMode === 'quick'}
+                className={`rounded-control border-0 px-3 py-1.5 font-semibold shadow-none ${viewMode === 'quick' ? 'bg-brand-primary/15 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:text-brand-text'}`}
               >
                 Xem nhanh
               </button>
-              <button 
+              <button
+                type="button"
                 onClick={() => setViewMode('full')}
-                className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${viewMode === 'full' ? 'bg-brand-primary/15 text-brand-primary' : 'text-brand-text-muted hover:text-brand-text'}`}
+                aria-pressed={viewMode === 'full'}
+                className={`rounded-control border-0 px-3 py-1.5 font-semibold shadow-none ${viewMode === 'full' ? 'bg-brand-primary/15 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:text-brand-text'}`}
               >
                 Xem đầy đủ
               </button>
             </div>
-
-            <button 
-              onClick={onClose}
-              className="text-brand-text-muted hover:text-brand-text p-1.5 rounded-xl bg-brand-surface hover:bg-brand-surface-high border border-brand-outline/30 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Modal Info Summary strip (Static in full mode) */}
-        <div className="bg-brand-surface-high/60 border-b border-brand-outline/20 px-6 py-2 flex flex-wrap justify-between items-center gap-2 text-[11px] text-brand-text-muted">
-          <div className="flex items-center gap-4">
             {getHealthBadge(details.healthStatus)}
-            <span>Lần đồng bộ gần nhất: <strong className="text-brand-text font-mono">{details.lastSync}</strong></span>
+            <span>Đồng bộ gần nhất: <strong className="text-brand-text">{details.lastSync}</strong></span>
           </div>
-          <div className="flex items-center gap-1.5 text-brand-primary/90 font-mono font-medium">
-            <Globe className="w-3.5 h-3.5" />
+          <span className="flex items-center gap-1.5 font-medium text-brand-primary">
+            <Globe className="h-3.5 w-3.5" aria-hidden="true" />
             <span title={details.timezone}>{getCountryLabel(details.country)}</span>
-          </div>
+          </span>
         </div>
 
         {/* Content Box */}
@@ -2012,7 +1988,7 @@ export default function TenantDetailModal({
                             } else if (details.alerts[0].id.includes('PAY')) {
                               setActiveTab('config');
                             } else {
-                              triggerToast(`Đã điều hướng tới tác vụ: ${details.alerts[0].action}`);
+                              showToast(`Đã điều hướng tới tác vụ: ${details.alerts[0].action}`, 'info');
                             }
                           }}
                           className="shrink-0 bg-brand-surface border border-brand-outline hover:bg-brand-surface-high text-brand-text px-4 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer"
@@ -2195,7 +2171,12 @@ export default function TenantDetailModal({
                                   {getInvoiceStatusBadge(inv.status)}
                                 </td>
                                 <td className="py-3 px-4 text-right">
-                                  <button onClick={() => triggerToast(`Đang tải xuống PDF hóa đơn ${inv.id}...`)} className="min-w-[92px] justify-center text-brand-primary border border-brand-primary/25 bg-brand-primary/10 hover:bg-brand-primary/15 cursor-pointer inline-flex items-center gap-1.5 font-bold px-3 py-1.5 rounded-lg whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    disabled
+                                    title="Xuất PDF cần dịch vụ hóa đơn ở phía máy chủ — chưa khả dụng."
+                                    className="min-w-[92px] justify-center text-brand-text-muted border border-brand-outline/40 bg-brand-surface-high cursor-not-allowed inline-flex items-center gap-1.5 font-bold px-3 py-1.5 rounded-lg whitespace-nowrap"
+                                  >
                                     <span>Tải PDF</span>
                                     <ArrowUpRight className="w-3 h-3 shrink-0" />
                                   </button>
@@ -2480,158 +2461,11 @@ export default function TenantDetailModal({
 
           </div>
 
-          {/* Sidebar / Support & Control Panel (Static on Desktop, Drawer on Mobile if Fullmode) */}
-          {false && viewMode === 'full' && (
-            <div className="w-full lg:w-72 bg-brand-surface-high border-t lg:border-t-0 lg:border-l border-brand-outline/40 p-6 flex flex-col justify-between gap-6 overflow-y-auto">
-              
-              {/* Quick Support Actions */}
-              <div className="space-y-4">
-                <h5 className="text-[10px] uppercase font-bold tracking-wider text-brand-text-muted">Tác vụ hỗ trợ khẩn</h5>
-                
-                <div className="space-y-2.5 text-xs">
-                  <button 
-                    onClick={() => triggerToast(`Đã gửi email nhắc cước & báo cáo dịch vụ đến: ${tenant.adminEmail}`)}
-                    className="w-full bg-brand-surface hover:bg-brand-surface-high text-brand-text px-3.5 py-2.5 rounded-xl font-bold border border-brand-outline/35 transition-colors flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <Mail className="w-4 h-4 text-brand-secondary" />
-                    <span>Gửi báo cáo Email</span>
-                  </button>
-
-                  <button 
-                    onClick={() => alert(`Hotline Hệ thống NailSaaS: Đang gọi đến số di động của Tenant: ${tenant.phone}`)}
-                    className="w-full bg-brand-surface hover:bg-brand-surface-high text-brand-text px-3.5 py-2.5 rounded-xl font-bold border border-brand-outline/35 transition-colors flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <Phone className="w-4 h-4 text-brand-primary" />
-                    <span>Gọi điện trực tiếp</span>
-                  </button>
-
-                  <button 
-                    onClick={() => setShowSendNotification(true)}
-                    className="w-full bg-brand-surface hover:bg-brand-surface-high text-brand-text px-3.5 py-2.5 rounded-xl font-bold border border-brand-outline/35 transition-colors flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <AlertCircle className="w-4 h-4 text-brand-tertiary" />
-                    <span>Gửi thông báo Toast</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Drawer for sending notification to tenant */}
-              {showSendNotification && (
-                <div className="p-4 bg-brand-surface rounded-2xl border border-brand-outline/40 space-y-3 mt-4 animate-fadeIn text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-brand-text">Gửi tin nhắn trực tiếp</span>
-                    <button onClick={() => setShowSendNotification(false)} className="text-brand-text-muted hover:text-brand-text cursor-pointer">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <textarea 
-                    value={notificationMsg}
-                    onChange={(e) => setNotificationMsg(e.target.value)}
-                    placeholder="Nội dung thông báo (Sẽ hiển thị popup phía giao diện salon)..."
-                    rows={2}
-                    className="w-full bg-brand-surface-high border border-brand-outline rounded-lg p-2 text-xs focus:outline-none focus:border-brand-primary text-brand-text"
-                  />
-                  <div className="flex justify-end gap-1.5">
-                    <button onClick={() => { setNotificationMsg(''); setShowSendNotification(false); }} className="bg-brand-surface-high px-2 py-1 rounded text-[10px] text-brand-text-muted cursor-pointer">Hủy</button>
-                    <button onClick={() => {
-                      if (!notificationMsg.trim()) return;
-                      triggerToast("Đã đẩy thông báo tới Tenant thành công!");
-                      setNotificationMsg('');
-                      setShowSendNotification(false);
-                    }} className="bg-brand-primary text-brand-on-primary px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer">Gửi đi</button>
-                  </div>
-                </div>
-              )}
-
-              {/* Management Zone / Danger Area */}
-              <div className="space-y-4 border-t border-brand-outline/25 pt-6">
-                <h5 className="text-[10px] uppercase font-bold tracking-wider text-brand-text-muted">Quản trị tối cao (Superadmin)</h5>
-                
-                <div className="space-y-2.5 text-xs">
-                  {tenant.status === 'SUSPENDED' ? (
-                    <button 
-                      onClick={() => setConfirmAction({
-                        type: 'unlock',
-                        message: `Bạn chắc chắn muốn MỞ KHÓA dịch vụ hoạt động cho Tenant "${tenant.name}"? Hệ thống sẽ kích hoạt lại quyền truy cập.`
-                      })}
-                      className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-3.5 py-2.5 rounded-xl font-bold border border-emerald-500/15 transition-all flex items-center gap-2.5 cursor-pointer"
-                    >
-                      <Unlock className="w-4 h-4" />
-                      <span>Kích hoạt hoạt động</span>
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => setConfirmAction({
-                        type: 'lock',
-                        message: `Bạn chắc chắn muốn KHÓA TẠM THỜI hoạt động của Tenant "${tenant.name}"? Tenant Admin và toàn bộ nhân viên sẽ bị mất quyền truy cập hệ thống ngay lập tức.`
-                      })}
-                      className="w-full bg-brand-error/10 hover:bg-brand-error/20 text-brand-error px-3.5 py-2.5 rounded-xl font-bold border border-brand-error/15 transition-all flex items-center gap-2.5 cursor-pointer"
-                    >
-                      <Lock className="w-4 h-4" />
-                      <span>Khóa tạm thời</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-            </div>
-          )}
 
         </div>
 
-        {/* Footer (Static Actions Panel) */}
-        <div className="px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex justify-between items-center gap-4">
-          <div className="text-xs text-brand-text-muted">
-            {viewMode === 'full' ? (
-              <span>Đang xem chi tiết vận hành đầy đủ của <strong>{tenant.name}</strong></span>
-            ) : (
-              <span>Xem tóm tắt thông tin của <strong>{tenant.name}</strong></span>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {viewMode === 'full' && (
-              tenant.status === 'SUSPENDED' ? (
-                <button
-                  onClick={() => setConfirmAction({
-                    type: 'unlock',
-                    message: `Bạn chắc chắn muốn MỞ KHÓA dịch vụ hoạt động cho Tenant "${tenant.name}"? Hệ thống sẽ kích hoạt lại quyền truy cập.`
-                  })}
-                  className="bg-brand-secondary/10 hover:bg-brand-secondary/20 text-brand-secondary px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer border border-brand-secondary/25"
-                >
-                  <Unlock className="w-3.5 h-3.5" />
-                  <span>Mở khóa</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => setConfirmAction({
-                    type: 'lock',
-                    message: `Bạn chắc chắn muốn KHÓA TẠM THỜI hoạt động của Tenant "${tenant.name}"? Tenant Admin và toàn bộ nhân viên sẽ bị mất quyền truy cập hệ thống ngay lập tức.`
-                  })}
-                  className="bg-brand-error/10 hover:bg-brand-error/20 text-brand-error px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer border border-brand-error/25"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Khóa tạm thời</span>
-                </button>
-              )
-            )}
-            <button 
-              onClick={() => { onEditClick(); onClose(); }}
-              className="bg-brand-secondary hover:bg-brand-secondary/90 text-brand-on-secondary px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer shadow-md"
-            >
-              <Edit className="w-3.5 h-3.5" />
-              <span>Sửa Tenant</span>
-            </button>
-            <button 
-              onClick={onClose}
-              className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-brand-outline/40"
-            >
-              Đóng lại
-            </button>
-          </div>
         </div>
-
-      </div>
-    </div>
+      </Modal>
+    </>
   );
 }

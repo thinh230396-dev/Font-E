@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   CalendarCheck2,
@@ -30,6 +30,9 @@ import {
   X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { formatMoney as formatCurrency } from '../utils/money';
+import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader } from './ui';
+import type { DataTableColumn } from './ui';
 
 type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
@@ -106,15 +109,35 @@ interface AppointmentFormState {
   note: string;
 }
 
-const statusMeta: Record<AppointmentStatus, { label: string; shortLabel: string; symbol: string; badge: string; card: string; dot: string }> = {
-  PENDING: { label: 'Chờ xác nhận', shortLabel: 'Chờ', symbol: '!', badge: 'bg-amber-50 text-amber-700 ring-amber-200', card: 'border-amber-300 bg-amber-50/95 text-amber-950', dot: 'bg-amber-500' },
-  CONFIRMED: { label: 'Đã xác nhận', shortLabel: 'Xác nhận', symbol: '✓', badge: 'bg-blue-50 text-blue-700 ring-blue-200', card: 'border-blue-300 bg-blue-50/95 text-blue-950', dot: 'bg-blue-500' },
-  CHECKED_IN: { label: 'Đã đến', shortLabel: 'Đã đến', symbol: '↳', badge: 'bg-cyan-50 text-cyan-700 ring-cyan-200', card: 'border-cyan-300 bg-cyan-50/95 text-cyan-950', dot: 'bg-cyan-500' },
-  IN_SERVICE: { label: 'Đang phục vụ', shortLabel: 'Phục vụ', symbol: '●', badge: 'bg-violet-50 text-violet-700 ring-violet-200', card: 'border-violet-300 bg-violet-50/95 text-violet-950', dot: 'bg-violet-500' },
-  COMPLETED: { label: 'Hoàn thành', shortLabel: 'Xong', symbol: '✓', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', card: 'border-emerald-300 bg-emerald-50/95 text-emerald-950', dot: 'bg-emerald-500' },
-  CANCELLED: { label: 'Đã hủy', shortLabel: 'Đã hủy', symbol: '×', badge: 'bg-rose-50 text-rose-700 ring-rose-200', card: 'border-rose-300 bg-rose-50/90 text-rose-950', dot: 'bg-rose-500' },
-  NO_SHOW: { label: 'Không đến', shortLabel: 'Vắng', symbol: '—', badge: 'bg-slate-100 text-slate-600 ring-slate-200', card: 'border-slate-300 bg-slate-100/95 text-slate-700', dot: 'bg-slate-500' }
+/**
+ * Từ vựng nghiệp vụ riêng của màn hình Lịch hẹn.
+ *
+ * Bảng này chỉ chứa CHỮ. Tông màu và icon của trạng thái luôn lấy từ
+ * `STATUS_MAP` qua `getStatusDefinition`, nên đây không phải bảng ánh xạ trạng
+ * thái thứ hai (README §15.2). `short` dùng cho cột lịch hẹp, nơi nhãn đầy đủ
+ * bị cắt mất nghĩa.
+ */
+const appointmentStatusText: Record<AppointmentStatus, { label: string; short: string }> = {
+  PENDING: { label: 'Chờ xác nhận', short: 'Chờ' },
+  CONFIRMED: { label: 'Đã xác nhận', short: 'Xác nhận' },
+  CHECKED_IN: { label: 'Đã đến', short: 'Đã đến' },
+  IN_SERVICE: { label: 'Đang phục vụ', short: 'Phục vụ' },
+  COMPLETED: { label: 'Hoàn thành', short: 'Xong' },
+  CANCELLED: { label: 'Đã hủy', short: 'Đã hủy' },
+  NO_SHOW: { label: 'Không đến', short: 'Vắng' }
 };
+
+/** Tông ngữ nghĩa của một trạng thái. Nguồn duy nhất là `STATUS_MAP`. */
+const statusTone = (status: AppointmentStatus) => getStatusDefinition(status).tone;
+
+/**
+ * Icon của trạng thái, cũng lấy từ `STATUS_MAP`. Thẻ lịch quá thấp không đủ
+ * chỗ cho badge đầy đủ, nhưng vẫn phải có tín hiệu ngoài màu sắc (§5.2).
+ */
+function StatusGlyph({ status, className = '' }: { status: AppointmentStatus; className?: string }) {
+  const Icon = getStatusDefinition(status).icon;
+  return <Icon className={className} aria-hidden="true" />;
+}
 
 const sourceLabels: Record<AppointmentSource, string> = {
   ONLINE: 'Đặt lịch online',
@@ -200,13 +223,32 @@ const nextStatusLabel: Partial<Record<AppointmentStatus, string>> = {
   IN_SERVICE: 'Hoàn thành dịch vụ'
 };
 
-const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
-// Keep the full 08:00–20:00 operating day visible without a nested vertical scroll.
-// Appointment details remain available in the detail dialog after selecting a card.
-const SCHEDULE_HOUR_HEIGHT = 40;
+/**
+ * Control đứng một mình trên thanh công cụ (ô tìm kiếm, chọn ngày). Control
+ * nằm trong biểu mẫu dùng `Field`, được `.ui-field` tạo hình sẵn.
+ */
+const controlClass = 'h-[var(--size-control-sm)] w-full rounded-control border border-brand-outline bg-brand-surface px-3 text-body text-brand-text outline-none';
+
+// Giữ trọn ngày làm việc 08:00–20:00 trong tầm nhìn, không tạo thanh cuộn dọc
+// lồng nhau. Chi tiết lịch hẹn vẫn mở được ở hộp thoại sau khi chọn thẻ.
+// 56px mỗi giờ là mức tối thiểu để thẻ 60 phút chứa được chữ 13–14px — sàn
+// typography của README §4.3 — mà không phải cắt nội dung.
+const SCHEDULE_HOUR_HEIGHT = 56;
 const SCHEDULE_BOTTOM_GUTTER = 22;
-const SCHEDULE_EXPANDED_STAFF_HEADER_HEIGHT = 48;
+/** Chiều cao tạm tính của đầu cột nhân viên, dùng trước khi đo được thật. */
+const SCHEDULE_EXPANDED_STAFF_HEADER_HEIGHT = 56;
 const STAFF_COLUMNS_PER_PAGE = 6;
+/** Bề ngang mong muốn của một cột nhân viên khi còn dư chỗ. */
+const SCHEDULE_PREFERRED_COLUMN_WIDTH = 220;
+/**
+ * Bề ngang tối thiểu vẫn còn đọc được tên và tỉ lệ kín lịch của một cột.
+ *
+ * Dưới mức này thì thu hẹp thêm cũng vô nghĩa vì tên nhân viên bị cắt gần hết,
+ * nên lúc đó mới chấp nhận cho lưới cuộn ngang.
+ */
+const SCHEDULE_MIN_COLUMN_WIDTH = 140;
+/** Thẻ ngắn nhất vẫn phải đọc được giờ và tên khách. */
+const SCHEDULE_MIN_CARD_HEIGHT = 44;
 
 const toDate = (date: string) => new Date(`${date}T00:00:00`);
 
@@ -250,7 +292,6 @@ const getWeekDates = (selectedDate: string) => {
   });
 };
 
-const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')}đ`;
 
 const formatSelectedDate = (date: string) => toDate(date).toLocaleDateString('vi-VN', {
   weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric'
@@ -323,6 +364,8 @@ export default function TenantAdminAppointments({
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
   const scheduleViewportRef = useRef<HTMLDivElement | null>(null);
   const [scheduleViewportHeight, setScheduleViewportHeight] = useState(0);
+  const [scheduleViewportWidth, setScheduleViewportWidth] = useState(0);
+  const [scheduleStaffHeaderHeight, setScheduleStaffHeaderHeight] = useState(SCHEDULE_EXPANDED_STAFF_HEADER_HEIGHT);
   const [statusFilter, setStatusFilter] = useState<'ALL' | AppointmentStatus>('ALL');
   const [operationalFilter, setOperationalFilter] = useState<OperationalFilter>('ALL');
   const [staffFilter, setStaffFilter] = useState('ALL');
@@ -371,38 +414,91 @@ export default function TenantAdminAppointments({
     onBookingRequestHandled?.();
   }, [bookingRequest, onBookingRequestHandled, selectedDate]);
 
+  // Ba hộp thoại của màn hình đã chuyển sang `Modal`, vốn tự lo Escape, bẫy
+  // focus, trả focus và khoá cuộn nền. Chỉ còn chế độ xem lịch toàn màn hình —
+  // không phải hộp thoại — cần tự xử lý, và chỉ khi không có hộp thoại nào mở.
   useEffect(() => {
-    if (!selectedAppointment && !formMode && !isScheduleExpanded && !showCancelForm) return;
-    const shouldLockBody = Boolean(selectedAppointment || formMode || isScheduleExpanded || showCancelForm);
+    if (!isScheduleExpanded) return;
     const previousOverflow = document.body.style.overflow;
-    if (shouldLockBody) document.body.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (showCancelForm) setShowCancelForm(false);
-      else if (formMode) setFormMode(null);
-      else if (selectedAppointment) setSelectedAppointment(null);
-      else setIsScheduleExpanded(false);
+      if (selectedAppointment || formMode || showCancelForm) return;
+      setIsScheduleExpanded(false);
     };
     window.addEventListener('keydown', handleEscape);
     return () => {
-      if (shouldLockBody) document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleEscape);
     };
   }, [formMode, isScheduleExpanded, selectedAppointment, showCancelForm]);
 
+  /**
+   * Đo khung lịch ở CẢ hai chế độ: chiều cao để giãn thang giờ khi mở toàn màn
+   * hình, còn bề ngang để chia đều cột nhân viên cho vừa khung (xem
+   * scheduleColumnWidth bên dưới).
+   *
+   * Gắn observer bằng callback ref chứ không bằng useEffect: khung lịch bị tháo
+   * ra lắp lại khi đổi giữa chế độ thường và toàn màn hình, mà useEffect chỉ chạy
+   * lại theo danh sách phụ thuộc nên observer dễ mắc kẹt ở node cũ đã rời DOM —
+   * lúc đó bề ngang đo được đứng yên và lưới không co giãn theo cửa sổ nữa.
+   */
+  const scheduleResizeObserverRef = useRef<ResizeObserver | null>(null);
+  const scheduleMeasureRef = useRef<(() => void) | null>(null);
+  const attachScheduleViewport = useCallback((node: HTMLDivElement | null) => {
+    scheduleViewportRef.current = node;
+    scheduleResizeObserverRef.current?.disconnect();
+    scheduleResizeObserverRef.current = null;
+    if (!node) return;
+    const measureViewport = () => {
+      const box = node.getBoundingClientRect();
+      setScheduleViewportHeight(Math.floor(box.height));
+      setScheduleViewportWidth(Math.floor(box.width));
+    };
+    measureViewport();
+    scheduleMeasureRef.current = measureViewport;
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measureViewport);
+    observer.observe(node);
+    scheduleResizeObserverRef.current = observer;
+  }, []);
+
+  // Dự phòng cho ResizeObserver: một số môi trường không phát callback khi trang
+  // không được vẽ. Sự kiện resize của cửa sổ phủ đúng trường hợp hay gặp nhất là
+  // người dùng đổi kích thước cửa sổ hoặc xoay ngang thiết bị.
   useEffect(() => {
-    if (!isScheduleExpanded) {
-      setScheduleViewportHeight(0);
+    const handleResize = () => scheduleMeasureRef.current?.();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  /**
+   * Đo luôn đầu cột nhân viên vì nó dính ở đỉnh khung và ăn vào chỗ của thang
+   * giờ. Chiều cao thật đổi theo nội dung — tên dài, badge chi nhánh khi xem
+   * "Tất cả chi nhánh" — nên không đoán được: hằng số 56px trước đây thấp hơn
+   * chiều cao thật (~70px), khiến lưới cao hơn khung và khung giờ cuối ngày bị
+   * cắt mất ở chế độ toàn màn hình.
+   */
+  const scheduleHeaderObserverRef = useRef<ResizeObserver | null>(null);
+  const attachScheduleStaffHeader = useCallback((node: HTMLDivElement | null) => {
+    scheduleHeaderObserverRef.current?.disconnect();
+    scheduleHeaderObserverRef.current = null;
+    if (!node) {
+      setScheduleStaffHeaderHeight(SCHEDULE_EXPANDED_STAFF_HEADER_HEIGHT);
       return;
     }
-    const viewport = scheduleViewportRef.current;
-    if (!viewport) return;
-    const measureViewport = () => setScheduleViewportHeight(Math.floor(viewport.getBoundingClientRect().height));
-    measureViewport();
-    const observer = new ResizeObserver(measureViewport);
-    observer.observe(viewport);
-    return () => observer.disconnect();
-  }, [isScheduleExpanded]);
+    const measureHeader = () => setScheduleStaffHeaderHeight(Math.ceil(node.getBoundingClientRect().height));
+    measureHeader();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measureHeader);
+    observer.observe(node);
+    scheduleHeaderObserverRef.current = observer;
+  }, []);
+
+  useEffect(() => () => {
+    scheduleResizeObserverRef.current?.disconnect();
+    scheduleHeaderObserverRef.current?.disconnect();
+  }, []);
 
   const requireManageAccess = () => {
     if (canManage) return true;
@@ -495,8 +591,64 @@ export default function TenantAdminAppointments({
   const cancellationRate = scopedAppointments.length ? Math.round(cancelledCount / scopedAppointments.length * 100) : 0;
   const activeFilterCount = [operationalFilter !== 'ALL', statusFilter !== 'ALL', staffFilter !== 'ALL', sourceFilter !== 'ALL'].filter(Boolean).length;
   const scheduleHourHeight = isScheduleExpanded && scheduleViewportHeight
-    ? Math.max(24, Math.floor((scheduleViewportHeight - SCHEDULE_EXPANDED_STAFF_HEADER_HEIGHT - SCHEDULE_BOTTOM_GUTTER) / 12))
+    ? Math.max(24, Math.floor((scheduleViewportHeight - scheduleStaffHeaderHeight - SCHEDULE_BOTTOM_GUTTER) / 12))
     : SCHEDULE_HOUR_HEIGHT;
+
+  /** Bề ngang cột giờ bên trái. */
+  const scheduleTimeColumnWidth = isScheduleExpanded ? 64 : 72;
+
+  /**
+   * Bề ngang một cột nhân viên, tính theo chỗ thật sự còn lại trong khung.
+   *
+   * Trước đây cột bị ghim cứng ở 220px và khung còn bị ép `min-width` tối thiểu
+   * 980px, nên đủ 6 nhân viên là lưới rộng 72 + 6×230 = 1452px trong khi khung
+   * chỉ khoảng 1150px — luôn luôn phải cuộn ngang dù màn hình rộng bao nhiêu.
+   *
+   * Nay bề ngang cột co giãn giữa hai mốc: nới tới 220px khi còn dư chỗ, thu về
+   * tối đa 160px để nhét vừa khung. Chỉ khi 160px vẫn không đủ (màn hình hẹp)
+   * thì lưới mới cuộn ngang.
+   */
+  const scheduleColumnWidth = useMemo(() => {
+    if (!visibleScheduleStaff.length) return SCHEDULE_PREFERRED_COLUMN_WIDTH;
+    if (!scheduleViewportWidth) return SCHEDULE_PREFERRED_COLUMN_WIDTH;
+    // Trừ 1px để phép làm tròn không đẩy lưới rộng hơn khung đúng một pixel.
+    const available = scheduleViewportWidth - scheduleTimeColumnWidth - 1;
+    const fairShare = Math.floor(available / visibleScheduleStaff.length);
+    return Math.min(
+      SCHEDULE_PREFERRED_COLUMN_WIDTH,
+      Math.max(SCHEDULE_MIN_COLUMN_WIDTH, fairShare)
+    );
+  }, [scheduleTimeColumnWidth, scheduleViewportWidth, visibleScheduleStaff.length]);
+
+  /**
+   * Chip lọc nhanh theo trạng thái, chỉ giữ trạng thái thật sự có lịch.
+   *
+   * Trước đây luôn in đủ 8 chip nên một ngày vắng khách hiện 6 chip mang số 0 —
+   * tốn nguyên một hàng để nói rằng không có gì. Chip đang được chọn luôn được
+   * giữ lại kể cả khi về 0, nếu không nó biến mất ngay lúc bấm và người dùng
+   * không còn chỗ nào để bỏ lọc.
+   */
+  const statusFilterChips = useMemo(() => (
+    (['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const)
+      .map((status) => ({
+        status,
+        count: status === 'ALL'
+          ? scopedAppointments.length
+          : scopedAppointments.filter((appointment) => appointment.status === status).length
+      }))
+      .filter(({ status, count }) => status === 'ALL' || count > 0 || statusFilter === status)
+  ), [scopedAppointments, statusFilter]);
+
+  const scheduleGridTemplate = isScheduleExpanded
+    ? `64px repeat(${visibleScheduleStaff.length}, minmax(0, 1fr))`
+    : `${scheduleTimeColumnWidth}px repeat(${visibleScheduleStaff.length}, minmax(${scheduleColumnWidth}px, 1fr))`;
+
+  /**
+   * Cột hẹp thì đầu cột phải bớt thành phần, nếu không tên nhân viên chỉ còn vài
+   * ký tự: avatar nhỏ lại, bỏ dòng ca làm và gộp tỉ lệ kín lịch vào dòng vai trò
+   * thay vì để nó chiếm một badge riêng bên phải.
+   */
+  const isCompactStaffHeader = isScheduleExpanded || scheduleColumnWidth < 180;
   const selectedServiceDetails = form.services
     .map((name) => services.find((service) => service.name === name))
     .filter((service): service is (typeof services)[number] => Boolean(service));
@@ -720,113 +872,446 @@ export default function TenantAdminAppointments({
     onSearchQueryChange('');
   };
 
+  /** Cột của chế độ xem danh sách. Cột phụ được ẩn dần ở màn hình hẹp (§17.2). */
+  const appointmentColumns: DataTableColumn<TenantAppointment>[] = [
+    {
+      key: 'time',
+      header: 'Thời gian',
+      width: '15%',
+      cell: (appointment) => (
+        <div className="min-w-0">
+          <p className="font-semibold tabular-nums text-brand-text">
+            {appointment.start}–{getEndTime(appointment.start, appointment.duration)}
+          </p>
+          <p className="mt-0.5 text-caption text-brand-text-muted">
+            <span className="font-mono tracking-tight">{appointment.id}</span>
+            <span aria-hidden="true"> · </span>
+            {appointment.duration} phút
+          </p>
+        </div>
+      )
+    },
+    {
+      key: 'customer',
+      header: 'Khách hàng',
+      cell: (appointment) => (
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-1.5 font-semibold text-brand-text">
+            {appointment.customer}
+            {appointment.firstVisit && (
+              <span className="rounded-pill bg-[var(--accent-soft)] px-2 text-caption font-semibold text-[color:var(--accent-strong)]">
+                Khách mới
+              </span>
+            )}
+          </p>
+          <p className="mt-0.5 text-caption tabular-nums text-brand-text-muted">{appointment.phone}</p>
+        </div>
+      )
+    },
+    {
+      key: 'service',
+      header: 'Dịch vụ',
+      cell: (appointment) => <span className="text-brand-text">{appointment.service}</span>
+    },
+    {
+      key: 'staff',
+      header: 'Nhân viên',
+      hideBelow: 'lg',
+      cell: (appointment) => (
+        <div className="min-w-0">
+          <p className="font-semibold text-brand-text">{appointment.staff}</p>
+          <p className="mt-0.5 text-caption text-brand-text-muted">{branchLabels[appointment.branch]}</p>
+        </div>
+      )
+    },
+    {
+      key: 'source',
+      header: 'Nguồn',
+      hideBelow: 'lg',
+      cell: (appointment) => <span className="text-brand-text-muted">{sourceLabels[appointment.source]}</span>
+    },
+    {
+      key: 'value',
+      header: 'Giá trị',
+      numeric: true,
+      hideBelow: 'md',
+      cell: (appointment) => (
+        <div>
+          <p className="font-semibold text-brand-text">{formatCurrency(appointment.price)}</p>
+          <p className="mt-0.5 text-caption text-brand-text-muted">Cọc {formatCurrency(appointment.deposit)}</p>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      header: 'Trạng thái',
+      cell: (appointment) => (
+        <StatusBadge status={appointment.status} label={appointmentStatusText[appointment.status].label} size="small" />
+      )
+    },
+    {
+      key: 'actions',
+      header: 'Thao tác',
+      headerSrOnly: true,
+      actions: true,
+      // Dòng bảng bấm được bằng chuột, nhưng bàn phím cần nút thật (§19.1).
+      cell: (appointment) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            size="small"
+            variant="ghost"
+            aria-label={`Xem chi tiết lịch của ${appointment.customer}`}
+            onClick={(event) => { event.stopPropagation(); setSelectedAppointment(appointment); }}
+          >
+            Chi tiết
+          </Button>
+          {nextStatus[appointment.status] && !(isReceptionist && appointment.status === 'IN_SERVICE') && (
+            <Button
+              size="small"
+              variant="primary"
+              disabled={!canManage}
+              iconLeading={<Check />}
+              onClick={(event) => { event.stopPropagation(); advanceAppointmentStatus(appointment); }}
+            >
+              {nextStatusLabel[appointment.status]}
+            </Button>
+          )}
+        </div>
+      )
+    }
+  ];
+
   return (
-    <div className={`space-y-4 ${isReceptionist ? 'appointments-receptionist' : ''}`}>
-      <section className={`isolate overflow-hidden border border-slate-200 bg-white ${isScheduleExpanded ? 'ui-fullscreen-layer fixed inset-0 z-[160] flex flex-col rounded-none shadow-2xl' : 'rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]'}`}>
-        <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
-            <button type="button" onClick={() => setSelectedDate(addDays(selectedDate, -1))} aria-label="Ngày trước" className="flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-slate-500 shadow-none hover:bg-white"><ChevronLeft className="h-3.5 w-3.5" /></button>
-            <button type="button" onClick={() => setSelectedDate(initialDate)} className="h-8 border-0 bg-white px-2.5 text-[9px] font-black text-slate-700 shadow-sm">Hôm nay</button>
-            <button type="button" onClick={() => setSelectedDate(addDays(selectedDate, 1))} aria-label="Ngày sau" className="flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-slate-500 shadow-none hover:bg-white"><ChevronRight className="h-3.5 w-3.5" /></button>
-            <span className="ml-1.5 hidden text-[10px] font-black capitalize text-slate-800 sm:block">{formatSelectedDate(selectedDate)}</span>
-            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} aria-label="Chọn ngày xem lịch" className="ml-1 h-8 rounded-lg border border-slate-200 bg-white px-2 text-[9px] font-bold text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100" />
+    <div className={`flex flex-col gap-4 ${isReceptionist ? 'appointments-receptionist' : ''}`}>
+      {/* Đây là màn hình duy nhất của Tenant Admin không có <h1>, nên trình đọc
+          màn hình không đọc được tên trang và nó cũng là trang duy nhất lệch
+          khuôn đầu trang. Ở shell Lễ tân thì không thêm: tên trang đã nằm trên
+          topbar của shell đó, và bàn lễ tân cần trọn chiều cao cho lịch. */}
+      {!isReceptionist && (
+        <PageHeader
+          title="Lịch hẹn"
+        />
+      )}
+      <section className={`isolate border border-brand-outline bg-brand-surface ${isScheduleExpanded ? 'ui-fullscreen-layer fixed inset-0 flex flex-col rounded-none' : 'overflow-hidden rounded-card shadow-card'}`}>
+        {/* Thanh điều khiển hai hàng, chia theo nhóm việc: hàng trên là "đang xem
+            ngày nào", hàng dưới là "làm gì với ngày đó". Trước đây tất cả dồn vào
+            một hàng nên ở bề ngang 1208px nó tự vỡ thành ba hàng lộn xộn. */}
+        <div className="flex flex-col gap-2 border-b border-brand-outline px-3 py-2.5">
+          {/* Hàng 1 — điều hướng ngày và tìm kiếm lịch hẹn */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-control border border-brand-outline bg-brand-surface-lowest p-1">
+              <Button size="small" variant="ghost" iconOnly aria-label="Ngày trước" onClick={() => setSelectedDate(addDays(selectedDate, -1))}><ChevronLeft /></Button>
+              <Button size="small" variant="ghost" onClick={() => setSelectedDate(initialDate)}>Hôm nay</Button>
+              <Button size="small" variant="ghost" iconOnly aria-label="Ngày sau" onClick={() => setSelectedDate(addDays(selectedDate, 1))}><ChevronRight /></Button>
+            </div>
+            <span className="text-body font-semibold capitalize text-brand-text">{formatSelectedDate(selectedDate)}</span>
+            {/* Ô chọn ngày trước đây là một <input type="date"> rộng 427px, lại hiện
+                ngày theo locale trình duyệt ("07/16/2026") nên chỏi với dòng chữ
+                tiếng Việt ngay cạnh. Nay input trong suốt phủ đúng một nút icon:
+                bấm vẫn mở đúng bộ chọn ngày của hệ điều hành, còn ngày hiển thị
+                chỉ do dòng chữ bên trái quyết định. */}
+            <span className="relative inline-flex">
+              <span aria-hidden="true" className="flex h-[var(--size-control-sm)] w-[var(--size-control-sm)] items-center justify-center rounded-control border border-brand-outline bg-brand-surface text-brand-text-muted">
+                <CalendarDays className="h-4 w-4" />
+              </span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                aria-label="Chọn ngày xem lịch"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              />
+            </span>
+
+            <div className="relative min-w-0 flex-1 sm:min-w-72">
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" />
+              <input type="search" value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} aria-label="Tìm lịch hẹn" placeholder="Tìm mã lịch, khách, SĐT, dịch vụ..." className={`${controlClass} pl-9 pr-10`} />
+              {searchQuery && (
+                <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-brand-text-muted shadow-none">
+                  <X aria-hidden="true" className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold text-slate-700 shadow-sm sm:w-40">
+
+          {/* Hàng 2 — phạm vi dữ liệu và hành động trên ngày đang xem */}
+          <div className="flex flex-wrap items-center gap-2">
+            <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className={`${controlClass} w-auto sm:w-44`}>
               <option value="Q3">Quận 3</option>
               <option value="Q1">Quận 1</option>
               {!branchLocked && <option value="ALL">Tất cả chi nhánh</option>}
             </BeautifulSelect>
-            <div className="relative min-w-0 sm:w-72">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm mã lịch, khách, SĐT, dịch vụ..." className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[10px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
-              {searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}
+
+            <Button
+              size="small"
+              variant={showFilters || activeFilterCount ? 'primary' : 'secondary'}
+              onClick={() => setShowFilters((value) => !value)}
+              iconLeading={<Filter />}
+              aria-expanded={showFilters}
+              aria-controls="appointment-filters"
+            >
+              Bộ lọc{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
+            </Button>
+
+            <div role="group" aria-label="Chế độ hiển thị" className="flex items-center gap-1 rounded-control border border-brand-outline bg-brand-surface-lowest p-1">
+              <Button size="small" variant={viewMode === 'SCHEDULE' ? 'primary' : 'ghost'} aria-pressed={viewMode === 'SCHEDULE'} onClick={() => setViewMode('SCHEDULE')} iconLeading={<LayoutGrid />}>Lịch</Button>
+              <Button size="small" variant={viewMode === 'LIST' ? 'primary' : 'ghost'} aria-pressed={viewMode === 'LIST'} onClick={() => setViewMode('LIST')} iconLeading={<LayoutList />}>Danh sách</Button>
             </div>
-            <button type="button" onClick={() => setShowFilters((value) => !value)} className={`flex h-9 items-center justify-center gap-1.5 border px-2.5 text-[9px] font-bold shadow-sm ${showFilters || activeFilterCount ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'}`}><Filter className="h-3.5 w-3.5" />Bộ lọc{activeFilterCount > 0 && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[7px] text-white">{activeFilterCount}</span>}</button>
-            <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1">
-              <button type="button" onClick={() => setViewMode('SCHEDULE')} aria-label="Xem lịch ngày" className={`flex h-8 items-center justify-center gap-1.5 border-0 px-2.5 text-[9px] font-black shadow-none ${viewMode === 'SCHEDULE' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutGrid className="h-3.5 w-3.5" />Lịch</button>
-              <button type="button" onClick={() => setViewMode('LIST')} aria-label="Xem danh sách" className={`flex h-8 items-center justify-center gap-1.5 border-0 px-2.5 text-[9px] font-black shadow-none ${viewMode === 'LIST' ? 'bg-slate-900 text-white' : 'bg-transparent text-slate-400'}`}><LayoutList className="h-3.5 w-3.5" />Danh sách</button>
-            </div>
-            {viewMode === 'SCHEDULE' && <button type="button" onClick={() => { setIsScheduleExpanded((value) => !value); setShowFilters(false); }} className={`flex h-9 items-center justify-center gap-1.5 border px-2.5 text-[8px] font-black shadow-sm ${isScheduleExpanded ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'}`}>{isScheduleExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}{isScheduleExpanded ? 'Thu nhỏ' : 'Vừa màn hình'}</button>}
-            <button type="button" onClick={openCreateForm} disabled={!canManage} title={!canManage ? readOnlyReason || 'Bạn chỉ có quyền xem' : undefined} className={`flex h-9 shrink-0 items-center justify-center gap-1.5 border px-3 text-[8px] font-black text-white shadow-lg disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none ${isReceptionist ? 'border-emerald-700 bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700' : 'border-violet-700 bg-violet-600 shadow-violet-200 hover:bg-violet-700'}`}><Plus className="h-3.5 w-3.5" />Tạo lịch</button>
+
+            {viewMode === 'SCHEDULE' && (
+              <Button
+                size="small"
+                variant={isScheduleExpanded ? 'primary' : 'secondary'}
+                aria-pressed={isScheduleExpanded}
+                onClick={() => { setIsScheduleExpanded((value) => !value); setShowFilters(false); }}
+                iconLeading={isScheduleExpanded ? <Minimize2 /> : <Maximize2 />}
+              >
+                {isScheduleExpanded ? 'Thu nhỏ' : 'Vừa màn hình'}
+              </Button>
+            )}
+
+            <Button
+              size="small"
+              variant="primary"
+              className="ml-auto"
+              onClick={openCreateForm}
+              disabled={!canManage}
+              title={!canManage ? readOnlyReason || 'Bạn chỉ có quyền xem' : undefined}
+              iconLeading={<Plus />}
+            >
+              Tạo lịch
+            </Button>
           </div>
         </div>
 
-        <div className={`${isScheduleExpanded ? 'hidden' : 'grid'} grid-cols-7 border-b border-slate-100 bg-slate-50/70 px-2 sm:px-3`}>
-          {weekDates.map((date) => {
-            const dayAppointments = appointments.filter((appointment) => appointment.date === date && (selectedBranch === 'ALL' || appointment.branch === selectedBranch));
-            const isSelected = date === selectedDate;
-            const isToday = date === initialDate;
-            return (
-              <button key={date} type="button" onClick={() => setSelectedDate(date)} className={`relative flex h-auto min-h-12 flex-col items-center justify-center rounded-none border-0 bg-transparent px-1 py-1 shadow-none ${isSelected ? 'text-violet-700' : 'text-slate-500 hover:bg-white'}`}>
-                <span className="text-[8px] font-bold uppercase">{toDate(date).toLocaleDateString('vi-VN', { weekday: 'short' })}</span>
-                <span className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-black ${isSelected ? 'bg-violet-600 text-white shadow-md shadow-violet-200' : 'bg-transparent text-slate-700'}`}>{toDate(date).getDate()}</span>
-                <span className="text-[7px] font-semibold text-slate-400">{dayAppointments.length} lịch</span>
-                {isToday && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-violet-500" />}
-              </button>
-            );
-          })}
+        {/* Dải tuần — mật độ lịch thể hiện bằng thanh thay vì chữ "12 lịch".
+
+            Chữ khiến mỗi ô phải cao 89px và vẫn phải đọc từng ô mới biết ngày nào
+            đông. Thanh cho biết ngay bằng một cái liếc; con số chính xác vẫn còn ở
+            thuộc tính title và ở chuỗi dành cho trình đọc màn hình. */}
+        <div className={`${isScheduleExpanded ? 'hidden' : 'grid'} grid-cols-7 border-b border-brand-outline bg-brand-surface-lowest px-2 sm:px-3`}>
+          {(() => {
+            const weekCounts = weekDates.map((date) => appointments.filter((appointment) => (
+              appointment.date === date && (selectedBranch === 'ALL' || appointment.branch === selectedBranch)
+            )).length);
+            const busiest = Math.max(1, ...weekCounts);
+
+            return weekDates.map((date, index) => {
+              const dayCount = weekCounts[index];
+              const isSelected = date === selectedDate;
+              const isToday = date === initialDate;
+              // Ngày có lịch luôn hiện ít nhất một vạch mỏng, để "có ít" không bị
+              // nhìn nhầm thành "không có".
+              const densityPercent = dayCount ? Math.max(12, Math.round((dayCount / busiest) * 100)) : 0;
+
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  onClick={() => setSelectedDate(date)}
+                  aria-current={isSelected ? 'date' : undefined}
+                  title={`${toDate(date).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })} · ${dayCount} lịch`}
+                  className={`relative flex h-auto min-h-14 flex-col items-center justify-center gap-1 rounded-none border-0 bg-transparent px-1 py-1.5 shadow-none ${isSelected ? 'text-[color:var(--accent-strong)]' : 'text-brand-text-muted'}`}
+                >
+                  <span className="text-caption font-bold uppercase">{toDate(date).toLocaleDateString('vi-VN', { weekday: 'short' })}</span>
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-pill text-body font-bold tabular-nums ${isSelected ? 'bg-[var(--accent)] text-[color:var(--color-brand-on-primary)]' : 'bg-transparent text-brand-text'}`}>
+                    {toDate(date).getDate()}
+                  </span>
+                  <span aria-hidden="true" className="flex h-1 w-8 overflow-hidden rounded-pill bg-brand-surface-high">
+                    {densityPercent > 0 && (
+                      <span
+                        className={`h-full rounded-pill ${isSelected ? 'bg-[var(--accent)]' : 'bg-[color-mix(in_srgb,var(--accent)_55%,transparent)]'}`}
+                        style={{ width: `${densityPercent}%` }}
+                      />
+                    )}
+                  </span>
+                  <span className="sr-only">{dayCount} lịch</span>
+                  {isToday && (
+                    <>
+                      <span aria-hidden="true" className="absolute bottom-0.5 h-1 w-1 rounded-pill bg-[var(--accent)]" />
+                      <span className="sr-only">Hôm nay</span>
+                    </>
+                  )}
+                </button>
+              );
+            });
+          })()}
         </div>
 
         {showFilters && (
-          <div className="grid gap-3 border-b border-slate-100 bg-violet-50/40 p-4 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
-            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Trạng thái</span><BeautifulSelect value={statusFilter} onChange={(event) => { setOperationalFilter('ALL'); setStatusFilter(event.target.value as 'ALL' | AppointmentStatus); }} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả trạng thái</option>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label>
-            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Nhân viên</span><BeautifulSelect value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả nhân viên</option>{scheduleStaff.map((staff) => <option key={staff.name} value={staff.name}>{staff.name}</option>)}</BeautifulSelect></label>
-            <label><span className="mb-1.5 block text-[8px] font-black uppercase tracking-wide text-slate-500">Nguồn đặt lịch</span><BeautifulSelect value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as 'ALL' | AppointmentSource)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả nguồn</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label>
-            <button type="button" onClick={resetFilters} className="self-end border border-slate-200 bg-white px-3 text-[9px] font-bold text-slate-600 shadow-sm">Đặt lại</button>
+          <div id="appointment-filters" className="grid grid-cols-1 gap-4 border-b border-brand-outline bg-brand-surface-lowest p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
+            <Field label="Trạng thái">
+              <BeautifulSelect
+                value={statusFilter}
+                onChange={(event) => { setOperationalFilter('ALL'); setStatusFilter(event.target.value as 'ALL' | AppointmentStatus); }}
+                className="w-full"
+              >
+                <option value="ALL">Tất cả trạng thái</option>
+                {(Object.keys(appointmentStatusText) as AppointmentStatus[]).map((value) => (
+                  <option key={value} value={value}>{appointmentStatusText[value].label}</option>
+                ))}
+              </BeautifulSelect>
+            </Field>
+
+            <Field label="Nhân viên">
+              <BeautifulSelect value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} className="w-full">
+                <option value="ALL">Tất cả nhân viên</option>
+                {scheduleStaff.map((staff) => <option key={staff.name} value={staff.name}>{staff.name}</option>)}
+              </BeautifulSelect>
+            </Field>
+
+            {/* Ô này trước đây đứng riêng một băng 59px phía trên lưới. Nó lọc xem
+                CỘT nào hiện trên lưới, khác với ô "Nhân viên" ở trên (chọn đúng một
+                người), nên vẫn giữ lại đầy đủ chứ không gộp làm một. */}
+            <Field label="Tìm nhân viên trên lịch" helper="Lọc cột hiển thị theo tên, vai trò hoặc chi nhánh.">
+              <div className="relative">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" />
+                <input
+                  type="search"
+                  value={staffSearchQuery}
+                  onChange={(event) => setStaffSearchQuery(event.target.value)}
+                  placeholder="Tên, vai trò, chi nhánh..."
+                  className={`${controlClass} w-full pl-9 pr-10`}
+                />
+                {staffSearchQuery && (
+                  <button type="button" onClick={() => setStaffSearchQuery('')} aria-label="Xóa tìm kiếm nhân viên" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-brand-text-muted shadow-none">
+                    <X aria-hidden="true" className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </Field>
+
+            <Field label="Nguồn đặt lịch">
+              <BeautifulSelect value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as 'ALL' | AppointmentSource)} className="w-full">
+                <option value="ALL">Tất cả nguồn</option>
+                {Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </BeautifulSelect>
+            </Field>
+
+            <Button variant="secondary" onClick={resetFilters} className="self-end">Đặt lại</Button>
           </div>
         )}
 
-        <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-100 px-3 ${isScheduleExpanded ? 'py-1.5' : 'py-2'}`}>
-          <span className="flex items-center gap-1.5 text-[7px] font-bold uppercase tracking-wide text-slate-400"><SlidersHorizontal className="h-3 w-3" />Màu = trạng thái</span>
-          <span className="flex items-center gap-1 text-[7px] font-semibold text-slate-400"><Clock3 className="h-2.5 w-2.5" />Chiều cao = thời lượng</span>
-          {(['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const).map((status) => {
-            const count = status === 'ALL' ? scopedAppointments.length : scopedAppointments.filter((appointment) => appointment.status === status).length;
-            return <button key={status} type="button" onClick={() => { setOperationalFilter('ALL'); setStatusFilter(status); }} className={`flex h-6 min-h-0 items-center gap-1 border-0 bg-transparent px-0 text-[8px] font-bold shadow-none ${statusFilter === status && operationalFilter === 'ALL' ? 'text-violet-700' : 'text-slate-500'}`}>{status !== 'ALL' && <span aria-hidden="true" className={`flex h-3.5 w-3.5 items-center justify-center rounded text-[6px] font-black text-white ${statusMeta[status].dot}`}>{statusMeta[status].symbol}</span>}{status === 'ALL' ? 'Tất cả' : statusMeta[status].label}<span className={`rounded-full px-1.5 py-0.5 text-[7px] ${statusFilter === status && operationalFilter === 'ALL' ? 'bg-violet-100' : 'bg-slate-100'}`}>{count}</span></button>;
-          })}
+        {/* Lọc nhanh theo trạng thái, kèm phạm vi nhân sự đang xem.
+
+            Hai dòng chú giải "Màu = trạng thái" và "Chiều cao = thời lượng" đã
+            chuyển xuống chân khung: đó là giải thích tĩnh, không nên đứng cùng hàng
+            với những chip bấm được. Băng phân trang nhân sự riêng 59px cũng được
+            gộp vào đây vì cả hai đều trả lời cùng một câu hỏi: đang xem những gì. */}
+        <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-b border-brand-outline px-3 ${isScheduleExpanded ? 'py-1.5' : 'py-2'}`}>
+          {/* Hàng chip cuộn ngang thay vì xuống dòng: trên điện thoại nó vỡ ba hàng
+              và đẩy lưới xuống gần 140px. Cuộn giữ băng luôn đúng một hàng ở mọi bề
+              ngang, còn trên desktop thì đủ chỗ nên không xuất hiện thanh cuộn. */}
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {statusFilterChips.map(({ status, count }) => {
+              const active = statusFilter === status && operationalFilter === 'ALL';
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => { setOperationalFilter('ALL'); setStatusFilter(status); }}
+                  className={`flex h-7 min-h-0 shrink-0 items-center gap-1.5 rounded-pill border-0 px-2 text-caption font-semibold shadow-none ${active ? 'bg-[var(--accent-soft)] text-[color:var(--accent-strong)]' : 'bg-transparent text-brand-text-muted'}`}
+                >
+                  {status !== 'ALL' && <StatusGlyph status={status} className="h-3.5 w-3.5 shrink-0" />}
+                  {status === 'ALL' ? 'Tất cả' : appointmentStatusText[status].label}
+                  <span className="rounded-pill bg-brand-surface-high px-1.5 tabular-nums text-brand-text">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {viewMode === 'SCHEDULE' && filteredScheduleStaff.length > 0 && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <span role="status" className="text-caption text-brand-text-muted">
+                Đang xem <strong className="tabular-nums text-brand-text">{visibleStaffStart}–{visibleStaffEnd}</strong> / {filteredScheduleStaff.length} nhân viên
+              </span>
+              {staffPageCount > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button size="small" variant="secondary" iconOnly aria-label="Nhóm nhân viên trước" disabled={staffPage === 0} onClick={() => setStaffPage((current) => Math.max(0, current - 1))}><ChevronLeft /></Button>
+                  <Button size="small" variant="secondary" iconOnly aria-label="Nhóm nhân viên tiếp theo" disabled={staffPage >= staffPageCount - 1} onClick={() => setStaffPage((current) => Math.min(staffPageCount - 1, current + 1))}><ChevronRight /></Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {viewMode === 'SCHEDULE' ? (
           <>
-            <div className={`flex flex-col gap-1.5 border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between ${isScheduleExpanded ? 'shrink-0' : ''}`}>
-              <div className="relative w-full sm:max-w-64">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                <input value={staffSearchQuery} onChange={(event) => setStaffSearchQuery(event.target.value)} aria-label="Tìm nhân viên trên lịch" placeholder="Tìm tên, vai trò, chi nhánh..." className="h-8 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-7 text-[9px] font-semibold text-slate-700 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100" />
-                {staffSearchQuery && <button type="button" onClick={() => setStaffSearchQuery('')} aria-label="Xóa tìm kiếm nhân viên" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none hover:text-slate-700"><X className="h-3.5 w-3.5" /></button>}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="mr-1 text-[9px] font-semibold text-slate-500">Đang xem <strong className="text-slate-800">{visibleStaffStart}–{visibleStaffEnd}</strong> / {filteredScheduleStaff.length} nhân viên</span>
-                {staffPageCount > 1 && <BeautifulSelect value={String(staffPage)} onChange={(event) => setStaffPage(Number(event.target.value))} aria-label="Chọn nhóm nhân viên" className="h-7 min-w-28 rounded-lg border border-slate-200 bg-white px-2 text-[7px] font-bold text-slate-700">{Array.from({ length: staffPageCount }, (_, index) => { const start = index * STAFF_COLUMNS_PER_PAGE + 1; const end = Math.min((index + 1) * STAFF_COLUMNS_PER_PAGE, filteredScheduleStaff.length); return <option key={index} value={index}>Nhóm {index + 1} · {start}–{end}</option>; })}</BeautifulSelect>}
-                <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <button type="button" onClick={() => setStaffPage((current) => Math.max(0, current - 1))} disabled={staffPage === 0} aria-label="Nhóm nhân viên trước" className="flex h-7 w-7 items-center justify-center rounded-none border-0 border-r border-slate-200 bg-white p-0 text-slate-600 shadow-none disabled:cursor-not-allowed disabled:text-slate-300"><ChevronLeft className="h-3 w-3" /></button>
-                  <button type="button" onClick={() => setStaffPage((current) => Math.min(staffPageCount - 1, current + 1))} disabled={staffPage >= staffPageCount - 1} aria-label="Nhóm nhân viên tiếp theo" className="flex h-7 w-7 items-center justify-center rounded-none border-0 bg-white p-0 text-slate-600 shadow-none disabled:cursor-not-allowed disabled:text-slate-300"><ChevronRight className="h-3 w-3" /></button>
-                </div>
-              </div>
-            </div>
-            <div ref={scheduleViewportRef} className={`relative bg-white ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
-            {visibleScheduleStaff.length ? <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${Math.max(980, 72 + visibleScheduleStaff.length * 230)}px` }}>
-              <div className="sticky top-0 z-20 grid border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.05)]" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${visibleScheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${visibleScheduleStaff.length}, minmax(220px, 1fr))` }}>
-                <div className="flex items-center justify-center border-r border-slate-100 text-[9px] font-black text-slate-400">GMT+7</div>
+            <div ref={attachScheduleViewport} className={`relative bg-brand-surface ${isScheduleExpanded ? 'min-h-0 flex-1 overflow-auto' : 'overflow-x-auto overflow-y-hidden'}`}>
+            {visibleScheduleStaff.length ? <div className="h-full" style={{ minWidth: isScheduleExpanded ? '100%' : `${scheduleTimeColumnWidth + visibleScheduleStaff.length * scheduleColumnWidth}px` }}>
+              <div ref={attachScheduleStaffHeader} className="sticky top-0 grid border-b border-brand-outline bg-brand-surface" style={{ zIndex: 'var(--z-sticky)', gridTemplateColumns: scheduleGridTemplate }}>
+                <div className="flex items-center justify-center border-r border-brand-outline text-caption font-semibold text-brand-text-muted">GMT+7</div>
                 {visibleScheduleStaff.map((staff) => {
                   const staffAppointments = scopedAppointments.filter((appointment) => appointment.staff === staff.name && !['CANCELLED', 'NO_SHOW'].includes(appointment.status));
                   const bookedMinutes = staffAppointments.reduce((sum, appointment) => sum + appointment.duration, 0);
                   const utilization = Math.min(100, Math.round(bookedMinutes / 600 * 100));
-                  return <div key={staff.name} className={`flex items-center border-r border-slate-100 last:border-r-0 ${isScheduleExpanded ? 'min-h-12 gap-1.5 px-2 py-1.5' : 'min-h-[60px] gap-2 px-2.5 py-1.5'}`}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[8px] font-black text-slate-700">{staff.initials}</span><div className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1"><span className="truncate text-[10px] font-black text-slate-800">{staff.name}</span>{selectedBranch === 'ALL' && <span className="shrink-0 rounded-md bg-slate-100 px-1 py-0.5 text-[6px] font-black text-slate-500">{staff.branch}</span>}</span><p className="truncate text-[8px] text-slate-400">{staff.role}</p>{!isScheduleExpanded && <p className="text-[7px] font-semibold text-slate-400">{staff.shift}</p>}</div><span className="rounded-md bg-violet-50 px-1.5 py-1 text-[8px] font-black text-violet-600">{utilization}%</span></div>;
+                  return (
+                    <div
+                      key={staff.name}
+                      title={`${staff.name} · ${staff.role} · ${staff.shift} · đã đặt ${bookedMinutes}/600 phút`}
+                      className={`flex items-center border-r border-brand-outline last:border-r-0 gap-2 py-2 ${isCompactStaffHeader ? 'min-h-14 px-2' : 'min-h-16 px-2.5'}`}
+                    >
+                      <span aria-hidden="true" className={`flex shrink-0 items-center justify-center rounded-control bg-brand-surface-high text-caption font-bold text-brand-text ${isCompactStaffHeader ? 'h-8 w-8' : 'h-9 w-9'}`}>
+                        {staff.initials}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className="truncate text-body font-semibold text-brand-text">{staff.name}</span>
+                          {selectedBranch === 'ALL' && (
+                            <span className="shrink-0 rounded-pill bg-brand-surface-high px-1.5 text-caption text-brand-text-muted">{staff.branch}</span>
+                          )}
+                        </span>
+                        {/* Cột hẹp: tỉ lệ kín lịch đi kèm vai trò trên cùng một dòng,
+                            nhường lại toàn bộ bề ngang của badge cho tên nhân viên. */}
+                        <p className="truncate text-caption text-brand-text-muted">
+                          {staff.role}
+                          {isCompactStaffHeader && (
+                            <>
+                              {' · '}
+                              <span className="font-bold tabular-nums text-[color:var(--accent-strong)]">{utilization}%</span>
+                            </>
+                          )}
+                        </p>
+                        {!isCompactStaffHeader && <p className="truncate text-caption text-brand-text-muted">{staff.shift}</p>}
+                      </div>
+                      {!isCompactStaffHeader && (
+                        <span className="shrink-0 rounded-control bg-[var(--accent-soft)] px-1.5 py-1 text-caption font-bold tabular-nums text-[color:var(--accent-strong)]">
+                          {utilization}%
+                        </span>
+                      )}
+                    </div>
+                  );
                 })}
               </div>
-              <div className="relative grid" style={{ gridTemplateColumns: isScheduleExpanded ? `64px repeat(${visibleScheduleStaff.length}, minmax(0, 1fr))` : `72px repeat(${visibleScheduleStaff.length}, minmax(220px, 1fr))`, height: scheduleHourHeight * 12 + SCHEDULE_BOTTOM_GUTTER }}>
-                <div className="relative border-r border-slate-200 bg-slate-50/70">
-                    {Array.from({ length: 13 }, (_, index) => 8 + index).map((hour) => <span key={hour} className={`absolute right-2 text-[10px] font-bold text-slate-400 ${hour === 8 ? '' : '-translate-y-1/2'}`} style={{ top: hour === 8 ? 8 : (hour - 8) * scheduleHourHeight }}>{String(hour).padStart(2, '0')}:00</span>)}
+              <div className="relative grid" style={{ gridTemplateColumns: scheduleGridTemplate, height: scheduleHourHeight * 12 + SCHEDULE_BOTTOM_GUTTER }}>
+                <div className="relative border-r border-brand-outline bg-brand-surface-lowest">
+                    {/* Ở chế độ toàn màn hình mỗi giờ có thể co xuống dưới 30px —
+                        không đủ chỗ cho hai nhãn 13px liền nhau. Khi đó chỉ ghi
+                        nhãn cách giờ; các đường kẻ vẫn giữ đủ mọi mốc giờ. */}
+                    {Array.from({ length: 13 }, (_, index) => 8 + index)
+                      .filter((hour) => scheduleHourHeight >= 32 || (hour - 8) % 2 === 0)
+                      .map((hour) => (
+                        <span
+                          key={hour}
+                          className={`absolute right-2 text-caption font-semibold tabular-nums text-brand-text-muted ${hour === 8 ? '' : '-translate-y-1/2'}`}
+                          style={{ top: hour === 8 ? 8 : (hour - 8) * scheduleHourHeight }}
+                        >
+                          {String(hour).padStart(2, '0')}:00
+                        </span>
+                      ))}
                 </div>
                 {visibleScheduleStaff.map((staff) => (
-                  <div key={staff.name} className="relative border-r border-slate-100 last:border-r-0" style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${scheduleHourHeight - 1}px, #e8edf5 ${scheduleHourHeight}px)` }}>
+                  <div key={staff.name} className="relative border-r border-brand-outline last:border-r-0" style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${scheduleHourHeight - 1}px, var(--color-brand-outline) ${scheduleHourHeight}px)` }}>
                     {filteredAppointments.filter((appointment) => appointment.staff === staff.name).map((appointment) => {
                       const top = Math.max(0, (minutesFromStart(appointment.start) - 480) / 60 * scheduleHourHeight);
-                      const height = Math.max(34, appointment.duration / 60 * scheduleHourHeight - 4);
-                      const meta = statusMeta[appointment.status];
-                      const isCompact = height < 72;
-                      const showService = height >= 88;
-                      const showOperationalMeta = height >= 118;
+                      const height = Math.max(SCHEDULE_MIN_CARD_HEIGHT, appointment.duration / 60 * scheduleHourHeight - 4);
+                      const statusText = appointmentStatusText[appointment.status];
+                      // Ngưỡng tính theo chiều cao thật của thẻ: mỗi dòng chữ 13–14px
+                      // chiếm ~20px, nên chỉ thêm dòng khi thẻ đủ chỗ cho trọn dòng đó.
+                      const isCompact = height < 76;
+                      const showService = height >= 96;
+                      const showOperationalMeta = height >= 128;
                       const appointmentStart = minutesFromStart(appointment.start);
                       const hasConflict = scopedAppointments.some((other) => {
                         if (other.id === appointment.id || ['CANCELLED', 'NO_SHOW'].includes(other.status)) return false;
@@ -834,22 +1319,41 @@ export default function TenantAdminAppointments({
                         const overlaps = appointmentStart < otherStart + other.duration && appointmentStart + appointment.duration > otherStart;
                         return overlaps && (other.staff === appointment.staff || Boolean(appointment.station && appointment.station === other.station));
                       });
-                      const fullSummary = `${appointment.start}–${getEndTime(appointment.start, appointment.duration)} · ${appointment.customer} · ${appointment.service} · ${meta.label}${appointment.station ? ` · ${appointment.station}` : ''}${hasConflict ? ' · Có xung đột nguồn lực' : ''}`;
+                      const fullSummary = `${appointment.start}–${getEndTime(appointment.start, appointment.duration)} · ${appointment.customer} · ${appointment.service} · ${statusText.label}${appointment.station ? ` · ${appointment.station}` : ''}${hasConflict ? ' · Có xung đột nguồn lực' : ''}`;
                       return (
-                        <button key={appointment.id} type="button" onClick={() => setSelectedAppointment(appointment)} aria-label={`Xem lịch: ${fullSummary}`} title={fullSummary} className={`group absolute left-1.5 right-1.5 z-10 h-auto overflow-hidden rounded-lg border border-l-[3px] px-2 text-left shadow-sm transition-all hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${selectedAppointment?.id === appointment.id ? 'z-20 ring-2 ring-slate-900 ring-offset-1' : ''} ${isCompact ? 'py-1' : 'py-1.5'} ${['CANCELLED', 'NO_SHOW'].includes(appointment.status) ? 'opacity-70' : ''} ${meta.card}`} style={{ top: top + 2, height }}>
+                        <button
+                          key={appointment.id}
+                          type="button"
+                          onClick={() => setSelectedAppointment(appointment)}
+                          aria-label={`Xem lịch: ${fullSummary}`}
+                          title={fullSummary}
+                          className={`absolute left-1.5 right-1.5 z-10 h-auto overflow-hidden border-l-4 px-2 text-left shadow-card transition-transform hover:z-20 hover:-translate-y-0.5 focus-visible:z-20 ui-tone ui-tone--${statusTone(appointment.status)} ${isCompact ? 'py-1' : 'py-1.5'} ${['CANCELLED', 'NO_SHOW'].includes(appointment.status) ? 'opacity-70' : ''} ${selectedAppointment?.id === appointment.id ? 'z-20 ring-2 ring-[color:var(--accent-strong)] ring-offset-1' : ''}`}
+                          style={{ top: top + 2, height }}
+                        >
                           {isCompact ? (
                             <span className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0 text-[9px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
-                              <span className={`min-w-0 flex-1 truncate text-[10px] font-black ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
-                              {hasConflict && <CircleAlert aria-label="Có xung đột nguồn lực" className="h-3.5 w-3.5 shrink-0 text-rose-600" />}
-                              <span aria-label={meta.label} className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[7px] font-black text-white ${meta.dot}`}>{meta.symbol}</span>
+                              <span className="shrink-0 text-caption font-bold tabular-nums text-brand-text">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
+                              <span className={`min-w-0 flex-1 truncate text-body font-semibold text-brand-text ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
+                              {hasConflict && <CircleAlert aria-hidden="true" className="h-4 w-4 shrink-0 text-brand-error" />}
+                              <StatusGlyph status={appointment.status} className="h-4 w-4 shrink-0 text-brand-text-muted" />
                             </span>
                           ) : (
                             <>
-                              <span className="flex items-center justify-between gap-2"><span className="text-[10px] font-black tracking-tight tabular-nums">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span><span className="flex items-center gap-1.5">{hasConflict && <CircleAlert aria-label="Có xung đột nguồn lực" className="h-3.5 w-3.5 text-rose-600" />}<span aria-label={meta.label} className={`flex h-4 w-4 items-center justify-center rounded text-[7px] font-black text-white ${meta.dot}`}>{meta.symbol}</span></span></span>
-                              <span className={`mt-1 block truncate text-[11px] font-black leading-4 ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
-                              {showService && <span className="block truncate text-[9px] font-medium leading-4 opacity-70">{appointment.service}</span>}
-                              {showOperationalMeta && <span className="mt-1.5 flex items-center justify-between gap-2"><span className="inline-flex min-w-0 truncate rounded-md bg-white/75 px-1.5 py-0.5 text-[7px] font-bold ring-1 ring-black/5">{meta.shortLabel}</span><span className="shrink-0 truncate text-[7px] font-bold opacity-60">{appointment.station || 'Chưa xếp bàn'}</span></span>}
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="text-caption font-bold tabular-nums text-brand-text">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</span>
+                                <span className="flex items-center gap-1.5">
+                                  {hasConflict && <CircleAlert aria-hidden="true" className="h-4 w-4 text-brand-error" />}
+                                  <StatusGlyph status={appointment.status} className="h-4 w-4 text-brand-text-muted" />
+                                </span>
+                              </span>
+                              <span className={`mt-0.5 block truncate text-body font-semibold text-brand-text ${appointment.status === 'CANCELLED' ? 'line-through' : ''}`}>{appointment.customer}</span>
+                              {showService && <span className="block truncate text-caption text-brand-text-muted">{appointment.service}</span>}
+                              {showOperationalMeta && (
+                                <span className="mt-1 flex items-center justify-between gap-2">
+                                  <StatusBadge status={appointment.status} label={statusText.short} size="small" />
+                                  <span className="shrink-0 truncate text-caption text-brand-text-muted">{appointment.station || 'Chưa xếp bàn'}</span>
+                                </span>
+                              )}
                             </>
                           )}
                         </button>
@@ -857,222 +1361,824 @@ export default function TenantAdminAppointments({
                     })}
                   </div>
                 ))}
-                {selectedDate === todayDate && currentMinuteOfDay >= 8 * 60 && currentMinuteOfDay <= 20 * 60 && <div className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-rose-400" style={{ top: (currentMinuteOfDay - 480) / 60 * scheduleHourHeight }}><span className="absolute -left-0.5 -top-2.5 z-20 rounded-r-md bg-rose-500 px-2 py-0.5 text-[8px] font-black text-white shadow-sm">{currentTimeLabel}</span></div>}
+                {selectedDate === todayDate && currentMinuteOfDay >= 8 * 60 && currentMinuteOfDay <= 20 * 60 && (
+                  <div className="pointer-events-none absolute left-0 right-0 border-t border-brand-error" style={{ zIndex: 5, top: (currentMinuteOfDay - 480) / 60 * scheduleHourHeight }}>
+                    <span className="absolute -left-0.5 -top-3 z-20 rounded-r-control bg-brand-error px-2 py-0.5 text-caption font-bold tabular-nums text-[color:var(--color-brand-on-primary)]">
+                      {currentTimeLabel}
+                      <span className="sr-only"> — thời điểm hiện tại</span>
+                    </span>
+                  </div>
+                )}
               </div>
-            </div> : <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center"><UsersRound className="h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-700">Không tìm thấy nhân viên</p><p className="mt-1 text-[8px] text-slate-400">Thử tên khác hoặc xóa tìm kiếm để xem toàn bộ lịch.</p><button type="button" onClick={() => setStaffSearchQuery('')} className="mt-3 border border-slate-200 bg-white px-3 text-[8px] font-bold text-violet-600 shadow-sm">Xóa tìm kiếm</button></div>}
-            {!filteredAppointments.length && <div className="absolute inset-x-0 top-80 text-center"><CalendarDays className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không có lịch phù hợp với bộ lọc</p></div>}
-            {selectedAppointment && (
-              <aside aria-label="Chi tiết lịch hẹn đang chọn" className="hidden">
-                <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-4 py-3.5">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><span className="text-[8px] font-black uppercase tracking-[0.12em] text-violet-600">{selectedAppointment.id}</span><span className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${statusMeta[selectedAppointment.status].badge}`}>{statusMeta[selectedAppointment.status].label}</span></div>
-                    <h2 className="mt-1.5 truncate text-sm font-black text-slate-950">{selectedAppointment.customer}</h2>
-                  </div>
-                  <button type="button" onClick={() => setSelectedAppointment(null)} aria-label="Đóng bảng chi tiết" className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-3.5 w-3.5" /></button>
-                </header>
-
-                <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                  <section className="rounded-2xl bg-slate-950 p-4 text-white">
-                    <div className="flex items-end justify-between gap-3"><div><p className="text-[8px] font-bold capitalize text-slate-400">{toDate(selectedAppointment.date).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}</p><p className="mt-1 text-xl font-black tracking-tight">{selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)}</p></div><span className="rounded-lg bg-white/10 px-2.5 py-1.5 text-[8px] font-black ring-1 ring-white/10">{selectedAppointment.duration} phút</span></div>
-                    <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-[8px]"><span className="text-slate-400">{branchLabels[selectedAppointment.branch]}</span><span className="font-black">{selectedAppointment.station || 'Chưa xếp bàn'}</span></div>
-                  </section>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <a href={`tel:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-9 items-center justify-center gap-2 rounded-xl bg-slate-100 text-[8px] font-bold text-slate-700 no-underline"><Phone className="h-3.5 w-3.5" />{selectedAppointment.phone}</a>
-                    <a href={`sms:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-9 items-center justify-center gap-2 rounded-xl bg-violet-50 text-[8px] font-bold text-violet-700 no-underline"><MessageCircle className="h-3.5 w-3.5" />Nhắn khách</a>
-                  </div>
-
-                  <section className="mt-3 rounded-2xl border border-slate-200 p-3.5">
-                    <p className="text-[7px] font-black uppercase tracking-wide text-slate-400">Dịch vụ & phân công</p>
-                    <div className="mt-2 space-y-1.5">{(selectedAppointment.services?.length ? selectedAppointment.services : [selectedAppointment.service]).map((service, index) => <div key={`${service}-${index}`} className="flex items-start gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-fuchsia-50 text-[7px] font-black text-fuchsia-600">{index + 1}</span><p className="text-[9px] font-bold leading-4 text-slate-800">{service}</p></div>)}</div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3"><div><p className="text-[7px] text-slate-400">Kỹ thuật viên</p><p className="mt-1 truncate text-[9px] font-black text-slate-800">{selectedAppointment.staff}</p></div><div><p className="text-[7px] text-slate-400">Nguồn đặt</p><p className="mt-1 truncate text-[9px] font-black text-slate-800">{sourceLabels[selectedAppointment.source]}</p></div></div>
-                  </section>
-
-                  <section className="mt-3 grid grid-cols-3 overflow-hidden rounded-2xl border border-slate-200">
-                    <div className="p-3"><p className="text-[7px] text-slate-400">Tổng tiền</p><p className="mt-1 text-[9px] font-black text-slate-900">{formatCurrency(selectedAppointment.price)}</p></div>
-                    <div className="border-l border-slate-100 bg-emerald-50/70 p-3"><p className="text-[7px] text-emerald-600">Đã cọc</p><p className="mt-1 text-[9px] font-black text-emerald-800">{formatCurrency(selectedAppointment.deposit)}</p></div>
-                    <div className="border-l border-slate-100 bg-amber-50/70 p-3"><p className="text-[7px] text-amber-600">Còn thu</p><p className="mt-1 text-[9px] font-black text-amber-800">{formatCurrency(Math.max(0, selectedAppointment.price - selectedAppointment.deposit))}</p></div>
-                  </section>
-
-                  <section className="mt-3 rounded-2xl bg-slate-50 p-3.5">
-                    <div className="flex items-center justify-between gap-2"><p className="text-[7px] font-black uppercase tracking-wide text-slate-400">Ghi chú phục vụ</p>{selectedAppointment.reminderSent ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[7px] font-bold text-emerald-700">Đã nhắc lịch</span> : <button type="button" onClick={() => { updateAppointment(selectedAppointment.id, { reminderSent: true }); onNotify?.(`Đã ghi nhận gửi nhắc lịch cho ${selectedAppointment.customer}.`); }} disabled={!canManage} className="min-h-6 rounded-full border border-amber-200 bg-amber-100 px-2 text-[7px] font-black text-amber-700 shadow-none disabled:opacity-50">Gửi nhắc</button>}</div>
-                    <p className="mt-2 text-[9px] leading-4 text-slate-600">{selectedAppointment.note || 'Chưa có ghi chú cho lịch hẹn này.'}</p>
-                  </section>
-                </div>
-
-                <footer className="shrink-0 border-t border-slate-100 bg-slate-50 p-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => openEditForm(selectedAppointment)} disabled={!canEditSelectedAppointment} className="flex h-9 items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button>
-                    {nextStatus[selectedAppointment.status] && !(isReceptionist && selectedAppointment.status === 'IN_SERVICE') ? <button type="button" onClick={() => advanceAppointmentStatus(selectedAppointment)} disabled={!canManage} className={`flex h-9 items-center justify-center gap-2 border px-3 text-[8px] font-black text-white shadow-sm disabled:border-slate-300 disabled:bg-slate-300 ${isReceptionist ? 'border-emerald-700 bg-emerald-600' : 'border-violet-700 bg-violet-600'}`}><Check className="h-3.5 w-3.5" />{nextStatusLabel[selectedAppointment.status]}</button> : <span className="flex h-9 items-center justify-center rounded-xl bg-slate-100 px-3 text-[8px] font-black text-slate-500">{statusMeta[selectedAppointment.status].label}</span>}
-                  </div>
-                  {!['COMPLETED', 'CANCELLED', 'NO_SHOW', ...(isReceptionist ? ['IN_SERVICE' as AppointmentStatus] : [])].includes(selectedAppointment.status) && <button type="button" onClick={openCancelForm} disabled={!canManage} className="mt-2 h-8 w-full border-0 bg-transparent text-[8px] font-bold text-rose-600 shadow-none disabled:text-slate-400">Hủy lịch hẹn</button>}
-                </footer>
-              </aside>
+            </div> : (
+              <div className="flex min-h-72 flex-col items-center justify-center gap-2 px-6 text-center">
+                <UsersRound aria-hidden="true" className="h-8 w-8 text-brand-text-muted" />
+                <p className="text-card-title text-brand-text">Không tìm thấy nhân viên</p>
+                <p className="text-body text-brand-text-muted">Thử tên khác hoặc xóa tìm kiếm để xem toàn bộ lịch.</p>
+                <Button size="small" variant="secondary" onClick={() => setStaffSearchQuery('')}>Xóa tìm kiếm</Button>
+              </div>
+            )}
+            {!filteredAppointments.length && (
+              <div className="pointer-events-none absolute inset-x-0 top-80 flex flex-col items-center gap-2 text-center">
+                <CalendarDays aria-hidden="true" className="h-7 w-7 text-brand-text-muted" />
+                <p className="text-body font-semibold text-brand-text-muted">Không có lịch phù hợp với bộ lọc</p>
+              </div>
             )}
           </div>
           </>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] border-collapse text-left">
-              <thead><tr className="border-b border-slate-100 bg-slate-50/70 text-[9px] font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Thời gian</th><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Dịch vụ</th><th className="px-4 py-3">Nhân viên</th><th className="px-4 py-3">Nguồn</th><th className="px-4 py-3">Giá trị</th><th className="px-4 py-3">Trạng thái</th><th className="px-5 py-3 text-right">Thao tác</th></tr></thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredAppointments.map((appointment) => (
-                  <tr key={appointment.id} className="text-[10px] text-slate-600 hover:bg-slate-50/70">
-                    <td className="whitespace-nowrap px-5 py-3.5"><p className="font-black text-slate-900">{appointment.start}–{getEndTime(appointment.start, appointment.duration)}</p><p className="mt-1 text-[9px] text-slate-400">{appointment.id} · {appointment.duration} phút</p></td>
-                    <td className="px-4 py-3.5"><p className="font-black text-slate-800">{appointment.customer}{appointment.firstVisit && <span className="ml-1.5 rounded bg-violet-50 px-1.5 py-0.5 text-[8px] text-violet-600">Khách mới</span>}</p><p className="mt-1 text-[9px] text-slate-400">{appointment.phone}</p></td>
-                    <td className="px-4 py-3.5 font-semibold text-slate-700">{appointment.service}</td>
-                    <td className="px-4 py-3.5"><p className="font-bold text-slate-700">{appointment.staff}</p><p className="mt-1 text-[9px] text-slate-400">{branchLabels[appointment.branch]}</p></td>
-                    <td className="px-4 py-3.5">{sourceLabels[appointment.source]}</td>
-                    <td className="whitespace-nowrap px-4 py-3.5"><p className="font-black text-slate-800">{formatCurrency(appointment.price)}</p><p className="mt-1 text-[9px] text-slate-400">Cọc {formatCurrency(appointment.deposit)}</p></td>
-                    <td className="px-4 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[9px] font-bold ring-1 ${statusMeta[appointment.status].badge}`}>{statusMeta[appointment.status].label}</span></td>
-                    <td className="px-5 py-3.5"><div className="flex justify-end gap-2"><button type="button" onClick={() => setSelectedAppointment(appointment)} className="border border-slate-200 bg-white px-3 text-[9px] font-bold text-slate-600 shadow-sm">Chi tiết</button>{nextStatus[appointment.status] && !(isReceptionist && appointment.status === 'IN_SERVICE') && <button type="button" onClick={() => advanceAppointmentStatus(appointment)} disabled={!canManage} className={`flex items-center gap-1.5 border px-3 text-[9px] font-black text-white shadow-sm disabled:border-slate-300 disabled:bg-slate-300 ${isReceptionist ? 'border-emerald-700 bg-emerald-600' : 'border-violet-700 bg-violet-600'}`}><Check className="h-3.5 w-3.5" />{nextStatusLabel[appointment.status]}</button>}</div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!filteredAppointments.length && <div className="px-6 py-14 text-center"><Search className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-600">Không tìm thấy lịch hẹn phù hợp</p><button type="button" onClick={resetFilters} className="mt-2 border-0 bg-transparent px-2 text-[9px] font-bold text-violet-600 shadow-none">Xóa tìm kiếm và bộ lọc</button></div>}
+          <div className="p-3">
+            <DataTable<TenantAppointment>
+              columns={appointmentColumns}
+              rows={filteredAppointments}
+              rowKey={(appointment) => appointment.id}
+              caption={`Lịch hẹn ngày ${formatSelectedDate(selectedDate)}`}
+              onRowClick={(appointment) => setSelectedAppointment(appointment)}
+              emptyTitle="Không tìm thấy lịch hẹn phù hợp"
+              emptyDescription="Thử từ khóa khác hoặc bỏ bớt bộ lọc đang áp dụng."
+              emptyAction={<Button size="small" variant="secondary" onClick={resetFilters}>Xóa tìm kiếm và bộ lọc</Button>}
+            />
           </div>
         )}
 
-        <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[8px] font-medium text-slate-400">Hiển thị <span className="font-black text-slate-600">{filteredAppointments.length}</span> trên {scopedAppointments.length} lịch trong ngày</p>
-          <div className="flex items-center gap-4 text-[8px] text-slate-400"><span className="flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />Giờ mở cửa 08:00–20:00</span><span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{selectedBranch === 'ALL' ? '2 chi nhánh' : branchLabels[selectedBranch as BranchCode]}</span></div>
+        <div className="flex flex-col gap-2 border-t border-brand-outline bg-brand-surface-lowest px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p role="status" className="text-caption text-brand-text-muted">
+            Hiển thị <span className="font-bold tabular-nums text-brand-text">{filteredAppointments.length}</span> trên{' '}
+            <span className="tabular-nums">{scopedAppointments.length}</span> lịch trong ngày
+          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-brand-text-muted">
+            {/* Chú giải cách đọc lịch — giải thích tĩnh nên đặt ở chân khung, không
+                đứng cùng hàng với các chip lọc bấm được. */}
+            {viewMode === 'SCHEDULE' && (
+              <>
+                <span className="flex items-center gap-1.5"><SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />Màu = trạng thái</span>
+                <span className="flex items-center gap-1.5"><Clock3 aria-hidden="true" className="h-3.5 w-3.5" />Chiều cao = thời lượng</span>
+              </>
+            )}
+            <span className="flex items-center gap-1.5"><Clock3 aria-hidden="true" className="h-3.5 w-3.5" />Giờ mở cửa 08:00–20:00</span>
+            <span className="flex items-center gap-1.5"><MapPin aria-hidden="true" className="h-3.5 w-3.5" />{selectedBranch === 'ALL' ? '2 chi nhánh' : branchLabels[selectedBranch as BranchCode]}</span>
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-3">
-        <article className="rounded-2xl border border-amber-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between"><div><h2 className="text-sm font-black text-slate-900">Ưu tiên xử lý</h2><p className="mt-1 text-[9px] text-slate-400">Xác nhận nhanh, không cần mở chi tiết</p></div><span className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-amber-50 px-2 text-[10px] font-black text-amber-700">{pendingCount}</span></div>
-          <div className="mt-3 divide-y divide-slate-100">
-            {scopedAppointments.filter((appointment) => appointment.status === 'PENDING').slice(0, 3).map((appointment) => (
-              <div key={appointment.id} className="flex items-center gap-3 py-3">
-                <button type="button" onClick={() => setSelectedAppointment(appointment)} className="flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl border-0 bg-transparent px-0 py-0 text-left shadow-none">
-                  <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-[10px] font-black text-amber-700">{appointment.start}</span>
-                  <span className="min-w-0 flex-1"><span className="block truncate text-[10px] font-black text-slate-700">{appointment.customer}</span><span className="mt-1 block truncate text-[9px] text-slate-400">{appointment.service} · {appointment.phone}</span></span>
-                </button>
-                <button type="button" onClick={() => advanceAppointmentStatus(appointment)} disabled={!canManage} aria-label={`Xác nhận lịch của ${appointment.customer}`} className={`flex h-8 shrink-0 items-center gap-1.5 border px-2.5 text-[8px] font-black text-white shadow-sm disabled:border-slate-300 disabled:bg-slate-300 ${isReceptionist ? 'border-emerald-700 bg-emerald-600' : 'border-violet-700 bg-violet-600'}`}><Check className="h-3 w-3" />Xác nhận</button>
-              </div>
-            ))}
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <article className="rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-card-title text-brand-text">Ưu tiên xử lý</h2>
+              <p className="mt-0.5 text-body text-brand-text-muted">Xác nhận nhanh, không cần mở chi tiết</p>
+            </div>
+            <StatusBadge status="PENDING" label={`${pendingCount} chờ xác nhận`} size="small" />
           </div>
-          {!pendingCount && <div className="py-7 text-center"><Check className="mx-auto h-6 w-6 text-emerald-500" /><p className="mt-2 text-[10px] font-bold text-slate-500">Không còn lịch cần xác nhận</p></div>}
+
+          {pendingCount ? (
+            <ul className="mt-3 flex flex-col">
+              {scopedAppointments.filter((appointment) => appointment.status === 'PENDING').slice(0, 3).map((appointment) => (
+                <li key={appointment.id} className="flex items-center gap-3 border-t border-brand-outline py-3 first:border-t-0 first:pt-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAppointment(appointment)}
+                    className="flex h-auto min-w-0 flex-1 items-center gap-3 rounded-control border-0 bg-transparent px-0 py-0 text-left shadow-none"
+                  >
+                    <span className="flex h-10 w-14 shrink-0 items-center justify-center rounded-control bg-brand-surface-high text-body font-bold tabular-nums text-brand-text">
+                      {appointment.start}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-body font-semibold text-brand-text">{appointment.customer}</span>
+                      <span className="mt-0.5 block truncate text-caption text-brand-text-muted">{appointment.service} · {appointment.phone}</span>
+                    </span>
+                  </button>
+                  <Button
+                    size="small"
+                    variant="primary"
+                    disabled={!canManage}
+                    aria-label={`Xác nhận lịch của ${appointment.customer}`}
+                    iconLeading={<Check />}
+                    onClick={() => advanceAppointmentStatus(appointment)}
+                  >
+                    Xác nhận
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <Check aria-hidden="true" className="h-6 w-6 text-brand-secondary" />
+              <p className="text-body text-brand-text-muted">Không còn lịch cần xác nhận</p>
+            </div>
+          )}
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Nguồn đặt lịch</h2><p className="mt-1 text-[8px] text-slate-400">Phân bổ theo kênh trong ngày</p></div><CalendarDays className="h-4.5 w-4.5 text-violet-500" /></div>
-          <div className="mt-4 space-y-3">{(Object.keys(sourceLabels) as AppointmentSource[]).map((source) => {
-            const count = scopedAppointments.filter((appointment) => appointment.source === source).length;
-            const percent = scopedAppointments.length ? Math.round(count / scopedAppointments.length * 100) : 0;
-            return <div key={source}><div className="mb-1.5 flex items-center justify-between text-[8px]"><span className="font-bold text-slate-600">{sourceLabels[source]}</span><span className="font-black text-slate-700">{count} · {percent}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500" style={{ width: `${percent}%` }} /></div></div>;
-          })}</div>
+        <article className="rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-card-title text-brand-text">Nguồn đặt lịch</h2>
+              <p className="mt-0.5 text-body text-brand-text-muted">Phân bổ theo kênh trong ngày</p>
+            </div>
+            <CalendarDays aria-hidden="true" className="h-5 w-5 shrink-0 text-brand-text-muted" />
+          </div>
+          <dl className="mt-4 flex flex-col gap-3">
+            {(Object.keys(sourceLabels) as AppointmentSource[]).map((source) => {
+              const count = scopedAppointments.filter((appointment) => appointment.source === source).length;
+              const percent = scopedAppointments.length ? Math.round(count / scopedAppointments.length * 100) : 0;
+              return (
+                <div key={source}>
+                  <div className="mb-1 flex items-center justify-between gap-2 text-body">
+                    <dt className="text-brand-text">{sourceLabels[source]}</dt>
+                    <dd className="font-semibold tabular-nums text-brand-text">{count} · {percent}%</dd>
+                  </div>
+                  {/* Thanh tỷ lệ chỉ minh hoạ cho con số đã có bằng chữ ở trên. */}
+                  <div aria-hidden="true" className="h-1.5 overflow-hidden rounded-pill bg-brand-surface-high">
+                    <div className="h-full rounded-pill bg-[var(--accent)]" style={{ width: `${percent}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </dl>
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Chất lượng vận hành</h2><p className="mt-1 text-[8px] text-slate-400">Tính theo lịch đang chọn</p></div><Sparkles className="h-4.5 w-4.5 text-emerald-500" /></div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <div><p className="text-[8px] text-slate-400">Đã xác nhận</p><p className="mt-1 text-lg font-black text-slate-900">{confirmationRate}%</p></div>
-            <div><p className="text-[8px] text-slate-400">Hủy / vắng</p><p className="mt-1 text-lg font-black text-slate-900">{cancellationRate}%</p></div>
-            <div><p className="text-[8px] text-slate-400">Lấp đầy</p><p className="mt-1 text-lg font-black text-emerald-600">{utilizationRate}%</p></div>
+        <article className="rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-card-title text-brand-text">Chất lượng vận hành</h2>
+              <p className="mt-0.5 text-body text-brand-text-muted">Tính theo lịch đang chọn</p>
+            </div>
+            <Sparkles aria-hidden="true" className="h-5 w-5 shrink-0 text-brand-text-muted" />
           </div>
-          <div className="mt-4 rounded-xl bg-emerald-50 p-3"><p className="flex items-center gap-2 text-[8px] font-black text-emerald-800"><ClipboardCheck className="h-3.5 w-3.5" />Tình trạng điều phối</p><p className="mt-1.5 text-[8px] leading-4 text-emerald-700">{pendingCount ? `Còn ${pendingCount} lịch chờ xác nhận và ${reminderPendingCount} lịch chưa gửi nhắc.` : `Tất cả ${confirmedCount + completedCount + servingCount} lịch đang hoạt động đã qua bước xác nhận.`}</p></div>
+          <dl className="mt-4 grid grid-cols-3 gap-3">
+            <div>
+              <dt className="text-caption text-brand-text-muted">Đã xác nhận</dt>
+              <dd className="ta-metric-value mt-1 text-brand-text">{confirmationRate}%</dd>
+            </div>
+            <div>
+              <dt className="text-caption text-brand-text-muted">Hủy / vắng</dt>
+              <dd className="ta-metric-value mt-1 text-brand-text">{cancellationRate}%</dd>
+            </div>
+            <div>
+              <dt className="text-caption text-brand-text-muted">Lấp đầy</dt>
+              <dd className="ta-metric-value mt-1 text-brand-text">{utilizationRate}%</dd>
+            </div>
+          </dl>
+          <div className={`mt-4 p-3 ui-tone ui-tone--${pendingCount ? 'warning' : 'success'}`}>
+            <p className="flex items-center gap-2 text-body font-semibold text-brand-text">
+              <ClipboardCheck aria-hidden="true" className="h-4 w-4 shrink-0" />Tình trạng điều phối
+            </p>
+            <p className="mt-1 text-body leading-5 text-brand-text-muted">
+              {pendingCount
+                ? `Còn ${pendingCount} lịch chờ xác nhận và ${reminderPendingCount} lịch chưa gửi nhắc.`
+                : `Tất cả ${confirmedCount + completedCount + servingCount} lịch đang hoạt động đã qua bước xác nhận.`}
+            </p>
+          </div>
         </article>
       </section>
 
-      {selectedAppointment && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6">
-          <button type="button" aria-label="Đóng chi tiết lịch hẹn" onClick={() => setSelectedAppointment(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-          <section role="dialog" aria-modal="true" aria-labelledby="appointment-detail-title" className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/20 bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)]">
-            <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-7 sm:py-5"><div><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">{selectedAppointment.id}</span>{selectedAppointment.firstVisit && <span className="rounded-md bg-violet-50 px-2 py-1 text-[8px] font-bold text-violet-600">Khách mới</span>}<span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[selectedAppointment.status].badge}`}>{statusMeta[selectedAppointment.status].label}</span></div><h2 id="appointment-detail-title" className="mt-2 text-xl font-black tracking-tight text-slate-950">Chi tiết lịch hẹn</h2><p className="mt-1 text-[9px] text-slate-400">Tạo lúc {selectedAppointment.createdAt} · {selectedAppointment.createdBy || roleLabel}</p></div><button type="button" onClick={() => setSelectedAppointment(null)} aria-label="Đóng chi tiết lịch hẹn" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm hover:bg-slate-50"><X className="h-4 w-4" /></button></header>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
-              <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-                <div className="space-y-4">
-                  <div className="rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 p-5 text-white shadow-lg shadow-slate-200 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold capitalize text-slate-400">{toDate(selectedAppointment.date).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</p><p className="mt-2 text-3xl font-black tracking-tight">{selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)}</p><p className="mt-2 text-[10px] text-slate-400">{selectedAppointment.duration} phút · {branchLabels[selectedAppointment.branch]}</p></div><div className="rounded-xl bg-white/10 px-4 py-3 ring-1 ring-white/10"><p className="text-[8px] font-bold uppercase text-slate-400">Bàn / ghế</p><p className="mt-1 text-[11px] font-black">{selectedAppointment.station || 'Chưa xếp bàn'}</p></div></div></div>
-
-                  <div className="rounded-2xl border border-slate-200 p-4 sm:p-5"><div className="flex items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-[11px] font-black text-violet-700">{selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-slate-900">{selectedAppointment.customer}</p><p className="mt-1 text-[9px] text-slate-400">{selectedAppointment.firstVisit ? 'Khách lần đầu sử dụng dịch vụ' : 'Khách đã có hồ sơ tại salon'}</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><a href={`tel:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-100 text-[9px] font-bold text-slate-700 no-underline"><Phone className="h-4 w-4" />{selectedAppointment.phone}</a><a href={`sms:${selectedAppointment.phone.replace(/\s/g, '')}`} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-50 text-[9px] font-bold text-violet-700 no-underline"><MessageCircle className="h-4 w-4" />Gửi tin nhắn</a></div></div>
-
-                  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/50 p-4"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-fuchsia-600 shadow-sm"><Sparkles className="h-4 w-4" /></span><div className="mt-3 flex items-center justify-between gap-2"><p className="text-[8px] font-bold uppercase text-fuchsia-500">Dịch vụ</p><span className="rounded-full bg-white px-2 py-1 text-[7px] font-black text-fuchsia-600 shadow-sm">{selectedAppointment.services?.length || 1} dịch vụ</span></div><div className="mt-2 space-y-1.5">{(selectedAppointment.services?.length ? selectedAppointment.services : [selectedAppointment.service]).map((service, index) => <div key={`${service}-${index}`} className="flex items-start gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-white text-[7px] font-black text-fuchsia-600 shadow-sm">{index + 1}</span><p className="text-[9px] font-bold leading-4 text-slate-800">{service}</p></div>)}</div><p className="mt-2 border-t border-fuchsia-100 pt-2 text-[9px] font-semibold text-slate-500">Tổng {selectedAppointment.duration} phút · {formatCurrency(selectedAppointment.price)}</p></div><div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm"><UserRound className="h-4 w-4" /></span><p className="mt-3 text-[8px] font-bold uppercase text-blue-500">Kỹ thuật viên</p><p className="mt-1 text-[11px] font-black text-slate-900">{selectedAppointment.staff}</p><p className="mt-1 text-[9px] text-slate-500">{staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role}</p></div></div>
+      {/* Chi tiết lịch hẹn */}
+      <Modal
+        open={Boolean(selectedAppointment)}
+        onClose={() => setSelectedAppointment(null)}
+        size="large"
+        eyebrow={selectedAppointment?.id}
+        title="Chi tiết lịch hẹn"
+        description={selectedAppointment ? `Tạo lúc ${selectedAppointment.createdAt} · ${selectedAppointment.createdBy || roleLabel}` : undefined}
+        headerAside={selectedAppointment && (
+          <span className="flex flex-wrap items-center gap-2">
+            {selectedAppointment.firstVisit && (
+              <span className="rounded-pill bg-[var(--accent-soft)] px-2 py-0.5 text-caption font-semibold text-[color:var(--accent-strong)]">
+                Khách mới
+              </span>
+            )}
+            <StatusBadge
+              status={selectedAppointment.status}
+              label={appointmentStatusText[selectedAppointment.status].label}
+              size="small"
+            />
+          </span>
+        )}
+        footer={selectedAppointment && (
+          <>
+            {!['COMPLETED', 'CANCELLED', 'NO_SHOW', ...(isReceptionist ? ['IN_SERVICE' as AppointmentStatus] : [])].includes(selectedAppointment.status) && (
+              <Button variant="ghost" onClick={openCancelForm} disabled={!canManage} className="mr-auto">
+                Hủy lịch hẹn
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={() => openEditForm(selectedAppointment)}
+              disabled={!canEditSelectedAppointment}
+              title={!canEditSelectedAppointment && isReceptionist ? 'Chỉ được sửa trước khi bắt đầu dịch vụ' : undefined}
+              iconLeading={<Pencil />}
+            >
+              Chỉnh sửa
+            </Button>
+            {nextStatus[selectedAppointment.status] && !(isReceptionist && selectedAppointment.status === 'IN_SERVICE') && (
+              <Button
+                variant="primary"
+                onClick={() => advanceAppointmentStatus(selectedAppointment)}
+                disabled={!canManage}
+                iconLeading={<Check />}
+              >
+                {nextStatusLabel[selectedAppointment.status]}
+              </Button>
+            )}
+            {isReceptionist && selectedAppointment.status === 'IN_SERVICE' && (
+              <span className="flex items-center gap-2 px-3 py-2 text-body font-semibold text-brand-text ui-tone ui-tone--info">
+                <ReceiptText aria-hidden="true" className="h-4 w-4" />Hoàn tất tại Bàn lễ tân
+              </span>
+            )}
+          </>
+        )}
+      >
+        {selectedAppointment && (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <div className="flex flex-col gap-4">
+              <section className="rounded-card border border-brand-outline bg-brand-surface-lowest p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-body capitalize text-brand-text-muted">
+                      {toDate(selectedAppointment.date).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </p>
+                    <p className="mt-1 text-display font-bold tabular-nums text-brand-text">
+                      {selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)}
+                    </p>
+                    <p className="mt-1 text-body text-brand-text-muted">
+                      {selectedAppointment.duration} phút · {branchLabels[selectedAppointment.branch]}
+                    </p>
+                  </div>
+                  <div className="shrink-0 rounded-control border border-brand-outline bg-brand-surface px-3 py-2">
+                    <p className="text-caption uppercase tracking-wide text-brand-text-muted">Bàn / ghế</p>
+                    <p className="mt-0.5 text-body font-semibold text-brand-text">{selectedAppointment.station || 'Chưa xếp bàn'}</p>
+                  </div>
                 </div>
+              </section>
 
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Thanh toán</p><p className="mt-2 text-2xl font-black text-slate-950">{formatCurrency(selectedAppointment.price)}</p><p className="mt-1 text-[9px] text-slate-400">{sourceLabels[selectedAppointment.source]}</p></div><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><ReceiptText className="h-4 w-4" /></span></div><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-xl bg-emerald-50 p-3"><p className="text-[8px] font-bold text-emerald-600">Đã đặt cọc</p><p className="mt-1 text-[11px] font-black text-emerald-800">{formatCurrency(selectedAppointment.deposit)}</p></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-[8px] font-bold text-amber-600">Còn phải thu</p><p className="mt-1 text-[11px] font-black text-amber-800">{formatCurrency(Math.max(0, selectedAppointment.price - selectedAppointment.deposit))}</p></div></div></div>
-
-                  <div className="rounded-2xl bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Ghi chú phục vụ</p>{selectedAppointment.reminderSent ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[7px] font-bold text-emerald-700">Đã nhắc lịch</span> : <button type="button" onClick={() => { updateAppointment(selectedAppointment.id, { reminderSent: true }); onNotify?.(`Đã ghi nhận gửi nhắc lịch cho ${selectedAppointment.customer}.`); }} disabled={!canManage} className="min-h-7 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[7px] font-black text-amber-700 shadow-none disabled:opacity-50">Gửi nhắc lịch</button>}</div><p className="mt-3 text-[10px] leading-5 text-slate-600">{selectedAppointment.note || 'Chưa có ghi chú cho lịch hẹn này.'}</p></div>
-
-                  {selectedAppointment.status === 'CANCELLED' && <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-rose-600 shadow-sm"><X className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[8px] font-black uppercase tracking-wide text-rose-600">Thông tin hủy lịch</p>{selectedAppointment.cancelledAt && <span className="text-[7px] font-semibold text-rose-400">{selectedAppointment.cancelledAt}</span>}</div><p className="mt-2 text-[10px] font-black text-rose-900">{selectedAppointment.cancellationReason || 'Chưa ghi nhận lý do'}</p><div className="mt-2 rounded-xl bg-white/80 px-3 py-2.5"><p className="text-[7px] font-bold uppercase text-slate-400">Ghi chú hủy</p><p className="mt-1 text-[9px] leading-4 text-slate-600">{selectedAppointment.cancellationNote || 'Không có ghi chú bổ sung.'}</p></div><p className="mt-2 text-[7px] font-semibold text-rose-500">Thực hiện bởi {selectedAppointment.cancelledBy || roleLabel}</p></div></div></div>}
-
-                  <div className="rounded-2xl border border-slate-200 p-4"><p className="text-[8px] font-black uppercase tracking-wide text-slate-400">Tiến trình phục vụ</p><div className="mt-4 flex gap-2">{(['CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'] as AppointmentStatus[]).map((status, index) => { const order: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED']; const isReached = order.indexOf(selectedAppointment.status) >= order.indexOf(status); return <div key={status} className="min-w-0 flex-1"><div className={`h-2 rounded-full ${isReached ? 'bg-violet-500' : 'bg-slate-100'}`} /><p className={`mt-2 truncate text-center text-[7px] font-bold ${isReached ? 'text-violet-600' : 'text-slate-400'}`}>{index === 0 ? 'Xác nhận' : index === 1 ? 'Đã đến' : index === 2 ? 'Phục vụ' : 'Hoàn thành'}</p></div>; })}</div></div>
-
-                  <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" /><div><p className="text-[9px] font-black text-violet-800">Quyền thao tác: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-violet-600">{canManage ? 'Bạn có thể chỉnh sửa thông tin và cập nhật trạng thái lịch hẹn này.' : readOnlyReason || 'Bạn đang ở chế độ chỉ xem.'}</p></div></div></div>
+              <section className="rounded-card border border-brand-outline p-4">
+                <div className="flex items-center gap-3">
+                  <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-card bg-[var(--accent-soft)] text-body font-bold text-[color:var(--accent-strong)]">
+                    {selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-card-title text-brand-text">{selectedAppointment.customer}</p>
+                    <p className="mt-0.5 text-body text-brand-text-muted">
+                      {selectedAppointment.firstVisit ? 'Khách lần đầu sử dụng dịch vụ' : 'Khách đã có hồ sơ tại salon'}
+                    </p>
+                  </div>
                 </div>
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <a
+                    href={`tel:${selectedAppointment.phone.replace(/\s/g, '')}`}
+                    className="flex h-[var(--size-control)] items-center justify-center gap-2 rounded-control border border-brand-outline bg-brand-surface-lowest text-body font-semibold text-brand-text no-underline"
+                  >
+                    <Phone aria-hidden="true" className="h-4 w-4" />{selectedAppointment.phone}
+                  </a>
+                  <a
+                    href={`sms:${selectedAppointment.phone.replace(/\s/g, '')}`}
+                    className="flex h-[var(--size-control)] items-center justify-center gap-2 rounded-control border border-brand-outline bg-brand-surface-lowest text-body font-semibold text-brand-text no-underline"
+                  >
+                    <MessageCircle aria-hidden="true" className="h-4 w-4" />Gửi tin nhắn
+                  </a>
+                </div>
+              </section>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <section className="rounded-card border border-brand-outline p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-body font-semibold text-brand-text">Dịch vụ</h3>
+                    <span className="rounded-pill bg-brand-surface-high px-2 text-caption tabular-nums text-brand-text-muted">
+                      {selectedAppointment.services?.length || 1} dịch vụ
+                    </span>
+                  </div>
+                  <ol className="mt-2 flex flex-col gap-1.5">
+                    {(selectedAppointment.services?.length ? selectedAppointment.services : [selectedAppointment.service]).map((service, index) => (
+                      <li key={`${service}-${index}`} className="flex items-start gap-2">
+                        <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-control bg-brand-surface-high text-caption font-bold text-brand-text">
+                          {index + 1}
+                        </span>
+                        <p className="text-body leading-5 text-brand-text">{service}</p>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-2 border-t border-brand-outline pt-2 text-caption text-brand-text-muted">
+                    Tổng {selectedAppointment.duration} phút · {formatCurrency(selectedAppointment.price)}
+                  </p>
+                </section>
+
+                <section className="rounded-card border border-brand-outline p-4">
+                  <h3 className="text-body font-semibold text-brand-text">Kỹ thuật viên</h3>
+                  <p className="mt-2 text-body font-semibold text-brand-text">{selectedAppointment.staff}</p>
+                  <p className="mt-0.5 text-caption text-brand-text-muted">
+                    {staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role || 'Kỹ thuật viên'}
+                  </p>
+                  <p className="mt-2 border-t border-brand-outline pt-2 text-caption text-brand-text-muted">
+                    Nguồn đặt: {sourceLabels[selectedAppointment.source]}
+                  </p>
+                </section>
               </div>
             </div>
 
-            <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-              <div>
-                {!['COMPLETED', 'CANCELLED', 'NO_SHOW', ...(isReceptionist ? ['IN_SERVICE' as AppointmentStatus] : [])].includes(selectedAppointment.status) && (
-                  <button type="button" onClick={openCancelForm} disabled={!canManage} className="h-10 border-0 bg-transparent px-3 text-[9px] font-bold text-rose-600 shadow-none disabled:text-slate-400">Hủy lịch hẹn</button>
-                )}
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button type="button" onClick={() => openEditForm(selectedAppointment)} disabled={!canEditSelectedAppointment} title={!canEditSelectedAppointment && isReceptionist ? 'Chỉ được sửa trước khi bắt đầu dịch vụ' : undefined} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa</button>
-                {nextStatus[selectedAppointment.status] && !(isReceptionist && selectedAppointment.status === 'IN_SERVICE') && (
-                  <button type="button" onClick={() => advanceAppointmentStatus(selectedAppointment)} disabled={!canManage} className={`flex h-11 flex-1 items-center justify-center gap-2 border px-5 text-[9px] font-black text-white shadow-lg disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none sm:flex-none ${isReceptionist ? 'border-emerald-700 bg-emerald-600 shadow-emerald-200' : 'border-violet-700 bg-violet-600 shadow-violet-200'}`}><Check className="h-4 w-4" />{nextStatusLabel[selectedAppointment.status]}</button>
-                )}
-                {isReceptionist && selectedAppointment.status === 'IN_SERVICE' && (
-                  <span className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 text-[9px] font-black text-emerald-700 ring-1 ring-emerald-200"><ReceiptText className="h-4 w-4" />Hoàn tất tại Bàn lễ tân</span>
-                )}
-              </div>
-            </footer>
-          </section>
-        </div>
-      )}
+            <div className="flex flex-col gap-4">
+              <section className="rounded-card border border-brand-outline p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-caption uppercase tracking-wide text-brand-text-muted">Thanh toán</p>
+                    <p className="ta-metric-value mt-1 text-brand-text">{formatCurrency(selectedAppointment.price)}</p>
+                  </div>
+                  <ReceiptText aria-hidden="true" className="h-5 w-5 shrink-0 text-brand-text-muted" />
+                </div>
+                <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="p-3 ui-tone ui-tone--success">
+                    <dt className="text-caption text-brand-text-muted">Đã đặt cọc</dt>
+                    <dd className="mt-1 text-body font-bold tabular-nums text-brand-text">{formatCurrency(selectedAppointment.deposit)}</dd>
+                  </div>
+                  <div className="p-3 ui-tone ui-tone--warning">
+                    <dt className="text-caption text-brand-text-muted">Còn phải thu</dt>
+                    <dd className="mt-1 text-body font-bold tabular-nums text-brand-text">
+                      {formatCurrency(Math.max(0, selectedAppointment.price - selectedAppointment.deposit))}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
 
-      {showCancelForm && selectedAppointment && (
-        <div className="fixed inset-0 z-[230] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <button type="button" aria-label="Đóng xác nhận hủy lịch" onClick={() => setShowCancelForm(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-          <form onSubmit={submitCancellation} role="dialog" aria-modal="true" aria-labelledby="cancel-appointment-title" className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600"><CircleAlert className="h-5 w-5" /></span><div><h2 id="cancel-appointment-title" className="text-base font-black text-slate-900">Hủy lịch hẹn</h2><p className="mt-1 text-[9px] leading-4 text-slate-500">Lý do và ghi chú sẽ được lưu trong lịch sử lịch hẹn.</p></div></div><button type="button" onClick={() => setShowCancelForm(false)} aria-label="Đóng" className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header>
-            <div className="space-y-5 p-5 sm:p-6">
-              <div className="flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[9px] font-black">{selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}</span><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black">{selectedAppointment.customer}</p><p className="mt-1 truncate text-[8px] text-slate-400">{selectedAppointment.id} · {selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)} · {selectedAppointment.service}</p></div></div>
-              {selectedAppointment.deposit > 0 && <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[9px] font-bold leading-4 text-amber-800"><CircleDollarSign className="mt-0.5 h-4 w-4 shrink-0" />Lịch đã nhận cọc {formatCurrency(selectedAppointment.deposit)}. Sau khi hủy, cần xử lý hoàn cọc hoặc ghi chú đối soát tại màn hình Thanh toán.</div>}
-              {cancellationError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{cancellationError}</div>}
-              <fieldset><legend className="mb-2 text-[9px] font-black text-slate-700">Lý do hủy *</legend><div className="grid gap-2 sm:grid-cols-2">{cancellationReasons.map((reason) => { const isSelected = cancellationReason === reason; return <button key={reason} type="button" aria-pressed={isSelected} onClick={() => { setCancellationReason(reason); setCancellationError(''); }} className={`flex h-auto min-h-11 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[8px] font-bold shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 ${isSelected ? 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-100' : 'border-slate-200 bg-white text-slate-600 hover:border-rose-200 hover:bg-rose-50/40'}`}><span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${isSelected ? 'border-rose-500 bg-rose-500' : 'border-slate-300 bg-white'}`}>{isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}</span>{reason}</button>; })}</div></fieldset>
-              <label className="block"><span className="flex items-center justify-between gap-3"><span className="text-[9px] font-black text-slate-700">Ghi chú hủy {cancellationReason === 'Khác' ? '*' : '(không bắt buộc)'}</span><span className="text-[7px] font-semibold text-slate-400">{cancellationNote.length}/500</span></span><textarea value={cancellationNote} maxLength={500} onChange={(event) => { setCancellationNote(event.target.value); setCancellationError(''); }} className="mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" placeholder="Ví dụ: Khách báo bận công tác và sẽ đặt lại vào tuần sau..." /></label>
-              <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-[8px] leading-4 text-amber-700"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>Hệ thống sẽ ghi nhận người hủy là <strong>{roleLabel}</strong> cùng thời điểm thao tác.</span></div>
-            </div>
-            <footer className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setShowCancelForm(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Quay lại</button><button type="submit" disabled={!cancellationReason} className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-[9px] font-black text-white shadow-lg shadow-rose-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><X className="h-4 w-4" />Xác nhận hủy lịch</button></footer>
-          </form>
-        </div>
-      )}
+              <section className="rounded-card border border-brand-outline bg-brand-surface-lowest p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-body font-semibold text-brand-text">Ghi chú phục vụ</h3>
+                  {selectedAppointment.reminderSent ? (
+                    <StatusBadge status="SENT" label="Đã nhắc lịch" size="small" />
+                  ) : (
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      disabled={!canManage}
+                      onClick={() => {
+                        updateAppointment(selectedAppointment.id, { reminderSent: true });
+                        onNotify?.(`Đã ghi nhận gửi nhắc lịch cho ${selectedAppointment.customer}.`);
+                      }}
+                    >
+                      Gửi nhắc lịch
+                    </Button>
+                  )}
+                </div>
+                <p className="mt-2 text-body leading-5 text-brand-text-muted">
+                  {selectedAppointment.note || 'Chưa có ghi chú cho lịch hẹn này.'}
+                </p>
+              </section>
 
-      {formMode && (
-        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-          <button type="button" aria-label="Đóng biểu mẫu" onClick={() => setFormMode(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-          <form onSubmit={submitAppointment} className="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><h2 className="text-base font-black text-slate-900">{formMode === 'CREATE' ? 'Tạo lịch hẹn mới' : `Chỉnh sửa ${selectedAppointment?.id}`}</h2><p className="mt-1 text-[9px] text-slate-500">Chọn một hoặc nhiều dịch vụ cho khách trong cùng lịch hẹn.</p></div><button type="button" onClick={() => setFormMode(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>
-            <div className="space-y-5 p-5 sm:p-6">
-              {formError && <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{formError}</div>}
-              <fieldset><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><UserRound className="h-3.5 w-3.5" /></span>Thông tin khách hàng</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tên khách hàng *</span><input value={form.customer} onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nguyễn Minh Anh" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số điện thoại *</span><input type="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className={inputClass} placeholder="09xx xxx xxx" /></label></div>{form.customerId && <div className="mt-3 flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2.5 text-[8px] font-bold text-violet-700"><Check className="h-3.5 w-3.5" />Đã liên kết hồ sơ khách hàng <span className="font-black">{form.customerId}</span></div>}</fieldset>
-              <fieldset className="border-t border-slate-100 pt-5">
-                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600"><Sparkles className="h-3.5 w-3.5" /></span>Dịch vụ & phân công</legend>
-                <div className="flex items-center justify-between gap-3"><div><p className="text-[9px] font-bold text-slate-700">Chọn dịch vụ *</p><p className="mt-0.5 text-[8px] text-slate-400">Có thể chọn nhiều dịch vụ cho cùng một khách</p></div><span className="rounded-full bg-violet-50 px-2.5 py-1 text-[8px] font-black text-violet-700">{form.services.length} đã chọn</span></div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {services.map((service) => {
-                    const isSelected = form.services.includes(service.name);
-                    return <button key={service.name} type="button" aria-pressed={isSelected} onClick={() => { setForm((current) => ({ ...current, services: isSelected ? current.services.filter((name) => name !== service.name) : [...current.services, service.name] })); setFormError(''); }} className={`flex h-auto items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-none transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-1 ${isSelected ? 'border-violet-300 bg-violet-50 ring-2 ring-violet-100' : 'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/40'}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-white ${isSelected ? 'border-violet-600 bg-violet-600' : 'border-slate-200 bg-white'}`}>{isSelected && <Check className="h-3.5 w-3.5" />}</span><span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-black text-slate-800">{service.name}</span><span className="mt-1 block text-[8px] font-semibold text-slate-400">{service.duration} phút · {formatCurrency(service.price)}</span></span></button>;
+              {selectedAppointment.status === 'CANCELLED' && (
+                <section className="p-4 ui-tone ui-tone--danger">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-body font-semibold text-brand-text">Thông tin hủy lịch</h3>
+                    {selectedAppointment.cancelledAt && (
+                      <span className="text-caption tabular-nums text-brand-text-muted">{selectedAppointment.cancelledAt}</span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-body font-semibold text-brand-text">
+                    {selectedAppointment.cancellationReason || 'Chưa ghi nhận lý do'}
+                  </p>
+                  <div className="mt-2 rounded-control border border-brand-outline bg-brand-surface px-3 py-2">
+                    <p className="text-caption uppercase tracking-wide text-brand-text-muted">Ghi chú hủy</p>
+                    <p className="mt-1 text-body leading-5 text-brand-text">
+                      {selectedAppointment.cancellationNote || 'Không có ghi chú bổ sung.'}
+                    </p>
+                  </div>
+                  <p className="mt-2 text-caption text-brand-text-muted">
+                    Thực hiện bởi {selectedAppointment.cancelledBy || roleLabel}
+                  </p>
+                </section>
+              )}
+
+              <section className="rounded-card border border-brand-outline p-4">
+                <h3 className="text-body font-semibold text-brand-text">Tiến trình phục vụ</h3>
+                <ol className="mt-3 flex gap-2">
+                  {(['CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'] as AppointmentStatus[]).map((status, index) => {
+                    const order: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'];
+                    const isReached = order.indexOf(selectedAppointment.status) >= order.indexOf(status);
+                    return (
+                      <li key={status} className="min-w-0 flex-1">
+                        <div aria-hidden="true" className={`h-2 rounded-pill ${isReached ? 'bg-[var(--accent)]' : 'bg-brand-surface-high'}`} />
+                        <p className={`mt-2 truncate text-center text-caption font-semibold ${isReached ? 'text-[color:var(--accent-strong)]' : 'text-brand-text-muted'}`}>
+                          {index === 0 ? 'Xác nhận' : index === 1 ? 'Đã đến' : index === 2 ? 'Phục vụ' : 'Hoàn thành'}
+                          {isReached && <span className="sr-only"> (đã qua)</span>}
+                        </p>
+                      </li>
+                    );
                   })}
+                </ol>
+              </section>
+
+              <section className="flex items-start gap-3 p-4 ui-tone ui-tone--info">
+                <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-brand-text-muted" />
+                <div className="min-w-0">
+                  <p className="text-body font-semibold text-brand-text">Quyền thao tác: {roleLabel}</p>
+                  <p className="mt-1 text-body leading-5 text-brand-text-muted">
+                    {canManage
+                      ? 'Bạn có thể chỉnh sửa thông tin và cập nhật trạng thái lịch hẹn này.'
+                      : readOnlyReason || 'Bạn đang ở chế độ chỉ xem.'}
+                  </p>
                 </div>
-                {selectedServiceDetails.length ? <div className="mt-3 overflow-hidden rounded-2xl border border-violet-100 bg-violet-50/40"><div className="flex items-center justify-between border-b border-violet-100 px-4 py-2.5"><p className="text-[8px] font-black uppercase tracking-wide text-violet-700">Danh sách dịch vụ</p><p className="text-[8px] font-bold text-violet-600">{selectedServiceDuration} phút</p></div><div className="divide-y divide-violet-100/80">{selectedServiceDetails.map((service, index) => <div key={service.name} className="flex items-center gap-3 px-4 py-2.5"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-[8px] font-black text-violet-600 shadow-sm">{index + 1}</span><span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-bold text-slate-700">{service.name}</span><span className="text-[7px] text-slate-400">{service.duration} phút</span></span><span className="shrink-0 text-[8px] font-black text-slate-700">{formatCurrency(service.price)}</span><button type="button" onClick={() => setForm((current) => ({ ...current, services: current.services.filter((name) => name !== service.name) }))} aria-label={`Bỏ dịch vụ ${service.name}`} className="flex h-7 w-7 shrink-0 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none hover:text-rose-600"><X className="h-3.5 w-3.5" /></button></div>)}</div><div className="grid grid-cols-3 gap-px bg-violet-100"><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Tổng dịch vụ</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedServiceDetails.length}</p></div><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Thời lượng</p><p className="mt-1 text-[10px] font-black text-slate-800">{selectedServiceDuration} phút</p></div><div className="bg-white px-3 py-2.5"><p className="text-[7px] font-bold text-slate-400">Tạm tính</p><p className="mt-1 text-[10px] font-black text-violet-700">{formatCurrency(selectedServicePrice)}</p></div></div></div> : <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-[8px] font-bold text-amber-700">Chọn ít nhất một dịch vụ để tiếp tục.</div>}
-                <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={form.branch} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} onChange={(event) => { const branch = event.target.value as BranchCode; setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn', station: stationDirectory[branch][0] })); }} className={inputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Kỹ thuật viên phụ trách *</span><BeautifulSelect value={form.staff} onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))} className={inputClass}>{staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghế / phòng phục vụ *</span><BeautifulSelect value={form.station} onChange={(event) => setForm((current) => ({ ...current, station: event.target.value }))} className={inputClass}>{stationDirectory[form.branch].map((station) => <option key={station} value={station}>{station}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nguồn đặt lịch</span><BeautifulSelect value={form.source} onChange={(event) => setForm((current) => ({ ...current, source: event.target.value as AppointmentSource }))} className={inputClass}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></label></div>
-                <p className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[8px] leading-4 text-slate-500"><UsersRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" />Nhân viên và bàn/ghế đã chọn được áp dụng cho toàn bộ dịch vụ trong lịch hẹn này.</p>
-              </fieldset>
-              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Clock3 className="h-3.5 w-3.5" /></span>Thời gian & trạng thái</legend><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ngày *</span><input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Giờ bắt đầu *</span><input type="text" inputMode="numeric" maxLength={5} pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" aria-label="Giờ bắt đầu theo định dạng 24 giờ" value={form.start} onChange={(event) => setForm((current) => ({ ...current, start: format24HourInput(event.target.value) }))} className={inputClass} /><span className="mt-1 block text-[7px] font-semibold text-slate-400">Định dạng 24 giờ, ví dụ 00:00 hoặc 14:30.</span></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Trạng thái</span><BeautifulSelect value={form.status} disabled={isReceptionist} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as AppointmentStatus }))} className={inputClass}>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect>{isReceptionist && <span className="mt-1 block text-[7px] font-semibold text-slate-400">Đổi trạng thái theo nút nghiệp vụ trong chi tiết lịch.</span>}</label></div></fieldset>
-              <fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CircleDollarSign className="h-3.5 w-3.5" /></span>Thanh toán & ghi chú</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Tiền đặt cọc</span><input type="number" min="0" max={selectedServicePrice || undefined} step="10000" value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} className={inputClass} /></label><div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-100 bg-slate-50"><div className="px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Tổng dự kiến</p><p className="mt-1 text-[12px] font-black text-slate-800">{formatCurrency(selectedServicePrice)}</p></div><div className="border-l border-slate-200 px-4 py-3"><p className="text-[8px] font-bold text-slate-400">Kết thúc</p><p className="mt-1 text-[12px] font-black text-violet-700">{selectedServiceEnd}</p></div></div></div><label className="mt-3 block"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Ghi chú phục vụ</span><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Mẫu nail, màu sắc, tình trạng móng, dị ứng hoặc yêu cầu riêng..." /></label></fieldset>
+              </section>
             </div>
-            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setFormMode(null)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" disabled={!form.services.length} className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><CalendarCheck2 className="h-4 w-4" />{formMode === 'CREATE' ? `Lưu ${form.services.length} dịch vụ` : 'Lưu thay đổi'}</button></div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Hủy lịch hẹn */}
+      <Modal
+        open={showCancelForm && Boolean(selectedAppointment)}
+        onClose={() => setShowCancelForm(false)}
+        size="medium"
+        closeOnBackdrop={false}
+        icon={<CircleAlert aria-hidden="true" />}
+        title="Hủy lịch hẹn"
+        description="Lý do và ghi chú sẽ được lưu trong lịch sử lịch hẹn."
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setShowCancelForm(false)}>Quay lại</Button>
+            <Button
+              variant="danger"
+              type="submit"
+              form="tenant-appointment-cancel-form"
+              disabled={!cancellationReason}
+              iconLeading={<X />}
+            >
+              Xác nhận hủy lịch
+            </Button>
+          </>
+        )}
+      >
+        {selectedAppointment && (
+          <form id="tenant-appointment-cancel-form" onSubmit={submitCancellation} noValidate className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 rounded-card border border-brand-outline bg-brand-surface-lowest p-3">
+              <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-brand-surface-high text-caption font-bold text-brand-text">
+                {selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-body font-semibold text-brand-text">{selectedAppointment.customer}</p>
+                <p className="mt-0.5 truncate text-caption text-brand-text-muted">
+                  {selectedAppointment.id} · {selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)} · {selectedAppointment.service}
+                </p>
+              </div>
+            </div>
+
+            {selectedAppointment.deposit > 0 && (
+              <p className="flex items-start gap-2 p-3 text-body leading-5 text-brand-text ui-tone ui-tone--warning">
+                <CircleDollarSign aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                Lịch đã nhận cọc {formatCurrency(selectedAppointment.deposit)}. Sau khi hủy, cần xử lý hoàn cọc hoặc ghi chú đối soát tại màn hình Thanh toán.
+              </p>
+            )}
+
+            {cancellationError && (
+              <p role="alert" className="flex items-start gap-2 p-3 text-body font-semibold text-brand-text ui-tone ui-tone--danger">
+                <CircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{cancellationError}
+              </p>
+            )}
+
+            <fieldset className="border-0 p-0">
+              <legend className="mb-2 text-body font-semibold text-brand-text">
+                Lý do hủy <span className="text-brand-error" title="Bắt buộc"><span aria-hidden="true">*</span><span className="sr-only">Bắt buộc</span></span>
+              </legend>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {cancellationReasons.map((reason) => {
+                  const isSelected = cancellationReason === reason;
+                  return (
+                    <label
+                      key={reason}
+                      className={`flex min-h-11 cursor-pointer items-center gap-2.5 p-3 text-body text-brand-text ui-tone ${isSelected ? 'ui-tone--danger' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="cancellation-reason"
+                        value={reason}
+                        checked={isSelected}
+                        onChange={() => { setCancellationReason(reason); setCancellationError(''); }}
+                        className="h-4 w-4 shrink-0 accent-[var(--color-brand-error)]"
+                      />
+                      {reason}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <Field
+              label="Ghi chú hủy"
+              required={cancellationReason === 'Khác'}
+              helper={`${cancellationNote.length}/500 ký tự${cancellationReason === 'Khác' ? '' : ' · không bắt buộc'}`}
+            >
+              <textarea
+                value={cancellationNote}
+                maxLength={500}
+                rows={3}
+                onChange={(event) => { setCancellationNote(event.target.value); setCancellationError(''); }}
+                placeholder="Ví dụ: Khách báo bận công tác và sẽ đặt lại vào tuần sau..."
+                className="w-full resize-y py-2.5 leading-5"
+              />
+            </Field>
+
+            <p className="flex items-start gap-2 p-3 text-body leading-5 text-brand-text-muted ui-tone">
+              <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Hệ thống sẽ ghi nhận người hủy là <strong className="text-brand-text">{roleLabel}</strong> cùng thời điểm thao tác.</span>
+            </p>
           </form>
-        </div>
-      )}
+        )}
+      </Modal>
+
+      {/* Tạo và chỉnh sửa lịch hẹn */}
+      <Modal
+        open={Boolean(formMode)}
+        onClose={() => setFormMode(null)}
+        size="large"
+        closeOnBackdrop={false}
+        title={formMode === 'CREATE' ? 'Tạo lịch hẹn mới' : `Chỉnh sửa ${selectedAppointment?.id ?? ''}`}
+        description="Chọn một hoặc nhiều dịch vụ cho khách trong cùng lịch hẹn."
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setFormMode(null)}>Hủy</Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="tenant-appointment-form"
+              disabled={!form.services.length}
+              iconLeading={<CalendarCheck2 />}
+            >
+              {formMode === 'CREATE' ? `Lưu ${form.services.length} dịch vụ` : 'Lưu thay đổi'}
+            </Button>
+          </>
+        )}
+      >
+        <form id="tenant-appointment-form" onSubmit={submitAppointment} noValidate className="flex flex-col gap-5">
+          {formError && (
+            <p role="alert" className="flex items-start gap-2 p-3 text-body font-semibold text-brand-text ui-tone ui-tone--danger">
+              <CircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{formError}
+            </p>
+          )}
+
+          <fieldset className="border-0 p-0">
+            <legend className="mb-3 flex items-center gap-2 text-card-title text-brand-text">
+              <UserRound aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Thông tin khách hàng
+            </legend>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Tên khách hàng" required>
+                <input
+                  type="text"
+                  value={form.customer}
+                  onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))}
+                  placeholder="Ví dụ: Nguyễn Minh Anh"
+                />
+              </Field>
+              <Field label="Số điện thoại" required helper="Định dạng Việt Nam, ví dụ 0912 884 206.">
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                  placeholder="09xx xxx xxx"
+                />
+              </Field>
+            </div>
+            {form.customerId && (
+              <p className="mt-3 flex items-center gap-2 p-3 text-body text-brand-text ui-tone ui-tone--info">
+                <Check aria-hidden="true" className="h-4 w-4 shrink-0" />
+                Đã liên kết hồ sơ khách hàng <strong>{form.customerId}</strong>
+              </p>
+            )}
+          </fieldset>
+
+          <fieldset className="border-0 border-t border-brand-outline p-0 pt-5">
+            <legend className="mb-3 flex items-center gap-2 text-card-title text-brand-text">
+              <Sparkles aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Dịch vụ &amp; phân công
+            </legend>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-body font-semibold text-brand-text">
+                  Chọn dịch vụ <span className="text-brand-error" title="Bắt buộc"><span aria-hidden="true">*</span><span className="sr-only">Bắt buộc</span></span>
+                </p>
+                <p className="mt-0.5 text-caption text-brand-text-muted">Có thể chọn nhiều dịch vụ cho cùng một khách</p>
+              </div>
+              <span role="status" className="rounded-pill bg-[var(--accent-soft)] px-2.5 py-0.5 text-caption font-semibold tabular-nums text-[color:var(--accent-strong)]">
+                {form.services.length} đã chọn
+              </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {services.map((service) => {
+                const isSelected = form.services.includes(service.name);
+                return (
+                  <label
+                    key={service.name}
+                    className={`flex cursor-pointer items-center gap-3 p-3 ui-tone ${isSelected ? 'ui-tone--info' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {
+                        setForm((current) => ({
+                          ...current,
+                          services: isSelected
+                            ? current.services.filter((name) => name !== service.name)
+                            : [...current.services, service.name]
+                        }));
+                        setFormError('');
+                      }}
+                      className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-body font-semibold text-brand-text">{service.name}</span>
+                      <span className="mt-0.5 block text-caption tabular-nums text-brand-text-muted">
+                        {service.duration} phút · {formatCurrency(service.price)}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {selectedServiceDetails.length ? (
+              <div className="mt-3 overflow-hidden rounded-card border border-brand-outline">
+                <div className="flex items-center justify-between border-b border-brand-outline bg-brand-surface-lowest px-4 py-2.5">
+                  <p className="text-body font-semibold text-brand-text">Danh sách dịch vụ</p>
+                  <p className="text-caption tabular-nums text-brand-text-muted">{selectedServiceDuration} phút</p>
+                </div>
+                <ol>
+                  {selectedServiceDetails.map((service, index) => (
+                    <li key={service.name} className="flex items-center gap-3 border-b border-brand-outline px-4 py-2.5">
+                      <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-control bg-brand-surface-high text-caption font-bold text-brand-text">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-body text-brand-text">{service.name}</span>
+                        <span className="text-caption tabular-nums text-brand-text-muted">{service.duration} phút</span>
+                      </span>
+                      <span className="shrink-0 text-body font-semibold tabular-nums text-brand-text">{formatCurrency(service.price)}</span>
+                      <Button
+                        size="small"
+                        variant="ghost"
+                        iconOnly
+                        aria-label={`Bỏ dịch vụ ${service.name}`}
+                        onClick={() => setForm((current) => ({ ...current, services: current.services.filter((name) => name !== service.name) }))}
+                      >
+                        <X />
+                      </Button>
+                    </li>
+                  ))}
+                </ol>
+                <dl className="grid grid-cols-3 gap-px bg-brand-outline">
+                  <div className="bg-brand-surface px-3 py-2.5">
+                    <dt className="text-caption text-brand-text-muted">Tổng dịch vụ</dt>
+                    <dd className="mt-1 text-body font-bold tabular-nums text-brand-text">{selectedServiceDetails.length}</dd>
+                  </div>
+                  <div className="bg-brand-surface px-3 py-2.5">
+                    <dt className="text-caption text-brand-text-muted">Thời lượng</dt>
+                    <dd className="mt-1 text-body font-bold tabular-nums text-brand-text">{selectedServiceDuration} phút</dd>
+                  </div>
+                  <div className="bg-brand-surface px-3 py-2.5">
+                    <dt className="text-caption text-brand-text-muted">Tạm tính</dt>
+                    <dd className="mt-1 text-body font-bold tabular-nums text-brand-text">{formatCurrency(selectedServicePrice)}</dd>
+                  </div>
+                </dl>
+              </div>
+            ) : (
+              <p className="mt-3 border-dashed p-3 text-body font-semibold text-brand-text ui-tone ui-tone--warning">
+                Chọn ít nhất một dịch vụ để tiếp tục.
+              </p>
+            )}
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Chi nhánh" required disabled={branchLocked}>
+                <BeautifulSelect
+                  value={form.branch}
+                  aria-label={branchLocked ? 'Chi nhánh được phân công' : undefined}
+                  onChange={(event) => {
+                    const branch = event.target.value as BranchCode;
+                    setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn', station: stationDirectory[branch][0] }));
+                  }}
+                  className="w-full"
+                >
+                  <option value="Q3">Chi nhánh Quận 3</option>
+                  <option value="Q1">Chi nhánh Quận 1</option>
+                </BeautifulSelect>
+              </Field>
+
+              <Field label="Kỹ thuật viên phụ trách" required>
+                <BeautifulSelect
+                  value={form.staff}
+                  onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))}
+                  className="w-full"
+                >
+                  {staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => (
+                    <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>
+                  ))}
+                </BeautifulSelect>
+              </Field>
+
+              <Field label="Ghế / phòng phục vụ" required>
+                <BeautifulSelect
+                  value={form.station}
+                  onChange={(event) => setForm((current) => ({ ...current, station: event.target.value }))}
+                  className="w-full"
+                >
+                  {stationDirectory[form.branch].map((station) => <option key={station} value={station}>{station}</option>)}
+                </BeautifulSelect>
+              </Field>
+
+              <Field label="Nguồn đặt lịch">
+                <BeautifulSelect
+                  value={form.source}
+                  onChange={(event) => setForm((current) => ({ ...current, source: event.target.value as AppointmentSource }))}
+                  className="w-full"
+                >
+                  {Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </BeautifulSelect>
+              </Field>
+            </div>
+
+            <p className="mt-3 flex items-start gap-2 p-3 text-body leading-5 text-brand-text-muted ui-tone">
+              <UsersRound aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+              Nhân viên và bàn/ghế đã chọn được áp dụng cho toàn bộ dịch vụ trong lịch hẹn này.
+            </p>
+          </fieldset>
+
+          <fieldset className="border-0 border-t border-brand-outline p-0 pt-5">
+            <legend className="mb-3 flex items-center gap-2 text-card-title text-brand-text">
+              <Clock3 aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Thời gian &amp; trạng thái
+            </legend>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Ngày" required>
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
+                />
+              </Field>
+
+              <Field label="Giờ bắt đầu" required helper="Định dạng 24 giờ, ví dụ 00:00 hoặc 14:30.">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={5}
+                  pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]"
+                  placeholder="HH:mm"
+                  value={form.start}
+                  onChange={(event) => setForm((current) => ({ ...current, start: format24HourInput(event.target.value) }))}
+                />
+              </Field>
+
+              <Field
+                label="Trạng thái"
+                disabled={isReceptionist}
+                helper={isReceptionist ? 'Đổi trạng thái theo nút nghiệp vụ trong chi tiết lịch.' : undefined}
+              >
+                <BeautifulSelect
+                  value={form.status}
+                  onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as AppointmentStatus }))}
+                  className="w-full"
+                >
+                  {(Object.keys(appointmentStatusText) as AppointmentStatus[]).map((value) => (
+                    <option key={value} value={value}>{appointmentStatusText[value].label}</option>
+                  ))}
+                </BeautifulSelect>
+              </Field>
+            </div>
+          </fieldset>
+
+          <fieldset className="border-0 border-t border-brand-outline p-0 pt-5">
+            <legend className="mb-3 flex items-center gap-2 text-card-title text-brand-text">
+              <CircleDollarSign aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Thanh toán &amp; ghi chú
+            </legend>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Tiền đặt cọc" helper="Không được lớn hơn tổng giá dịch vụ dự kiến.">
+                <input
+                  type="number"
+                  min="0"
+                  max={selectedServicePrice || undefined}
+                  step="10000"
+                  value={form.deposit}
+                  onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))}
+                />
+              </Field>
+
+              <dl className="grid grid-cols-2 gap-px self-end overflow-hidden rounded-control border border-brand-outline bg-brand-outline">
+                <div className="bg-brand-surface-lowest px-4 py-3">
+                  <dt className="text-caption text-brand-text-muted">Tổng dự kiến</dt>
+                  <dd className="mt-1 text-body font-bold tabular-nums text-brand-text">{formatCurrency(selectedServicePrice)}</dd>
+                </div>
+                <div className="bg-brand-surface-lowest px-4 py-3">
+                  <dt className="text-caption text-brand-text-muted">Kết thúc</dt>
+                  <dd className="mt-1 text-body font-bold tabular-nums text-brand-text">{selectedServiceEnd}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <Field label="Ghi chú phục vụ" className="mt-4">
+              <textarea
+                value={form.note}
+                rows={3}
+                onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
+                placeholder="Mẫu nail, màu sắc, tình trạng móng, dị ứng hoặc yêu cầu riêng..."
+                className="w-full resize-y py-2.5 leading-5"
+              />
+            </Field>
+          </fieldset>
+        </form>
+      </Modal>
     </div>
   );
 }

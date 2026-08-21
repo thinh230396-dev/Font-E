@@ -1,6 +1,6 @@
 import type { SubscriptionPackage } from '../types';
 import type { NailPageId } from '../components/nailAdminData';
-import { SUBSCRIPTION_CAPABILITY_CATALOG } from './subscriptions';
+import { STANDARD_PLAN_CAPABILITY_TIERS, SUBSCRIPTION_CAPABILITY_CATALOG } from './subscriptions';
 
 export type TenantPageAccess = 'full' | 'limited' | 'locked';
 
@@ -9,6 +9,16 @@ interface TenantPagePolicy {
   fallback: Exclude<TenantPageAccess, 'full'>;
 }
 
+/**
+ * Màn hình nào bị khóa theo quyền của gói. Trang không có mục ở đây thì luôn mở.
+ *
+ * Năm trang cố ý để mở cho mọi gói vì thiếu chúng thì tiệm không vận hành nổi
+ * và gói rẻ nhất sẽ không dùng được: `overview`, `branches`, `pos`, `staff`,
+ * `services` và `settings`. Riêng `branches` và `staff` vẫn bị chặn theo hạn
+ * mức số lượng của gói chứ không phải theo quyền — xem `getTenantUsagePercent`.
+ * `subscription` phải luôn mở, nếu không thì tenant bị khóa sẽ không còn đường
+ * vào trang nâng cấp để tự mở khóa.
+ */
 export const TENANT_PAGE_POLICIES: Partial<Record<NailPageId, TenantPagePolicy>> = {
   appointments: { capabilityKey: 'appointments', fallback: 'locked' },
   stations: { capabilityKey: 'appointments', fallback: 'locked' },
@@ -16,7 +26,11 @@ export const TENANT_PAGE_POLICIES: Partial<Record<NailPageId, TenantPagePolicy>>
   loyalty: { capabilityKey: 'loyalty', fallback: 'locked' },
   inventory: { capabilityKey: 'inventory', fallback: 'locked' },
   online: { capabilityKey: 'online_booking', fallback: 'locked' },
-  finance: { capabilityKey: 'inventory', fallback: 'locked' },
+  gallery: { capabilityKey: 'nail_gallery', fallback: 'locked' },
+  sanitation: { capabilityKey: 'sanitation', fallback: 'locked' },
+  /* Trước đây Thu & Chi dùng chung khoá 'inventory' với Kho vật tư, nên bán một
+     module là mở luôn module kia. Giờ mỗi trang có khoá riêng. */
+  finance: { capabilityKey: 'finance', fallback: 'locked' },
   reports: { capabilityKey: 'advanced_reports', fallback: 'limited' }
 };
 
@@ -24,12 +38,6 @@ const STANDARD_PLAN_RANKS: Record<string, number> = {
   basic: 1,
   premium: 2,
   enterprise: 3
-};
-
-const STANDARD_PLAN_CAPABILITIES: Record<number, string[]> = {
-  1: ['appointments', 'online_booking', 'customers'],
-  2: ['advanced_reports', 'loyalty', 'automation', 'api', 'priority_support'],
-  3: ['inventory', 'custom_domain', 'sso', 'account_manager']
 };
 
 export const getStandardTenantPlanRank = (subscriptionPackage?: SubscriptionPackage) => (
@@ -51,7 +59,7 @@ export const getEnabledTenantCapabilities = (
 
   if (!currentRank) return enabled;
 
-  Object.entries(STANDARD_PLAN_CAPABILITIES).forEach(([rank, capabilityKeys]) => {
+  Object.entries(STANDARD_PLAN_CAPABILITY_TIERS).forEach(([rank, capabilityKeys]) => {
     if (Number(rank) <= currentRank) capabilityKeys.forEach((key) => enabled.add(key));
   });
 

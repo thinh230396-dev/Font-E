@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowDownRight,
   ArrowUpRight,
   BellRing,
   Building2,
@@ -66,6 +67,57 @@ const STATUS_META: Record<TenantStatus, { label: string; color: string; classNam
 };
 
 const PERIOD_OPTIONS = ['30 ngày qua', 'Tháng này', 'Quý này', 'Năm nay'];
+
+interface RevenueBucket {
+  label: string;
+  start: Date;
+  end: Date;
+}
+
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+
+/**
+ * Các mốc thời gian của biểu đồ doanh thu, tùy theo khoảng thời gian đang chọn.
+ * Khoảng ngắn thì chia theo ngày hoặc tuần, khoảng dài thì chia theo tháng —
+ * để mỗi cột luôn là một quãng có thật chứ không phải một nhãn trang trí.
+ */
+const buildRevenueBuckets = (period: string, now: Date): RevenueBucket[] => {
+  if (period === 'Tháng này') {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const buckets: RevenueBucket[] = [];
+    for (let weekStart = monthStart; weekStart <= now; weekStart = addDays(weekStart, 7)) {
+      const weekEnd = addDays(weekStart, 7);
+      buckets.push({ label: `Tuần ${buckets.length + 1}`, start: weekStart, end: weekEnd });
+    }
+    return buckets;
+  }
+
+  if (period === 'Quý này' || period === 'Năm nay') {
+    const firstMonth = period === 'Quý này' ? Math.floor(now.getMonth() / 3) * 3 : 0;
+    const buckets: RevenueBucket[] = [];
+    for (let month = firstMonth; month <= now.getMonth(); month += 1) {
+      buckets.push({
+        label: `T${month + 1}`,
+        start: new Date(now.getFullYear(), month, 1),
+        end: new Date(now.getFullYear(), month + 1, 1),
+      });
+    }
+    return buckets;
+  }
+
+  // 30 ngày qua: 5 cột, mỗi cột 6 ngày.
+  const today = startOfDay(now);
+  return Array.from({ length: 5 }, (_, index) => {
+    const start = addDays(today, -29 + index * 6);
+    const end = addDays(start, 6);
+    return {
+      label: `${String(start.getDate()).padStart(2, '0')}/${String(start.getMonth() + 1).padStart(2, '0')}`,
+      start,
+      end,
+    };
+  });
+};
 
 export default function Overview({
   tenants,
@@ -139,17 +191,37 @@ export default function Overview({
     return `conic-gradient(${stops.join(', ')})`;
   }, [statusSegments, totalTenants]);
 
+  /* Biểu đồ dựng từ hóa đơn đã thu thật, trừ đi phần đã hoàn, quy đổi về tiền tệ
+     báo cáo. Mốc thời gian lấy theo ngày thu tiền; hóa đơn cũ chưa có `paidAt`
+     thì lùi về ngày tạo. */
   const revenueChartData = useMemo(() => {
-    const current = Math.max(totalMonthlyRevenue, 1);
-    return [
-      { label: 'T3', amount: current * 0.58 },
-      { label: 'T4', amount: current * 0.66 },
-      { label: 'T5', amount: current * 0.75 },
-      { label: 'T6', amount: current * 0.86 },
-      { label: 'T7', amount: current },
-    ];
-  }, [totalMonthlyRevenue]);
-  const maxRevenue = Math.max(...revenueChartData.map((item) => item.amount));
+    const buckets = buildRevenueBuckets(timePeriod, new Date());
+    const paidInvoices = invoices.filter((invoice) => invoice.status === 'PAID');
+
+    return buckets.map((bucket) => ({
+      label: bucket.label,
+      amount: paidInvoices.reduce((total, invoice) => {
+        const paidAt = new Date(invoice.paidAt || invoice.createdAt);
+        if (Number.isNaN(paidAt.getTime()) || paidAt < bucket.start || paidAt >= bucket.end) return total;
+        const net = invoice.amount - (invoice.refundedAmount || 0);
+        return total + convertMoney(net, invoice.currency, reportCurrency);
+      }, 0),
+    }));
+  }, [invoices, reportCurrency, timePeriod]);
+
+  const periodRevenue = revenueChartData.reduce((total, item) => total + item.amount, 0);
+  const maxRevenue = Math.max(...revenueChartData.map((item) => item.amount), 0);
+  const hasPeriodRevenue = periodRevenue > 0;
+
+  /* Tăng trưởng so với mốc liền trước. Không có mốc trước hoặc mốc trước bằng 0
+     thì không có gì để so, nên ẩn hẳn thay vì hiện một con số vô nghĩa. */
+  const growthPercent = useMemo(() => {
+    if (revenueChartData.length < 2) return null;
+    const previous = revenueChartData[revenueChartData.length - 2].amount;
+    const latest = revenueChartData[revenueChartData.length - 1].amount;
+    if (previous <= 0) return null;
+    return Math.round(((latest - previous) / previous) * 1000) / 10;
+  }, [revenueChartData]);
 
   const todayLabel = new Intl.DateTimeFormat('vi-VN', {
     weekday: 'long',
@@ -253,22 +325,34 @@ export default function Overview({
           <div className="sa-panel-heading">
             <div>
               <div className="flex items-center gap-2">
-                <h2>Xu hướng doanh thu</h2>
-                <span className="sa-soft-badge">Ước tính</span>
+                <h2>Doanh thu đã thu</h2>
+                <span className="sa-soft-badge">{timePeriod}</span>
               </div>
-              <p>Doanh thu định kỳ quy đổi theo tháng · {reportCurrency}</p>
+              <p>Hóa đơn đã thanh toán, trừ phần đã hoàn · {reportCurrency}</p>
             </div>
-            <div className="sa-chart-summary">
-              <span>Tăng trưởng</span>
-              <strong><ArrowUpRight className="h-4 w-4" /> 16,3%</strong>
-            </div>
+            {hasPeriodRevenue && (
+              <div className="sa-chart-summary">
+                <span>{growthPercent === null ? 'Tổng đã thu' : 'So với kỳ liền trước'}</span>
+                <strong>
+                  {growthPercent === null
+                    ? formatMoney(periodRevenue, reportCurrency)
+                    : <>{growthPercent >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />} {Math.abs(growthPercent).toLocaleString('vi-VN')}%</>}
+                </strong>
+              </div>
+            )}
           </div>
 
+          {!hasPeriodRevenue ? (
+            <div className="sa-chart-empty">
+              <p>Chưa có hóa đơn nào được thu trong {timePeriod.toLocaleLowerCase('vi')}.</p>
+              <p>Biểu đồ sẽ hiện khi có hóa đơn chuyển sang trạng thái đã thanh toán.</p>
+            </div>
+          ) : (
           <div className="sa-chart">
             <div className="sa-chart-grid" aria-hidden="true">
               <span /><span /><span /><span />
             </div>
-            <div className="sa-chart-bars" aria-label="Biểu đồ xu hướng doanh thu 5 tháng">
+            <div className="sa-chart-bars" aria-label={`Doanh thu đã thu theo từng mốc · ${timePeriod}`}>
               {revenueChartData.map((item, index) => {
                 const isActive = hoveredBar === index || index === revenueChartData.length - 1;
                 return (
@@ -280,12 +364,14 @@ export default function Overview({
                     onMouseLeave={() => setHoveredBar(null)}
                     onFocus={() => setHoveredBar(index)}
                     onBlur={() => setHoveredBar(null)}
+                    aria-pressed={isActive}
+                    onClick={() => setHoveredBar((current) => (current === index ? null : index))}
                     aria-label={`${item.label}: ${formatMoney(item.amount, reportCurrency)}`}
                   >
                     <span className="sa-chart-tooltip">{formatMoney(item.amount, reportCurrency)}</span>
                     <span
                       className="sa-chart-bar"
-                      style={{ height: `${Math.max(18, (item.amount / maxRevenue) * 100)}%` }}
+                      style={{ height: `${maxRevenue > 0 ? Math.max(4, (item.amount / maxRevenue) * 100) : 4}%` }}
                     />
                     <span className="sa-chart-label">{item.label}</span>
                   </button>
@@ -293,6 +379,7 @@ export default function Overview({
               })}
             </div>
           </div>
+          )}
         </section>
 
         <section className="sa-panel">

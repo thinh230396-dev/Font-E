@@ -1,47 +1,38 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { getTenantAdminInitialData, isTenantAdminLiveDataMode } from '../utils/mockDataReset';
 import {
-  ArrowDownRight,
-  ArrowRight,
   ArrowUpRight,
   BarChart3,
+  CalendarCheck2,
   CalendarDays,
   Check,
+  CircleDollarSign,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleDollarSign,
   Clock3,
   Download,
   Eye,
   FileBarChart,
-  Filter,
-  Gauge,
-  Layers3,
   LockKeyhole,
   Mail,
   Maximize2,
-  MoreHorizontal,
-  PieChart,
   Plus,
+  ReceiptText,
   RefreshCcw,
   Search,
-  Settings2,
-  Sparkles,
   Star,
   Store,
-  Target,
-  TrendingDown,
-  TrendingUp,
-  UserRoundCheck,
-  UsersRound,
-  WalletCards,
+  UserPlus,
   X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { formatMoney as money } from '../utils/money';
+import { Button, DataTable, Field, Modal, StatusBadge, PageHeader } from './ui';
+import type { DataTableColumn } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
-type ReportTab = 'EXECUTIVE' | 'REVENUE' | 'OPERATIONS' | 'CUSTOMERS' | 'STAFF' | 'EXPORTS';
+type ReportTab = 'REVENUE' | 'OPERATIONS' | 'CUSTOMERS' | 'STAFF' | 'EXPORTS';
 type ScheduleFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 type ComparisonFilter = 'NONE' | 'PREVIOUS_PERIOD' | 'SAME_PERIOD_LAST_YEAR' | 'TARGET';
 interface TenantAdminReportsProps { searchQuery: string; onSearchQueryChange: (value: string) => void; selectedBranch: string; onSelectedBranchChange: (value: string) => void; branches?: Array<{ code: string; name: string }>; tenantName?: string; roleLabel?: string; accessMode?: 'full' | 'limited' | 'locked'; readOnlyReason?: string; onNotify?: (message: string) => void; }
@@ -62,11 +53,22 @@ const scheduleSeed: ReportSchedule[] = [
   { id: 'SCH-03', name: 'Hiệu suất chi nhánh Quận 3', frequency: 'WEEKLY', time: '09:00 · Thứ Ba', recipients: ['manager.q3@lumiere.vn'], format: 'PDF', branch: 'Q3', nextRun: '21/07/2026 · 09:00', active: true },
   { id: 'SCH-04', name: 'Tổng hợp hoa hồng tháng', frequency: 'MONTHLY', time: '08:00 · Ngày 01', recipients: ['hr@lumiere.vn', 'owner@lumiere.vn'], format: 'Excel', branch: 'ALL', nextRun: '01/08/2026 · 08:00', active: false }
 ];
-const tabs: Array<{ id: ReportTab; label: string }> = [{ id: 'EXECUTIVE', label: 'Điều hành' }, { id: 'REVENUE', label: 'Doanh thu' }, { id: 'OPERATIONS', label: 'Vận hành' }, { id: 'CUSTOMERS', label: 'Khách hàng' }, { id: 'STAFF', label: 'Nhân sự' }];
+// `EXPORTS` từng có trong kiểu ReportTab nhưng thiếu ở đây, khiến toàn bộ thư
+// viện báo cáo và lịch gửi tự động không truy cập được. Đã bổ sung lại.
+/* Không còn tab "Tổng quan": phần tóm tắt nay luôn hiển thị ở đầu trang thay vì
+   là một tab ngang hàng với các nhóm chi tiết. */
+const tabs: Array<{ id: ReportTab; label: string }> = [{ id: 'REVENUE', label: 'Doanh thu' }, { id: 'OPERATIONS', label: 'Vận hành' }, { id: 'CUSTOMERS', label: 'Khách hàng' }, { id: 'STAFF', label: 'Nhân sự' }, { id: 'EXPORTS', label: 'Xuất & lịch gửi' }];
 const comparisonLabels: Record<ComparisonFilter, string> = { NONE: 'Không so sánh', PREVIOUS_PERIOD: 'Kỳ liền trước', SAME_PERIOD_LAST_YEAR: 'Cùng kỳ năm trước', TARGET: 'Mục tiêu KPI' };
-const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
-const money = (value: number) => `${value.toLocaleString('vi-VN')}đ`;
-const shortMoney = (value: number) => `${(value / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`;
+/** Card của trang — đúng bộ class card đang dùng ở Lịch hẹn, Ghế/Bàn và Dịch vụ. */
+const cardClass = 'rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card';
+/** Control đứng một mình. Control trong biểu mẫu dùng `Field`, đã có sẵn hình thức. */
+const controlClass = 'h-[var(--size-control)] w-full rounded-control border border-brand-outline bg-brand-surface px-3 text-body text-brand-text outline-none';
+/** Chuỗi dữ liệu trong biểu đồ nhiều chuỗi — thang phân loại dẫn xuất từ accent. */
+const chartSeries = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
+/* Tiền luôn hiện đủ chữ số. Trước đây trang này trộn "1,1 tỷ ₫", "1.141tr",
+   "168,4 triệu ₫" và "780.000 ₫" trên cùng một màn hình, nên muốn so hai con số
+   là phải quy đổi trong đầu. Giữ tên `shortMoney` để không phải sửa ~30 chỗ gọi. */
+const shortMoney = (value: number) => money(value);
 const branchName = (branch: BranchCode | 'ALL') => branch === 'ALL' ? 'Tất cả chi nhánh' : branch === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3';
 const formatReportDate = (value: string) => {
   const [year, month, day] = value.split('-');
@@ -77,6 +79,32 @@ const fromIsoDate = (value: string) => {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year, month - 1, day);
 };
+
+/**
+ * Khối nội dung của trang báo cáo.
+ *
+ * Chỉ gói lại đúng bộ class card đang dùng ở các màn hình khác — không phải một
+ * component thư viện mới. Tiêu đề luôn là `h2` để mọi khối cùng một bậc dưới `h1`.
+ */
+function ReportCard({ title, description, action, className = '', bodyClassName = '', children }: {
+  title?: string;
+  description?: string;
+  action?: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  children?: ReactNode;
+}) {
+  return <section className={`min-w-0 ${cardClass} ${className}`}>
+    {(title || action) && <div className="flex flex-wrap items-start justify-between gap-3">
+      {title && <div className="min-w-0">
+        <h2 className="text-card-title text-brand-text">{title}</h2>
+        {description && <p className="mt-0.5 text-body text-brand-text-muted">{description}</p>}
+      </div>}
+      {action}
+    </div>}
+    {children && <div className={`min-w-0 ${title || action ? 'mt-4' : ''} ${bodyClassName}`}>{children}</div>}
+  </section>;
+}
 
 function ReportRangeCalendar({ value, onChange }: { value: { start: string; end: string }; onChange: (next: { start: string; end: string }) => void }) {
   const initialDate = value.start ? fromIsoDate(value.start) : new Date();
@@ -94,18 +122,18 @@ function ReportRangeCalendar({ value, onChange }: { value: { start: string; end:
     if (!value.start || value.end || selected < value.start) onChange({ start: selected, end: '' });
     else onChange({ start: value.start, end: selected });
   };
-  return <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+  return <div className="mt-4 rounded-card border border-brand-outline bg-brand-surface-lowest p-3">
     <div className="flex items-center justify-between">
-      <button type="button" aria-label="Tháng trước" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="flex h-8 w-8 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><ChevronLeft className="h-4 w-4" /></button>
-      <p className="text-xs font-black text-slate-800">Tháng {month + 1}/{year}</p>
-      <button type="button" aria-label="Tháng sau" onClick={() => setViewDate(new Date(year, month + 1, 1))} className="flex h-8 w-8 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><ChevronRight className="h-4 w-4" /></button>
+      <Button size="small" variant="ghost" iconOnly aria-label="Tháng trước" onClick={() => setViewDate(new Date(year, month - 1, 1))}><ChevronLeft /></Button>
+      <p className="text-body font-semibold text-brand-text">Tháng {month + 1}/{year}</p>
+      <Button size="small" variant="ghost" iconOnly aria-label="Tháng sau" onClick={() => setViewDate(new Date(year, month + 1, 1))}><ChevronRight /></Button>
     </div>
-    <div className="mt-3 grid grid-cols-7 gap-1 text-center">{['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((label) => <span key={label} className="py-1 text-[9px] font-black text-slate-400">{label}</span>)}{cells.map((day, index) => {
+    <div className="mt-3 grid grid-cols-7 gap-1 text-center">{['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((label) => <span key={label} className="py-1 text-caption font-semibold text-brand-text-muted">{label}</span>)}{cells.map((day, index) => {
       if (!day) return <span key={`empty-${index}`} />;
       const iso = toIsoDate(new Date(year, month, day));
       const isEndpoint = iso === value.start || iso === value.end;
       const isInRange = Boolean(value.start && value.end && iso > value.start && iso < value.end);
-      return <button key={iso} type="button" onClick={() => chooseDay(day)} aria-label={formatReportDate(iso)} aria-pressed={isEndpoint} className={`flex h-9 min-h-0 items-center justify-center rounded-lg border-0 p-0 text-[10px] font-bold shadow-none ${isEndpoint ? 'bg-violet-600 text-white' : isInRange ? 'bg-violet-100 text-violet-700' : 'bg-transparent text-slate-600 hover:bg-white hover:text-violet-700'}`}>{day}</button>;
+      return <button key={iso} type="button" onClick={() => chooseDay(day)} aria-label={formatReportDate(iso)} aria-pressed={isEndpoint} className={`flex h-9 min-h-0 items-center justify-center rounded-control border-0 p-0 text-body tabular-nums shadow-none ${isEndpoint ? 'bg-[var(--accent)] font-bold text-[color:var(--color-brand-on-primary)]' : isInRange ? 'bg-[var(--accent-soft)] font-semibold text-[color:var(--accent-strong)]' : 'bg-transparent text-brand-text'}`}>{day}</button>;
     })}</div>
   </div>;
 }
@@ -121,21 +149,64 @@ function BranchComparisonTable({ branches }: { branches: Array<{ code: string; n
   const rows = [
     { label: 'Công suất', value: (branch: typeof comparisonBranches[number]) => `${branch.capacity.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` },
     { label: 'Lịch/ngày', value: (branch: typeof comparisonBranches[number]) => branch.bookings.toLocaleString('vi-VN') },
-    { label: 'Doanh thu/ghế', value: (branch: typeof comparisonBranches[number]) => `${branch.revenue.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}tr` },
+    { label: 'Doanh thu/ghế', value: (branch: typeof comparisonBranches[number]) => money(branch.revenue * 1_000_000) },
     { label: 'Hủy/no-show', value: (branch: typeof comparisonBranches[number]) => `${branch.noShow.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` },
     { label: 'Đánh giá', value: (branch: typeof comparisonBranches[number]) => branch.rating.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) }
   ];
   const previewBranches = comparisonBranches.slice(0, 2);
-  return <article className="min-w-0 rounded-2xl border border-slate-200 p-5">
-    <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-black text-slate-900">So sánh chi nhánh</h3><p className="mt-1 text-[10px] text-slate-400">Xem nhanh {previewBranches.length}/{comparisonBranches.length} chi nhánh</p></div><button type="button" onClick={() => setExpanded(true)} className="flex h-9 items-center gap-1.5 border border-violet-200 bg-violet-50 px-3 text-[10px] font-black text-violet-700 shadow-sm"><Maximize2 className="h-3.5 w-3.5" />Phóng to</button></div>
-    <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-      <table className="w-full table-fixed border-collapse">
-        <thead><tr className="bg-slate-50 text-[10px] font-black text-slate-400"><th className="w-[42%] px-4 py-3 text-left">Chỉ số</th>{previewBranches.map((branch) => <th key={branch.code} className="px-2 py-3 text-center"><span className="block truncate text-slate-700">{branch.name.replace(/^Chi nhánh\s+/i, '')}</span><span className="mt-0.5 block text-[8px] font-bold text-slate-400">{branch.code}</span></th>)}</tr></thead>
-        <tbody>{rows.map((row, rowIndex) => <tr key={row.label} className="border-t border-slate-100"><th className="px-4 py-3 text-left text-xs font-bold text-slate-600">{row.label}</th>{previewBranches.map((branch, branchIndex) => <td key={branch.code} className={`px-2 py-3 text-center text-xs font-black ${branchIndex === 0 ? 'text-violet-700' : 'text-slate-700'} ${rowIndex % 2 ? 'bg-slate-50/40' : 'bg-white'}`}>{row.value(branch)}</td>)}</tr>)}</tbody>
-      </table>
+
+  // Chỉ số là hàng, chi nhánh là cột — dạng này so sánh nhanh hơn thẻ rời.
+  const buildColumns = (list: typeof comparisonBranches): DataTableColumn<(typeof rows)[number]>[] => [
+    { key: 'metric', header: 'Chỉ số', width: '34%', cell: (row) => <span className="font-semibold text-brand-text">{row.label}</span> },
+    ...list.map((branch, index) => ({
+      key: branch.code,
+      numeric: true,
+      header: (
+        <span className="block">
+          <span className="block truncate text-brand-text">{branch.name.replace(/^Chi nhánh\s+/i, '')}</span>
+          <span className="block font-normal text-brand-text-muted">{branch.code}</span>
+        </span>
+      ),
+      cell: (row: (typeof rows)[number]) => (
+        <span className={index === 0 ? 'font-bold text-[color:var(--accent-strong)]' : 'text-brand-text'}>{row.value(branch)}</span>
+      )
+    }))
+  ];
+
+  return <section className={`min-w-0 ${cardClass}`}>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-card-title text-brand-text">So sánh chi nhánh</h2>
+        <p className="mt-0.5 text-body text-brand-text-muted">Xem nhanh {previewBranches.length}/{comparisonBranches.length} chi nhánh</p>
+      </div>
+      <Button size="small" variant="secondary" iconLeading={<Maximize2 />} onClick={() => setExpanded(true)}>Xem tất cả</Button>
     </div>
-    {expanded && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><button type="button" aria-label="Đóng so sánh chi nhánh" onClick={() => setExpanded(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><section role="dialog" aria-modal="true" aria-labelledby="branch-comparison-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:px-6"><div><p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">Báo cáo vận hành</p><h2 id="branch-comparison-title" className="mt-1 text-lg font-black text-slate-900">So sánh toàn bộ chi nhánh</h2><p className="mt-1 text-xs text-slate-500">{comparisonBranches.length} chi nhánh trong cùng kỳ báo cáo</p></div><button type="button" onClick={() => setExpanded(false)} aria-label="Đóng" className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="overflow-y-auto p-5 sm:p-6"><div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">{comparisonBranches.map((branch, branchIndex) => <article key={branch.code} className={`flex h-full flex-col overflow-hidden rounded-2xl border ${branchIndex === 0 ? 'border-violet-200 shadow-lg shadow-violet-100' : 'border-slate-200 shadow-sm'}`}><div className={`flex min-h-[112px] p-4 ${branchIndex === 0 ? 'bg-violet-600 text-white' : 'bg-slate-50 text-slate-800'}`}><div className="flex w-full items-start justify-between gap-3"><div className="min-w-0"><p className="line-clamp-2 min-h-10 text-sm font-black leading-5">{branch.name}</p><p className={`mt-1 text-[9px] font-bold ${branchIndex === 0 ? 'text-violet-200' : 'text-slate-400'}`}>{branch.code}</p></div>{branchIndex === 0 && <span className="shrink-0 rounded-full bg-white/15 px-2 py-1 text-[8px] font-black">Nổi bật</span>}</div></div><div className="flex-1 divide-y divide-slate-100">{rows.map((row) => <div key={row.label} className="flex min-h-14 items-center justify-between gap-3 px-4 py-3"><span className="text-[10px] font-bold text-slate-500">{row.label}</span><strong className="text-xs font-black text-slate-800">{row.value(branch)}</strong></div>)}</div></article>)}</div></div></section></div>}
-  </article>;
+
+    <DataTable
+      className="mt-4"
+      columns={buildColumns(previewBranches)}
+      rows={rows}
+      rowKey={(row) => row.label}
+      caption={`Chỉ số vận hành của ${previewBranches.length} chi nhánh nổi bật`}
+    />
+
+    <Modal
+      open={expanded}
+      onClose={() => setExpanded(false)}
+      size="large"
+      eyebrow="Báo cáo vận hành"
+      title="So sánh toàn bộ chi nhánh"
+      description={`${comparisonBranches.length} chi nhánh trong cùng kỳ báo cáo`}
+      footer={<Button variant="secondary" onClick={() => setExpanded(false)}>Đóng</Button>}
+    >
+      <DataTable
+        columns={buildColumns(comparisonBranches)}
+        rows={rows}
+        rowKey={(row) => row.label}
+        caption={`Chỉ số vận hành của ${comparisonBranches.length} chi nhánh`}
+      />
+    </Modal>
+  </section>;
 }
 
 function RevenueReportTab({ revenue, bookings, averageTicket, branches, selectedBranch, periodLabel, comparisonSuffix }: { revenue: number; bookings: number; averageTicket: number; branches: Array<{ code: string; name: string }>; selectedBranch: string; periodLabel: string; comparisonSuffix: string }) {
@@ -149,10 +220,10 @@ function RevenueReportTab({ revenue, bookings, averageTicket, branches, selected
   const compareText = comparisonSuffix || 'trong kỳ đã chọn';
   const serviceRevenue = Math.round(revenue * 0.861);
   const sourceRows = [
-    { label: 'Dịch vụ', value: serviceRevenue, share: 86.1, growth: '+17,4%', tone: 'bg-violet-500' },
-    { label: 'Sản phẩm bán lẻ', value: Math.round(revenue * 0.074), share: 7.4, growth: '+9,8%', tone: 'bg-blue-500' },
-    { label: 'Thẻ liệu trình & thành viên', value: Math.round(revenue * 0.041), share: 4.1, growth: '+12,6%', tone: 'bg-emerald-500' },
-    { label: 'Phí khác', value: Math.round(revenue * 0.024), share: 2.4, growth: '+4,2%', tone: 'bg-amber-500' }
+    { label: 'Dịch vụ', value: serviceRevenue, share: 86.1, growth: '+17,4%', tone: chartSeries[0] },
+    { label: 'Sản phẩm bán lẻ', value: Math.round(revenue * 0.074), share: 7.4, growth: '+9,8%', tone: chartSeries[1] },
+    { label: 'Thẻ liệu trình & thành viên', value: Math.round(revenue * 0.041), share: 4.1, growth: '+12,6%', tone: chartSeries[2] },
+    { label: 'Phí khác', value: Math.round(revenue * 0.024), share: 2.4, growth: '+4,2%', tone: chartSeries[3] }
   ];
   const trend = [58, 66, 62, 74, 69, 81, 76, 88, 83, 92, 79, 96, 91, 100];
   const previousTrend = [54, 58, 60, 64, 67, 70, 72, 75, 77, 79, 81, 83, 84, 86];
@@ -164,11 +235,17 @@ function RevenueReportTab({ revenue, bookings, averageTicket, branches, selected
     { name: 'Spa & phục hồi', share: 10, bookings: 158, average: 624000, growth: '+18,1%' }
   ].map((item) => ({ ...item, revenue: Math.round(serviceRevenue * item.share / 100) }));
   const paymentMethods = [
-    { label: 'Chuyển khoản', share: 42, tone: 'bg-violet-500', reconciled: '100%' },
-    { label: 'Thẻ', share: 28, tone: 'bg-blue-500', reconciled: '99,8%' },
-    { label: 'Tiền mặt', share: 18, tone: 'bg-emerald-500', reconciled: '98,9%' },
-    { label: 'Ví điện tử', share: 12, tone: 'bg-amber-500', reconciled: '100%' }
+    { label: 'Chuyển khoản', share: 42, tone: chartSeries[0], reconciled: '100%' },
+    { label: 'Thẻ', share: 28, tone: chartSeries[1], reconciled: '99,8%' },
+    { label: 'Tiền mặt', share: 18, tone: chartSeries[2], reconciled: '98,9%' },
+    { label: 'Ví điện tử', share: 12, tone: chartSeries[3], reconciled: '100%' }
   ];
+  // Vòng tròn tỷ trọng dựng từ cùng thang màu, cộng dồn theo phần trăm.
+  const paymentGradient = `conic-gradient(${paymentMethods.reduce<{ parts: string[]; offset: number }>((acc, method) => {
+    const next = acc.offset + method.share;
+    acc.parts.push(`${method.tone} ${acc.offset}% ${next}%`);
+    return { parts: acc.parts, offset: next };
+  }, { parts: [], offset: 0 }).parts.join(', ')})`;
   const activeBranches = (selectedBranch === 'ALL' ? branches : branches.filter((branch) => branch.code === selectedBranch));
   const branchWeights = activeBranches.map((branch, index) => branch.code === 'Q3' ? 59 : branch.code === 'Q1' ? 41 : 32 + index * 3);
   const totalWeight = branchWeights.reduce((sum, value) => sum + value, 0) || 1;
@@ -184,60 +261,253 @@ function RevenueReportTab({ revenue, bookings, averageTicket, branches, selected
     { label: 'Đối tác & chiến dịch', share: 6, value: Math.round(revenue * 0.06), growth: '+7,2%' }
   ];
 
-  return <div className="space-y-5">
-    <section className="flex flex-col gap-3 rounded-2xl bg-slate-950 p-5 text-white lg:flex-row lg:items-center lg:justify-between">
-      <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-300">Tổng quan doanh thu · {periodLabel}</p><div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2"><p className="text-3xl font-black">{shortMoney(revenue)}</p><span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[10px] font-black text-emerald-300">+16,8% {compareText}</span></div><p className="mt-2 text-xs text-slate-400">Doanh thu thuần sau giảm giá và hoàn tiền · {bookings.toLocaleString('vi-VN')} hóa đơn hoàn tất</p></div>
-      <div className="min-w-64 rounded-2xl bg-white/5 p-4"><div className="flex items-center justify-between text-[10px]"><span className="font-bold text-slate-400">Mục tiêu kỳ</span><strong>{shortMoney(target)}</strong></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400" style={{ width: `${Math.min(100, targetProgress)}%` }} /></div><p className="mt-2 text-[10px] font-bold text-violet-200">Đạt {targetProgress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% · còn {shortMoney(Math.max(0, target - revenue))}</p></div>
+  return <div className="flex flex-col gap-4">
+    {/* Tóm tắt kỳ — số lớn dẫn dắt, nằm trong card như các khối khác */}
+    <section className={`flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between ${cardClass}`}>
+      <div className="min-w-0">
+        <p className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">Tổng quan doanh thu · {periodLabel}</p>
+        <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2">
+          <p className="text-display font-bold tabular-nums text-brand-text">{shortMoney(revenue)}</p>
+          <span className="flex items-center gap-1 text-body font-semibold text-brand-secondary">
+            <ArrowUpRight aria-hidden="true" className="h-4 w-4" />16,8% {compareText}
+          </span>
+        </div>
+        <p className="mt-2 text-body text-brand-text-muted">
+          Doanh thu thuần sau giảm giá và hoàn tiền · {bookings.toLocaleString('vi-VN')} hóa đơn hoàn tất
+        </p>
+      </div>
+      <div className="w-full lg:max-w-sm">
+        <div className="flex items-center justify-between gap-3 text-body">
+          <span className="text-brand-text-muted">Mục tiêu kỳ</span>
+          <strong className="tabular-nums text-brand-text">{shortMoney(target)}</strong>
+        </div>
+        <div aria-hidden="true" className="mt-2 h-2 overflow-hidden rounded-pill bg-brand-surface-high">
+          <div className="h-full rounded-pill bg-[var(--accent)]" style={{ width: `${Math.min(100, targetProgress)}%` }} />
+        </div>
+        <p className="mt-2 text-caption text-brand-text-muted">
+          Đạt <strong className="tabular-nums text-brand-text">{targetProgress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</strong> · còn {shortMoney(Math.max(0, target - revenue))}
+        </p>
+      </div>
     </section>
 
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">{[
-      { label: 'Doanh thu gộp', value: shortMoney(grossRevenue), detail: 'Trước giảm giá & hoàn tiền', icon: CircleDollarSign, tone: 'bg-violet-50 text-violet-600' },
-      { label: 'Doanh thu thuần', value: shortMoney(revenue), detail: '+16,8% so với đối chiếu', icon: TrendingUp, tone: 'bg-emerald-50 text-emerald-600' },
-      { label: 'Đã thực thu', value: shortMoney(collected), detail: '96,4% doanh thu thuần', icon: WalletCards, tone: 'bg-blue-50 text-blue-600' },
-      { label: 'Chưa thu/đang chờ', value: shortMoney(outstanding), detail: 'Cọc, công nợ và giao dịch chờ', icon: Clock3, tone: 'bg-amber-50 text-amber-600' },
-      { label: 'Giá trị hóa đơn TB', value: money(averageTicket), detail: '+3,9% trên mỗi hóa đơn', icon: FileBarChart, tone: 'bg-fuchsia-50 text-fuchsia-600' },
-      { label: 'Giảm giá & hoàn tiền', value: `−${shortMoney(discounts + refunds)}`, detail: `${((discounts + refunds) / grossRevenue * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% doanh thu gộp`, icon: ArrowDownRight, tone: 'bg-rose-50 text-rose-600' }
-    ].map(({ label, value, detail, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-slate-200 p-4"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4 w-4" /></span><p className="mt-3 text-[10px] font-bold text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-slate-900">{value}</p><p className="mt-1 text-[9px] font-semibold text-slate-400">{detail}</p></article>)}</section>
+    {/* Sáu chỉ số phụ — chia bằng đường kẻ, không đóng khung từng ô */}
+    <section aria-label="Chỉ số doanh thu trong kỳ" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">{[
+      { label: 'Doanh thu gộp', value: shortMoney(grossRevenue), detail: 'Trước giảm giá & hoàn tiền' },
+      { label: 'Doanh thu thuần', value: shortMoney(revenue), detail: '+16,8% so với đối chiếu' },
+      { label: 'Đã thực thu', value: shortMoney(collected), detail: '96,4% doanh thu thuần' },
+      { label: 'Chưa thu/đang chờ', value: shortMoney(outstanding), detail: 'Cọc, công nợ và giao dịch chờ' },
+      { label: 'Giá trị hóa đơn TB', value: money(averageTicket), detail: '+3,9% trên mỗi hóa đơn' },
+      { label: 'Giảm giá & hoàn tiền', value: `−${shortMoney(discounts + refunds)}`, detail: `${((discounts + refunds) / grossRevenue * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% doanh thu gộp` }
+    ].map(({ label, value, detail }) => <article key={label} className="flex flex-col gap-1 rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+      <p className="text-caption text-brand-text-muted">{label}</p>
+      <p className="text-card-title font-bold tabular-nums text-brand-text">{value}</p>
+      <p className="text-caption text-brand-text-muted">{detail}</p>
+    </article>)}</section>
 
-    <section className="grid min-w-0 gap-5 xl:grid-cols-[1.35fr_.65fr]">
-      <article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Xu hướng doanh thu thuần</h3><p className="mt-1 text-[10px] text-slate-400">Theo ngày · đối chiếu với kỳ so sánh</p></div><TrendingUp className="h-5 w-5 text-violet-500" /></div><div className="relative mt-6 h-64 border-b border-l border-slate-200"><div className="absolute inset-0 flex flex-col justify-between">{['100%', '75%', '50%', '25%', '0'].map((value) => <div key={value} className="border-t border-dashed border-slate-100"><span className="-ml-10 -translate-y-2 block w-8 text-right text-[8px] font-bold text-slate-400">{value}</span></div>)}</div><div className="absolute inset-0 flex items-end gap-2 px-3">{trend.map((value, index) => <div key={index} className="relative flex h-full flex-1 items-end"><span className="w-full rounded-t-md bg-gradient-to-t from-violet-600 to-fuchsia-400" style={{ height: `${value}%` }} /><span className="absolute w-full border-t-2 border-dashed border-slate-400" style={{ bottom: `${previousTrend[index]}%` }} /></div>)}</div></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><div className="flex gap-4 text-[9px] font-bold text-slate-500"><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded bg-violet-500" />Kỳ hiện tại</span><span className="flex items-center gap-1.5"><i className="w-4 border-t-2 border-dashed border-slate-400" />Kỳ đối chiếu</span></div><p className="text-[9px] font-bold text-emerald-600">Ngày cao nhất: 19/07 · {shortMoney(revenue * 0.071)}</p></div></article>
-      <article className="rounded-2xl border border-slate-200 p-5"><div><h3 className="text-sm font-black text-slate-900">Từ doanh thu gộp đến thuần</h3><p className="mt-1 text-[10px] text-slate-400">Các khoản điều chỉnh trong kỳ</p></div><div className="mt-5 space-y-3">{[
-        { label: 'Doanh thu gộp', value: grossRevenue, tone: 'text-slate-900', prefix: '' },
-        { label: 'Giảm giá', value: discounts, tone: 'text-rose-600', prefix: '−' },
-        { label: 'Hoàn tiền', value: refunds, tone: 'text-rose-600', prefix: '−' },
-        { label: 'Doanh thu thuần', value: revenue, tone: 'text-violet-700', prefix: '' }
-      ].map((item, index) => <div key={item.label} className={`flex items-center justify-between rounded-xl p-3 ${index === 3 ? 'bg-violet-50 ring-1 ring-violet-200' : 'bg-slate-50'}`}><span className="text-xs font-bold text-slate-600">{item.label}</span><strong className={`text-xs font-black ${item.tone}`}>{item.prefix}{shortMoney(item.value)}</strong></div>)}</div><div className="mt-4 rounded-xl bg-blue-50 p-3"><p className="text-[10px] font-black text-blue-800">Thuế & phí cần kê khai</p><p className="mt-1 text-lg font-black text-blue-900">{shortMoney(revenue * 0.08)}</p><p className="mt-1 text-[9px] text-blue-700">Ước tính VAT 8%, chưa trừ khỏi doanh thu thuần.</p></div></article>
+    <section className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
+      <ReportCard title="Xu hướng doanh thu thuần" description="Theo ngày · đối chiếu với kỳ so sánh">
+        <div
+          role="img"
+          aria-label={`Biểu đồ cột doanh thu thuần theo ngày trong ${periodLabel}, kèm đường nét đứt của kỳ đối chiếu. Ngày cao nhất 19/07.`}
+          className="relative ml-11 mt-2 h-52 border-b border-l border-brand-outline"
+        >
+          <div aria-hidden="true" className="absolute inset-0 flex flex-col justify-between">{['100%', '75%', '50%', '25%', '0'].map((value) => <div key={value} className="border-t border-dashed border-brand-outline"><span className="-ml-11 -translate-y-2 block w-9 text-right text-caption tabular-nums text-brand-text-muted">{value}</span></div>)}</div>
+          <div aria-hidden="true" className="absolute inset-0 flex items-end gap-2 px-3">{trend.map((value, index) => <div key={index} className="relative flex h-full flex-1 items-end"><span className="w-full rounded-t-control" style={{ height: `${value}%`, background: 'var(--chart-1)' }} /><span className="absolute w-full border-t-2 border-dashed border-brand-text-muted" style={{ bottom: `${previousTrend[index]}%` }} /></div>)}</div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-caption text-brand-text-muted">
+          <div className="flex gap-4">
+            <span className="flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-sm" style={{ background: 'var(--chart-1)' }} />Kỳ hiện tại</span>
+            <span className="flex items-center gap-1.5"><i aria-hidden="true" className="w-4 border-t-2 border-dashed border-brand-text-muted" />Kỳ đối chiếu</span>
+          </div>
+          <p>Ngày cao nhất: <strong className="tabular-nums text-brand-text">19/07 · {shortMoney(revenue * 0.071)}</strong></p>
+        </div>
+      </ReportCard>
+
+      <ReportCard title="Từ doanh thu gộp đến thuần" description="Các khoản điều chỉnh trong kỳ">
+        <dl>{[
+          { label: 'Doanh thu gộp', value: grossRevenue, tone: 'text-brand-text', prefix: '' },
+          { label: 'Giảm giá', value: discounts, tone: 'text-brand-error', prefix: '−' },
+          { label: 'Hoàn tiền', value: refunds, tone: 'text-brand-error', prefix: '−' },
+          { label: 'Doanh thu thuần', value: revenue, tone: 'text-[color:var(--accent-strong)]', prefix: '' }
+        ].map((item, index) => <div key={item.label} className={`flex items-center justify-between gap-3 py-2.5 ${index === 0 ? '' : 'border-t border-brand-outline'} ${index === 3 ? 'mt-1 border-t-2' : ''}`}>
+          <dt className={`text-body ${index === 3 ? 'font-semibold text-brand-text' : 'text-brand-text-muted'}`}>{item.label}</dt>
+          <dd className={`text-body font-bold tabular-nums ${item.tone}`}>{item.prefix}{shortMoney(item.value)}</dd>
+        </div>)}</dl>
+        <div className="mt-4 p-3 ui-tone ui-tone--info">
+          <p className="text-body font-semibold text-brand-text">Thuế &amp; phí cần kê khai</p>
+          <p className="mt-1 text-card-title font-bold tabular-nums text-brand-text">{shortMoney(revenue * 0.08)}</p>
+          <p className="mt-1 text-caption text-brand-text-muted">Ước tính VAT 8%, chưa trừ khỏi doanh thu thuần.</p>
+        </div>
+      </ReportCard>
     </section>
 
-    <section className="grid min-w-0 gap-5 xl:grid-cols-2">
-      <article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Cơ cấu nguồn doanh thu</h3><p className="mt-1 text-[10px] text-slate-400">Tỷ trọng và tăng trưởng theo nguồn</p></div><Layers3 className="h-5 w-5 text-violet-500" /></div><div className="mt-5 space-y-4">{sourceRows.map((item) => <div key={item.label}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="font-bold text-slate-600">{item.label}</span><span><strong className="text-slate-800">{shortMoney(item.value)}</strong><em className="ml-2 not-italic font-bold text-emerald-600">{item.growth}</em></span></div><div className="h-2.5 rounded-full bg-slate-100"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${item.share}%` }} /></div><p className="mt-1 text-right text-[8px] font-bold text-slate-400">{item.share.toLocaleString('vi-VN')}%</p></div>)}</div></article>
-      <article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Phương thức thanh toán & đối soát</h3><p className="mt-1 text-[10px] text-slate-400">Theo giá trị giao dịch đã thu</p></div><WalletCards className="h-5 w-5 text-blue-500" /></div><div className="mt-5 grid gap-5 sm:grid-cols-[160px_1fr]"><div className="flex items-center justify-center"><div className="relative flex h-36 w-36 items-center justify-center rounded-full" style={{ background: 'conic-gradient(#7c3aed 0 42%, #3b82f6 42% 70%, #10b981 70% 88%, #f59e0b 88% 100%)' }}><div className="flex h-20 w-20 flex-col items-center justify-center rounded-full bg-white"><p className="text-[9px] text-slate-400">Đã thu</p><p className="mt-1 text-xs font-black text-slate-900">{shortMoney(collected)}</p></div></div></div><div className="space-y-2">{paymentMethods.map((item) => <div key={item.label} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-xl bg-slate-50 p-3"><span className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><i className={`h-2.5 w-2.5 rounded-full ${item.tone}`} />{item.label}</span><strong className="text-[10px] text-slate-800">{shortMoney(collected * item.share / 100)}</strong><span className="rounded-full bg-emerald-50 px-2 py-1 text-[8px] font-black text-emerald-700">{item.reconciled}</span></div>)}</div></div><p className="mt-4 rounded-xl bg-amber-50 p-3 text-[9px] font-bold leading-5 text-amber-800">Còn 3 giao dịch thẻ và 1 ca tiền mặt cần xác nhận, tổng giá trị {shortMoney(outstanding)}.</p></article>
+    <section className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+      <ReportCard title="Cơ cấu nguồn doanh thu" description="Tỷ trọng và tăng trưởng theo nguồn">
+        <dl className="flex flex-col gap-4">{sourceRows.map((item) => <div key={item.label}>
+          <div className="mb-1.5 flex items-center justify-between gap-3 text-body">
+            <dt className="text-brand-text">{item.label}</dt>
+            <dd className="flex items-baseline gap-2">
+              <strong className="tabular-nums text-brand-text">{shortMoney(item.value)}</strong>
+              <span className="text-caption font-semibold text-brand-secondary">{item.growth}</span>
+            </dd>
+          </div>
+          <div aria-hidden="true" className="h-2 overflow-hidden rounded-pill bg-brand-surface-high">
+            <div className="h-full rounded-pill" style={{ width: `${item.share}%`, background: item.tone }} />
+          </div>
+          <p className="mt-1 text-right text-caption tabular-nums text-brand-text-muted">{item.share.toLocaleString('vi-VN')}%</p>
+        </div>)}</dl>
+      </ReportCard>
+
+      <ReportCard title="Phương thức thanh toán & đối soát" description="Theo giá trị giao dịch đã thu">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-[9rem_1fr]">
+          <div className="flex items-center justify-center">
+            <div aria-hidden="true" className="relative flex h-36 w-36 items-center justify-center rounded-pill" style={{ background: paymentGradient }}>
+              <div className="flex h-20 w-20 flex-col items-center justify-center rounded-pill bg-brand-surface text-center">
+                <p className="text-caption text-brand-text-muted">Đã thu</p>
+                <p className="mt-0.5 text-body font-bold tabular-nums text-brand-text">{shortMoney(collected)}</p>
+              </div>
+            </div>
+          </div>
+          <dl className="flex flex-col">{paymentMethods.map((item) => <div key={item.label} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-brand-outline py-2.5 last:border-b-0">
+            <dt className="flex items-center gap-2 text-body text-brand-text">
+              <i aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-pill" style={{ background: item.tone }} />{item.label}
+            </dt>
+            <dd className="text-body font-semibold tabular-nums text-brand-text">{shortMoney(collected * item.share / 100)}</dd>
+            <dd className="text-caption tabular-nums text-brand-text-muted">đối soát {item.reconciled}</dd>
+          </div>)}</dl>
+        </div>
+        <p className="mt-4 flex items-start gap-2 p-3 text-body leading-5 text-brand-text ui-tone ui-tone--warning">
+          <Clock3 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          Còn 3 giao dịch thẻ và 1 ca tiền mặt cần xác nhận, tổng giá trị {shortMoney(outstanding)}.
+        </p>
+      </ReportCard>
     </section>
 
-    <section className="overflow-hidden rounded-2xl border border-slate-200"><div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-sm font-black text-slate-900">Doanh thu theo nhóm dịch vụ</h3><p className="mt-1 text-[10px] text-slate-400">Doanh thu, số lượt, giá trị trung bình và tăng trưởng</p></div><span className="rounded-full bg-white px-3 py-1.5 text-[9px] font-black text-violet-700 ring-1 ring-violet-200">{serviceGroups.length} nhóm dịch vụ</span></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] border-collapse"><thead><tr className="text-left text-[9px] font-black uppercase tracking-wide text-slate-400"><th className="px-4 py-3">Nhóm dịch vụ</th><th className="px-3 py-3 text-right">Doanh thu</th><th className="px-3 py-3 text-right">Tỷ trọng</th><th className="px-3 py-3 text-right">Số lượt</th><th className="px-3 py-3 text-right">TB/lượt</th><th className="px-4 py-3 text-right">Tăng trưởng</th></tr></thead><tbody>{serviceGroups.map((item, index) => <tr key={item.name} className="border-t border-slate-100 text-xs"><td className="px-4 py-3.5"><div className="flex items-center gap-3"><span className={`flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-black ${index === 0 ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><span className="font-black text-slate-700">{item.name}</span></div></td><td className="px-3 py-3.5 text-right font-black text-slate-900">{shortMoney(item.revenue)}</td><td className="px-3 py-3.5 text-right font-bold text-slate-600">{item.share.toLocaleString('vi-VN')}%</td><td className="px-3 py-3.5 text-right font-bold text-slate-600">{item.bookings.toLocaleString('vi-VN')}</td><td className="px-3 py-3.5 text-right font-bold text-slate-600">{money(item.average)}</td><td className="px-4 py-3.5 text-right font-black text-emerald-600">{item.growth}</td></tr>)}</tbody></table></div></section>
+    <section className="min-w-0">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-card-title text-brand-text">Doanh thu theo nhóm dịch vụ</h2>
+          <p className="mt-0.5 text-body text-brand-text-muted">Doanh thu, số lượt, giá trị trung bình và tăng trưởng</p>
+        </div>
+        <p className="text-caption tabular-nums text-brand-text-muted">{serviceGroups.length} nhóm dịch vụ</p>
+      </div>
+      <DataTable<(typeof serviceGroups)[number]>
+        className="mt-4"
+        rows={serviceGroups}
+        rowKey={(item) => item.name}
+        caption="Doanh thu theo nhóm dịch vụ trong kỳ báo cáo"
+        columns={[
+          {
+            key: 'name',
+            header: 'Nhóm dịch vụ',
+            width: '28%',
+            cell: (item, index) => (
+              <span className="flex items-center gap-3">
+                <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-caption font-bold ${index === 0 ? 'bg-[var(--accent)] text-[color:var(--color-brand-on-primary)]' : 'bg-brand-surface-high text-brand-text-muted'}`}>{index + 1}</span>
+                <span className="font-semibold text-brand-text">{item.name}</span>
+              </span>
+            )
+          },
+          { key: 'revenue', header: 'Doanh thu', numeric: true, cell: (item) => <span className="font-semibold text-brand-text">{shortMoney(item.revenue)}</span> },
+          { key: 'share', header: 'Tỷ trọng', numeric: true, hideBelow: 'md', cell: (item) => `${item.share.toLocaleString('vi-VN')}%` },
+          { key: 'bookings', header: 'Số lượt', numeric: true, hideBelow: 'lg', cell: (item) => item.bookings.toLocaleString('vi-VN') },
+          { key: 'average', header: 'TB/lượt', numeric: true, hideBelow: 'lg', cell: (item) => money(item.average) },
+          { key: 'growth', header: 'Tăng trưởng', numeric: true, cell: (item) => <span className="font-semibold text-brand-secondary">{item.growth}</span> }
+        ]}
+      />
+    </section>
 
-    <section className="grid min-w-0 gap-5 xl:grid-cols-[1.1fr_.9fr]">
-      <article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Hiệu quả theo chi nhánh</h3><p className="mt-1 text-[10px] text-slate-400">Doanh thu, tỷ trọng và mức hoàn thành mục tiêu</p></div><Store className="h-5 w-5 text-blue-500" /></div><div className="mt-4 space-y-3">{branchRows.length ? branchRows.map((branch, index) => { const progress = branch.target ? branch.revenue / branch.target * 100 : 0; return <div key={branch.code} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black text-slate-800">{branch.name}</p><p className="mt-1 text-[9px] font-bold text-emerald-600">{branch.growth} {compareText}</p></div><div className="text-right"><p className="text-sm font-black text-slate-900">{shortMoney(branch.revenue)}</p><p className="mt-1 text-[9px] text-slate-400">{branch.share.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% toàn tenant</p></div></div><div className="mt-3 flex items-center gap-3"><div className="h-2 flex-1 rounded-full bg-slate-100"><div className={`h-full rounded-full ${index === 0 ? 'bg-violet-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(100, progress)}%` }} /></div><span className="text-[9px] font-black text-slate-500">{progress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu</span></div></div>; }) : <p className="py-8 text-center text-xs text-slate-400">Chưa có dữ liệu chi nhánh.</p>}</div></article>
-      <article className="rounded-2xl border border-slate-200 p-5"><div><h3 className="text-sm font-black text-slate-900">Doanh thu theo nguồn khách</h3><p className="mt-1 text-[10px] text-slate-400">Kênh phát sinh giao dịch hoàn tất</p></div><div className="mt-4 space-y-2">{revenueChannels.map((item) => <div key={item.label} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl bg-slate-50 p-3"><div><div className="flex items-center justify-between gap-3"><span className="text-[10px] font-bold text-slate-600">{item.label}</span><span className="text-[9px] font-black text-emerald-600">{item.growth}</span></div><div className="mt-2 h-1.5 rounded-full bg-white"><div className="h-full rounded-full bg-violet-500" style={{ width: `${item.share}%` }} /></div></div><div className="text-right"><strong className="text-xs font-black text-slate-800">{shortMoney(item.value)}</strong><p className="mt-1 text-[8px] text-slate-400">{item.share}%</p></div></div>)}</div></article>
+    <section className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+      <ReportCard title="Hiệu quả theo chi nhánh" description="Doanh thu, tỷ trọng và mức hoàn thành mục tiêu">
+        <div className="mt-4">{branchRows.length ? branchRows.map((branch) => {
+          const progress = branch.target ? branch.revenue / branch.target * 100 : 0;
+          return <div key={branch.code} className="border-t border-brand-outline py-4 first:border-t-0 first:pt-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-body font-semibold text-brand-text">{branch.name}</p>
+                <p className="mt-0.5 flex items-center gap-1 text-caption font-semibold text-brand-secondary">
+                  <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />{branch.growth} {compareText}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-card-title font-bold tabular-nums text-brand-text">{shortMoney(branch.revenue)}</p>
+                <p className="mt-0.5 text-caption tabular-nums text-brand-text-muted">{branch.share.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% toàn tenant</p>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <div aria-hidden="true" className="h-2 flex-1 overflow-hidden rounded-pill bg-brand-surface-high">
+                <div className="h-full rounded-pill bg-[var(--accent)]" style={{ width: `${Math.min(100, progress)}%` }} />
+              </div>
+              <span className="shrink-0 text-caption tabular-nums text-brand-text-muted">{progress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu</span>
+            </div>
+          </div>;
+        }) : <p className="py-8 text-center text-body text-brand-text-muted">Chưa có dữ liệu chi nhánh.</p>}</div>
+      </ReportCard>
+
+      <ReportCard title="Doanh thu theo nguồn khách" description="Kênh phát sinh giao dịch hoàn tất">
+        <dl className="mt-4">{revenueChannels.map((item, index) => <div key={item.label} className="grid grid-cols-[1fr_auto] items-center gap-4 border-t border-brand-outline py-3 first:border-t-0 first:pt-0">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-body text-brand-text">{item.label}</dt>
+              <span className="text-caption font-semibold text-brand-secondary">{item.growth}</span>
+            </div>
+            <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-pill bg-brand-surface-high">
+              <div className="h-full rounded-pill" style={{ width: `${item.share}%`, background: chartSeries[Math.min(index, chartSeries.length - 1)] }} />
+            </div>
+          </div>
+          <dd className="shrink-0 text-right">
+            <strong className="text-body font-bold tabular-nums text-brand-text">{shortMoney(item.value)}</strong>
+            <p className="mt-0.5 text-caption tabular-nums text-brand-text-muted">{item.share}%</p>
+          </dd>
+        </div>)}</dl>
+      </ReportCard>
     </section>
 
 
-    <section className="grid gap-5 lg:grid-cols-3">
-      <article className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5"><h3 className="text-sm font-black text-rose-900">Giảm giá & hoàn tiền</h3><div className="mt-4 space-y-2">{[
-        { label: 'Ưu đãi thành viên', value: discounts * 0.48 }, { label: 'Mã khuyến mãi', value: discounts * 0.34 }, { label: 'Điều chỉnh thủ công', value: discounts * 0.18 }, { label: 'Hoàn tiền', value: refunds }
-      ].map((item) => <div key={item.label} className="flex items-center justify-between rounded-xl bg-white/70 p-3"><span className="text-[10px] font-bold text-rose-700">{item.label}</span><strong className="text-[10px] text-rose-900">−{shortMoney(item.value)}</strong></div>)}</div></article>
-      <article className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5"><h3 className="text-sm font-black text-amber-900">Khoản cần xử lý</h3><div className="mt-4 space-y-2">{[
-        { label: 'Giao dịch chờ đối soát', value: '4 giao dịch', detail: shortMoney(outstanding) }, { label: 'Cọc chưa chuyển doanh thu', value: '28 lịch', detail: shortMoney(revenue * 0.031) }, { label: 'Hoàn tiền chờ duyệt', value: '2 yêu cầu', detail: shortMoney(refunds * 0.24) }
-      ].map((item) => <div key={item.label} className="rounded-xl bg-white/70 p-3"><div className="flex justify-between gap-3"><span className="text-[10px] font-bold text-amber-800">{item.label}</span><strong className="text-[10px] text-amber-950">{item.value}</strong></div><p className="mt-1 text-[9px] text-amber-700">{item.detail}</p></div>)}</div></article>
-      <article className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5"><h3 className="text-sm font-black text-emerald-900">Nhận định doanh thu</h3><div className="mt-4 space-y-3">{[
-        'Nail Art đóng góp lớn nhất và tăng nhanh nhất trong kỳ.', 'Đặt lịch trực tuyến tăng 23,4%, cao hơn các nguồn khách khác.', 'Tỷ lệ thực thu đạt 96,4%; cần hoàn tất 4 giao dịch đối soát.'
-      ].map((item, index) => <div key={item} className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-[9px] font-black text-emerald-700">{index + 1}</span><p className="text-[10px] font-semibold leading-5 text-emerald-800">{item}</p></div>)}</div></article>
+    {/* Ba khối kết luận — chỉ đây mới dùng nền theo tông, để mắt biết đâu là
+        khoản trừ, đâu là việc phải làm, đâu là nhận định */}
+    <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <article className="p-4 ui-tone ui-tone--danger">
+        <h2 className="text-card-title text-brand-text">Giảm giá &amp; hoàn tiền</h2>
+        <dl className="mt-3">{[
+          { label: 'Ưu đãi thành viên', value: discounts * 0.48 }, { label: 'Mã khuyến mãi', value: discounts * 0.34 }, { label: 'Điều chỉnh thủ công', value: discounts * 0.18 }, { label: 'Hoàn tiền', value: refunds }
+        ].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 border-t border-brand-outline py-2.5 first:border-t-0 first:pt-0">
+          <dt className="text-body text-brand-text-muted">{item.label}</dt>
+          <dd className="text-body font-semibold tabular-nums text-brand-text">−{shortMoney(item.value)}</dd>
+        </div>)}</dl>
+      </article>
+
+      <article className="p-4 ui-tone ui-tone--warning">
+        <h2 className="text-card-title text-brand-text">Khoản cần xử lý</h2>
+        <dl className="mt-3">{[
+          { label: 'Giao dịch chờ đối soát', value: '4 giao dịch', detail: shortMoney(outstanding) }, { label: 'Cọc chưa chuyển doanh thu', value: '28 lịch', detail: shortMoney(revenue * 0.031) }, { label: 'Hoàn tiền chờ duyệt', value: '2 yêu cầu', detail: shortMoney(refunds * 0.24) }
+        ].map((item) => <div key={item.label} className="border-t border-brand-outline py-2.5 first:border-t-0 first:pt-0">
+          <div className="flex justify-between gap-3">
+            <dt className="text-body text-brand-text-muted">{item.label}</dt>
+            <dd className="text-body font-semibold tabular-nums text-brand-text">{item.value}</dd>
+          </div>
+          <p className="mt-0.5 text-caption tabular-nums text-brand-text-muted">{item.detail}</p>
+        </div>)}</dl>
+      </article>
+
+      <article className="p-4 ui-tone ui-tone--success">
+        <h2 className="text-card-title text-brand-text">Nhận định doanh thu</h2>
+        <ol className="mt-3 flex flex-col gap-3">{[
+          'Nail Art đóng góp lớn nhất và tăng nhanh nhất trong kỳ.', 'Đặt lịch trực tuyến tăng 23,4%, cao hơn các nguồn khách khác.', 'Tỷ lệ thực thu đạt 96,4%; cần hoàn tất 4 giao dịch đối soát.'
+        ].map((item, index) => <li key={item} className="flex gap-3">
+          <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-control bg-brand-surface text-caption font-bold text-brand-text">{index + 1}</span>
+          <p className="text-body leading-5 text-brand-text">{item}</p>
+        </li>)}</ol>
+      </article>
     </section>
   </div>;
 }
 
 export default function TenantAdminReports({ searchQuery, onSearchQueryChange, selectedBranch, branches = [{ code: 'Q3', name: 'Chi nhánh Quận 3' }, { code: 'Q1', name: 'Chi nhánh Quận 1' }], tenantName = 'Lumière Nail Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason, onNotify }: TenantAdminReportsProps) {
-  const [tab, setTab] = useState<ReportTab>('EXECUTIVE');
+  const [tab, setTab] = useState<ReportTab>('REVENUE');
+  /* Phân tích chi tiết thu gọn mặc định. Để mở sẵn thì trang dài hơn 4.000px và
+     phần tóm tắt lại chìm nghỉm giữa các biểu đồ — đúng thứ vừa đi sửa. */
+  const [detailOpen, setDetailOpen] = useState(false);
   const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const [dateRange, setDateRange] = useState({ start: '2026-07-01', end: '2026-07-20' });
   const [draftDateRange, setDraftDateRange] = useState({ start: '2026-07-01', end: '2026-07-20' });
@@ -326,6 +596,28 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
     : selectedBranch === 'Q3'
     ? 168
     : 294;
+  /* Mục tiêu kỳ — trước đây nằm rải: hai chỉ số đầu lặp lại số của thẻ KPI phía
+     trên (doanh thu ghi "1.141tr / 1.280tr" trong khi thẻ KPI ghi "1,1 tỷ ₫"),
+     hai chỉ số sau thì không có thẻ KPI nào tương ứng. Gom về một nguồn: chỉ số
+     nào có thẻ KPI thì tiến độ hiện luôn trong thẻ, số còn lại nằm ở mục "Đang
+     chậm ở đâu". */
+  const revenueTarget = 1_280_000_000;
+  const newCustomerTarget = 350;
+  const otherGoals = [
+    { label: 'Tỷ lệ quay lại', actual: 74.2, target: 78, unit: '%' },
+    { label: 'Công suất ghế', actual: 82.6, target: 85, unit: '%' },
+  ];
+  const goalPercent = (actual: number, target: number) => (target ? (actual / target) * 100 : 0);
+  const revenueProgress = goalPercent(revenue, revenueTarget);
+  const customerProgress = goalPercent(newCustomers, newCustomerTarget);
+  /** Dưới 90% mục tiêu là mức cần chú ý — dùng chung cho mọi thanh tiến độ. */
+  const BEHIND_THRESHOLD = 90;
+  const behindGoals = [
+    { label: 'doanh thu', percent: revenueProgress },
+    { label: 'khách hàng mới', percent: customerProgress },
+    ...otherGoals.map((item) => ({ label: item.label.toLocaleLowerCase('vi'), percent: goalPercent(item.actual, item.target) })),
+  ].filter((item) => item.percent < BEHIND_THRESHOLD);
+
   const exportReport = (name = 'Báo cáo điều hành') => { const rows = [['Chỉ số', 'Giá trị', 'So sánh'], ['Doanh thu', revenue, '+16,8%'], ['Lịch hoàn tất', bookings, '+12,4%'], ['Giá trị trung bình', averageTicket, '+3,9%'], ['Khách mới', newCustomers, '+18,2%']]; const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n'); const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); link.download = `${name.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')}.csv`; link.click(); URL.revokeObjectURL(link.href); setNotice(`Đã xuất ${name}.`); };
   const submitBuilder = (event: FormEvent) => { event.preventDefault(); if (!requireManage()) return; if (!builder.name.trim() || builder.metrics.length === 0) { setFormError('Vui lòng nhập tên và chọn ít nhất một chỉ số.'); return; } setBuilderOpen(false); setNotice(`Đã tạo báo cáo tùy chỉnh “${builder.name}”.`); };
   const submitSchedule = (event: FormEvent) => { event.preventDefault(); if (!requireManage()) return; const recipients = scheduleForm.recipients.split(',').map((item) => item.trim()).filter(Boolean); if (!scheduleForm.name.trim() || recipients.length === 0) { setFormError('Vui lòng nhập tên lịch gửi và ít nhất một email nhận báo cáo.'); return; } const created: ReportSchedule = { id: `SCH-${String(schedules.length + 1).padStart(2, '0')}`, name: scheduleForm.name.trim(), frequency: scheduleForm.frequency, time: scheduleForm.time, recipients, format: scheduleForm.format, branch: scheduleForm.branch, nextRun: scheduleForm.frequency === 'DAILY' ? `21/07/2026 · ${scheduleForm.time}` : scheduleForm.frequency === 'WEEKLY' ? `27/07/2026 · ${scheduleForm.time}` : `01/08/2026 · ${scheduleForm.time}`, active: true }; setSchedules((current) => [created, ...current]); setScheduleOpen(false); setNotice(`Đã tạo lịch gửi “${created.name}”.`); };
@@ -351,64 +643,960 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
   };
 
   if (isTenantAdminLiveDataMode()) {
-    return <div className="space-y-5">
-      <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div><div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-violet-600"><BarChart3 className="h-4 w-4" />Phân tích điều hành</div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Báo cáo</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Báo cáo của {tenantName} sẽ được tổng hợp từ giao dịch, lịch hẹn và dữ liệu vận hành thật.</p></div></section>
-      <section className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm"><FileBarChart className="h-12 w-12 text-slate-300" /><h2 className="mt-4 text-base font-black text-slate-800">Chưa có dữ liệu để lập báo cáo</h2><p className="mt-2 max-w-lg text-xs leading-6 text-slate-500">Các số liệu mẫu đã được loại bỏ. Báo cáo sẽ xuất hiện sau khi tenant có lịch hẹn hoàn tất, thanh toán hoặc dữ liệu vận hành thực tế.</p></section>
+    return <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Báo cáo"
+      />
+      <section className="flex min-h-96 flex-col items-center justify-center gap-3 rounded-card border border-dashed border-brand-outline px-6 py-14 text-center">
+        <FileBarChart aria-hidden="true" className="h-10 w-10 text-brand-text-muted" />
+        <h2 className="text-card-title text-brand-text">Chưa có dữ liệu để lập báo cáo</h2>
+        <p className="max-w-lg text-body leading-6 text-brand-text-muted">
+          Các số liệu mẫu đã được loại bỏ. Báo cáo sẽ xuất hiện sau khi tenant có lịch hẹn hoàn tất, thanh toán hoặc dữ liệu vận hành thực tế.
+        </p>
+      </section>
     </div>;
   }
 
-  return <div className="space-y-5">
-    {(notice || accessMode !== 'full') && <div className="flex items-start justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-800"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm"><Check className="h-4 w-4" /></span><div><p className="text-xs font-black">Trung tâm báo cáo</p><p className="mt-1 text-xs leading-5">{notice || readOnlyReason || 'Bạn đang xem báo cáo ở chế độ giới hạn theo quyền của gói.'}</p></div></div>{notice && <button type="button" onClick={() => setNotice('')} aria-label="Đóng thông báo" className="flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-violet-500 shadow-none"><X className="h-4 w-4" /></button>}</div>}
-    <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div><div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-violet-600"><BarChart3 className="h-4 w-4" />Phân tích điều hành</div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Báo cáo</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Phân tích doanh thu, vận hành, khách hàng và nhân sự của {tenantName} theo từng chi nhánh.</p></div><div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => exportReport()} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm"><Download className="h-4 w-4" />Xuất báo cáo</button><button type="button" onClick={() => { if (!requireManage()) return; setFormError(''); setBuilderOpen(true); }} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />Tạo báo cáo</button></div></section>
-    <section className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex flex-wrap gap-2">
-        <div className="relative">
-          <button
-            type="button"
-            aria-label="Chọn khoảng ngày báo cáo"
-            aria-expanded={dateRangeOpen}
-            onClick={() => { setDraftDateRange(dateRange); setDateRangeError(''); setDateRangeOpen((open) => !open); }}
-            className={`flex h-10 min-w-64 items-center justify-between gap-3 rounded-xl border bg-white px-3 text-xs font-black shadow-sm ${dateRangeOpen ? 'border-violet-300 text-violet-700 ring-4 ring-violet-100' : 'border-slate-200 text-slate-700'}`}
-          >
-            <span className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-violet-500" />{periodLabel}</span>
-            <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${dateRangeOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {dateRangeOpen && <>
-            <button type="button" aria-label="Đóng bộ chọn khoảng ngày" onClick={() => setDateRangeOpen(false)} className="fixed inset-0 z-20 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
-            <div role="dialog" aria-label="Chọn khoảng ngày báo cáo" className="absolute left-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-3rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-              <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><CalendarDays className="h-5 w-5" /></span><div><p className="text-sm font-black text-slate-900">Khoảng thời gian báo cáo</p><p className="mt-1 text-[10px] leading-4 text-slate-500">Chọn ngày bắt đầu và ngày kết thúc cần tổng hợp.</p></div></div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[9px] font-black uppercase tracking-wide text-slate-400">Từ ngày</p><p className="mt-1.5 text-xs font-black text-slate-800">{draftDateRange.start ? formatReportDate(draftDateRange.start) : 'Chưa chọn'}</p></div>
-                <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-[9px] font-black uppercase tracking-wide text-slate-400">Đến ngày</p><p className="mt-1.5 text-xs font-black text-slate-800">{draftDateRange.end ? formatReportDate(draftDateRange.end) : 'Chọn ngày kết thúc'}</p></div>
-              </div>
-              <ReportRangeCalendar value={draftDateRange} onChange={(next) => { setDraftDateRange(next); setDateRangeError(''); }} />
-              {dateRangeError && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-[10px] font-bold text-rose-700">{dateRangeError}</p>}
-              <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={() => setDateRangeOpen(false)} className="h-9 border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="button" onClick={applyDateRange} className="h-9 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-sm">Áp dụng</button></div>
-            </div>
-          </>}
+  return <div className="flex flex-col gap-6">
+    {(notice || accessMode !== 'full') && (
+      <div role="status" className="flex items-start justify-between gap-3 p-4 ui-tone ui-tone--info">
+        <div className="flex min-w-0 items-start gap-3">
+          <Check aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-brand-text-muted" />
+          <div className="min-w-0">
+            <p className="text-body font-semibold text-brand-text">Trung tâm báo cáo</p>
+            <p className="mt-0.5 text-body leading-5 text-brand-text-muted">
+              {notice || readOnlyReason || 'Bạn đang xem báo cáo ở chế độ giới hạn theo quyền của gói.'}
+            </p>
+          </div>
         </div>
-        <BeautifulSelect aria-label="Chọn mốc đối chiếu báo cáo" value={compare} onChange={(event) => setCompare(event.target.value as ComparisonFilter)} className="h-10 w-52 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black"><option value="NONE">Không so sánh</option><option value="PREVIOUS_PERIOD">Kỳ liền trước</option><option value="SAME_PERIOD_LAST_YEAR">Cùng kỳ năm trước</option><option value="TARGET">Mục tiêu KPI</option></BeautifulSelect>
+        {notice && <Button size="small" variant="ghost" iconOnly aria-label="Đóng thông báo" onClick={() => setNotice('')}><X /></Button>}
       </div>
-      <div className="flex items-center gap-2 text-xs text-slate-500"><RefreshCcw className="h-4 w-4 text-emerald-500" /><span>Dữ liệu cập nhật lúc <strong className="text-slate-700">16:45 · 20/07/2026</strong></span></div>
+    )}
+
+    {/* Đầu trang (README §8.2) */}
+    <PageHeader
+      title="Báo cáo"
+      actions={(
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button variant="secondary" iconLeading={<Download />} onClick={() => exportReport()}>Xuất báo cáo</Button>
+          <Button
+            variant="primary"
+            iconLeading={<Plus />}
+            disabled={!canManage}
+            onClick={() => { if (!requireManage()) return; setFormError(''); setBuilderOpen(true); }}
+          >
+            Tạo báo cáo
+          </Button>
+        </div>
+      )}
+    />
+
+    {/* Cụm điều khiển: phạm vi dữ liệu và nhóm báo cáo nằm chung một card như thanh công cụ ở các màn khác */}
+    <section className="rounded-card border border-brand-outline bg-brand-surface shadow-card">
+      <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              aria-label="Chọn khoảng ngày báo cáo"
+              aria-expanded={dateRangeOpen}
+              onClick={() => { setDraftDateRange(dateRange); setDateRangeError(''); setDateRangeOpen((open) => !open); }}
+              className={`flex h-[var(--size-control)] min-w-64 items-center justify-between gap-3 rounded-control border bg-brand-surface px-3 text-body font-semibold shadow-none ${dateRangeOpen ? 'border-[color:var(--accent)] text-[color:var(--accent-strong)]' : 'border-brand-outline text-brand-text'}`}
+            >
+              <span className="flex items-center gap-2">
+                <CalendarDays aria-hidden="true" className="h-4 w-4 text-brand-text-muted" />
+                <span className="tabular-nums">{periodLabel}</span>
+              </span>
+              <ChevronDown aria-hidden="true" className={`h-4 w-4 text-brand-text-muted ${dateRangeOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {dateRangeOpen && (
+              <div
+                role="dialog"
+                aria-label="Chọn khoảng ngày báo cáo"
+                className="absolute left-0 top-full mt-2 w-[min(22rem,calc(100vw-3rem))] rounded-card border border-brand-outline bg-brand-surface p-4 shadow-floating"
+                style={{ zIndex: 'var(--z-dropdown)' }}
+              >
+                <p className="text-body font-semibold text-brand-text">Khoảng thời gian báo cáo</p>
+                <p className="mt-0.5 text-caption leading-4 text-brand-text-muted">Chọn ngày bắt đầu và ngày kết thúc cần tổng hợp.</p>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-control border border-brand-outline p-3">
+                    <p className="text-caption uppercase tracking-wide text-brand-text-muted">Từ ngày</p>
+                    <p className="mt-1 text-body font-semibold tabular-nums text-brand-text">{draftDateRange.start ? formatReportDate(draftDateRange.start) : 'Chưa chọn'}</p>
+                  </div>
+                  <div className="rounded-control border border-brand-outline p-3">
+                    <p className="text-caption uppercase tracking-wide text-brand-text-muted">Đến ngày</p>
+                    <p className="mt-1 text-body font-semibold tabular-nums text-brand-text">{draftDateRange.end ? formatReportDate(draftDateRange.end) : 'Chọn ngày kết thúc'}</p>
+                  </div>
+                </div>
+                <ReportRangeCalendar value={draftDateRange} onChange={(next) => { setDraftDateRange(next); setDateRangeError(''); }} />
+                {dateRangeError && <p role="alert" className="mt-3 p-3 text-body font-semibold text-brand-text ui-tone ui-tone--danger">{dateRangeError}</p>}
+                <div className="mt-4 flex justify-end gap-2 border-t border-brand-outline pt-3">
+                  <Button size="small" variant="secondary" onClick={() => setDateRangeOpen(false)}>Hủy</Button>
+                  <Button size="small" variant="primary" onClick={applyDateRange}>Áp dụng</Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <BeautifulSelect
+            aria-label="Chọn mốc đối chiếu báo cáo"
+            value={compare}
+            onChange={(event) => setCompare(event.target.value as ComparisonFilter)}
+            className={`${controlClass} w-52`}
+          >
+            <option value="NONE">Không so sánh</option>
+            <option value="PREVIOUS_PERIOD">Kỳ liền trước</option>
+            <option value="SAME_PERIOD_LAST_YEAR">Cùng kỳ năm trước</option>
+            <option value="TARGET">Mục tiêu KPI</option>
+          </BeautifulSelect>
+
+          {/* Chi nhánh do topbar điều khiển (BeautifulSelect tự ẩn mọi bộ lọc chi
+              nhánh cấp trang). Hiện lại ở đây để phạm vi dữ liệu nằm gọn một chỗ. */}
+          <span
+            title="Phạm vi chi nhánh được chọn ở thanh trên cùng"
+            className="flex h-[var(--size-control)] items-center gap-1.5 rounded-control border border-brand-outline bg-brand-surface-lowest px-3 text-body text-brand-text-muted"
+          >
+            <Store aria-hidden="true" className="h-4 w-4" />
+            <span className="text-brand-text-muted">Chi nhánh:</span>
+            <strong className="font-semibold text-brand-text">{selectedBranch === 'ALL' ? 'Toàn tenant' : branchName(selectedBranch as BranchCode)}</strong>
+          </span>
+        </div>
+
+        <p className="flex items-center gap-2 text-caption text-brand-text-muted">
+          <RefreshCcw aria-hidden="true" className="h-4 w-4" />
+          Dữ liệu cập nhật lúc <strong className="tabular-nums text-brand-text">16:45 · 20/07/2026</strong>
+        </p>
+      </div>
+
     </section>
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[{ label: 'Doanh thu thuần', value: shortMoney(revenue), detail: compare === 'NONE' ? `Trong ${periodLabel.toLocaleLowerCase('vi')}` : `+16,8% ${comparisonSuffix}`, icon: CircleDollarSign, tone: 'bg-violet-50 text-violet-600', key: 'revenue' }, { label: 'Lịch hoàn tất', value: bookings.toLocaleString('vi-VN'), detail: '92,6% lịch đã xác nhận', icon: CalendarDays, tone: 'bg-blue-50 text-blue-600', key: 'bookings' }, { label: 'Giá trị trung bình', value: money(averageTicket), detail: '+3,9% trên mỗi hóa đơn', icon: WalletCards, tone: 'bg-emerald-50 text-emerald-600', key: 'ticket' }, { label: 'Khách hàng mới', value: newCustomers.toLocaleString('vi-VN'), detail: 'Tỷ lệ quay lại 74,2%', icon: UsersRound, tone: 'bg-amber-50 text-amber-600', key: 'customers' }].map(({ label, value, detail, icon: Icon, tone, key }) => <button key={label} type="button" onClick={() => setMetricOpen(key)} className="h-auto border border-slate-200 bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.04)] hover:border-violet-200 hover:shadow-lg"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-slate-500">{label}</p><p className="mt-1.5 text-xl font-black tracking-tight text-slate-950">{value}</p></div><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span></div><p className="mt-2 text-xs font-semibold text-emerald-600">{detail}</p></button>)}</section>
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex gap-1 overflow-x-auto border-b border-slate-100 px-3 pt-3 sm:px-5">{tabs.map((item) => <button key={item.id} type="button" onClick={() => switchTab(item.id)} className={`h-10 shrink-0 rounded-b-none border-x-0 border-t-0 px-3 text-xs font-black shadow-none ${tab === item.id ? 'border-b-2 border-violet-600 bg-violet-50/60 text-violet-700' : 'border-b-2 border-transparent bg-white text-slate-500'}`}>{item.label}</button>)}</div><div className="p-4 sm:p-5">
-      {tab === 'EXECUTIVE' && <div className="space-y-5"><div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]"><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h2 className="text-base font-black text-slate-900">Xu hướng doanh thu</h2><p className="mt-1 text-xs text-slate-400">Doanh thu theo ngày và đường so sánh kỳ trước</p></div><TrendingUp className="h-5 w-5 text-violet-500" /></div><div className="relative mt-6 h-56 border-b border-l border-slate-200"><div className="absolute inset-0 flex flex-col justify-between">{[100, 75, 50, 25, 0].map((value) => <div key={value} className="border-t border-dashed border-slate-100"><span className="-ml-10 -translate-y-2 block w-8 text-right text-[9px] font-bold text-slate-400">{value}%</span></div>)}</div><div className="absolute inset-0 flex items-end gap-1.5 px-2">{lineValues.map((value, index) => <div key={index} className="group relative flex h-full flex-1 items-end"><span className="absolute bottom-0 w-full rounded-t bg-violet-500/12" style={{ height: `${value}%` }} /><span className="absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-white bg-violet-600 shadow" style={{ bottom: `calc(${value}% - 5px)` }} /><span className="absolute left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-slate-300" style={{ bottom: `calc(${previousValues[index]}% - 4px)` }} /></div>)}</div></div><div className="mt-4 flex justify-center gap-5 text-[10px] font-bold text-slate-500"><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-violet-600" />Kỳ hiện tại</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-slate-300" />Kỳ trước</span></div></article><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h2 className="text-base font-black text-slate-900">Mục tiêu tháng</h2><p className="mt-1 text-xs text-slate-400">Tiến độ các KPI chính</p></div><Target className="h-5 w-5 text-fuchsia-500" /></div><div className="mt-5 space-y-4">{[{ label: 'Doanh thu', actual: 1141, target: 1280, unit: 'tr', tone: 'bg-violet-500' }, { label: 'Khách hàng mới', actual: 294, target: 350, unit: '', tone: 'bg-blue-500' }, { label: 'Tỷ lệ quay lại', actual: 74.2, target: 78, unit: '%', tone: 'bg-emerald-500' }, { label: 'Công suất ghế', actual: 82.6, target: 85, unit: '%', tone: 'bg-amber-500' }].map((item) => { const percent = item.actual / item.target * 100; return <div key={item.label}><div className="mb-1.5 flex justify-between text-xs"><span className="font-bold text-slate-600">{item.label}</span><span className="font-black text-slate-800">{item.actual}{item.unit} / {item.target}{item.unit}</span></div><div className="h-2.5 rounded-full bg-slate-100"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${Math.min(100, percent)}%` }} /></div><p className="mt-1 text-[9px] font-bold text-slate-400">Đạt {percent.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu</p></div>; })}</div></article></div><div className="grid gap-5 lg:grid-cols-3"><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Doanh thu theo chi nhánh</h3><p className="mt-1 text-xs text-slate-400">Tháng 07/2026</p></div><Store className="h-5 w-5 text-blue-500" /></div><div className="mt-4 space-y-3">{[{ name: 'Quận 3', value: 672.4, share: 59, growth: '+18,2%' }, { name: 'Quận 1', value: 468.6, share: 41, growth: '+14,9%' }].map((item) => <button key={item.name} type="button" className="h-auto w-full border-0 bg-slate-50 p-3 text-left shadow-none"><div className="flex justify-between"><div><p className="text-xs font-black text-slate-700">Chi nhánh {item.name}</p><p className="mt-1 text-[10px] text-emerald-600">{item.growth}</p></div><p className="text-sm font-black text-slate-900">{item.value}tr</p></div><div className="mt-2 h-2 rounded-full bg-white"><div className="h-full rounded-full bg-blue-500" style={{ width: `${item.share}%` }} /></div></button>)}</div></article><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Dịch vụ dẫn đầu</h3><p className="mt-1 text-xs text-slate-400">Theo doanh thu</p></div><Sparkles className="h-5 w-5 text-violet-500" /></div><div className="mt-3 divide-y divide-slate-100">{[{ name: 'Nail Art Premium', value: '168,4tr', share: '14,8%' }, { name: 'Acrylic Full Set', value: '142,8tr', share: '12,5%' }, { name: 'Pedicure Spa', value: '136,2tr', share: '11,9%' }, { name: 'Gel Manicure', value: '128,6tr', share: '11,3%' }].map((item, index) => <div key={item.name} className="flex items-center gap-3 py-3"><span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><div className="flex-1"><p className="text-xs font-black text-slate-700">{item.name}</p><p className="mt-1 text-[10px] text-slate-400">{item.share} tổng doanh thu</p></div><p className="text-xs font-black text-violet-700">{item.value}</p></div>)}</div></article><article className="rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div><h3 className="text-sm font-black text-slate-900">Điểm cần chú ý</h3><p className="mt-1 text-xs text-slate-400">Tự động từ dữ liệu</p></div><Gauge className="h-5 w-5 text-amber-500" /></div><div className="mt-3 space-y-2">{[{ title: 'Công suất chiều thứ Bảy', detail: 'Đạt 96%, có nguy cơ từ chối lịch', tone: 'bg-rose-50 text-rose-700' }, { title: 'Chi phí vật tư', detail: 'Dự báo vượt ngân sách 4,5%', tone: 'bg-amber-50 text-amber-700' }, { title: 'Khách thành viên', detail: 'LTV cao hơn khách thường 2,3 lần', tone: 'bg-emerald-50 text-emerald-700' }].map((item) => <div key={item.title} className={`rounded-xl p-3 ${item.tone}`}><p className="text-xs font-black">{item.title}</p><p className="mt-1 text-[10px] leading-4 opacity-80">{item.detail}</p></div>)}</div></article></div></div>}
+
+    {/* ===== 1. KỲ NÀY RA SAO =====================================
+        Một câu kết luận trước, con số sau. Trước đây trang mở ra bằng 70 con số
+        cùng cỡ chữ và không câu nào nói cho chủ tiệm biết nên nhìn cái gì. */}
+    <section aria-label="Tóm tắt kỳ báo cáo" className={cardClass}>
+      <p className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">
+        Kỳ này ra sao · {periodLabel}
+      </p>
+      <p className="mt-2 text-card-title font-bold leading-6 text-brand-text">
+        {behindGoals.length === 0
+          ? 'Toàn bộ mục tiêu trong kỳ đều đang đạt tiến độ.'
+          : `Đang chậm mục tiêu ${behindGoals.map((item) => item.label).join(', ')}. Các chỉ số còn lại đạt tiến độ.`}
+      </p>
+      <p className="mt-1.5 text-body text-brand-text-muted">
+        Doanh thu thuần {shortMoney(revenue)} trên mục tiêu {shortMoney(revenueTarget)}
+        {' · '}còn thiếu {shortMoney(Math.max(0, revenueTarget - revenue))} để về đích.
+      </p>
+    </section>
+
+    {/* Bốn KPI dẫn dắt — thẻ trắng, mở chi tiết khi bấm.
+        Chỉ số nào có mục tiêu thì thanh tiến độ nằm ngay trong thẻ, nhờ đó bỏ
+        được hẳn thẻ "Mục tiêu tháng" vốn lặp lại chính những con số này. */}
+    <section aria-label="Chỉ số điều hành" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {[
+        { label: 'Doanh thu thuần', value: shortMoney(revenue), detail: compare === 'NONE' ? `Trong ${periodLabel.toLocaleLowerCase('vi')}` : `+16,8% ${comparisonSuffix}`, key: 'revenue', icon: CircleDollarSign, percent: revenueProgress, goal: shortMoney(revenueTarget) },
+        { label: 'Lịch hoàn tất', value: bookings.toLocaleString('vi-VN'), detail: '92,6% lịch đã xác nhận', key: 'bookings', icon: CalendarCheck2, percent: null, goal: '' },
+        { label: 'Giá trị trung bình', value: money(averageTicket), detail: '+3,9% trên mỗi hóa đơn', key: 'ticket', icon: ReceiptText, percent: null, goal: '' },
+        { label: 'Khách hàng mới', value: newCustomers.toLocaleString('vi-VN'), detail: 'Tỷ lệ quay lại 74,2%', key: 'customers', icon: UserPlus, percent: customerProgress, goal: `${newCustomerTarget.toLocaleString('vi-VN')} khách` }
+      ].map(({ label, value, detail, key, icon: Icon, percent, goal }) => {
+        const isGrowth = detail.trim().startsWith('+');
+        const behind = percent !== null && percent < BEHIND_THRESHOLD;
+        return (
+          <article key={key} className={cardClass}>
+            <button
+              type="button"
+              onClick={() => setMetricOpen(key)}
+              aria-label={`Xem chi tiết ${label}: ${value}`}
+              className="flex h-auto w-full flex-col items-start gap-1 border-0 bg-transparent p-0 text-left shadow-none"
+            >
+              <span className="flex w-full items-start justify-between gap-3">
+                <span className="text-caption text-brand-text-muted">{label}</span>
+                <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-[var(--accent-soft)] text-[color:var(--accent-strong)]">
+                  <Icon className="h-[18px] w-[18px]" />
+                </span>
+              </span>
+              <span className="ta-metric-value text-brand-text">{value}</span>
+              <span className={`flex items-center gap-1 text-caption ${isGrowth ? 'font-semibold text-brand-secondary' : 'text-brand-text-muted'}`}>
+                {isGrowth && <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />}{detail}
+              </span>
+              {percent !== null && (
+                <span className="mt-2 block w-full">
+                  <span aria-hidden="true" className="block h-1.5 overflow-hidden rounded-pill bg-brand-surface-high">
+                    <span className="block h-full rounded-pill" style={{ width: `${Math.min(100, percent)}%`, background: behind ? 'var(--color-brand-tertiary)' : 'var(--accent)' }} />
+                  </span>
+                  <span className={`mt-1 block text-caption tabular-nums ${behind ? 'text-brand-tertiary' : 'text-brand-text-muted'}`}>
+                    Đạt {percent.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu {goal}
+                  </span>
+                </span>
+              )}
+            </button>
+          </article>
+        );
+      })}
+    </section>
+
+    <div className="min-w-0">
+      {/* ===== 2. ĐANG CHẬM Ở ĐÂU ================================== */}
+      <div className="flex flex-col gap-4">
+        <h2 className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">Đang chậm ở đâu</h2>
+        {/* Biểu đồ dẫn dắt: xu hướng bên trái, hai mục tiêu không có thẻ KPI bên phải */}
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
+          <ReportCard title="Xu hướng doanh thu" description="Doanh thu theo ngày và đường so sánh kỳ trước">
+            <div
+              role="img"
+              aria-label={`Biểu đồ doanh thu theo ngày trong ${periodLabel}, kèm điểm dữ liệu của kỳ trước để đối chiếu.`}
+              className="relative ml-11 mt-2 h-48 border-b border-l border-brand-outline"
+            >
+              <div aria-hidden="true" className="absolute inset-0 flex flex-col justify-between">
+                {[100, 75, 50, 25, 0].map((value) => <div key={value} className="border-t border-dashed border-brand-outline"><span className="-ml-11 -translate-y-2 block w-9 text-right text-caption tabular-nums text-brand-text-muted">{value}%</span></div>)}
+              </div>
+              <div aria-hidden="true" className="absolute inset-0 flex items-end gap-1.5 px-2">
+                {lineValues.map((value, index) => <div key={index} className="relative flex h-full flex-1 items-end">
+                  <span className="absolute bottom-0 w-full rounded-t-control" style={{ height: `${value}%`, background: 'var(--accent-soft)' }} />
+                  <span className="absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-pill" style={{ bottom: `calc(${value}% - 5px)`, background: 'var(--accent)' }} />
+                  <span className="absolute left-1/2 h-2 w-2 -translate-x-1/2 rounded-pill bg-brand-text-muted" style={{ bottom: `calc(${previousValues[index]}% - 4px)` }} />
+                </div>)}
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-center gap-5 text-caption text-brand-text-muted">
+              <span className="flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-pill" style={{ background: 'var(--accent)' }} />Kỳ hiện tại</span>
+              <span className="flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-pill bg-brand-text-muted" />Kỳ trước</span>
+            </div>
+          </ReportCard>
+
+          <ReportCard title="Mục tiêu khác trong kỳ" description="Hai chỉ số không có thẻ riêng ở trên">
+            <dl className="flex flex-col gap-4">
+              {otherGoals.map((item) => {
+                const percent = goalPercent(item.actual, item.target);
+                const behind = percent < BEHIND_THRESHOLD;
+                return <div key={item.label}>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-3 text-body">
+                    <dt className="text-brand-text">{item.label}</dt>
+                    <dd className="font-semibold tabular-nums text-brand-text">
+                      {item.actual.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}{item.unit} / {item.target.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}{item.unit}
+                    </dd>
+                  </div>
+                  <div aria-hidden="true" className="h-2 overflow-hidden rounded-pill bg-brand-surface-high">
+                    <div className="h-full rounded-pill" style={{ width: `${Math.min(100, percent)}%`, background: behind ? 'var(--color-brand-tertiary)' : 'var(--accent)' }} />
+                  </div>
+                  <p className={`mt-1 text-caption tabular-nums ${behind ? 'text-brand-tertiary' : 'text-brand-text-muted'}`}>
+                    Đạt {percent.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu{behind ? ' · chậm tiến độ' : ''}
+                  </p>
+                </div>;
+              })}
+            </dl>
+          </ReportCard>
+        </div>
+
+      </div>
+
+      {/* ===== TIỀN ĐẾN TỪ ĐÂU ======================================
+          Hai khối này trả lời câu khác với "đang chậm ở đâu" nên tách tiêu đề
+          riêng thay vì nhét chung. */}
+      <div className="mt-4 flex flex-col gap-4">
+        <h2 className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">Tiền đến từ đâu</h2>
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+          <ReportCard title="Top dịch vụ theo doanh thu" description="Bốn dịch vụ đóng góp nhiều nhất trong kỳ">
+            <ol className="flex flex-col">
+              {[{ name: 'Nail Art Premium', value: 168_400_000, share: '14,8%' }, { name: 'Acrylic Full Set', value: 142_800_000, share: '12,5%' }, { name: 'Pedicure Spa', value: 136_200_000, share: '11,9%' }, { name: 'Gel Manicure', value: 128_600_000, share: '11,3%' }].map((item, index) => <li key={item.name} className="flex items-center gap-3 border-t border-brand-outline py-3 first:border-t-0 first:pt-0">
+                <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-caption font-bold ${index === 0 ? 'bg-[var(--accent)] text-[color:var(--color-brand-on-primary)]' : 'bg-brand-surface-high text-brand-text-muted'}`}>{index + 1}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-body font-semibold text-brand-text">{item.name}</span>
+                  <span className="block text-caption tabular-nums text-brand-text-muted">{item.share} tổng doanh thu</span>
+                </span>
+                <span className="ta-money shrink-0 text-right text-body font-bold text-brand-text">{money(item.value)}</span>
+              </li>)}
+            </ol>
+          </ReportCard>
+
+          <ReportCard title="Cơ cấu doanh thu" description={`Theo chi nhánh · ${periodLabel}`}>
+            <div className="grid grid-cols-1 items-center gap-5 sm:grid-cols-[9.5rem_1fr]">
+              <div className="flex justify-center">
+                <div aria-hidden="true" className="relative flex h-36 w-36 items-center justify-center rounded-pill" style={{ background: `conic-gradient(${chartSeries[0]} 0 59%, ${chartSeries[2]} 59% 100%)` }}>
+                  <div className="flex h-24 w-24 flex-col items-center justify-center rounded-pill bg-brand-surface text-center">
+                    <p className="text-caption text-brand-text-muted">Tổng</p>
+                    <p className="mt-0.5 text-body font-bold tabular-nums text-brand-text">{shortMoney(revenue)}</p>
+                  </div>
+                </div>
+              </div>
+              <dl className="flex min-w-0 flex-col">
+                {[{ name: 'Quận 3', value: 672.4, share: 59, growth: '+18,2%', tone: chartSeries[0] }, { name: 'Quận 1', value: 468.6, share: 41, growth: '+14,9%', tone: chartSeries[2] }].map((item) => <div key={item.name} className="border-t border-brand-outline py-3 first:border-t-0 first:pt-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="flex min-w-0 items-center gap-2 text-body font-semibold text-brand-text">
+                      <i aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-pill" style={{ background: item.tone }} />
+                      <span className="truncate">Chi nhánh {item.name}</span>
+                    </dt>
+                    <dd className="ta-money shrink-0 text-right text-body font-bold text-brand-text">{money(item.value * 1_000_000)}</dd>
+                  </div>
+                  <p className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-caption text-brand-text-muted">
+                    <span className="flex items-center gap-1 font-semibold text-brand-secondary">
+                      <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />{item.growth}
+                    </span>
+                    <span className="tabular-nums">{item.share.toLocaleString('vi-VN')}% tổng doanh thu</span>
+                  </p>
+                </div>)}
+              </dl>
+            </div>
+          </ReportCard>
+        </div>
+
+      </div>
+
+      {/* ===== 3. NÊN LÀM GÌ ========================================
+          Trước đây đây là hai thẻ tách rời: "Điểm cần chú ý" liệt kê 3 vấn đề,
+          "Gợi ý phân tích" liệt kê 3 việc, không thẻ nào nói việc nào giải
+          quyết vấn đề nào — người đọc phải tự ghép. Nay mỗi dòng là một đơn vị
+          hoàn chỉnh: vấn đề → con số chứng minh → việc nên làm. */}
+      <div className="mt-4 flex flex-col gap-4">
+        <h2 className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">Nên làm gì</h2>
+        <ReportCard title="Việc cần làm" description="Tự động từ dữ liệu trong kỳ · xếp theo mức ảnh hưởng">
+          <ol className="flex flex-col">
+            {[
+              { problem: 'Công suất chiều thứ Bảy đã kịch 96%', evidence: 'Khung 14:00–18:00 thứ Bảy gần như kín, có nguy cơ phải từ chối khách.', action: 'Mở thêm một ca kỹ thuật viên chiều thứ Bảy', tone: 'danger' },
+              { problem: 'Chi phí vật tư dự báo vượt ngân sách 4,5%', evidence: 'Nhóm Nail Art tiêu hao nhanh hơn định mức từ đầu tháng.', action: 'Rà lại định mức và giá nhập vật tư Nail Art', tone: 'warning' },
+              { problem: 'Khách mới chưa quay lại đủ nhanh', evidence: `Mới đạt ${customerProgress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu khách mới, tỷ lệ quay lại 74,2% so với mục tiêu 78%.`, action: 'Gửi ưu đãi tái đặt lịch cho khách mới trong 30 ngày', tone: 'warning' }
+            ].map((item, index) => (
+              <li key={item.problem} className="flex gap-3 border-t border-brand-outline py-3 first:border-t-0 first:pt-0">
+                <span aria-hidden="true" className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-caption font-bold ui-tone ui-tone--${item.tone}`}>
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-body font-semibold text-brand-text">{item.problem}</p>
+                  <p className="mt-0.5 text-caption leading-4 text-brand-text-muted">{item.evidence}</p>
+                  <button
+                    type="button"
+                    onClick={() => setNotice(`Đã ghi nhận việc cần làm “${item.action}”.`)}
+                    className="mt-1.5 flex h-auto items-center gap-1.5 rounded-none border-0 bg-transparent p-0 text-left text-body font-semibold shadow-none"
+                    style={{ color: 'var(--accent-strong)' }}
+                  >
+                    {item.action}
+                    <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </ReportCard>
+      </div>
+
+      {/* ===== 4. PHÂN TÍCH CHI TIẾT ================================
+          Năm nhóm báo cáo cũ vẫn còn nguyên, chỉ thôi tranh chỗ với phần tóm
+          tắt: chúng nằm dưới đáy trang, sau khi người đọc đã biết kỳ này ra sao
+          và cần làm gì. */}
+      <section className="mt-8 border-t border-brand-outline pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">Phân tích chi tiết</h2>
+            <p className="mt-1 text-body text-brand-text-muted">
+              Năm nhóm báo cáo đầy đủ: doanh thu, vận hành, khách hàng, nhân sự, xuất &amp; lịch gửi.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            aria-expanded={detailOpen}
+            iconLeading={<ChevronDown className={detailOpen ? 'rotate-180' : ''} />}
+            onClick={() => setDetailOpen((open) => !open)}
+          >
+            {detailOpen ? 'Thu gọn' : 'Mở phân tích chi tiết'}
+          </Button>
+        </div>
+
+        {detailOpen && (
+          <nav aria-label="Nhóm báo cáo chi tiết" className="mt-3 flex gap-1 overflow-x-auto rounded-card border border-brand-outline bg-brand-surface-lowest p-2">
+            {tabs.map((item) => {
+              const active = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => switchTab(item.id)}
+                  aria-current={active ? 'true' : undefined}
+                  className={`shrink-0 rounded-control border-0 px-3 text-body shadow-none ${active ? 'bg-[var(--accent-soft)] font-bold text-[color:var(--accent-strong)]' : 'bg-transparent font-medium text-brand-text-muted hover:bg-brand-surface-high hover:text-brand-text'}`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+        )}
+      </section>
+
+      <div className={detailOpen ? 'mt-4' : 'hidden'}>
       {tab === 'REVENUE' && <RevenueReportTab revenue={revenue} bookings={bookings} averageTicket={averageTicket} branches={branches} selectedBranch={selectedBranch} periodLabel={periodLabel} comparisonSuffix={comparisonSuffix} />}
-      {tab === 'OPERATIONS' && <div className="space-y-5">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{[{ label: 'Công suất ghế', value: '82,6%', detail: '+5,2 điểm', tone: 'text-violet-700' }, { label: 'Thời gian phục vụ TB', value: '86 phút', detail: '−4 phút', tone: 'text-blue-700' }, { label: 'Tỷ lệ hủy/no-show', value: '4,8%', detail: '−1,2 điểm', tone: 'text-emerald-700' }, { label: 'Lịch đúng giờ', value: '91,4%', detail: '+2,8 điểm', tone: 'text-amber-700' }].map((item) => <article key={item.label} className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold text-slate-500">{item.label}</p><p className={`mt-2 text-2xl font-black ${item.tone}`}>{item.value}</p><p className="mt-1 text-[10px] font-bold text-emerald-600">{item.detail} so với kỳ trước</p></article>)}</div>
-        <div className="grid min-w-0 gap-5 lg:grid-cols-2">
-          <article className="rounded-2xl border border-slate-200 p-5"><h3 className="text-sm font-black text-slate-900">Công suất theo khung giờ</h3><div className="mt-5 grid grid-cols-7 gap-2">{['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day, dayIndex) => <div key={day}><p className="mb-2 text-center text-[10px] font-black text-slate-500">{day}</p><div className="space-y-1">{Array.from({ length: 6 }, (_, index) => { const value = 45 + ((dayIndex * 17 + index * 13) % 54); return <div key={index} title={`${9 + index * 2}:00 · ${value}%`} className={`h-8 rounded ${value > 88 ? 'bg-rose-500' : value > 72 ? 'bg-violet-500' : value > 55 ? 'bg-blue-300' : 'bg-slate-200'}`} />; })}</div></div>)}</div><div className="mt-4 flex justify-center gap-3 text-[9px] font-bold text-slate-500"><span>Thấp</span><i className="h-3 w-3 rounded bg-slate-200" /><i className="h-3 w-3 rounded bg-blue-300" /><i className="h-3 w-3 rounded bg-violet-500" /><i className="h-3 w-3 rounded bg-rose-500" /><span>Cao</span></div></article>
+
+      {tab === 'OPERATIONS' && <div className="flex flex-col gap-4">
+        <section aria-label="Chỉ số vận hành" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[{ label: 'Công suất ghế', value: '82,6%', detail: '+5,2 điểm' }, { label: 'Thời gian phục vụ TB', value: '86 phút', detail: '−4 phút' }, { label: 'Tỷ lệ hủy/no-show', value: '4,8%', detail: '−1,2 điểm' }, { label: 'Lịch đúng giờ', value: '91,4%', detail: '+2,8 điểm' }].map((item) => <article key={item.label} className="flex flex-col gap-1 rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+            <p className="text-caption text-brand-text-muted">{item.label}</p>
+            <p className="ta-metric-value text-brand-text">{item.value}</p>
+            <p className="text-caption font-semibold text-brand-secondary">{item.detail} so với kỳ trước</p>
+          </article>)}
+        </section>
+
+        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+          <ReportCard title="Công suất theo khung giờ" description="Từ 09:00 đến 19:00, theo ngày trong tuần">
+            <div className="grid grid-cols-7 gap-2">
+              {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day, dayIndex) => <div key={day}>
+                <p className="mb-2 text-center text-caption font-semibold text-brand-text-muted">{day}</p>
+                <div className="flex flex-col gap-1">
+                  {Array.from({ length: 6 }, (_, index) => {
+                    const value = 45 + ((dayIndex * 17 + index * 13) % 54);
+                    const level = value > 88 ? 4 : value > 72 ? 3 : value > 55 ? 2 : 1;
+                    return <div
+                      key={index}
+                      title={`${day} · ${9 + index * 2}:00 · công suất ${value}%`}
+                      className="h-8 rounded-control"
+                      style={{ background: level === 4 ? 'var(--color-brand-error)' : level === 3 ? 'var(--chart-1)' : level === 2 ? 'var(--chart-3)' : 'var(--color-brand-surface-high)' }}
+                    />;
+                  })}
+                </div>
+              </div>)}
+            </div>
+            <div className="mt-4 flex items-center justify-center gap-2 text-caption text-brand-text-muted">
+              <span>Thấp</span>
+              <i aria-hidden="true" className="h-3 w-3 rounded-sm bg-brand-surface-high" />
+              <i aria-hidden="true" className="h-3 w-3 rounded-sm" style={{ background: 'var(--chart-3)' }} />
+              <i aria-hidden="true" className="h-3 w-3 rounded-sm" style={{ background: 'var(--chart-1)' }} />
+              <i aria-hidden="true" className="h-3 w-3 rounded-sm bg-brand-error" />
+              <span>Cao · trên 88% có nguy cơ từ chối lịch</span>
+            </div>
+          </ReportCard>
+
           <BranchComparisonTable branches={branches} />
         </div>
       </div>}
-      {tab === 'CUSTOMERS' && <div className="space-y-5"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{[{ label: 'Tổng khách hoạt động', value: '4.826', detail: '+8,4%' }, { label: 'Khách mới', value: '294', detail: '+18,2%' }, { label: 'Tỷ lệ quay lại', value: '74,2%', detail: '+3,1 điểm' }, { label: 'LTV trung bình', value: '8,6 triệu', detail: '+12,8%' }].map((item) => <article key={item.label} className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold text-slate-500">{item.label}</p><p className="mt-2 text-2xl font-black text-slate-900">{item.value}</p><p className="mt-1 text-[10px] font-bold text-emerald-600">{item.detail}</p></article>)}</div><div className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]"><article className="rounded-2xl border border-slate-200 p-5"><h3 className="text-sm font-black text-slate-900">Phân khúc khách hàng</h3><div className="mt-5 flex justify-center"><div className="relative flex h-44 w-44 items-center justify-center rounded-full" style={{ background: 'conic-gradient(#7c3aed 0 18%, #ec4899 18% 42%, #3b82f6 42% 74%, #cbd5e1 74% 100%)' }}><div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white"><p className="text-[10px] text-slate-400">Khách hoạt động</p><p className="mt-1 text-xl font-black text-slate-900">4.826</p></div></div></div><div className="mt-5 grid grid-cols-2 gap-2">{[{ label: 'VIP', value: '18%', tone: 'bg-violet-500' }, { label: 'Thành viên', value: '24%', tone: 'bg-pink-500' }, { label: 'Thường xuyên', value: '32%', tone: 'bg-blue-500' }, { label: 'Mới/không thường xuyên', value: '26%', tone: 'bg-slate-300' }].map((item) => <div key={item.label} className="flex justify-between rounded-xl bg-slate-50 p-3 text-xs"><span className="flex items-center gap-2 font-bold text-slate-600"><i className={`h-2.5 w-2.5 rounded-full ${item.tone}`} />{item.label}</span><strong>{item.value}</strong></div>)}</div></article><article className="rounded-2xl border border-slate-200 p-5"><h3 className="text-sm font-black text-slate-900">Cohort quay lại theo tháng đầu</h3><div className="mt-5 overflow-x-auto"><div className="min-w-[520px]"><div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-slate-400"><span className="text-left">Cohort</span>{['M0', 'M1', 'M2', 'M3', 'M4', 'M5'].map((item) => <span key={item}>{item}</span>)}</div>{['02/2026', '03/2026', '04/2026', '05/2026', '06/2026', '07/2026'].map((month, row) => <div key={month} className="mt-1 grid grid-cols-7 gap-1"><span className="flex items-center text-[10px] font-bold text-slate-500">{month}</span>{Array.from({ length: 6 }, (_, col) => { const active = col <= 5 - row + 2; const value = Math.max(0, 100 - col * 12 - row * 2); return <div key={col} className={`flex h-9 items-center justify-center rounded text-[9px] font-black ${!active ? 'bg-slate-50 text-slate-300' : value > 80 ? 'bg-violet-600 text-white' : value > 65 ? 'bg-violet-400 text-white' : value > 50 ? 'bg-violet-200 text-violet-800' : 'bg-violet-100 text-violet-700'}`}>{active ? `${value}%` : '—'}</div>; })}</div>)}</div></div></article></div></div>}
-      {tab === 'STAFF' && <div className="space-y-5"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{[{ label: 'Doanh thu/giờ làm', value: '286.000đ', detail: '+8,6%' }, { label: 'Tỷ lệ lấp lịch', value: '84,8%', detail: '+4,2 điểm' }, { label: 'Đánh giá trung bình', value: '4,86/5', detail: '+0,08 điểm' }, { label: 'Hoa hồng kỳ này', value: '186,5tr', detail: '16,3% doanh thu' }].map((item) => <article key={item.label} className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold text-slate-500">{item.label}</p><p className="mt-2 text-2xl font-black text-slate-900">{item.value}</p><p className="mt-1 text-[10px] font-bold text-emerald-600">{item.detail}</p></article>)}</div><article className="overflow-hidden rounded-2xl border border-slate-200"><div className="grid grid-cols-[1.2fr_100px_100px_100px_100px_100px] gap-3 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase text-slate-400"><span>Kỹ thuật viên</span><span>Doanh thu</span><span>Lịch</span><span>Lấp lịch</span><span>Đánh giá</span><span>Hoa hồng</span></div>{[{ name: 'Thảo Nguyễn', role: 'Senior Nail Artist', revenue: '148,6tr', bookings: 126, occupancy: '92%', rating: '4,96', commission: '26,8tr' }, { name: 'Hà My', role: 'Nail Artist', revenue: '126,4tr', bookings: 138, occupancy: '88%', rating: '4,91', commission: '21,5tr' }, { name: 'Minh Châu', role: 'Senior Technician', revenue: '118,2tr', bookings: 142, occupancy: '86%', rating: '4,88', commission: '20,1tr' }, { name: 'Thuỳ Dương', role: 'Nail Technician', revenue: '96,8tr', bookings: 132, occupancy: '82%', rating: '4,82', commission: '15,5tr' }, { name: 'Bảo Ngọc', role: 'Pedicure Specialist', revenue: '88,4tr', bookings: 118, occupancy: '78%', rating: '4,78', commission: '14,2tr' }].map((item, index) => <div key={item.name} className="grid grid-cols-[1.2fr_100px_100px_100px_100px_100px] gap-3 border-t border-slate-100 px-4 py-4 text-xs"><div className="flex items-center gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-xl font-black ${index === 0 ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{item.name.split(' ').map((word) => word[0]).slice(-2).join('')}</span><div><p className="font-black text-slate-800">{item.name}</p><p className="mt-1 text-[10px] text-slate-400">{item.role}</p></div></div><strong className="text-slate-800">{item.revenue}</strong><span className="font-bold text-slate-600">{item.bookings}</span><span className="font-black text-violet-700">{item.occupancy}</span><span className="flex items-center gap-1 font-black text-amber-700"><Star className="h-3 w-3 fill-amber-400" />{item.rating}</span><strong className="text-emerald-700">{item.commission}</strong></div>)}</article></div>}
-      {tab === 'EXPORTS' && <div className="space-y-6"><div><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-base font-black text-slate-900">Thư viện báo cáo</h2><p className="mt-1 text-xs text-slate-400">Mẫu báo cáo chuẩn theo vai trò và nghiệp vụ</p></div><div className="flex gap-2"><div className="relative flex-1 sm:w-64"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} className={`${inputClass} pl-10`} placeholder="Tìm báo cáo..." /></div><BeautifulSelect value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)} className="h-11 w-36 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold"><option value="ALL">Tất cả nhóm</option>{Array.from(new Set(templates.map((item) => item.group))).map((group) => <option key={group}>{group}</option>)}</BeautifulSelect><button type="button" onClick={() => setFavoriteOnly((value) => !value)} aria-label="Chỉ xem báo cáo yêu thích" className={`flex h-11 w-11 items-center justify-center border p-0 shadow-sm ${favoriteOnly ? 'border-amber-200 bg-amber-50 text-amber-600' : 'border-slate-200 bg-white text-slate-400'}`}><Star className={`h-4 w-4 ${favoriteOnly ? 'fill-amber-400' : ''}`} /></button></div></div><div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filteredTemplates.map((report) => <article key={report.id} className="rounded-2xl border border-slate-200 p-5 shadow-sm"><div className="flex items-start justify-between"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><FileBarChart className="h-5 w-5" /></span><Star className={`h-4 w-4 ${report.favorite ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} /></div><p className="mt-4 text-[10px] font-black uppercase tracking-wide text-violet-600">{report.id} · {report.group}</p><h3 className="mt-1 text-base font-black text-slate-900">{report.name}</h3><p className="mt-2 min-h-10 text-xs leading-5 text-slate-500">{report.description}</p><div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3"><div><p className="text-[9px] text-slate-400">Định dạng</p><p className="mt-1 text-[10px] font-black text-slate-700">{report.format}</p></div><div><p className="text-[9px] text-slate-400">Quyền xem</p><p className="mt-1 text-[10px] font-black text-slate-700">{report.access}</p></div></div><div className="mt-4 flex gap-2"><button type="button" onClick={() => setNotice(`Đã mở bản xem trước ${report.name}.`)} className="flex h-9 flex-1 items-center justify-center gap-1 border border-slate-200 bg-white text-xs font-bold text-slate-600 shadow-sm"><Eye className="h-3.5 w-3.5" />Xem</button><button type="button" onClick={() => exportReport(report.name)} className="flex h-9 flex-1 items-center justify-center gap-1 border border-violet-200 bg-violet-50 text-xs font-black text-violet-700 shadow-none"><Download className="h-3.5 w-3.5" />Xuất</button></div></article>)}</div></div><div className="border-t border-slate-100 pt-6"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-base font-black text-slate-900">Lịch gửi tự động</h2><p className="mt-1 text-xs text-slate-400">Gửi báo cáo định kỳ tới người phụ trách</p></div><button type="button" onClick={() => { if (!requireManage()) return; setFormError(''); setScheduleOpen(true); }} disabled={!canManage} className="flex h-10 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200"><Plus className="h-4 w-4" />Tạo lịch gửi</button></div><div className="mt-4 overflow-hidden rounded-2xl border border-slate-200"><div className="hidden grid-cols-[1.2fr_1fr_1fr_100px_100px_40px] gap-3 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase text-slate-400 lg:grid"><span>Lịch báo cáo</span><span>Tần suất</span><span>Người nhận</span><span>Tiếp theo</span><span>Trạng thái</span><span /></div>{schedules.map((schedule) => <div key={schedule.id} className="grid gap-3 border-t border-slate-100 px-4 py-4 first:border-0 lg:grid-cols-[1.2fr_1fr_1fr_100px_100px_40px] lg:items-center"><div><p className="text-xs font-black text-slate-800">{schedule.name}</p><p className="mt-1 text-[10px] text-slate-400">{schedule.id} · {branchName(schedule.branch)} · {schedule.format}</p></div><div><p className="text-xs font-bold text-slate-600">{schedule.frequency === 'DAILY' ? 'Hàng ngày' : schedule.frequency === 'WEEKLY' ? 'Hàng tuần' : 'Hàng tháng'}</p><p className="mt-1 text-[10px] text-slate-400">{schedule.time}</p></div><p className="truncate text-xs font-bold text-slate-600">{schedule.recipients.join(', ')}</p><p className="text-[10px] font-bold text-slate-500">{schedule.nextRun}</p><button type="button" onClick={() => toggleSchedule(schedule)} disabled={!canManage} className={`h-8 border-0 px-2 text-[10px] font-black shadow-none ${schedule.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{schedule.active ? 'Đang bật' : 'Tạm dừng'}</button><MoreHorizontal className="h-4 w-4 text-slate-400" /></div>)}</div></div></div>}
-    </div></section>
-    <section className="grid gap-4 lg:grid-cols-3"><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="text-sm font-black text-slate-900">Chất lượng dữ liệu</h2><p className="mt-1 text-xs text-slate-400">Độ đầy đủ theo nguồn</p></div><Check className="h-5 w-5 text-emerald-500" /></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-emerald-50 p-3"><p className="text-xl font-black text-emerald-700">100%</p><p className="mt-1 text-[10px] font-bold text-emerald-600">POS</p></div><div className="rounded-xl bg-blue-50 p-3"><p className="text-xl font-black text-blue-700">99,8%</p><p className="mt-1 text-[10px] font-bold text-blue-600">Lịch hẹn</p></div><div className="rounded-xl bg-violet-50 p-3"><p className="text-xl font-black text-violet-700">98,6%</p><p className="mt-1 text-[10px] font-bold text-violet-600">Khách hàng</p></div></div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="text-sm font-black text-slate-900">Quyền dữ liệu</h2><p className="mt-1 text-xs text-slate-400">Phạm vi tài khoản hiện tại</p></div><LockKeyhole className="h-5 w-5 text-violet-500" /></div><div className="mt-4 rounded-xl bg-violet-50 p-4"><p className="text-xs font-black text-violet-800">{roleLabel}</p><p className="mt-2 text-xs leading-5 text-violet-700">Được xem dữ liệu toàn tenant, xuất báo cáo và tạo báo cáo tùy chỉnh theo quyền gói.</p></div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="text-sm font-black text-slate-900">Gợi ý phân tích</h2><p className="mt-1 text-xs text-slate-400">Từ dữ liệu tháng 07</p></div><Sparkles className="h-5 w-5 text-amber-500" /></div><div className="mt-3 divide-y divide-slate-100">{['Tối ưu khung giờ chiều thứ Bảy', 'Kiểm soát chi phí vật tư Nail Art', 'Tăng tái đặt lịch cho khách mới'].map((item, index) => <button key={item} type="button" className="flex h-auto w-full items-center gap-3 rounded-none border-0 bg-white py-3 text-left shadow-none"><span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><span className="flex-1 text-xs font-bold text-slate-700">{item}</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>)}</div></article></section>
-    {metricOpen && <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"><button type="button" aria-label="Đóng chi tiết chỉ số" onClick={() => setMetricOpen(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><aside className="relative flex h-full w-full max-w-[500px] flex-col bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 p-5 sm:p-6"><div><span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700">KPI điều hành</span><h2 className="mt-3 text-xl font-black text-slate-900">{metricOpen === 'revenue' ? 'Doanh thu thuần' : metricOpen === 'bookings' ? 'Lịch hoàn tất' : metricOpen === 'ticket' ? 'Giá trị trung bình' : 'Khách hàng mới'}</h2><p className="mt-1 text-xs text-slate-400">Tháng 07/2026 · {selectedBranch === 'ALL' ? 'Toàn tenant' : branchName(selectedBranch as BranchCode)}</p></div><button type="button" onClick={() => setMetricOpen(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="flex-1 overflow-y-auto p-5 sm:p-6"><section className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-[10px] uppercase tracking-wide text-violet-300">Giá trị hiện tại</p><p className="mt-2 text-3xl font-black">{metricOpen === 'revenue' ? shortMoney(revenue) : metricOpen === 'bookings' ? bookings.toLocaleString('vi-VN') : metricOpen === 'ticket' ? money(averageTicket) : newCustomers.toLocaleString('vi-VN')}</p><p className="mt-2 flex items-center gap-1 text-xs font-bold text-emerald-300"><ArrowUpRight className="h-4 w-4" />Tăng 16,8% so với kỳ trước</p></section><div className="mt-5 grid grid-cols-2 gap-3">{[{ label: 'Chi nhánh Quận 3', value: metricOpen === 'revenue' ? '672,4tr' : metricOpen === 'bookings' ? '846' : metricOpen === 'ticket' ? '795.000đ' : '168' }, { label: 'Chi nhánh Quận 1', value: metricOpen === 'revenue' ? '468,6tr' : metricOpen === 'bookings' ? '612' : metricOpen === 'ticket' ? '766.000đ' : '126' }, { label: 'Mục tiêu tháng', value: metricOpen === 'revenue' ? '1,28 tỷ' : metricOpen === 'bookings' ? '1.600' : metricOpen === 'ticket' ? '800.000đ' : '350' }, { label: 'Dự báo cuối kỳ', value: metricOpen === 'revenue' ? '1,22 tỷ' : metricOpen === 'bookings' ? '1.538' : metricOpen === 'ticket' ? '790.000đ' : '326' }].map((item) => <div key={item.label} className="rounded-xl border border-slate-200 p-3"><p className="text-[10px] text-slate-400">{item.label}</p><p className="mt-1 text-sm font-black text-slate-800">{item.value}</p></div>)}</div><section className="mt-5 rounded-2xl bg-violet-50 p-4"><p className="text-xs font-black text-violet-800">Cách tính & nguồn dữ liệu</p><p className="mt-2 text-xs leading-5 text-violet-700">Chỉ số được tổng hợp từ POS, lịch hẹn đã hoàn tất và dữ liệu thanh toán đã đối soát. Giao dịch hủy hoặc hoàn tiền được loại trừ.</p></section><p className="mt-5 text-[10px] text-slate-400">Dữ liệu cập nhật lúc 16:45 · Quyền xem: {roleLabel}</p></div><div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><button type="button" onClick={() => exportReport('Chi tiết KPI')} className="flex h-11 w-full items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-xs font-black text-white shadow-lg shadow-violet-200"><Download className="h-4 w-4" />Xuất dữ liệu chi tiết</button></div></aside></div>}
-    {builderOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng trình tạo báo cáo" onClick={() => setBuilderOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitBuilder} className="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white p-5 sm:p-6"><div><p className="text-[10px] font-black uppercase tracking-wide text-violet-600">Report Builder</p><h2 className="mt-1 text-lg font-black text-slate-900">Tạo báo cáo tùy chỉnh</h2><p className="mt-1 text-xs text-slate-500">Chọn chỉ số, chiều phân tích và định dạng xuất.</p></div><button type="button" onClick={() => setBuilderOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="space-y-5 p-5 sm:p-6">{formError && <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700">{formError}</div>}<div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Tên báo cáo *</span><input value={builder.name} onChange={(event) => setBuilder((current) => ({ ...current, name: event.target.value }))} className={inputClass} placeholder="Ví dụ: Hiệu quả Nail Art theo chi nhánh" /></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Nhóm báo cáo</span><BeautifulSelect value={builder.group} onChange={(event) => setBuilder((current) => ({ ...current, group: event.target.value }))} className={inputClass}>{['Điều hành', 'Tài chính', 'Vận hành', 'Khách hàng', 'Nhân sự', 'Kho'].map((item) => <option key={item}>{item}</option>)}</BeautifulSelect></label></div><fieldset><legend className="mb-3 text-sm font-black text-slate-800">Chỉ số cần phân tích</legend><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{['Doanh thu', 'Lượt đặt', 'Giá trị trung bình', 'Công suất ghế', 'Khách hàng mới', 'Tỷ lệ quay lại', 'Chi phí vật tư', 'Hoa hồng', 'Đánh giá'].map((metric) => <label key={metric} className={`flex items-center gap-3 rounded-xl border p-3 ${builder.metrics.includes(metric) ? 'border-violet-200 bg-violet-50' : 'border-slate-200 bg-white'}`}><input type="checkbox" checked={builder.metrics.includes(metric)} onChange={(event) => setBuilder((current) => ({ ...current, metrics: event.target.checked ? [...current.metrics, metric] : current.metrics.filter((item) => item !== metric) }))} className="h-4 w-4 accent-violet-600" /><span className="text-xs font-bold text-slate-700">{metric}</span></label>)}</div></fieldset><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Chiều phân tích</span><BeautifulSelect value={builder.dimension} onChange={(event) => setBuilder((current) => ({ ...current, dimension: event.target.value }))} className={inputClass}>{['Theo ngày', 'Theo tuần', 'Theo chi nhánh', 'Theo dịch vụ', 'Theo kỹ thuật viên', 'Theo phân khúc khách'].map((item) => <option key={item}>{item}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Định dạng mặc định</span><BeautifulSelect value={builder.format} onChange={(event) => setBuilder((current) => ({ ...current, format: event.target.value }))} className={inputClass}><option>Excel</option><option>PDF</option><option>CSV</option></BeautifulSelect></label></div><label className="flex items-center gap-3 rounded-xl bg-slate-50 p-4"><input type="checkbox" checked={builder.includeComparison} onChange={(event) => setBuilder((current) => ({ ...current, includeComparison: event.target.checked }))} className="h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-black text-slate-700">Bao gồm so sánh kỳ trước</span><span className="mt-1 block text-[10px] text-slate-400">Thêm chênh lệch tuyệt đối và phần trăm tăng trưởng.</span></span></label></div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><button type="button" onClick={() => setBuilderOpen(false)} className="border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><FileBarChart className="h-4 w-4" />Tạo báo cáo</button></div></form></div>}
-    {scheduleOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng lịch gửi" onClick={() => setScheduleOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitSchedule} className="relative w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 p-5 sm:p-6"><div><p className="text-[10px] font-black uppercase tracking-wide text-violet-600">Phân phối báo cáo</p><h2 className="mt-1 text-lg font-black text-slate-900">Lập lịch gửi tự động</h2><p className="mt-1 text-xs text-slate-500">Cấu hình tần suất, người nhận và phạm vi dữ liệu.</p></div><button type="button" onClick={() => setScheduleOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">{formError && <div className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700 sm:col-span-2">{formError}</div>}<label className="sm:col-span-2"><span className="mb-1.5 block text-xs font-bold text-slate-600">Tên lịch gửi *</span><input value={scheduleForm.name} onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Tần suất</span><BeautifulSelect value={scheduleForm.frequency} onChange={(event) => setScheduleForm((current) => ({ ...current, frequency: event.target.value as ScheduleFrequency }))} className={inputClass}><option value="DAILY">Hàng ngày</option><option value="WEEKLY">Hàng tuần</option><option value="MONTHLY">Hàng tháng</option></BeautifulSelect></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Thời gian gửi</span><input type="time" value={scheduleForm.time} onChange={(event) => setScheduleForm((current) => ({ ...current, time: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Phạm vi</span><BeautifulSelect value={scheduleForm.branch} onChange={(event) => setScheduleForm((current) => ({ ...current, branch: event.target.value as BranchCode | 'ALL' }))} className={inputClass}><option value="ALL">Tất cả chi nhánh</option><option value="Q1">Chi nhánh Quận 1</option><option value="Q3">Chi nhánh Quận 3</option></BeautifulSelect></label><label><span className="mb-1.5 block text-xs font-bold text-slate-600">Định dạng</span><BeautifulSelect value={scheduleForm.format} onChange={(event) => setScheduleForm((current) => ({ ...current, format: event.target.value }))} className={inputClass}><option>PDF</option><option>Excel</option><option>CSV</option></BeautifulSelect></label><label className="sm:col-span-2"><span className="mb-1.5 block text-xs font-bold text-slate-600">Email người nhận *</span><input value={scheduleForm.recipients} onChange={(event) => setScheduleForm((current) => ({ ...current, recipients: event.target.value }))} className={inputClass} placeholder="owner@salon.vn, finance@salon.vn" /><span className="mt-1 block text-[10px] text-slate-400">Phân cách nhiều email bằng dấu phẩy.</span></label><div className="rounded-xl bg-violet-50 p-4 sm:col-span-2"><p className="text-xs font-black text-violet-800">Kiểm soát quyền dữ liệu</p><p className="mt-1 text-xs leading-5 text-violet-700">Người nhận chỉ nhận tệp xuất; liên kết chi tiết vẫn yêu cầu đăng nhập và quyền phù hợp.</p></div></div><div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 p-4 sm:px-6"><button type="button" onClick={() => setScheduleOpen(false)} className="border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200"><Mail className="h-4 w-4" />Tạo lịch gửi</button></div></form></div>}
+
+      {tab === 'CUSTOMERS' && <div className="flex flex-col gap-4">
+        <section aria-label="Chỉ số khách hàng" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[{ label: 'Tổng khách hoạt động', value: '4.826', detail: '+8,4%' }, { label: 'Khách mới', value: '294', detail: '+18,2%' }, { label: 'Tỷ lệ quay lại', value: '74,2%', detail: '+3,1 điểm' }, { label: 'LTV trung bình', value: money(8_600_000), detail: '+12,8%' }].map((item) => <article key={item.label} className="flex flex-col gap-1 rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+            <p className="text-caption text-brand-text-muted">{item.label}</p>
+            <p className="ta-metric-value text-brand-text">{item.value}</p>
+            <p className="text-caption font-semibold text-brand-secondary">{item.detail}</p>
+          </article>)}
+        </section>
+
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <ReportCard title="Phân khúc khách hàng" description="Tỷ trọng trên tổng khách hoạt động">
+            <div className="flex justify-center">
+              <div aria-hidden="true" className="relative flex h-44 w-44 items-center justify-center rounded-pill" style={{ background: `conic-gradient(${chartSeries[0]} 0 18%, ${chartSeries[1]} 18% 42%, ${chartSeries[2]} 42% 74%, ${chartSeries[4]} 74% 100%)` }}>
+                <div className="flex h-28 w-28 flex-col items-center justify-center rounded-pill bg-brand-surface text-center">
+                  <p className="text-caption text-brand-text-muted">Khách hoạt động</p>
+                  <p className="mt-1 text-card-title font-bold tabular-nums text-brand-text">4.826</p>
+                </div>
+              </div>
+            </div>
+            <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 sm:gap-x-5">
+              {[{ label: 'VIP', value: '18%', tone: chartSeries[0] }, { label: 'Thành viên', value: '24%', tone: chartSeries[1] }, { label: 'Thường xuyên', value: '32%', tone: chartSeries[2] }, { label: 'Mới/không thường xuyên', value: '26%', tone: chartSeries[4] }].map((item) => <div key={item.label} className="flex items-center justify-between gap-2 border-t border-brand-outline py-2.5 text-body">
+                <dt className="flex min-w-0 items-center gap-2 text-brand-text">
+                  <i aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-pill" style={{ background: item.tone }} />
+                  <span className="truncate">{item.label}</span>
+                </dt>
+                <dd className="shrink-0 font-semibold tabular-nums text-brand-text">{item.value}</dd>
+              </div>)}
+            </dl>
+          </ReportCard>
+
+          <ReportCard title="Cohort quay lại theo tháng đầu" description="Tỷ lệ khách quay lại sau mỗi tháng">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[34rem] border-collapse text-center">
+                <caption className="sr-only">Tỷ lệ quay lại theo cohort tháng đầu, từ tháng M0 đến M5</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className="pb-2 text-left text-caption font-semibold text-brand-text-muted">Cohort</th>
+                    {['M0', 'M1', 'M2', 'M3', 'M4', 'M5'].map((item) => <th key={item} scope="col" className="pb-2 text-caption font-semibold text-brand-text-muted">{item}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {['02/2026', '03/2026', '04/2026', '05/2026', '06/2026', '07/2026'].map((month, row) => <tr key={month}>
+                    <th scope="row" className="py-0.5 pr-2 text-left text-caption font-semibold tabular-nums text-brand-text-muted">{month}</th>
+                    {Array.from({ length: 6 }, (_, col) => {
+                      const active = col <= 5 - row + 2;
+                      const value = Math.max(0, 100 - col * 12 - row * 2);
+                      return <td key={col} className="p-0.5">
+                        <div
+                          className="flex h-9 items-center justify-center rounded-control text-caption font-semibold tabular-nums"
+                          // Chữ luôn là màu văn bản thường: nền đậm nhất cũng chỉ
+                          // pha 85% accent, vẫn đủ tương phản cho chữ tối (§19.2).
+                          style={active
+                            ? { background: `color-mix(in srgb, var(--accent) ${Math.max(12, Math.round(value * 0.85))}%, var(--color-brand-surface))`, color: 'var(--color-brand-text)' }
+                            : { background: 'var(--color-brand-surface-high)', color: 'var(--color-brand-text-muted)' }}
+                        >
+                          {active ? `${value}%` : '—'}
+                        </div>
+                      </td>;
+                    })}
+                  </tr>)}
+                </tbody>
+              </table>
+            </div>
+          </ReportCard>
+        </div>
+      </div>}
+
+      {tab === 'STAFF' && <div className="flex flex-col gap-4">
+        <section aria-label="Chỉ số nhân sự" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[{ label: 'Doanh thu/giờ làm', value: money(286_000), detail: '+8,6%' }, { label: 'Tỷ lệ lấp lịch', value: '84,8%', detail: '+4,2 điểm' }, { label: 'Đánh giá trung bình', value: '4,86/5', detail: '+0,08 điểm' }, { label: 'Hoa hồng kỳ này', value: money(186_500_000), detail: '16,3% doanh thu' }].map((item) => <article key={item.label} className="flex flex-col gap-1 rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+            <p className="text-caption text-brand-text-muted">{item.label}</p>
+            <p className="ta-metric-value text-brand-text">{item.value}</p>
+            <p className="text-caption font-semibold text-brand-secondary">{item.detail}</p>
+          </article>)}
+        </section>
+
+        <section className="min-w-0">
+          <h2 className="text-card-title text-brand-text">Hiệu suất kỹ thuật viên</h2>
+          <p className="mt-0.5 text-body text-brand-text-muted">Doanh thu, số lịch, tỷ lệ lấp lịch, đánh giá và hoa hồng</p>
+          <DataTable<{ name: string; role: string; revenue: number; bookings: number; occupancy: string; rating: string; commission: number }>
+            className="mt-4"
+            rowKey={(item) => item.name}
+            caption="Hiệu suất kỹ thuật viên trong kỳ báo cáo"
+            rows={[
+              { name: 'Thảo Nguyễn', role: 'Senior Nail Artist', revenue: 148_600_000, bookings: 126, occupancy: '92%', rating: '4,96', commission: 26_800_000 },
+              { name: 'Hà My', role: 'Nail Artist', revenue: 126_400_000, bookings: 138, occupancy: '88%', rating: '4,91', commission: 21_500_000 },
+              { name: 'Minh Châu', role: 'Senior Technician', revenue: 118_200_000, bookings: 142, occupancy: '86%', rating: '4,88', commission: 20_100_000 },
+              { name: 'Thuỳ Dương', role: 'Nail Technician', revenue: 96_800_000, bookings: 132, occupancy: '82%', rating: '4,82', commission: 15_500_000 },
+              { name: 'Bảo Ngọc', role: 'Pedicure Specialist', revenue: 88_400_000, bookings: 118, occupancy: '78%', rating: '4,78', commission: 14_200_000 }
+            ]}
+            columns={[
+              {
+                key: 'name',
+                header: 'Kỹ thuật viên',
+                width: '30%',
+                cell: (item, index) => (
+                  <span className="flex items-center gap-3">
+                    <span aria-hidden="true" className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-caption font-bold ${index === 0 ? 'bg-[var(--accent)] text-[color:var(--color-brand-on-primary)]' : 'bg-brand-surface-high text-brand-text-muted'}`}>
+                      {item.name.split(' ').map((word) => word[0]).slice(-2).join('')}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold text-brand-text">{item.name}</span>
+                      <span className="block truncate text-caption text-brand-text-muted">{item.role}</span>
+                    </span>
+                  </span>
+                )
+              },
+              { key: 'revenue', header: 'Doanh thu', numeric: true, cell: (item) => <span className="ta-money font-semibold text-brand-text">{money(item.revenue)}</span> },
+              { key: 'bookings', header: 'Lịch', numeric: true, hideBelow: 'md', cell: (item) => item.bookings.toLocaleString('vi-VN') },
+              { key: 'occupancy', header: 'Lấp lịch', numeric: true, hideBelow: 'lg', cell: (item) => item.occupancy },
+              {
+                key: 'rating',
+                header: 'Đánh giá',
+                numeric: true,
+                hideBelow: 'lg',
+                cell: (item) => <span className="inline-flex items-center justify-end gap-1 tabular-nums text-brand-text"><Star aria-hidden="true" className="h-3.5 w-3.5 text-brand-tertiary" />{item.rating}</span>
+              },
+              { key: 'commission', header: 'Hoa hồng', numeric: true, cell: (item) => <span className="ta-money font-semibold text-brand-text">{money(item.commission)}</span> }
+            ]}
+          />
+        </section>
+      </div>}
+
+      {tab === 'EXPORTS' && <div className="flex flex-col gap-4">
+        <section className="min-w-0">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-card-title text-brand-text">Thư viện báo cáo</h2>
+              <p className="mt-0.5 text-body text-brand-text-muted">Mẫu báo cáo chuẩn theo vai trò và nghiệp vụ</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative sm:w-64">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => onSearchQueryChange(event.target.value)}
+                  aria-label="Tìm mẫu báo cáo"
+                  placeholder="Tìm báo cáo..."
+                  className={`${controlClass} pl-9`}
+                />
+              </div>
+              <BeautifulSelect
+                value={groupFilter}
+                onChange={(event) => setGroupFilter(event.target.value)}
+                aria-label="Lọc theo nhóm báo cáo"
+                className={`${controlClass} sm:w-40`}
+              >
+                <option value="ALL">Tất cả nhóm</option>
+                {Array.from(new Set(templates.map((item) => item.group))).map((group) => <option key={group}>{group}</option>)}
+              </BeautifulSelect>
+              <Button
+                variant={favoriteOnly ? 'primary' : 'secondary'}
+                aria-pressed={favoriteOnly}
+                iconLeading={<Star />}
+                onClick={() => setFavoriteOnly((value) => !value)}
+              >
+                Yêu thích
+              </Button>
+            </div>
+          </div>
+
+          {filteredTemplates.length ? (
+            <ul className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {filteredTemplates.map((report) => <li key={report.id} className="flex flex-col rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">{report.id} · {report.group}</p>
+                  {/* Đây là cờ đánh dấu, không phải trạng thái bản ghi — nên không dùng StatusBadge. */}
+                  {report.favorite && (
+                    <span className="flex shrink-0 items-center gap-1 rounded-pill bg-[var(--accent-soft)] px-2 py-0.5 text-caption font-semibold text-[color:var(--accent-strong)]">
+                      <Star aria-hidden="true" className="h-3.5 w-3.5" />Yêu thích
+                    </span>
+                  )}
+                </div>
+                <h3 className="mt-2 text-card-title text-brand-text">{report.name}</h3>
+                <p className="mt-1 min-h-10 text-body leading-5 text-brand-text-muted">{report.description}</p>
+                <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-brand-outline pt-3">
+                  <div>
+                    <dt className="text-caption text-brand-text-muted">Định dạng</dt>
+                    <dd className="mt-0.5 text-body text-brand-text">{report.format}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-brand-text-muted">Quyền xem</dt>
+                    <dd className="mt-0.5 text-body text-brand-text">{report.access}</dd>
+                  </div>
+                </dl>
+                <div className="mt-4 flex gap-2">
+                  <Button size="small" variant="secondary" block iconLeading={<Eye />} onClick={() => setNotice(`Đã mở bản xem trước ${report.name}.`)}>Xem</Button>
+                  <Button size="small" variant="primary" block iconLeading={<Download />} onClick={() => exportReport(report.name)}>Xuất</Button>
+                </div>
+              </li>)}
+            </ul>
+          ) : (
+            <div className="mt-5 flex flex-col items-center gap-2 rounded-card border border-dashed border-brand-outline px-6 py-12 text-center">
+              <FileBarChart aria-hidden="true" className="h-8 w-8 text-brand-text-muted" />
+              <p className="text-card-title text-brand-text">Không tìm thấy mẫu báo cáo phù hợp</p>
+              <p className="text-body text-brand-text-muted">Thử từ khóa khác hoặc bỏ bớt bộ lọc đang áp dụng.</p>
+              <Button size="small" variant="secondary" onClick={() => { onSearchQueryChange(''); setGroupFilter('ALL'); setFavoriteOnly(false); }}>
+                Xóa tìm kiếm và bộ lọc
+              </Button>
+            </div>
+          )}
+        </section>
+
+        <section className="min-w-0 border-t border-brand-outline pt-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-card-title text-brand-text">Lịch gửi tự động</h2>
+              <p className="mt-0.5 text-body text-brand-text-muted">Gửi báo cáo định kỳ tới người phụ trách</p>
+            </div>
+            <Button
+              variant="primary"
+              iconLeading={<Plus />}
+              disabled={!canManage}
+              onClick={() => { if (!requireManage()) return; setFormError(''); setScheduleOpen(true); }}
+            >
+              Tạo lịch gửi
+            </Button>
+          </div>
+
+          <DataTable<ReportSchedule>
+            className="mt-4"
+            rows={schedules}
+            rowKey={(item) => item.id}
+            caption="Các lịch gửi báo cáo tự động đang cấu hình"
+            emptyTitle="Chưa có lịch gửi nào"
+            emptyDescription="Tạo lịch gửi để hệ thống tự gửi báo cáo định kỳ tới người phụ trách."
+            columns={[
+              {
+                key: 'name',
+                header: 'Lịch báo cáo',
+                width: '28%',
+                cell: (item) => (
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-brand-text">{item.name}</span>
+                    <span className="block truncate text-caption text-brand-text-muted">{item.id} · {branchName(item.branch)} · {item.format}</span>
+                  </span>
+                )
+              },
+              {
+                key: 'frequency',
+                header: 'Tần suất',
+                cell: (item) => (
+                  <span>
+                    <span className="block text-brand-text">{item.frequency === 'DAILY' ? 'Hàng ngày' : item.frequency === 'WEEKLY' ? 'Hàng tuần' : 'Hàng tháng'}</span>
+                    <span className="block text-caption text-brand-text-muted">{item.time}</span>
+                  </span>
+                )
+              },
+              { key: 'recipients', header: 'Người nhận', hideBelow: 'lg', cell: (item) => <span className="block truncate text-brand-text-muted">{item.recipients.join(', ')}</span> },
+              { key: 'nextRun', header: 'Tiếp theo', hideBelow: 'md', cell: (item) => <span className="tabular-nums text-brand-text-muted">{item.nextRun}</span> },
+              { key: 'status', header: 'Trạng thái', cell: (item) => <StatusBadge status={item.active ? 'ACTIVE' : 'INACTIVE'} label={item.active ? 'Đang bật' : 'Tạm dừng'} size="small" /> },
+              {
+                key: 'actions',
+                header: 'Thao tác',
+                headerSrOnly: true,
+                actions: true,
+                cell: (item) => (
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    disabled={!canManage}
+                    aria-label={item.active ? `Tạm dừng ${item.name}` : `Kích hoạt ${item.name}`}
+                    onClick={() => toggleSchedule(item)}
+                  >
+                    {item.active ? 'Tạm dừng' : 'Kích hoạt'}
+                  </Button>
+                )
+              }
+            ]}
+          />
+        </section>
+      </div>}
+      </div>
+    </div>
+
+    {/* Metadata nguồn và quyền — một dòng chân trang thay cho ba thẻ chiếm chỗ */}
+    <footer className="flex flex-col gap-2 border-t border-brand-outline pt-4 text-caption text-brand-text-muted sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        Độ đầy đủ dữ liệu: <strong className="tabular-nums text-brand-text">POS 100%</strong> ·{' '}
+        <strong className="tabular-nums text-brand-text">Lịch hẹn 99,8%</strong> ·{' '}
+        <strong className="tabular-nums text-brand-text">Khách hàng 98,6%</strong>
+      </p>
+      <p className="flex items-center gap-1.5">
+        <LockKeyhole aria-hidden="true" className="h-3.5 w-3.5" />
+        Xem dữ liệu toàn tenant, xuất và tạo báo cáo tùy chỉnh theo quyền gói · {roleLabel}
+      </p>
+    </footer>
+
+    {/* Chi tiết một KPI */}
+    <Modal
+      open={Boolean(metricOpen)}
+      onClose={() => setMetricOpen(null)}
+      size="medium"
+      eyebrow="KPI điều hành"
+      title={metricOpen === 'revenue' ? 'Doanh thu thuần' : metricOpen === 'bookings' ? 'Lịch hoàn tất' : metricOpen === 'ticket' ? 'Giá trị trung bình' : 'Khách hàng mới'}
+      description={`Tháng 07/2026 · ${selectedBranch === 'ALL' ? 'Toàn tenant' : branchName(selectedBranch as BranchCode)}`}
+      footer={(
+        <>
+          <Button variant="secondary" onClick={() => setMetricOpen(null)}>Đóng</Button>
+          <Button variant="primary" iconLeading={<Download />} onClick={() => exportReport('Chi tiết KPI')}>Xuất dữ liệu chi tiết</Button>
+        </>
+      )}
+    >
+      {metricOpen && <div className="flex flex-col gap-5">
+        <section className="border-b border-brand-outline pb-4">
+          <p className="text-caption uppercase tracking-wide text-brand-text-muted">Giá trị hiện tại</p>
+          <p className="mt-1 text-display font-bold tabular-nums text-brand-text">
+            {metricOpen === 'revenue' ? shortMoney(revenue) : metricOpen === 'bookings' ? bookings.toLocaleString('vi-VN') : metricOpen === 'ticket' ? money(averageTicket) : newCustomers.toLocaleString('vi-VN')}
+          </p>
+          <p className="mt-1 flex items-center gap-1 text-body font-semibold text-brand-secondary">
+            <ArrowUpRight aria-hidden="true" className="h-4 w-4" />Tăng 16,8% so với kỳ trước
+          </p>
+        </section>
+
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[
+            { label: 'Chi nhánh Quận 3', value: metricOpen === 'revenue' ? money(672_400_000) : metricOpen === 'bookings' ? '846' : metricOpen === 'ticket' ? money(795_000) : '168' },
+            { label: 'Chi nhánh Quận 1', value: metricOpen === 'revenue' ? money(468_600_000) : metricOpen === 'bookings' ? '612' : metricOpen === 'ticket' ? money(766_000) : '126' },
+            { label: 'Mục tiêu tháng', value: metricOpen === 'revenue' ? money(1_280_000_000) : metricOpen === 'bookings' ? '1.600' : metricOpen === 'ticket' ? money(800_000) : '350' },
+            { label: 'Dự báo cuối kỳ', value: metricOpen === 'revenue' ? money(1_220_000_000) : metricOpen === 'bookings' ? '1.538' : metricOpen === 'ticket' ? money(790_000) : '326' }
+          ].map((item) => <div key={item.label} className="rounded-card border border-brand-outline px-3 py-2.5">
+            <dt className="text-caption text-brand-text-muted">{item.label}</dt>
+            <dd className="ta-money mt-0.5 text-right text-body font-semibold text-brand-text">{item.value}</dd>
+          </div>)}
+        </dl>
+
+        <section className="p-4 ui-tone ui-tone--info">
+          <p className="text-body font-semibold text-brand-text">Cách tính &amp; nguồn dữ liệu</p>
+          <p className="mt-1 text-body leading-5 text-brand-text-muted">
+            Chỉ số được tổng hợp từ POS, lịch hẹn đã hoàn tất và dữ liệu thanh toán đã đối soát. Giao dịch hủy hoặc hoàn tiền được loại trừ.
+          </p>
+        </section>
+
+        <p className="text-caption text-brand-text-muted">Dữ liệu cập nhật lúc 16:45 · Quyền xem: {roleLabel}</p>
+      </div>}
+    </Modal>
+
+    {/* Trình tạo báo cáo tùy chỉnh */}
+    <Modal
+      open={builderOpen}
+      onClose={() => setBuilderOpen(false)}
+      size="large"
+      closeOnBackdrop={false}
+      eyebrow="Report Builder"
+      title="Tạo báo cáo tùy chỉnh"
+      description="Chọn chỉ số, chiều phân tích và định dạng xuất."
+      footer={(
+        <>
+          <Button variant="secondary" onClick={() => setBuilderOpen(false)}>Hủy</Button>
+          <Button variant="primary" type="submit" form="tenant-report-builder" iconLeading={<FileBarChart />}>Tạo báo cáo</Button>
+        </>
+      )}
+    >
+      <form id="tenant-report-builder" onSubmit={submitBuilder} noValidate className="flex flex-col gap-5">
+        {formError && (
+          <p role="alert" className="p-3 text-body font-semibold text-brand-text ui-tone ui-tone--danger">{formError}</p>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Tên báo cáo" required>
+            <input
+              type="text"
+              value={builder.name}
+              onChange={(event) => setBuilder((current) => ({ ...current, name: event.target.value }))}
+              placeholder="Ví dụ: Hiệu quả Nail Art theo chi nhánh"
+            />
+          </Field>
+          <Field label="Nhóm báo cáo">
+            <BeautifulSelect
+              value={builder.group}
+              onChange={(event) => setBuilder((current) => ({ ...current, group: event.target.value }))}
+              className="w-full"
+            >
+              {['Điều hành', 'Tài chính', 'Vận hành', 'Khách hàng', 'Nhân sự', 'Kho'].map((item) => <option key={item}>{item}</option>)}
+            </BeautifulSelect>
+          </Field>
+        </div>
+
+        <fieldset className="border-0 p-0">
+          <legend className="mb-3 text-body font-semibold text-brand-text">
+            Chỉ số cần phân tích <span className="text-brand-error" title="Bắt buộc"><span aria-hidden="true">*</span><span className="sr-only">Bắt buộc</span></span>
+          </legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {['Doanh thu', 'Lượt đặt', 'Giá trị trung bình', 'Công suất ghế', 'Khách hàng mới', 'Tỷ lệ quay lại', 'Chi phí vật tư', 'Hoa hồng', 'Đánh giá'].map((metric) => {
+              const checked = builder.metrics.includes(metric);
+              return (
+                <label key={metric} className={`flex cursor-pointer items-center gap-3 p-3 text-body text-brand-text ui-tone ${checked ? 'ui-tone--info' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => setBuilder((current) => ({ ...current, metrics: event.target.checked ? [...current.metrics, metric] : current.metrics.filter((item) => item !== metric) }))}
+                    className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                  />
+                  {metric}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Chiều phân tích">
+            <BeautifulSelect
+              value={builder.dimension}
+              onChange={(event) => setBuilder((current) => ({ ...current, dimension: event.target.value }))}
+              className="w-full"
+            >
+              {['Theo ngày', 'Theo tuần', 'Theo chi nhánh', 'Theo dịch vụ', 'Theo kỹ thuật viên', 'Theo phân khúc khách'].map((item) => <option key={item}>{item}</option>)}
+            </BeautifulSelect>
+          </Field>
+          <Field label="Định dạng mặc định">
+            <BeautifulSelect
+              value={builder.format}
+              onChange={(event) => setBuilder((current) => ({ ...current, format: event.target.value }))}
+              className="w-full"
+            >
+              <option>Excel</option>
+              <option>PDF</option>
+              <option>CSV</option>
+            </BeautifulSelect>
+          </Field>
+        </div>
+
+        <label className="flex cursor-pointer items-start gap-3 p-4 ui-tone">
+          <input
+            type="checkbox"
+            checked={builder.includeComparison}
+            onChange={(event) => setBuilder((current) => ({ ...current, includeComparison: event.target.checked }))}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+          />
+          <span>
+            <span className="block text-body font-semibold text-brand-text">Bao gồm so sánh kỳ trước</span>
+            <span className="mt-0.5 block text-caption text-brand-text-muted">Thêm chênh lệch tuyệt đối và phần trăm tăng trưởng.</span>
+          </span>
+        </label>
+      </form>
+    </Modal>
+
+    {/* Lập lịch gửi tự động */}
+    <Modal
+      open={scheduleOpen}
+      onClose={() => setScheduleOpen(false)}
+      size="medium"
+      closeOnBackdrop={false}
+      eyebrow="Phân phối báo cáo"
+      title="Lập lịch gửi tự động"
+      description="Cấu hình tần suất, người nhận và phạm vi dữ liệu."
+      footer={(
+        <>
+          <Button variant="secondary" onClick={() => setScheduleOpen(false)}>Hủy</Button>
+          <Button variant="primary" type="submit" form="tenant-report-schedule" iconLeading={<Mail />}>Tạo lịch gửi</Button>
+        </>
+      )}
+    >
+      <form id="tenant-report-schedule" onSubmit={submitSchedule} noValidate className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {formError && (
+          <p role="alert" className="p-3 text-body font-semibold text-brand-text ui-tone ui-tone--danger sm:col-span-2">{formError}</p>
+        )}
+
+        <Field label="Tên lịch gửi" required className="sm:col-span-2">
+          <input
+            type="text"
+            value={scheduleForm.name}
+            onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))}
+            placeholder="Ví dụ: Báo cáo điều hành đầu tuần"
+          />
+        </Field>
+
+        <Field label="Tần suất">
+          <BeautifulSelect
+            value={scheduleForm.frequency}
+            onChange={(event) => setScheduleForm((current) => ({ ...current, frequency: event.target.value as ScheduleFrequency }))}
+            className="w-full"
+          >
+            <option value="DAILY">Hàng ngày</option>
+            <option value="WEEKLY">Hàng tuần</option>
+            <option value="MONTHLY">Hàng tháng</option>
+          </BeautifulSelect>
+        </Field>
+
+        <Field label="Thời gian gửi">
+          <input
+            type="time"
+            value={scheduleForm.time}
+            onChange={(event) => setScheduleForm((current) => ({ ...current, time: event.target.value }))}
+          />
+        </Field>
+
+        <Field label="Phạm vi">
+          <BeautifulSelect
+            value={scheduleForm.branch}
+            onChange={(event) => setScheduleForm((current) => ({ ...current, branch: event.target.value as BranchCode | 'ALL' }))}
+            className="w-full"
+          >
+            <option value="ALL">Tất cả chi nhánh</option>
+            <option value="Q1">Chi nhánh Quận 1</option>
+            <option value="Q3">Chi nhánh Quận 3</option>
+          </BeautifulSelect>
+        </Field>
+
+        <Field label="Định dạng">
+          <BeautifulSelect
+            value={scheduleForm.format}
+            onChange={(event) => setScheduleForm((current) => ({ ...current, format: event.target.value }))}
+            className="w-full"
+          >
+            <option>PDF</option>
+            <option>Excel</option>
+            <option>CSV</option>
+          </BeautifulSelect>
+        </Field>
+
+        <Field
+          label="Email người nhận"
+          required
+          className="sm:col-span-2"
+          helper="Phân cách nhiều email bằng dấu phẩy."
+        >
+          <input
+            type="text"
+            value={scheduleForm.recipients}
+            onChange={(event) => setScheduleForm((current) => ({ ...current, recipients: event.target.value }))}
+            placeholder="owner@salon.vn, finance@salon.vn"
+          />
+        </Field>
+
+        <p className="flex items-start gap-2 p-3 text-body leading-5 text-brand-text-muted ui-tone ui-tone--info sm:col-span-2">
+          <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          Người nhận chỉ nhận tệp xuất; liên kết chi tiết vẫn yêu cầu đăng nhập và quyền phù hợp.
+        </p>
+      </form>
+    </Modal>
   </div>;
 }

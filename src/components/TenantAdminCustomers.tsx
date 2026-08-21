@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { PageHeader } from './ui';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertTriangle,
@@ -30,6 +31,7 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { formatMoney as money } from '../utils/money';
 
 type CustomerTier = 'VIP' | 'LOYAL' | 'STANDARD' | 'NEW';
 type CustomerStatus = 'ACTIVE' | 'CARE' | 'INACTIVE';
@@ -121,7 +123,6 @@ interface CustomerForm {
   consent: string[];
 }
 
-const money = (value: number) => `${new Intl.NumberFormat('vi-VN').format(value)}đ`;
 const phoneDigits = (value: string) => value.replace(/\D/g, '');
 const initials = (name: string) =>
   name
@@ -227,8 +228,11 @@ function CustomerStatusDropdown({ status, disabled = false, onStatusChange }: Cu
           e.stopPropagation();
           if (!disabled) setIsOpen((prev) => !prev);
         }}
-        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 transition-all focus:outline-none ${meta.badge} ${
-          disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:ring-2 hover:shadow-sm'
+        /* ui-badge-button: các quy tắc `.role-shell* button` ép mọi <button> về
+           khổ control (36px, bo 8px) nên nếu không nói lại, ô trạng thái sẽ to gấp
+           rưỡi badge hạng khách ngay bên cạnh và phá nhịp của cả bảng. */
+        className={`ui-badge-button inline-flex items-center gap-1.5 whitespace-nowrap border-0 px-2.5 py-1 font-bold shadow-none ring-1 transition-all focus:outline-none ${meta.badge} ${
+          disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:ring-2'
         }`}
         title={disabled ? 'Không có quyền thay đổi' : 'Bấm để đổi trạng thái'}
       >
@@ -239,7 +243,7 @@ function CustomerStatusDropdown({ status, disabled = false, onStatusChange }: Cu
 
       {isOpen && (
         <div className="absolute left-0 z-[120] mt-1.5 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5">
-          <p className="px-2.5 py-1 text-[7px] font-black uppercase tracking-wider text-slate-400">Đổi trạng thái</p>
+          <p className="px-2.5 py-1 text-caption font-black uppercase tracking-wider text-slate-400">Đổi trạng thái</p>
           {(Object.keys(statusMeta) as CustomerStatus[]).map((key) => {
             const itemMeta = statusMeta[key];
             const isCurrent = key === status;
@@ -254,11 +258,11 @@ function CustomerStatusDropdown({ status, disabled = false, onStatusChange }: Cu
                   }
                   setIsOpen(false);
                 }}
-                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[9px] font-bold transition ${
+                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-caption font-bold transition ${
                   isCurrent ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${itemMeta.badge}`}>
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${itemMeta.badge}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${itemMeta.dot}`} />
                   {itemMeta.label}
                 </span>
@@ -802,24 +806,16 @@ export default function TenantAdminCustomers({
 
   return (
     <div className="space-y-5">
-      <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <h1>
-              {isReceptionist ? 'Khách hàng tại quầy' : 'Khách hàng'}
-            </h1>
-            <p>
-              {isReceptionist
-                ? `Tra cứu và cập nhật hồ sơ khách tại ${branchName(selectedBranch)}.`
-                : 'Quản lý hồ sơ, lịch sử dịch vụ và hạng thành viên.'}
-            </p>
-          </div>
+      <PageHeader
+        title={isReceptionist ? 'Khách hàng tại quầy' : 'Khách hàng'}
+        actions={(
           <div className="flex flex-wrap gap-2">
             {!isReceptionist && (
               <button
                 type="button"
                 onClick={exportCustomers}
                 disabled={!canExport}
-                className="flex h-10 items-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-none disabled:opacity-50"
+                className="flex h-10 items-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-none disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
                 Xuất danh sách
@@ -829,48 +825,14 @@ export default function TenantAdminCustomers({
               type="button"
               onClick={openCreate}
               disabled={!canManage}
-              className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 px-4 text-[9px] font-black text-white shadow-none disabled:border-slate-300 disabled:bg-slate-300"
+              className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 px-4 text-caption font-black text-white shadow-none disabled:border-slate-300 disabled:bg-slate-300"
             >
               <Plus className="h-4 w-4" />
               Thêm khách mới
             </button>
           </div>
-      </section>
-
-      <section
-        className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
-          canManage ? 'border-emerald-100 bg-emerald-50/60' : 'border-amber-200 bg-amber-50'
-        }`}
-      >
-        <div className="flex items-start gap-3">
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              canManage ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-700'
-            }`}
-          >
-            <ShieldCheck className="h-4.5 w-4.5" />
-          </span>
-          <div>
-            <p className="text-[10px] font-black text-slate-800">Quyền truy cập: {roleLabel}</p>
-            <p className="mt-1 text-[8px] leading-4 text-slate-500">
-              {canManage
-                ? isReceptionist
-                  ? 'Được tạo và cập nhật thông tin phục vụ trong chi nhánh được phân công. Không được xuất dữ liệu hàng loạt, xóa hồ sơ, sửa điểm hoặc tự đổi hạng thành viên.'
-                  : 'Được quản lý hồ sơ, phân hạng và xuất dữ liệu trong tenant.'
-                : readOnlyReason || 'Chỉ được xem hồ sơ khách hàng.'}
-            </p>
-          </div>
-        </div>
-        <span
-          className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${
-            canManage
-              ? 'bg-white text-emerald-700 ring-emerald-200'
-              : 'bg-amber-100 text-amber-800 ring-amber-200'
-          }`}
-        >
-          {canManage ? (isReceptionist ? 'Theo chi nhánh' : 'Toàn quyền dữ liệu') : 'Chỉ xem'}
-        </span>
-      </section>
+        )}
+      />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -911,14 +873,14 @@ export default function TenantAdminCustomers({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[9px] font-bold text-slate-500">{label}</p>
-                <p className="mt-1.5 text-xl font-black tracking-tight text-slate-950">{value}</p>
+                <p className="text-caption font-bold text-slate-500">{label}</p>
+                <p className="ta-metric-value mt-1.5 text-slate-950">{value}</p>
               </div>
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
                 <Icon className="h-4.5 w-4.5" />
               </span>
             </div>
-            <p className="mt-2 text-[8px] font-semibold text-slate-400">{detail}</p>
+            <p className="mt-2 text-caption font-semibold text-slate-400">{detail}</p>
           </article>
         ))}
       </section>
@@ -934,7 +896,7 @@ export default function TenantAdminCustomers({
               autoComplete="off"
               inputMode="search"
               aria-label="Tìm kiếm khách hàng"
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-[10px] font-semibold outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-caption font-semibold outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
             />
             {searchQuery && (
               <button
@@ -953,7 +915,7 @@ export default function TenantAdminCustomers({
               onChange={(event) => onSelectedBranchChange(event.target.value)}
               disabled={branchLocked}
               aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'}
-              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
             >
               <option value="ALL">Tất cả chi nhánh</option>
               <option value="Q3">Chi nhánh Quận 3</option>
@@ -962,7 +924,7 @@ export default function TenantAdminCustomers({
             <BeautifulSelect
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as 'ALL' | CustomerStatus)}
-              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               aria-label="Lọc trạng thái khách hàng"
             >
               <option value="ALL">Mọi trạng thái</option>
@@ -981,14 +943,14 @@ export default function TenantAdminCustomers({
               key={value}
               type="button"
               onClick={() => setTierFilter(value)}
-              className={`h-8 shrink-0 border px-3 text-[8px] font-black shadow-sm ${
+              className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${
                 tierFilter === value
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                   : 'border-slate-200 bg-white text-slate-500'
               }`}
             >
               {value === 'ALL' ? 'Tất cả khách hàng' : tierMeta[value].label}
-              <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-[7px]">
+              <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">
                 {value === 'ALL' ? scoped.length : scoped.filter((item) => item.tier === value).length}
               </span>
             </button>
@@ -998,13 +960,16 @@ export default function TenantAdminCustomers({
         <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[1080px] text-left">
             <thead>
-              <tr className="border-b border-slate-100 text-[8px] font-black uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-slate-100 text-caption font-black uppercase tracking-wide text-slate-400">
                 <th className="px-5 py-3">Khách hàng</th>
                 <th className="px-4 py-3">Hạng & điểm</th>
                 <th className="px-4 py-3">Lần ghé / lịch hẹn</th>
                 <th className="px-4 py-3">Sở thích & an toàn</th>
-                <th className="px-4 py-3">Trạng thái</th>
-                <th className="px-5 py-3 text-right">Tác vụ tại quầy</th>
+                {/* Chốt bề ngang hai cột cuối: nhãn trạng thái dài ngắn khác nhau
+                    ("Cần chăm sóc" và "Không hoạt động" lệch nhau ~40px) nên nếu để
+                    bảng tự co, cụm tác vụ ở mỗi dòng lại nằm một chỗ. */}
+                <th className="w-44 px-4 py-3">Trạng thái</th>
+                <th className="w-52 px-5 py-3 text-right">Tác vụ tại quầy</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1023,28 +988,28 @@ export default function TenantAdminCustomers({
                   <tr
                     key={customer.id}
                     onClick={() => setSelected(customer)}
-                    className="cursor-pointer text-[9px] text-slate-600 transition hover:bg-emerald-50/30"
+                    className="cursor-pointer text-caption text-slate-600 transition hover:bg-emerald-50/30"
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <span
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-[9px] font-black text-white ${tierMeta[customer.tier].avatar}`}
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-caption font-black text-white ${tierMeta[customer.tier].avatar}`}
                         >
                           {initials(customer.name)}
                         </span>
                         <div>
                           <p className="font-black text-slate-900">{customer.name}</p>
-                          <p className="mt-1 text-[8px] text-slate-400">
+                          <p className="mt-1 text-caption text-slate-400">
                             {customer.id} · {customer.phone}
                           </p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${tierMeta[customer.tier].badge}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${tierMeta[customer.tier].badge}`}>
                         {tierMeta[customer.tier].label}
                       </span>
-                      <p className="mt-2 text-[8px] text-slate-400">
+                      <p className="mt-2 text-caption text-slate-400">
                         {customer.points.toLocaleString('vi-VN')} điểm
                       </p>
                     </td>
@@ -1055,14 +1020,14 @@ export default function TenantAdminCustomers({
                             <Clock3 className="h-3.5 w-3.5" />
                             Hôm nay · {liveAppointment.start}
                           </p>
-                          <p className="mt-1 max-w-44 truncate text-[8px] text-slate-400">
+                          <p className="mt-1 max-w-44 truncate text-caption text-slate-400">
                             {liveAppointment.service}
                           </p>
                         </>
                       ) : (
                         <>
                           <p className="font-black text-slate-800">{customer.visits} lượt ghé</p>
-                          <p className="mt-1 text-[8px] text-slate-400">Gần nhất {customer.lastVisit}</p>
+                          <p className="mt-1 text-caption text-slate-400">Gần nhất {customer.lastVisit}</p>
                         </>
                       )}
                     </td>
@@ -1071,7 +1036,7 @@ export default function TenantAdminCustomers({
                         {customer.preferences.slice(0, 3).join(' · ') || 'Chưa ghi nhận sở thích'}
                       </p>
                       <p
-                        className={`mt-1 flex items-center gap-1 truncate text-[8px] ${
+                        className={`mt-1 flex items-center gap-1 truncate text-caption ${
                           hasSafetyAlert ? 'font-black text-rose-600' : 'text-emerald-600'
                         }`}
                       >
@@ -1087,12 +1052,12 @@ export default function TenantAdminCustomers({
                       />
                     </td>
                     <td className="px-5 py-4">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         <a
                           href={`tel:${phoneDigits(customer.phone)}`}
                           onClick={(event) => event.stopPropagation()}
                           aria-label={`Gọi ${customer.name}`}
-                          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-emerald-200 hover:text-emerald-700"
+                          className="ui-row-action ui-row-action-icon flex shrink-0 items-center justify-center border border-slate-200 bg-white text-slate-500 transition hover:border-emerald-200 hover:text-emerald-700"
                         >
                           <Phone className="h-3.5 w-3.5" />
                         </a>
@@ -1103,7 +1068,7 @@ export default function TenantAdminCustomers({
                             bookCustomer(customer);
                           }}
                           disabled={!canManage}
-                          className="flex h-9 items-center gap-1.5 border border-emerald-200 bg-emerald-50 px-3 text-[8px] font-black text-emerald-700 shadow-sm disabled:opacity-50"
+                          className="ui-row-action flex shrink-0 items-center gap-1.5 border border-emerald-200 bg-emerald-50 px-2.5 font-bold text-emerald-700 disabled:opacity-50"
                         >
                           <CalendarClock className="h-3.5 w-3.5" />
                           Đặt lịch
@@ -1114,7 +1079,7 @@ export default function TenantAdminCustomers({
                             event.stopPropagation();
                             setSelected(customer);
                           }}
-                          className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+                          className="ui-row-action ui-row-action-icon flex shrink-0 items-center justify-center border border-slate-200 bg-white text-slate-500 transition hover:border-emerald-200 hover:text-emerald-700"
                           aria-label={`Xem hồ sơ ${customer.name}`}
                         >
                           <ChevronRight className="h-4 w-4" />
@@ -1145,17 +1110,17 @@ export default function TenantAdminCustomers({
             >
               <span className="flex items-start gap-3">
                 <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-[9px] font-black text-white ${tierMeta[customer.tier].avatar}`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-caption font-black text-white ${tierMeta[customer.tier].avatar}`}
                 >
                   {initials(customer.name)}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
                     <span>
-                      <span className="block truncate text-[10px] font-black text-slate-900">
+                      <span className="block truncate text-caption font-black text-slate-900">
                         {customer.name}
                       </span>
-                      <span className="mt-1 block text-[8px] text-slate-400">
+                      <span className="mt-1 block text-caption text-slate-400">
                         {customer.phone} · {branchName(customer.branch)}
                       </span>
                     </span>
@@ -1163,7 +1128,7 @@ export default function TenantAdminCustomers({
                   </span>
                   <span className="mt-3 flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
-                      <span className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${tierMeta[customer.tier].badge}`}>
+                      <span className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${tierMeta[customer.tier].badge}`}>
                         {tierMeta[customer.tier].label}
                       </span>
                       <CustomerStatusDropdown
@@ -1172,7 +1137,7 @@ export default function TenantAdminCustomers({
                         onStatusChange={(newStatus) => handleStatusChange(customer.id, newStatus)}
                       />
                     </span>
-                    <span className="truncate text-[8px] font-bold text-slate-600">
+                    <span className="truncate text-caption font-bold text-slate-600">
                       {customer.preferences.slice(0, 2).join(' · ') || 'Chưa có sở thích'}
                     </span>
                   </span>
@@ -1185,15 +1150,15 @@ export default function TenantAdminCustomers({
         {!filtered.length && (
           <div className="py-16 text-center">
             <UsersRound className="mx-auto h-8 w-8 text-slate-300" />
-            <p className="mt-3 text-[10px] font-black text-slate-600">Không tìm thấy hồ sơ phù hợp</p>
-            <p className="mt-1 text-[8px] text-slate-400">
+            <p className="mt-3 text-caption font-black text-slate-600">Không tìm thấy hồ sơ phù hợp</p>
+            <p className="mt-1 text-caption text-slate-400">
               Kiểm tra lại số điện thoại hoặc tạo khách mới nếu chưa có hồ sơ.
             </p>
             {canManage && (
               <button
                 type="button"
                 onClick={openCreate}
-                className="mt-4 border border-emerald-200 bg-emerald-50 px-4 text-[8px] font-black text-emerald-700 shadow-sm"
+                className="mt-4 border border-emerald-200 bg-emerald-50 px-4 text-caption font-black text-emerald-700 shadow-sm"
               >
                 <Plus className="mr-1 inline h-3.5 w-3.5" />
                 Tạo hồ sơ mới
@@ -1203,10 +1168,10 @@ export default function TenantAdminCustomers({
         )}
 
         <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3">
-          <p className="text-[8px] text-slate-400">
+          <p className="text-caption text-slate-400">
             Hiển thị <strong className="text-slate-600">{filtered.length}</strong> hồ sơ
           </p>
-          <p className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400">
+          <p className="flex items-center gap-1.5 text-caption font-semibold text-slate-400">
             <ShieldCheck className="h-3.5 w-3.5" />
             Dữ liệu riêng tư · {tenantName}
           </p>
@@ -1231,16 +1196,16 @@ export default function TenantAdminCustomers({
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-4">
                   <span
-                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-[13px] font-black text-white ${tierMeta[selected.tier].avatar}`}
+                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-caption font-black text-white ${tierMeta[selected.tier].avatar}`}
                   >
                     {initials(selected.name)}
                   </span>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[9px] font-black uppercase tracking-wide text-emerald-700">
+                      <span className="text-caption font-black uppercase tracking-wide text-emerald-700">
                         {selected.id}
                       </span>
-                      <span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${tierMeta[selected.tier].badge}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${tierMeta[selected.tier].badge}`}>
                         {tierMeta[selected.tier].label}
                       </span>
                       <CustomerStatusDropdown
@@ -1252,7 +1217,7 @@ export default function TenantAdminCustomers({
                     <h2 id="customer-detail-title" className="mt-2 truncate text-xl font-black text-slate-950">
                       {selected.name}
                     </h2>
-                    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] text-slate-500">
+                    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-slate-500">
                       <span>{selected.phone}</span>
                       <span className="text-slate-300">•</span>
                       <span>{selected.email || 'Chưa có email'}</span>
@@ -1271,7 +1236,7 @@ export default function TenantAdminCustomers({
               <div className="mt-4 grid grid-cols-3 gap-2">
                 <a
                   href={`tel:${phoneDigits(selected.phone)}`}
-                  className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-[8px] font-black text-white shadow-sm"
+                  className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-caption font-black text-white shadow-sm"
                 >
                   <Phone className="h-3.5 w-3.5" />
                   Gọi khách
@@ -1285,7 +1250,7 @@ export default function TenantAdminCustomers({
                       onNotify?.('Khách chưa đồng ý nhận SMS.');
                     }
                   }}
-                  className={`flex h-10 items-center justify-center gap-2 rounded-xl text-[8px] font-black ${
+                  className={`flex h-10 items-center justify-center gap-2 rounded-xl text-caption font-black ${
                     selected.consent.includes('SMS')
                       ? 'border border-blue-200 bg-blue-50 text-blue-700'
                       : 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
@@ -1298,7 +1263,7 @@ export default function TenantAdminCustomers({
                   type="button"
                   onClick={() => bookCustomer(selected)}
                   disabled={!canManage}
-                  className="flex h-10 items-center justify-center gap-2 border border-violet-200 bg-violet-50 px-2 text-[8px] font-black text-violet-700 shadow-sm disabled:opacity-50"
+                  className="flex h-10 items-center justify-center gap-2 border border-violet-200 bg-violet-50 px-2 text-caption font-black text-violet-700 shadow-sm disabled:opacity-50"
                 >
                   <CalendarClock className="h-3.5 w-3.5" />
                   Đặt lịch
@@ -1317,11 +1282,11 @@ export default function TenantAdminCustomers({
                         </span>
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-[9px] font-black uppercase tracking-wide text-emerald-700">
+                            <p className="text-caption font-black uppercase tracking-wide text-emerald-700">
                               Lịch hẹn hôm nay · {selectedTodayAppointment.start}
                             </p>
                             <span
-                              className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${
+                              className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${
                                 appointmentStatus[selectedTodayAppointment.status]?.className ||
                                 'bg-slate-100 text-slate-600 ring-slate-200'
                               }`}
@@ -1330,10 +1295,10 @@ export default function TenantAdminCustomers({
                                 selectedTodayAppointment.status}
                             </span>
                           </div>
-                          <p className="mt-2 text-[11px] font-black text-slate-900">
+                          <p className="mt-2 text-body font-black text-slate-900">
                             {selectedTodayAppointment.service}
                           </p>
-                          <p className="mt-1 text-[8px] text-slate-500">
+                          <p className="mt-1 text-caption text-slate-500">
                             {selectedTodayAppointment.staff}
                             {selectedTodayAppointment.station
                               ? ` · Ghế ${selectedTodayAppointment.station}`
@@ -1344,11 +1309,11 @@ export default function TenantAdminCustomers({
                         </div>
                       </div>
                       <div className="customer-detail-amount rounded-xl bg-white px-3 py-2 text-right shadow-sm">
-                        <p className="text-[7px] font-bold text-slate-400">Còn dự kiến thu</p>
-                        <p className="mt-1 text-[10px] font-black text-slate-900">
+                        <p className="text-caption font-bold text-slate-400">Còn dự kiến thu</p>
+                        <p className="mt-1 text-caption font-black text-slate-900">
                           {money(selectedOutstanding)}
                         </p>
-                        <p className="mt-1 text-[7px] text-emerald-600">
+                        <p className="mt-1 text-caption text-emerald-600">
                           Đã cọc {money(selectedTodayAppointment.deposit)}
                         </p>
                       </div>
@@ -1360,24 +1325,24 @@ export default function TenantAdminCustomers({
                       <CalendarClock className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="text-[8px] font-black uppercase text-blue-600">Lịch hẹn sắp tới</p>
-                      <p className="mt-1.5 text-[11px] font-black text-slate-900">
+                      <p className="text-caption font-black uppercase text-blue-600">Lịch hẹn sắp tới</p>
+                      <p className="mt-1.5 text-body font-black text-slate-900">
                         {selectedNextAppointment.date} · {selectedNextAppointment.start}
                       </p>
-                      <p className="mt-1 text-[8px] text-slate-500">{selectedNextAppointment.service}</p>
+                      <p className="mt-1 text-caption text-slate-500">{selectedNextAppointment.service}</p>
                     </div>
                   </section>
                 ) : (
                   <section className="customer-detail-empty flex items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
                     <div>
-                      <p className="text-[9px] font-black text-slate-700">Chưa có lịch hẹn sắp tới</p>
-                      <p className="mt-1 text-[8px] text-slate-400">Có thể tạo lịch trực tiếp từ hồ sơ này.</p>
+                      <p className="text-caption font-black text-slate-700">Chưa có lịch hẹn sắp tới</p>
+                      <p className="mt-1 text-caption text-slate-400">Có thể tạo lịch trực tiếp từ hồ sơ này.</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => bookCustomer(selected)}
                       disabled={!canManage}
-                      className="shrink-0 border border-emerald-200 bg-emerald-50 px-3 text-[8px] font-black text-emerald-700 shadow-sm disabled:opacity-50"
+                      className="shrink-0 border border-emerald-200 bg-emerald-50 px-3 text-caption font-black text-emerald-700 shadow-sm disabled:opacity-50"
                     >
                       Đặt lịch
                     </button>
@@ -1403,19 +1368,19 @@ export default function TenantAdminCustomers({
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[9px] font-black text-slate-800">Kiểm tra an toàn trước phục vụ</p>
-                        <span className="customer-detail-chip rounded-full bg-white px-2.5 py-1 text-[7px] font-black text-slate-600 ring-1 ring-slate-200">
+                        <p className="text-caption font-black text-slate-800">Kiểm tra an toàn trước phục vụ</p>
+                        <span className="customer-detail-chip rounded-full bg-white px-2.5 py-1 text-caption font-black text-slate-600 ring-1 ring-slate-200">
                           Bắt buộc đọc
                         </span>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         <div className="customer-detail-subcard rounded-xl bg-white/75 p-3">
-                          <p className="text-[7px] font-bold uppercase text-slate-400">Dị ứng / cần tránh</p>
-                          <p className="mt-1.5 text-[9px] font-black text-slate-800">{selected.allergies}</p>
+                          <p className="text-caption font-bold uppercase text-slate-400">Dị ứng / cần tránh</p>
+                          <p className="mt-1.5 text-caption font-black text-slate-800">{selected.allergies}</p>
                         </div>
                         <div className="customer-detail-subcard rounded-xl bg-white/75 p-3">
-                          <p className="text-[7px] font-bold uppercase text-slate-400">Tình trạng móng</p>
-                          <p className="mt-1.5 text-[9px] font-black text-slate-800">
+                          <p className="text-caption font-bold uppercase text-slate-400">Tình trạng móng</p>
+                          <p className="mt-1.5 text-caption font-black text-slate-800">
                             {selected.nailCondition}
                           </p>
                         </div>
@@ -1437,8 +1402,8 @@ export default function TenantAdminCustomers({
                   ].map(({ label, value, icon: Icon }) => (
                     <div key={label} className="customer-detail-stat rounded-2xl border border-slate-100 bg-slate-50 p-3">
                       <Icon className="h-3.5 w-3.5 text-emerald-600" />
-                      <p className="mt-2 text-[7px] font-bold text-slate-400">{label}</p>
-                      <p className="mt-1.5 text-[10px] font-black text-slate-900">{value}</p>
+                      <p className="mt-2 text-caption font-bold text-slate-400">{label}</p>
+                      <p className="mt-1.5 text-caption font-black text-slate-900">{value}</p>
                     </div>
                   ))}
                 </section>
@@ -1447,54 +1412,54 @@ export default function TenantAdminCustomers({
                   <section className="customer-detail-card rounded-2xl border border-slate-200 p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-[9px] font-black text-slate-800">Sở thích phục vụ</p>
-                        <p className="mt-1 text-[8px] text-slate-400">Giúp cá nhân hóa trải nghiệm tại quầy</p>
+                        <p className="text-caption font-black text-slate-800">Sở thích phục vụ</p>
+                        <p className="mt-1 text-caption text-slate-400">Giúp cá nhân hóa trải nghiệm tại quầy</p>
                       </div>
                       <Sparkles className="h-4 w-4 text-violet-500" />
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {selected.preferences.length ? (
                         selected.preferences.map((item) => (
-                          <span key={item} className="rounded-lg bg-violet-50 px-2.5 py-1.5 text-[8px] font-bold text-violet-700">
+                          <span key={item} className="rounded-lg bg-violet-50 px-2.5 py-1.5 text-caption font-bold text-violet-700">
                             {item}
                           </span>
                         ))
                       ) : (
-                        <span className="text-[8px] text-slate-400">Chưa ghi nhận</span>
+                        <span className="text-caption text-slate-400">Chưa ghi nhận</span>
                       )}
                     </div>
                     <div className="customer-detail-subcard mt-4 rounded-xl bg-slate-50 p-3">
-                      <p className="text-[7px] font-bold uppercase text-slate-400">Ghi chú cho nhân viên</p>
-                      <p className="mt-1.5 text-[8px] leading-4 text-slate-600">
+                      <p className="text-caption font-bold uppercase text-slate-400">Ghi chú cho nhân viên</p>
+                      <p className="mt-1.5 text-caption leading-4 text-slate-600">
                         {selected.note || 'Chưa có ghi chú phục vụ.'}
                       </p>
                     </div>
                   </section>
 
                   <section className="customer-detail-card rounded-2xl border border-slate-200 p-4">
-                    <p className="text-[9px] font-black text-slate-800">Thông tin & đồng ý liên hệ</p>
+                    <p className="text-caption font-black text-slate-800">Thông tin & đồng ý liên hệ</p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <div className="customer-detail-subcard rounded-xl bg-slate-50 p-3">
                         <Cake className="h-3.5 w-3.5 text-pink-500" />
-                        <p className="mt-2 text-[7px] text-slate-400">Ngày sinh</p>
+                        <p className="mt-2 text-caption text-slate-400">Ngày sinh</p>
                         <p className="mt-1 font-black text-slate-700">{selected.birthday || 'Chưa có'}</p>
                       </div>
                       <div className="customer-detail-subcard rounded-xl bg-slate-50 p-3">
                         <MapPin className="h-3.5 w-3.5 text-blue-500" />
-                        <p className="mt-2 text-[7px] text-slate-400">Chi nhánh chính</p>
+                        <p className="mt-2 text-caption text-slate-400">Chi nhánh chính</p>
                         <p className="mt-1 font-black text-slate-700">{branchName(selected.branch)}</p>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {selected.consent.length ? (
                         selected.consent.map((item) => (
-                          <span key={item} className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1.5 text-[7px] font-bold text-emerald-700">
+                          <span key={item} className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1.5 text-caption font-bold text-emerald-700">
                             <Check className="h-3 w-3" />
                             Cho phép {item}
                           </span>
                         ))
                       ) : (
-                        <span className="rounded-lg bg-rose-50 px-2 py-1.5 text-[7px] font-bold text-rose-700">
+                        <span className="rounded-lg bg-rose-50 px-2 py-1.5 text-caption font-bold text-rose-700">
                           Không đồng ý nhận tin
                         </span>
                       )}
@@ -1505,8 +1470,8 @@ export default function TenantAdminCustomers({
                 <section className="customer-detail-card overflow-hidden rounded-2xl border border-slate-200">
                   <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                     <div>
-                      <p className="text-[9px] font-black text-slate-800">Lịch sử dịch vụ</p>
-                      <p className="mt-1 text-[8px] text-slate-400">
+                      <p className="text-caption font-black text-slate-800">Lịch sử dịch vụ</p>
+                      <p className="mt-1 text-caption text-slate-400">
                         {selected.visits} lượt ghé · Gần nhất {selected.lastVisit}
                       </p>
                     </div>
@@ -1517,36 +1482,36 @@ export default function TenantAdminCustomers({
                       selected.history.map((item) => (
                         <div key={`${item.date}-${item.service}`} className="flex items-start justify-between gap-3 px-4 py-3">
                           <div>
-                            <p className="text-[9px] font-black text-slate-700">{item.service}</p>
-                            <p className="mt-1 text-[8px] text-slate-400">
+                            <p className="text-caption font-black text-slate-700">{item.service}</p>
+                            <p className="mt-1 text-caption text-slate-400">
                               {item.date} · {item.technician}
                             </p>
                             {item.rating && (
-                              <p className="mt-1 flex items-center gap-1 text-[7px] font-bold text-amber-500">
+                              <p className="mt-1 flex items-center gap-1 text-caption font-bold text-amber-500">
                                 <Star className="h-3 w-3 fill-current" />
                                 {item.rating}/5
                               </p>
                             )}
                           </div>
-                          <p className="text-[9px] font-black text-slate-800">{money(item.amount)}</p>
+                          <p className="text-caption font-black text-slate-800">{money(item.amount)}</p>
                         </div>
                       ))
                     ) : (
-                      <p className="px-4 py-8 text-center text-[8px] text-slate-400">Chưa phát sinh dịch vụ</p>
+                      <p className="px-4 py-8 text-center text-caption text-slate-400">Chưa phát sinh dịch vụ</p>
                     )}
                   </div>
                 </section>
 
                 <section className="customer-detail-card rounded-2xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-black text-slate-800">Nhật ký hồ sơ</p>
+                    <p className="text-caption font-black text-slate-800">Nhật ký hồ sơ</p>
                     <BadgeCheck className="h-4 w-4 text-blue-500" />
                   </div>
                   <div className="mt-3 space-y-3">
                     {selected.activity.map((item, index) => (
                       <div key={`${item}-${index}`} className="flex gap-3">
                         <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${index === 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                        <p className="text-[8px] leading-4 text-slate-500">{item}</p>
+                        <p className="text-caption leading-4 text-slate-500">{item}</p>
                       </div>
                     ))}
                   </div>
@@ -1555,7 +1520,7 @@ export default function TenantAdminCustomers({
             </div>
 
             <footer className="customer-detail-footer flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-              <p className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400">
+              <p className="flex items-center gap-1.5 text-caption font-semibold text-slate-400">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Chỉ sử dụng dữ liệu cho nghiệp vụ phục vụ khách
               </p>
@@ -1563,7 +1528,7 @@ export default function TenantAdminCustomers({
                 type="button"
                 onClick={() => openEdit(selected)}
                 disabled={!canManage}
-                className="flex h-10 items-center justify-center gap-2 border border-emerald-700 bg-emerald-600 px-4 text-[8px] font-black text-white shadow-sm disabled:opacity-50"
+                className="flex h-10 items-center justify-center gap-2 border border-emerald-700 bg-emerald-600 px-4 text-caption font-black text-white shadow-sm disabled:opacity-50"
               >
                 <UserRound className="h-3.5 w-3.5" />
                 Cập nhật hồ sơ
@@ -1587,13 +1552,13 @@ export default function TenantAdminCustomers({
           >
             <header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-emerald-700">
+                <p className="text-caption font-black uppercase tracking-wide text-emerald-700">
                   {isReceptionist ? 'Hồ sơ tại quầy' : 'Hồ sơ khách hàng'}
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-900">
                   {editingId ? 'Cập nhật thông tin phục vụ' : 'Thêm khách hàng mới'}
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-500">
+                <p className="mt-1 text-caption text-slate-500">
                   Số điện thoại là định danh duy nhất. Tránh tạo hồ sơ trùng lặp.
                 </p>
               </div>
@@ -1609,7 +1574,7 @@ export default function TenantAdminCustomers({
 
             <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
               {formError && (
-                <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700 sm:col-span-2">
+                <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700 sm:col-span-2">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   {formError}
                 </div>
@@ -1622,7 +1587,7 @@ export default function TenantAdminCustomers({
                 { key: 'birthday', label: 'Ngày sinh', placeholder: 'DD/MM/YYYY', type: 'text' },
               ].map((field) => (
                 <label key={field.key}>
-                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">{field.label}</span>
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">{field.label}</span>
                   <input
                     type={field.type}
                     value={form[field.key as keyof Pick<CustomerForm, 'name' | 'phone' | 'email' | 'birthday'>]}
@@ -1631,13 +1596,13 @@ export default function TenantAdminCustomers({
                     }
                     placeholder={field.placeholder}
                     autoComplete={field.key === 'name' ? 'name' : field.key === 'phone' ? 'tel' : field.key}
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
                   />
                 </label>
               ))}
 
               <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">Chi nhánh chính</span>
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Chi nhánh chính</span>
                 <BeautifulSelect
                   value={form.branch}
                   disabled={branchLocked}
@@ -1645,7 +1610,7 @@ export default function TenantAdminCustomers({
                   onChange={(event) =>
                     setForm((current) => ({ ...current, branch: event.target.value as BranchCode }))
                   }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
                 >
                   <option value="Q3">Chi nhánh Quận 3</option>
                   <option value="Q1">Chi nhánh Quận 1</option>
@@ -1653,10 +1618,10 @@ export default function TenantAdminCustomers({
               </label>
 
               <label>
-                <span className="mb-1.5 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 flex items-center justify-between gap-2 text-caption font-bold text-slate-600">
                   Phân hạng
                   {isReceptionist && (
-                    <span className="text-[7px] font-black text-amber-600">Tự động · Không được sửa</span>
+                    <span className="text-caption font-black text-amber-600">Tự động · Không được sửa</span>
                   )}
                 </span>
                 <BeautifulSelect
@@ -1665,7 +1630,7 @@ export default function TenantAdminCustomers({
                   onChange={(event) =>
                     setForm((current) => ({ ...current, tier: event.target.value as CustomerTier }))
                   }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
                   aria-label="Phân hạng khách hàng"
                 >
                   {Object.entries(tierMeta).map(([key, meta]) => (
@@ -1677,11 +1642,11 @@ export default function TenantAdminCustomers({
               </label>
 
               <label className="sm:col-span-2">
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">Nguồn khách</span>
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Nguồn khách</span>
                 <BeautifulSelect
                   value={form.source}
                   onChange={(event) => setForm((current) => ({ ...current, source: event.target.value }))}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
                   aria-label="Nguồn khách hàng"
                 >
                   <option>Khách giới thiệu</option>
@@ -1693,8 +1658,8 @@ export default function TenantAdminCustomers({
               </label>
 
               <fieldset className="rounded-2xl border border-slate-200 p-4 sm:col-span-2">
-                <legend className="px-2 text-[9px] font-black text-slate-700">Đồng ý nhận thông tin</legend>
-                <p className="mb-3 text-[8px] text-slate-400">Chỉ chọn kênh khách đã đồng ý. Có thể bỏ chọn toàn bộ.</p>
+                <legend className="px-2 text-caption font-black text-slate-700">Đồng ý nhận thông tin</legend>
+                <p className="mb-3 text-caption text-slate-400">Chỉ chọn kênh khách đã đồng ý. Có thể bỏ chọn toàn bộ.</p>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { channel: 'SMS', icon: MessageCircle },
@@ -1708,7 +1673,7 @@ export default function TenantAdminCustomers({
                         type="button"
                         onClick={() => toggleConsent(channel)}
                         aria-pressed={active}
-                        className={`flex h-10 items-center justify-center gap-2 border px-2 text-[8px] font-black shadow-sm ${
+                        className={`flex h-10 items-center justify-center gap-2 border px-2 text-caption font-black shadow-sm ${
                           active
                             ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                             : 'border-slate-200 bg-white text-slate-400'
@@ -1745,21 +1710,21 @@ export default function TenantAdminCustomers({
                 },
               ].map((field) => (
                 <label key={field.key} className="sm:col-span-2">
-                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">{field.label}</span>
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">{field.label}</span>
                   <textarea
                     value={form[field.key as keyof Pick<CustomerForm, 'preferences' | 'allergies' | 'nailCondition' | 'note'>]}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, [field.key]: event.target.value }))
                     }
                     placeholder={field.placeholder}
-                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
                   />
                 </label>
               ))}
             </div>
 
             <footer className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-              <p className="flex items-center gap-1.5 text-[8px] text-slate-400">
+              <p className="flex items-center gap-1.5 text-caption text-slate-400">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Mọi cập nhật đều được ghi vào nhật ký hồ sơ
               </p>
@@ -1767,13 +1732,13 @@ export default function TenantAdminCustomers({
                 <button
                   type="button"
                   onClick={() => setFormOpen(false)}
-                  className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                  className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-[9px] font-black text-white shadow-lg shadow-emerald-200"
+                  className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-caption font-black text-white shadow-lg shadow-emerald-200"
                 >
                   <Check className="h-4 w-4" />
                   {editingId ? 'Lưu thay đổi' : 'Tạo hồ sơ'}

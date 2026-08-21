@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { PageHeader } from './ui';
 import { getTenantAdminInitialData } from "../utils/mockDataReset";
 import {
   Archive,
@@ -36,6 +37,7 @@ import {
   X,
 } from "lucide-react";
 import BeautifulSelect from "./BeautifulSelect";
+import { formatCompactMoney, formatMoney as formatCurrency } from "../utils/money";
 
 type StaffRole = "RECEPTIONIST" | "TECHNICIAN";
 type StaffStatus = "WORKING" | "OFF_SHIFT" | "LEAVE" | "INACTIVE";
@@ -537,9 +539,8 @@ const staffSeed: StaffMember[] = [
 ];
 
 const inputClass =
-  "h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100";
+  "h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-body font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100";
 const dateInputClass = `${inputClass} staff-date-input pl-10 pr-3`;
-const formatCurrency = (value: number) => `${value.toLocaleString("vi-VN")}đ`;
 const formatDate = (value: string) =>
   new Date(`${value}T00:00:00`).toLocaleDateString("vi-VN");
 const initials = (name: string) =>
@@ -923,7 +924,7 @@ export default function TenantAdminStaff({
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
             <Check className="h-4 w-4" />
           </span>
-          <p className="text-[9px] font-bold text-slate-700">{notice}</p>
+          <p className="text-caption font-bold text-slate-700">{notice}</p>
           <button
             type="button"
             onClick={() => setNotice("")}
@@ -935,26 +936,16 @@ export default function TenantAdminStaff({
         </div>
       )}
 
-      <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="tenant-page-kicker mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Chấm công cập nhật lúc 14:32 · {tenantName}
-          </div>
-          <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">
-            Nhân sự
-          </h1>
-          <p className="mt-2 text-[11px] text-slate-500">
-            Quản lý đội ngũ Lễ tân và Nhân viên kỹ thuật: lịch làm việc, kỹ năng,
-            năng suất, doanh thu và chính sách hoa hồng.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <PageHeader
+        title="Nhân sự"
+        actions={(
+          <>
+<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <BeautifulSelect
             value={selectedBranch}
             onChange={(event) => onSelectedBranchChange(event.target.value)}
             aria-label="Chọn chi nhánh"
-            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-700 shadow-sm sm:w-48"
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold text-slate-700 shadow-sm sm:w-48"
           >
             <option value="Q3">Chi nhánh Quận 3</option>
             <option value="Q1">Chi nhánh Quận 1</option>
@@ -964,7 +955,7 @@ export default function TenantAdminStaff({
             type="button"
             onClick={exportStaff}
             disabled={!canManage}
-            className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm disabled:opacity-50"
+            className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             Xuất danh sách
@@ -973,40 +964,16 @@ export default function TenantAdminStaff({
             type="button"
             onClick={openCreate}
             disabled={!canManage}
-            className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+            className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
           >
             <UserPlus className="h-4 w-4" />
             Thêm nhân viên
           </button>
         </div>
-      </section>
+          </>
+        )}
+      />
 
-      <section
-        className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? "border-violet-100 bg-gradient-to-r from-violet-50 to-white" : "border-amber-200 bg-amber-50"}`}
-      >
-        <div className="flex items-start gap-3">
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? "bg-violet-600 text-white" : "bg-amber-100 text-amber-700"}`}
-          >
-            <ShieldCheck className="h-4.5 w-4.5" />
-          </span>
-          <div>
-            <p className="text-[10px] font-black text-slate-800">
-              Phạm vi quyền: {roleLabel}
-            </p>
-            <p className="mt-1 text-[8px] leading-4 text-slate-500">
-              {canManage
-                ? "Được quản lý hồ sơ, chi nhánh, ca làm, hoa hồng và quyền nghiệp vụ trong tenant; thay đổi nhạy cảm đều được gắn với tài khoản quản trị."
-                : readOnlyReason || "Chỉ được xem hồ sơ và hiệu suất nhân sự."}
-            </p>
-          </div>
-        </div>
-        <span
-          className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-800 ring-amber-200"}`}
-        >
-          {canManage ? "Toàn quyền nhân sự tenant" : "Chỉ xem"}
-        </span>
-      </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -1026,14 +993,14 @@ export default function TenantAdminStaff({
           },
           {
             label: "Doanh thu đội ngũ",
-            value: `${(totalRevenue / 1_000_000).toLocaleString("vi-VN")} triệu`,
+            value: formatCompactMoney(totalRevenue),
             detail: "74,5% mục tiêu tháng",
             icon: CircleDollarSign,
             tone: "bg-emerald-50 text-emerald-600",
           },
           {
             label: "Hoa hồng dự kiến",
-            value: `${(totalCommission / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} triệu`,
+            value: formatCompactMoney(totalCommission),
             detail: "Chốt kỳ vào 31/07/2026",
             icon: WalletCards,
             tone: "bg-amber-50 text-amber-600",
@@ -1045,8 +1012,8 @@ export default function TenantAdminStaff({
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[9px] font-bold text-slate-500">{label}</p>
-                <p className="mt-1.5 text-xl font-black tracking-tight text-slate-950">
+                <p className="text-caption font-bold text-slate-500">{label}</p>
+                <p className="ta-metric-value mt-1.5 text-slate-950">
                   {value}
                 </p>
               </div>
@@ -1056,7 +1023,7 @@ export default function TenantAdminStaff({
                 <Icon className="h-4.5 w-4.5" />
               </span>
             </div>
-            <p className="mt-2 flex items-center gap-1.5 text-[8px] font-semibold text-slate-400">
+            <p className="mt-2 flex items-center gap-1.5 text-caption font-semibold text-slate-400">
               <TrendingUp className="h-3 w-3 text-emerald-500" />
               {detail}
             </p>
@@ -1071,7 +1038,7 @@ export default function TenantAdminStaff({
               <h2 className="text-xs font-black text-slate-900">
                 Phân bổ ca hôm nay
               </h2>
-              <p className="mt-1 text-[8px] text-slate-400">
+              <p className="mt-1 text-caption text-slate-400">
                 Theo khung giờ hoạt động 08:00–20:00
               </p>
             </div>
@@ -1079,7 +1046,7 @@ export default function TenantAdminStaff({
           </div>
           <div className="overflow-x-auto p-4">
             <div className="min-w-[760px]">
-              <div className="ml-36 grid grid-cols-7 text-center text-[7px] font-bold text-slate-400">
+              <div className="ml-36 grid grid-cols-7 text-center text-caption font-bold text-slate-400">
                 {[
                   "08:00",
                   "10:00",
@@ -1109,15 +1076,15 @@ export default function TenantAdminStaff({
                       >
                         <span className="flex items-center gap-2">
                           <span
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[7px] font-black ${roleMeta[member.role].avatar}`}
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-caption font-black ${roleMeta[member.role].avatar}`}
                           >
                             {initials(member.name)}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-[8px] font-black text-slate-700">
+                            <span className="block truncate text-caption font-black text-slate-700">
                               {member.name}
                             </span>
-                            <span className="mt-0.5 block text-[7px] text-slate-400">
+                            <span className="mt-0.5 block text-caption text-slate-400">
                               {roleMeta[member.role].label}
                             </span>
                           </span>
@@ -1128,7 +1095,7 @@ export default function TenantAdminStaff({
                             style={{ left: `${left}%`, width: `${width}%` }}
                           >
                             <span
-                              className={`flex h-full items-center justify-center text-[7px] font-black ${member.status === "WORKING" ? "text-white" : "text-slate-600"}`}
+                              className={`flex h-full items-center justify-center text-caption font-black ${member.status === "WORKING" ? "text-white" : "text-slate-600"}`}
                             >
                               {member.status === "LEAVE"
                                 ? "Nghỉ phép"
@@ -1146,7 +1113,7 @@ export default function TenantAdminStaff({
         <article className="rounded-2xl bg-gradient-to-br from-[#19152e] to-[#292148] p-5 text-white shadow-xl shadow-violet-950/10">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-violet-300">
+              <p className="text-caption font-bold uppercase tracking-[0.14em] text-violet-300">
                 Mức độ phủ ca
               </p>
               <p className="mt-2 text-2xl font-black">86%</p>
@@ -1158,11 +1125,11 @@ export default function TenantAdminStaff({
           </div>
           <div className="mt-4 grid grid-cols-3 gap-3">
             <div>
-              <p className="text-[7px] text-slate-400">Trong ca</p>
+              <p className="text-caption text-slate-400">Trong ca</p>
               <p className="mt-1 text-sm font-black">{workingCount}</p>
             </div>
             <div>
-              <p className="text-[7px] text-slate-400">Nghỉ phép</p>
+              <p className="text-caption text-slate-400">Nghỉ phép</p>
               <p className="mt-1 text-sm font-black">
                 {
                   activeBranchStaff.filter((member) => member.status === "LEAVE")
@@ -1171,11 +1138,11 @@ export default function TenantAdminStaff({
               </p>
             </div>
             <div>
-              <p className="text-[7px] text-slate-400">Trễ ca</p>
+              <p className="text-caption text-slate-400">Trễ ca</p>
               <p className="mt-1 text-sm font-black">2</p>
             </div>
           </div>
-          <p className="mt-5 text-[8px] leading-4 text-slate-400">
+          <p className="mt-5 text-caption leading-4 text-slate-400">
             Khung 18:00–20:00 tại Quận 3 còn thiếu 1 nhân sự hỗ trợ kỹ thuật.
           </p>
         </article>
@@ -1189,7 +1156,7 @@ export default function TenantAdminStaff({
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
               placeholder="Tìm tên, mã nhân viên, kỹ năng, điện thoại..."
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-caption outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
             />
             {searchQuery && (
               <button
@@ -1206,12 +1173,12 @@ export default function TenantAdminStaff({
             <button
               type="button"
               onClick={() => setShowFilters((value) => !value)}
-              className={`flex h-10 items-center gap-2 border px-3 text-[8px] font-bold shadow-sm ${showFilters || activeFilterCount ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600"}`}
+              className={`flex h-10 items-center gap-2 border px-3 text-caption font-bold shadow-sm ${showFilters || activeFilterCount ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600"}`}
             >
               <Filter className="h-3.5 w-3.5" />
               Bộ lọc
               {activeFilterCount > 0 && (
-                <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-[7px] text-white">
+                <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-caption text-white">
                   {activeFilterCount}
                 </span>
               )}
@@ -1222,7 +1189,7 @@ export default function TenantAdminStaff({
                 setSortBy(event.target.value as typeof sortBy)
               }
               aria-label="Sắp xếp nhân sự"
-              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[8px] font-bold"
+              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
             >
               <option value="REVENUE">Doanh thu cao nhất</option>
               <option value="UTILIZATION">Công suất cao nhất</option>
@@ -1253,7 +1220,7 @@ export default function TenantAdminStaff({
         {showFilters && (
           <div className="grid gap-3 border-b border-slate-100 bg-violet-50/40 p-4 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
             <label>
-              <span className="mb-1.5 block text-[8px] font-black uppercase text-slate-500">
+              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">
                 Vai trò
               </span>
               <BeautifulSelect
@@ -1261,7 +1228,7 @@ export default function TenantAdminStaff({
                 onChange={(event) =>
                   setRoleFilter(event.target.value as "ALL" | StaffRole)
                 }
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Tất cả vai trò</option>
                 {Object.entries(roleMeta).map(([value, meta]) => (
@@ -1272,7 +1239,7 @@ export default function TenantAdminStaff({
               </BeautifulSelect>
             </label>
             <label>
-              <span className="mb-1.5 block text-[8px] font-black uppercase text-slate-500">
+              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">
                 Trạng thái ca
               </span>
               <BeautifulSelect
@@ -1282,7 +1249,7 @@ export default function TenantAdminStaff({
                     event.target.value as "ALL" | ActiveStaffStatus,
                   )
                 }
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Tất cả trạng thái</option>
                 {Object.entries(statusMeta)
@@ -1295,7 +1262,7 @@ export default function TenantAdminStaff({
               </BeautifulSelect>
             </label>
             <label>
-              <span className="mb-1.5 block text-[8px] font-black uppercase text-slate-500">
+              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">
                 Loại hợp đồng
               </span>
               <BeautifulSelect
@@ -1305,7 +1272,7 @@ export default function TenantAdminStaff({
                     event.target.value as "ALL" | EmploymentType,
                   )
                 }
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Tất cả loại hợp đồng</option>
                 {Object.entries(employmentLabels).map(([value, label]) => (
@@ -1318,7 +1285,7 @@ export default function TenantAdminStaff({
             <button
               type="button"
               onClick={resetFilters}
-              className="self-end border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-sm"
+              className="self-end border border-slate-200 bg-white px-3 text-caption font-bold text-slate-600 shadow-sm"
             >
               Đặt lại
             </button>
@@ -1337,7 +1304,7 @@ export default function TenantAdminStaff({
                 key={status}
                 type="button"
                 onClick={() => setStatusFilter(status)}
-                className={`flex h-7 min-h-0 items-center gap-1.5 border-0 bg-transparent px-0 text-[8px] font-bold shadow-none ${statusFilter === status ? "text-violet-700" : "text-slate-500"}`}
+                className={`flex h-7 min-h-0 items-center gap-1.5 border-0 bg-transparent px-0 text-caption font-bold shadow-none ${statusFilter === status ? "text-violet-700" : "text-slate-500"}`}
               >
                 {status !== "ALL" && (
                   <span
@@ -1353,7 +1320,7 @@ export default function TenantAdminStaff({
               </button>
             );
           })}
-          <span className="ml-auto text-[8px] text-slate-400">
+          <span className="ml-auto text-caption text-slate-400">
             {filteredStaff.length} hồ sơ phù hợp
           </span>
         </div>
@@ -1362,7 +1329,7 @@ export default function TenantAdminStaff({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1160px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/70 text-[8px] font-black uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-caption font-black uppercase tracking-wide text-slate-400">
                   <th className="px-5 py-3">Nhân viên</th>
                   <th className="px-4 py-3">Vai trò</th>
                   <th className="px-4 py-3">Ca hôm nay</th>
@@ -1377,12 +1344,12 @@ export default function TenantAdminStaff({
                 {filteredStaff.map((member) => (
                   <tr
                     key={member.id}
-                    className="text-[9px] text-slate-600 hover:bg-slate-50/70"
+                    className="text-caption text-slate-600 hover:bg-slate-50/70"
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <span
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[8px] font-black ${roleMeta[member.role].avatar}`}
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-caption font-black ${roleMeta[member.role].avatar}`}
                         >
                           {initials(member.name)}
                         </span>
@@ -1390,7 +1357,7 @@ export default function TenantAdminStaff({
                           <p className="font-black text-slate-800">
                             {member.name}
                           </p>
-                          <p className="mt-1 text-[8px] text-slate-400">
+                          <p className="mt-1 text-caption text-slate-400">
                             {member.id} · {branchLabels[member.branch]}
                           </p>
                         </div>
@@ -1398,11 +1365,11 @@ export default function TenantAdminStaff({
                     </td>
                     <td className="px-4 py-3.5">
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${roleMeta[member.role].badge}`}
+                        className={`inline-flex rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${roleMeta[member.role].badge}`}
                       >
                         {roleMeta[member.role].label}
                       </span>
-                      <p className="mt-1.5 text-[7px] text-slate-400">
+                      <p className="mt-1.5 text-caption text-slate-400">
                         {employmentLabels[member.employmentType]}
                       </p>
                     </td>
@@ -1410,7 +1377,7 @@ export default function TenantAdminStaff({
                       <p className="font-black text-slate-800">
                         {member.shiftStart}–{member.shiftEnd}
                       </p>
-                      <p className="mt-1 text-[8px] text-slate-400">
+                      <p className="mt-1 text-caption text-slate-400">
                         Chấm công {member.attendance}%
                       </p>
                     </td>
@@ -1418,7 +1385,7 @@ export default function TenantAdminStaff({
                       <p className="font-black text-slate-800">
                         {member.appointments} lịch
                       </p>
-                      <p className="mt-1 text-[8px] text-slate-400">
+                      <p className="mt-1 text-caption text-slate-400">
                         {member.completed} hoàn thành
                       </p>
                     </td>
@@ -1441,14 +1408,14 @@ export default function TenantAdminStaff({
                       >
                         {member.utilization}% công suất
                       </p>
-                      <p className="mt-1 flex items-center gap-1 text-[8px] text-amber-600">
+                      <p className="mt-1 flex items-center gap-1 text-caption text-amber-600">
                         <Star className="h-3 w-3 fill-amber-400" />
                         {member.rating || "—"} · Trễ {member.lateCount} lần
                       </p>
                     </td>
                     <td className="px-4 py-3.5">
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[member.status].badge}`}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[member.status].badge}`}
                       >
                         <span
                           className={`h-1.5 w-1.5 rounded-full ${statusMeta[member.status].dot}`}
@@ -1460,7 +1427,7 @@ export default function TenantAdminStaff({
                       <button
                         type="button"
                         onClick={() => setSelectedStaff(member)}
-                        className="border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-sm"
+                        className="border border-slate-200 bg-white px-3 text-caption font-bold text-slate-600 shadow-sm"
                       >
                         Xem hồ sơ
                       </button>
@@ -1472,13 +1439,13 @@ export default function TenantAdminStaff({
             {!filteredStaff.length && (
               <div className="px-6 py-14 text-center">
                 <Search className="mx-auto h-7 w-7 text-slate-300" />
-                <p className="mt-3 text-[10px] font-black text-slate-600">
+                <p className="mt-3 text-caption font-black text-slate-600">
                   Không tìm thấy nhân sự phù hợp
                 </p>
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="mt-2 border-0 bg-transparent px-2 text-[9px] font-bold text-violet-600 shadow-none"
+                  className="mt-2 border-0 bg-transparent px-2 text-caption font-bold text-violet-600 shadow-none"
                 >
                   Xóa tìm kiếm và bộ lọc
                 </button>
@@ -1496,21 +1463,21 @@ export default function TenantAdminStaff({
               >
                 <div className="flex items-start gap-3">
                   <span
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[9px] font-black ${roleMeta[member.role].avatar}`}
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-caption font-black ${roleMeta[member.role].avatar}`}
                   >
                     {initials(member.name)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[10px] font-black text-slate-800">
+                    <p className="truncate text-caption font-black text-slate-800">
                       {member.name}
                     </p>
-                    <p className="mt-1 text-[8px] text-slate-400">
+                    <p className="mt-1 text-caption text-slate-400">
                       {roleMeta[member.role].label} ·{" "}
                       {branchLabels[member.branch]}
                     </p>
                   </div>
                   <span
-                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${statusMeta[member.status].badge}`}
+                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-caption font-bold ring-1 ${statusMeta[member.status].badge}`}
                   >
                     <span
                       className={`h-1.5 w-1.5 rounded-full ${statusMeta[member.status].dot}`}
@@ -1520,27 +1487,27 @@ export default function TenantAdminStaff({
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3">
                   <div>
-                    <p className="text-[7px] text-slate-400">Lịch hẹn</p>
-                    <p className="mt-1 text-[10px] font-black text-slate-800">
+                    <p className="text-caption text-slate-400">Lịch hẹn</p>
+                    <p className="mt-1 text-caption font-black text-slate-800">
                       {member.appointments}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[7px] text-slate-400">Doanh thu</p>
-                    <p className="mt-1 truncate text-[10px] font-black text-slate-800">
-                      {(member.revenue / 1_000_000).toLocaleString("vi-VN")}tr
+                    <p className="text-caption text-slate-400">Doanh thu</p>
+                    <p className="mt-1 truncate text-caption font-black text-slate-800">
+                      {formatCompactMoney(member.revenue)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[7px] text-slate-400">Công suất</p>
+                    <p className="text-caption text-slate-400">Công suất</p>
                     <p
-                      className={`mt-1 text-[10px] font-black ${performanceTone(member.utilization)}`}
+                      className={`mt-1 text-caption font-black ${performanceTone(member.utilization)}`}
                     >
                       {member.utilization}%
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between text-[8px]">
+                <div className="mt-4 flex items-center justify-between text-caption">
                   <span className="text-slate-400">
                     Ca {member.shiftStart}–{member.shiftEnd}
                   </span>
@@ -1553,7 +1520,7 @@ export default function TenantAdminStaff({
                   {member.skills.slice(0, 3).map((skill) => (
                     <span
                       key={skill}
-                      className="rounded-md bg-violet-50 px-2 py-1 text-[7px] font-bold text-violet-600"
+                      className="rounded-md bg-violet-50 px-2 py-1 text-caption font-bold text-violet-600"
                     >
                       {skill}
                     </span>
@@ -1564,14 +1531,14 @@ export default function TenantAdminStaff({
           </div>
         )}
         <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[8px] text-slate-400">
+          <p className="text-caption text-slate-400">
             Hiển thị{" "}
             <span className="font-black text-slate-600">
               {filteredStaff.length}
             </span>{" "}
             hồ sơ đang hoạt động · Kỳ hiệu suất tháng 07/2026
           </p>
-          <p className="flex items-center gap-1.5 text-[8px] text-slate-400">
+          <p className="flex items-center gap-1.5 text-caption text-slate-400">
             <MapPin className="h-3.5 w-3.5" />
             {selectedBranch === "ALL"
               ? "Tất cả chi nhánh"
@@ -1591,18 +1558,18 @@ export default function TenantAdminStaff({
                 <h2 className="text-xs font-black text-slate-900">
                   Nhân sự ngừng hoạt động
                 </h2>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[8px] font-black text-slate-600 ring-1 ring-slate-200">
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-caption font-black text-slate-600 ring-1 ring-slate-200">
                   {inactiveBranchStaff.length}
                 </span>
               </div>
-              <p className="mt-1 text-[8px] leading-4 text-slate-500">
+              <p className="mt-1 text-caption leading-4 text-slate-500">
                 Hồ sơ được lưu riêng, không xuất hiện trong danh sách nhân viên,
                 lịch phân ca, xếp hạng hoặc chỉ số đội ngũ.
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-fit rounded-full bg-rose-50 px-3 py-1.5 text-[8px] font-bold text-rose-700 ring-1 ring-rose-200">
+            <span className="w-fit rounded-full bg-rose-50 px-3 py-1.5 text-caption font-bold text-rose-700 ring-1 ring-rose-200">
               Kho hồ sơ nội bộ
             </span>
             <button
@@ -1612,7 +1579,7 @@ export default function TenantAdminStaff({
               }
               aria-expanded={isInactiveSectionExpanded}
               aria-controls="inactive-staff-list"
-              className="flex h-9 items-center gap-1.5 border border-slate-200 bg-white px-3 text-[8px] font-black text-slate-600 shadow-sm"
+              className="flex h-9 items-center gap-1.5 border border-slate-200 bg-white px-3 text-caption font-black text-slate-600 shadow-sm"
             >
               {isInactiveSectionExpanded ? (
                 <ChevronUp className="h-3.5 w-3.5" />
@@ -1637,17 +1604,17 @@ export default function TenantAdminStaff({
                   onClick={() => setSelectedStaff(member)}
                   className="flex h-auto min-w-0 flex-1 items-center gap-3 border-0 bg-transparent p-0 text-left shadow-none"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[8px] font-black text-slate-600">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-caption font-black text-slate-600">
                     {initials(member.name)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[10px] font-black text-slate-800">
+                    <span className="block truncate text-caption font-black text-slate-800">
                       {member.name}
                     </span>
-                    <span className="mt-1 block text-[8px] text-slate-500">
+                    <span className="mt-1 block text-caption text-slate-500">
                       {member.id} · {roleMeta[member.role].label}
                     </span>
-                    <span className="mt-1 block text-[8px] text-slate-400">
+                    <span className="mt-1 block text-caption text-slate-400">
                       {branchLabels[member.branch]} · Bắt đầu {formatDate(member.startDate)}
                     </span>
                   </span>
@@ -1656,7 +1623,7 @@ export default function TenantAdminStaff({
                   <button
                     type="button"
                     onClick={() => setSelectedStaff(member)}
-                    className="border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-sm"
+                    className="border border-slate-200 bg-white px-3 text-caption font-bold text-slate-600 shadow-sm"
                   >
                     Xem hồ sơ
                   </button>
@@ -1664,7 +1631,7 @@ export default function TenantAdminStaff({
                     type="button"
                     onClick={() => reactivateStaff(member)}
                     disabled={!canManage}
-                    className="flex items-center gap-1.5 border border-violet-200 bg-violet-50 px-3 text-[8px] font-black text-violet-700 shadow-sm disabled:opacity-50"
+                    className="flex items-center gap-1.5 border border-violet-200 bg-violet-50 px-3 text-caption font-black text-violet-700 shadow-sm disabled:opacity-50"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                     Kích hoạt lại
@@ -1676,10 +1643,10 @@ export default function TenantAdminStaff({
         ) : (
           <div className="px-5 py-8 text-center">
             <Archive className="mx-auto h-6 w-6 text-slate-300" />
-            <p className="mt-2 text-[9px] font-black text-slate-600">
+            <p className="mt-2 text-caption font-black text-slate-600">
               Chưa có hồ sơ ngừng hoạt động
             </p>
-            <p className="mt-1 text-[8px] text-slate-400">
+            <p className="mt-1 text-caption text-slate-400">
               Khi đổi trạng thái một nhân viên, hồ sơ sẽ tự động chuyển vào đây.
             </p>
           </div>
@@ -1694,7 +1661,7 @@ export default function TenantAdminStaff({
               <h2 className="text-xs font-black text-slate-900">
                 Bảng xếp hạng tháng
               </h2>
-              <p className="mt-1 text-[8px] text-slate-400">
+              <p className="mt-1 text-caption text-slate-400">
                 Theo doanh thu dịch vụ
               </p>
             </div>
@@ -1712,26 +1679,26 @@ export default function TenantAdminStaff({
                   className="flex h-auto w-full items-center gap-3 border-0 bg-transparent px-0 py-2.5 text-left shadow-none"
                 >
                   <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-[8px] font-black ${index === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-caption font-black ${index === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}
                   >
                     {index + 1}
                   </span>
                   <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg text-[7px] font-black ${roleMeta[member.role].avatar}`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg text-caption font-black ${roleMeta[member.role].avatar}`}
                   >
                     {initials(member.name)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[9px] font-black text-slate-700">
+                    <span className="block truncate text-caption font-black text-slate-700">
                       {member.name}
                     </span>
-                    <span className="mt-1 block text-[8px] text-slate-400">
+                    <span className="mt-1 block text-caption text-slate-400">
                       {member.appointments} lịch · {member.utilization}% công
                       suất
                     </span>
                   </span>
-                  <span className="text-[8px] font-black text-slate-800">
-                    {(member.revenue / 1_000_000).toLocaleString("vi-VN")}tr
+                  <span className="text-caption font-black text-slate-800">
+                    {formatCompactMoney(member.revenue)}
                   </span>
                 </button>
               ))}
@@ -1743,7 +1710,7 @@ export default function TenantAdminStaff({
               <h2 className="text-xs font-black text-slate-900">
                 Nghỉ phép sắp tới
               </h2>
-              <p className="mt-1 text-[8px] text-slate-400">
+              <p className="mt-1 text-caption text-slate-400">
                 Yêu cầu đã duyệt trong 14 ngày
               </p>
             </div>
@@ -1788,22 +1755,22 @@ export default function TenantAdminStaff({
                   className="flex h-14 w-16 shrink-0 flex-col items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 px-1 text-center text-white shadow-md shadow-violet-100"
                   aria-label={item.fullDate}
                 >
-                  <span className="whitespace-nowrap text-[10px] font-black leading-none">
+                  <span className="whitespace-nowrap text-caption font-black leading-none">
                     {item.day}
                   </span>
-                  <span className="mt-1 whitespace-nowrap text-[7px] font-bold uppercase tracking-wide text-violet-100">
+                  <span className="mt-1 whitespace-nowrap text-caption font-bold uppercase tracking-wide text-violet-100">
                     {item.month}
                   </span>
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-black text-slate-700">
+                  <p className="text-caption font-black text-slate-700">
                     {item.name}
                   </p>
-                  <p className="mt-1 text-[8px] text-slate-400">
+                  <p className="mt-1 text-caption text-slate-400">
                     {item.reason}
                   </p>
                 </div>
-                <span className="text-[7px] font-bold text-slate-500">
+                <span className="text-caption font-bold text-slate-500">
                   {item.days}
                 </span>
               </div>
@@ -1816,7 +1783,7 @@ export default function TenantAdminStaff({
               <h2 className="text-xs font-black text-slate-900">
                 Sức khỏe đội ngũ
               </h2>
-              <p className="mt-1 text-[8px] text-slate-400">
+              <p className="mt-1 text-caption text-slate-400">
                 Chỉ số nhân sự tháng 07/2026
               </p>
             </div>
@@ -1824,23 +1791,23 @@ export default function TenantAdminStaff({
           </div>
           <div className="mt-4 grid grid-cols-3 gap-3">
             <div>
-              <p className="text-[7px] text-slate-400">Đúng giờ</p>
+              <p className="text-caption text-slate-400">Đúng giờ</p>
               <p className="mt-1 text-lg font-black text-slate-900">96%</p>
             </div>
             <div>
-              <p className="text-[7px] text-slate-400">Ổn định</p>
+              <p className="text-caption text-slate-400">Ổn định</p>
               <p className="mt-1 text-lg font-black text-slate-900">94%</p>
             </div>
             <div>
-              <p className="text-[7px] text-slate-400">CSAT</p>
+              <p className="text-caption text-slate-400">CSAT</p>
               <p className="mt-1 text-lg font-black text-emerald-600">4.8</p>
             </div>
           </div>
           <div className="mt-4 rounded-xl bg-emerald-50 p-3">
-            <p className="text-[8px] font-black text-emerald-800">
+            <p className="text-caption font-black text-emerald-800">
               Gợi ý đào tạo
             </p>
-            <p className="mt-1 text-[8px] leading-4 text-emerald-700">
+            <p className="mt-1 text-caption leading-4 text-emerald-700">
               3 nhân viên phù hợp khóa nâng cao kỹ thuật màu và tư vấn bán thêm.
             </p>
           </div>
@@ -1859,7 +1826,7 @@ export default function TenantAdminStaff({
             <div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
               <div className="flex min-w-0 items-center gap-3">
                 <span
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-[10px] font-black ${roleMeta[selectedStaff.role].avatar}`}
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-caption font-black ${roleMeta[selectedStaff.role].avatar}`}
                 >
                   {initials(selectedStaff.name)}
                 </span>
@@ -1869,12 +1836,12 @@ export default function TenantAdminStaff({
                       {selectedStaff.name}
                     </h2>
                     <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${statusMeta[selectedStaff.status].badge}`}
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${statusMeta[selectedStaff.status].badge}`}
                     >
                       {statusMeta[selectedStaff.status].label}
                     </span>
                   </div>
-                  <p className="mt-1 text-[8px] text-slate-400">
+                  <p className="mt-1 text-caption text-slate-400">
                     {selectedStaff.id} · {roleMeta[selectedStaff.role].label} ·{" "}
                     {branchLabels[selectedStaff.branch]}
                   </p>
@@ -1892,28 +1859,25 @@ export default function TenantAdminStaff({
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-[7px] text-slate-400">Lịch hẹn</p>
+                  <p className="text-caption text-slate-400">Lịch hẹn</p>
                   <p className="mt-1 text-lg font-black text-slate-900">
                     {selectedStaff.appointments}
                   </p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-[7px] text-slate-400">Doanh thu</p>
-                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">
-                    {(selectedStaff.revenue / 1_000_000).toLocaleString(
-                      "vi-VN",
-                    )}
-                    tr
+                  <p className="text-caption text-slate-400">Doanh thu</p>
+                  <p className="ta-money mt-1 text-right text-body font-black text-slate-900">
+                    {formatCompactMoney(selectedStaff.revenue)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-violet-50 p-3">
-                  <p className="text-[7px] text-violet-400">Công suất</p>
+                  <p className="text-caption text-violet-400">Công suất</p>
                   <p className="mt-1 text-lg font-black text-violet-700">
                     {selectedStaff.utilization}%
                   </p>
                 </div>
                 <div className="rounded-xl bg-amber-50 p-3">
-                  <p className="text-[7px] text-amber-500">Đánh giá</p>
+                  <p className="text-caption text-amber-500">Đánh giá</p>
                   <p className="mt-1 flex items-center gap-1 text-lg font-black text-amber-700">
                     <Star className="h-3.5 w-3.5 fill-amber-400" />
                     {selectedStaff.rating || "—"}
@@ -1930,10 +1894,10 @@ export default function TenantAdminStaff({
                     <Clock3 className="h-4.5 w-4.5" />
                   </span>
                   <div>
-                    <p className="text-[8px] font-black uppercase tracking-wide text-slate-500">
+                    <p className="text-caption font-black uppercase tracking-wide text-slate-500">
                       Trạng thái ca hôm nay
                     </p>
-                    <p className="mt-1 text-[11px] font-black text-slate-900">
+                    <p className="mt-1 text-body font-black text-slate-900">
                       {selectedStaff.status === "WORKING"
                         ? "Đang trong ca làm việc"
                         : selectedStaff.status === "OFF_SHIFT"
@@ -1942,7 +1906,7 @@ export default function TenantAdminStaff({
                             ? "Đang nghỉ phép"
                             : "Nhân sự ngừng hoạt động"}
                     </p>
-                    <p className="mt-1 text-[8px] leading-4 text-slate-500">
+                    <p className="mt-1 text-caption leading-4 text-slate-500">
                       {selectedStaff.status === "WORKING"
                         ? `Ghi nhận bắt đầu lúc ${selectedStaff.lastClockIn || selectedStaff.shiftStart}. Nhân viên đang sẵn sàng nhận lịch.`
                         : selectedStaff.status === "OFF_SHIFT"
@@ -1956,17 +1920,17 @@ export default function TenantAdminStaff({
                   </div>
                 </div>
                 <div className="shrink-0 rounded-xl border border-white/80 bg-white px-4 py-3 text-left shadow-sm sm:text-right">
-                  <p className="text-[7px] font-bold text-slate-400">
+                  <p className="text-caption font-bold text-slate-400">
                     Ca được phân công
                   </p>
-                  <p className="mt-1 text-[10px] font-black text-slate-800">
+                  <p className="mt-1 text-caption font-black text-slate-800">
                     {selectedStaff.shiftStart}–{selectedStaff.shiftEnd}
                   </p>
                 </div>
               </div>
               <div className="mt-5 rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-[8px] font-black uppercase tracking-wide text-slate-400">
+                  <p className="text-caption font-black uppercase tracking-wide text-slate-400">
                     Thông tin nhân sự
                   </p>
                   <div className="flex gap-2">
@@ -1990,8 +1954,8 @@ export default function TenantAdminStaff({
                   <div className="flex gap-2">
                     <Phone className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
                     <div>
-                      <p className="text-[7px] text-slate-400">Số điện thoại</p>
-                      <p className="mt-1 text-[9px] font-bold text-slate-700">
+                      <p className="text-caption text-slate-400">Số điện thoại</p>
+                      <p className="mt-1 text-caption font-bold text-slate-700">
                         {selectedStaff.phone}
                       </p>
                     </div>
@@ -1999,8 +1963,8 @@ export default function TenantAdminStaff({
                   <div className="flex gap-2">
                     <Mail className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
                     <div className="min-w-0">
-                      <p className="text-[7px] text-slate-400">Email</p>
-                      <p className="mt-1 truncate text-[9px] font-bold text-slate-700">
+                      <p className="text-caption text-slate-400">Email</p>
+                      <p className="mt-1 truncate text-caption font-bold text-slate-700">
                         {selectedStaff.email}
                       </p>
                     </div>
@@ -2008,8 +1972,8 @@ export default function TenantAdminStaff({
                   <div className="flex gap-2">
                     <BriefcaseBusiness className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
                     <div>
-                      <p className="text-[7px] text-slate-400">Hợp đồng</p>
-                      <p className="mt-1 text-[9px] font-bold text-slate-700">
+                      <p className="text-caption text-slate-400">Hợp đồng</p>
+                      <p className="mt-1 text-caption font-bold text-slate-700">
                         {employmentLabels[selectedStaff.employmentType]} · từ{" "}
                         {formatDate(selectedStaff.startDate)}
                       </p>
@@ -2018,8 +1982,8 @@ export default function TenantAdminStaff({
                   <div className="flex gap-2">
                     <Clock3 className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
                     <div>
-                      <p className="text-[7px] text-slate-400">Ca mặc định</p>
-                      <p className="mt-1 text-[9px] font-bold text-slate-700">
+                      <p className="text-caption text-slate-400">Ca mặc định</p>
+                      <p className="mt-1 text-caption font-bold text-slate-700">
                         {selectedStaff.shiftStart}–{selectedStaff.shiftEnd}
                       </p>
                     </div>
@@ -2029,7 +1993,7 @@ export default function TenantAdminStaff({
               <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-[8px] font-bold text-slate-400">
+                    <p className="text-caption font-bold text-slate-400">
                       Mục tiêu doanh thu tháng
                     </p>
                     <p className="mt-1 text-lg font-black">
@@ -2038,7 +2002,7 @@ export default function TenantAdminStaff({
                   </div>
                   <Target className="h-4.5 w-4.5 text-violet-300" />
                 </div>
-                <div className="mt-3 flex items-center justify-between text-[7px] text-slate-400">
+                <div className="mt-3 flex items-center justify-between text-caption text-slate-400">
                   <span>
                     Đã đạt{" "}
                     {selectedStaff.target
@@ -2060,20 +2024,20 @@ export default function TenantAdminStaff({
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-3">
                   <div>
-                    <p className="text-[7px] text-slate-500">Hoa hồng</p>
-                    <p className="mt-1 text-[10px] font-black">
+                    <p className="text-caption text-slate-500">Hoa hồng</p>
+                    <p className="mt-1 text-caption font-black">
                       {selectedStaff.commissionRate}%
                     </p>
                   </div>
                   <div>
-                    <p className="text-[7px] text-slate-500">Tạm tính</p>
-                    <p className="mt-1 text-[10px] font-black">
+                    <p className="text-caption text-slate-500">Tạm tính</p>
+                    <p className="mt-1 text-caption font-black">
                       {formatCurrency(selectedStaff.commissionEarned)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[7px] text-slate-500">Chấm công</p>
-                    <p className="mt-1 text-[10px] font-black">
+                    <p className="text-caption text-slate-500">Chấm công</p>
+                    <p className="mt-1 text-caption font-black">
                       {selectedStaff.attendance}%
                     </p>
                   </div>
@@ -2082,10 +2046,10 @@ export default function TenantAdminStaff({
               <div className="mt-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-[10px] font-black text-slate-800">
+                    <h3 className="text-caption font-black text-slate-800">
                       Lịch làm việc tuần này
                     </h3>
-                    <p className="mt-1 text-[9px] font-medium text-slate-500">
+                    <p className="mt-1 text-caption font-medium text-slate-500">
                       13/07–19/07/2026
                     </p>
                   </div>
@@ -2097,14 +2061,14 @@ export default function TenantAdminStaff({
                       key={day.day}
                       className={`flex min-h-20 flex-col items-center justify-center rounded-xl px-2 py-3 text-center ${day.status === "WORK" ? "bg-violet-50" : day.status === "LEAVE" ? "bg-amber-50" : "bg-slate-100"}`}
                     >
-                      <p className="text-[9px] font-black text-slate-600">
+                      <p className="text-caption font-black text-slate-600">
                         {day.day}
                       </p>
-                      <p className="mt-1 text-[8px] font-medium text-slate-400">
+                      <p className="mt-1 text-caption font-medium text-slate-400">
                         {day.date}
                       </p>
                       <p
-                        className={`mt-2 whitespace-nowrap text-[8px] font-black leading-none ${day.status === "WORK" ? "text-violet-700" : day.status === "LEAVE" ? "text-amber-700" : "text-slate-500"}`}
+                        className={`mt-2 whitespace-nowrap text-caption font-black leading-none ${day.status === "WORK" ? "text-violet-700" : day.status === "LEAVE" ? "text-amber-700" : "text-slate-500"}`}
                       >
                         {day.status === "WORK"
                           ? day.shift.replace(":00", "h").replace(":00", "h")
@@ -2117,14 +2081,14 @@ export default function TenantAdminStaff({
                 </div>
               </div>
               <div className="mt-5">
-                <p className="text-[8px] font-black uppercase tracking-wide text-slate-400">
+                <p className="text-caption font-black uppercase tracking-wide text-slate-400">
                   Kỹ năng chuyên môn
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {selectedStaff.skills.map((skill) => (
                     <span
                       key={skill}
-                      className="rounded-md bg-fuchsia-50 px-2 py-1 text-[7px] font-bold text-fuchsia-700"
+                      className="rounded-md bg-fuchsia-50 px-2 py-1 text-caption font-bold text-fuchsia-700"
                     >
                       {skill}
                     </span>
@@ -2135,10 +2099,10 @@ export default function TenantAdminStaff({
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
                   <div>
-                    <p className="text-[8px] font-black text-violet-800">
+                    <p className="text-caption font-black text-violet-800">
                       Quyền truy cập
                     </p>
-                    <p className="mt-1 text-[8px] leading-4 text-violet-600">
+                    <p className="mt-1 text-caption leading-4 text-violet-600">
                       {selectedStaff.permissions.length
                         ? selectedStaff.permissions.join(" · ")
                         : "Chưa cấp quyền nghiệp vụ"}
@@ -2147,10 +2111,10 @@ export default function TenantAdminStaff({
                 </div>
               </div>
               <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-                <p className="text-[8px] font-black uppercase tracking-wide text-slate-400">
+                <p className="text-caption font-black uppercase tracking-wide text-slate-400">
                   Ghi chú quản lý
                 </p>
-                <p className="mt-2 text-[9px] leading-5 text-slate-600">
+                <p className="mt-2 text-caption leading-5 text-slate-600">
                   {selectedStaff.notes || "Chưa có ghi chú cho nhân viên này."}
                 </p>
               </div>
@@ -2161,7 +2125,7 @@ export default function TenantAdminStaff({
                   type="button"
                   onClick={() => openEdit(selectedStaff)}
                   disabled={!canManage}
-                  className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   Chỉnh sửa
@@ -2179,7 +2143,7 @@ export default function TenantAdminStaff({
                     !canManage ||
                     !["WORKING", "OFF_SHIFT"].includes(selectedStaff.status)
                   }
-                  className={`flex h-11 flex-1 items-center justify-center gap-2 border px-4 text-[9px] font-black text-white shadow-lg disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none ${selectedStaff.status === "WORKING" ? "border-rose-700 bg-rose-600 shadow-rose-100" : "border-violet-700 bg-violet-600 shadow-violet-200"}`}
+                  className={`flex h-11 flex-1 items-center justify-center gap-2 border px-4 text-caption font-black text-white shadow-lg disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none ${selectedStaff.status === "WORKING" ? "border-rose-700 bg-rose-600 shadow-rose-100" : "border-violet-700 bg-violet-600 shadow-violet-200"}`}
                 >
                   <Clock3 className="h-4 w-4" />
                   {selectedStaff.status === "WORKING"
@@ -2217,7 +2181,7 @@ export default function TenantAdminStaff({
                 <Clock3 className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[8px] font-black uppercase tracking-wide text-slate-400">
+                <p className="text-caption font-black uppercase tracking-wide text-slate-400">
                   Xác nhận chấm công
                 </p>
                 <h2
@@ -2228,7 +2192,7 @@ export default function TenantAdminStaff({
                     ? "Bắt đầu ca làm việc?"
                     : "Kết thúc ca làm việc?"}
                 </h2>
-                <p className="mt-1 text-[9px] font-bold text-slate-500">
+                <p className="mt-1 text-caption font-bold text-slate-500">
                   {shiftAction.staff.name} · {shiftAction.staff.shiftStart}–
                   {shiftAction.staff.shiftEnd}
                 </p>
@@ -2247,14 +2211,14 @@ export default function TenantAdminStaff({
                 className={`rounded-2xl border p-4 ${shiftAction.type === "START" ? "border-emerald-100 bg-emerald-50" : "border-rose-100 bg-rose-50"}`}
               >
                 <p
-                  className={`text-[9px] font-black ${shiftAction.type === "START" ? "text-emerald-800" : "text-rose-800"}`}
+                  className={`text-caption font-black ${shiftAction.type === "START" ? "text-emerald-800" : "text-rose-800"}`}
                 >
                   {shiftAction.type === "START"
                     ? "Nhân viên sẽ được đánh dấu đang trong ca"
                     : "Nhân viên sẽ được đánh dấu ngoài ca"}
                 </p>
                 <p
-                  className={`mt-2 text-[8px] leading-4 ${shiftAction.type === "START" ? "text-emerald-700" : "text-rose-700"}`}
+                  className={`mt-2 text-caption leading-4 ${shiftAction.type === "START" ? "text-emerald-700" : "text-rose-700"}`}
                 >
                   {shiftAction.type === "START"
                     ? "Hệ thống ghi nhận giờ vào ca thực tế và cho phép phân công lịch mới cho nhân viên trong ngày."
@@ -2263,18 +2227,18 @@ export default function TenantAdminStaff({
               </div>
               <div className="grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4">
                 <div>
-                  <p className="text-[7px] font-bold text-slate-400">
+                  <p className="text-caption font-bold text-slate-400">
                     Chi nhánh
                   </p>
-                  <p className="mt-1 text-[9px] font-black text-slate-700">
+                  <p className="mt-1 text-caption font-black text-slate-700">
                     {branchLabels[shiftAction.staff.branch]}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[7px] font-bold text-slate-400">
+                  <p className="text-caption font-bold text-slate-400">
                     Thời điểm ghi nhận
                   </p>
-                  <p className="mt-1 text-[9px] font-black text-slate-700">
+                  <p className="mt-1 text-caption font-black text-slate-700">
                     Theo giờ hệ thống hiện tại
                   </p>
                 </div>
@@ -2284,14 +2248,14 @@ export default function TenantAdminStaff({
               <button
                 type="button"
                 onClick={() => setShiftAction(null)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
               >
                 Hủy
               </button>
               <button
                 type="button"
                 onClick={confirmShiftAction}
-                className={`flex items-center gap-2 border px-5 text-[9px] font-black text-white shadow-lg ${shiftAction.type === "START" ? "border-emerald-700 bg-emerald-600 shadow-emerald-100" : "border-rose-700 bg-rose-600 shadow-rose-100"}`}
+                className={`flex items-center gap-2 border px-5 text-caption font-black text-white shadow-lg ${shiftAction.type === "START" ? "border-emerald-700 bg-emerald-600 shadow-emerald-100" : "border-rose-700 bg-rose-600 shadow-rose-100"}`}
               >
                 <Clock3 className="h-4 w-4" />
                 {shiftAction.type === "START"
@@ -2322,7 +2286,7 @@ export default function TenantAdminStaff({
                     ? "Thêm nhân viên mới"
                     : `Chỉnh sửa ${selectedStaff?.id}`}
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-500">
+                <p className="mt-1 text-caption text-slate-500">
                   Thiết lập hồ sơ, vai trò, ca làm và quyền nghiệp vụ.
                 </p>
               </div>
@@ -2337,12 +2301,12 @@ export default function TenantAdminStaff({
             </div>
             <div className="space-y-5 p-5 sm:p-6">
               {formError && (
-                <div className="rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700">
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">
                   {formError}
                 </div>
               )}
               <fieldset>
-                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
                     <UserRound className="h-3.5 w-3.5" />
                   </span>
@@ -2350,7 +2314,7 @@ export default function TenantAdminStaff({
                 </legend>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Họ và tên *
                     </span>
                     <input
@@ -2366,7 +2330,7 @@ export default function TenantAdminStaff({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Số điện thoại *
                     </span>
                     <input
@@ -2382,7 +2346,7 @@ export default function TenantAdminStaff({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Email công việc *
                     </span>
                     <input
@@ -2399,7 +2363,7 @@ export default function TenantAdminStaff({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Ngày sinh
                     </span>
                     <div className="relative">
@@ -2420,7 +2384,7 @@ export default function TenantAdminStaff({
                 </div>
               </fieldset>
               <fieldset className="border-t border-slate-100 pt-5">
-                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                     <BriefcaseBusiness className="h-3.5 w-3.5" />
                   </span>
@@ -2428,7 +2392,7 @@ export default function TenantAdminStaff({
                 </legend>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Chi nhánh
                     </span>
                     <BeautifulSelect
@@ -2446,7 +2410,7 @@ export default function TenantAdminStaff({
                     </BeautifulSelect>
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Vai trò
                     </span>
                     <BeautifulSelect
@@ -2473,7 +2437,7 @@ export default function TenantAdminStaff({
                     </BeautifulSelect>
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Loại hợp đồng
                     </span>
                     <BeautifulSelect
@@ -2496,7 +2460,7 @@ export default function TenantAdminStaff({
                     </BeautifulSelect>
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Ngày bắt đầu
                     </span>
                     <div className="relative">
@@ -2515,7 +2479,7 @@ export default function TenantAdminStaff({
                     </div>
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Trạng thái
                     </span>
                     <BeautifulSelect
@@ -2536,7 +2500,7 @@ export default function TenantAdminStaff({
                     </BeautifulSelect>
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Hoa hồng dịch vụ (%)
                     </span>
                     <input
@@ -2556,7 +2520,7 @@ export default function TenantAdminStaff({
                 </div>
               </fieldset>
               <fieldset className="border-t border-slate-100 pt-5">
-                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                     <Clock3 className="h-3.5 w-3.5" />
                   </span>
@@ -2564,7 +2528,7 @@ export default function TenantAdminStaff({
                 </legend>
                 <div className="grid grid-cols-2 gap-3">
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Bắt đầu ca
                     </span>
                     <input
@@ -2580,7 +2544,7 @@ export default function TenantAdminStaff({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Kết thúc ca
                     </span>
                     <input
@@ -2598,7 +2562,7 @@ export default function TenantAdminStaff({
                 </div>
               </fieldset>
               <fieldset className="border-t border-slate-100 pt-5">
-                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600">
                     <ShieldCheck className="h-3.5 w-3.5" />
                   </span>
@@ -2607,10 +2571,10 @@ export default function TenantAdminStaff({
                 <div className="mb-3 flex items-start gap-3 rounded-xl border border-violet-100 bg-violet-50/70 p-3">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
                   <div>
-                    <p className="text-[8px] font-black text-violet-800">
+                    <p className="text-caption font-black text-violet-800">
                       Quyền tự động theo vai trò {roleMeta[form.role].label}
                     </p>
-                    <p className="mt-1 text-[8px] leading-4 text-violet-600">
+                    <p className="mt-1 text-caption leading-4 text-violet-600">
                       {rolePermissionPresets[form.role].summary}
                     </p>
                   </div>
@@ -2648,11 +2612,11 @@ export default function TenantAdminStaff({
                         )}
                       </span>
                       <span>
-                        <span className="block text-[8px] font-bold text-slate-700">
+                        <span className="block text-caption font-bold text-slate-700">
                           {permission.label}
                         </span>
                         <span
-                          className={`mt-0.5 block text-[7px] font-bold ${form[permission.key] ? "text-violet-600" : "text-slate-400"}`}
+                          className={`mt-0.5 block text-caption font-bold ${form[permission.key] ? "text-violet-600" : "text-slate-400"}`}
                         >
                           {form[permission.key] ? "Được cấp" : "Không được cấp"}
                         </span>
@@ -2661,7 +2625,7 @@ export default function TenantAdminStaff({
                   ))}
                 </div>
                 <label className="mt-3 block">
-                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">
                     Ghi chú quản lý
                   </span>
                   <textarea
@@ -2672,7 +2636,7 @@ export default function TenantAdminStaff({
                         notes: event.target.value,
                       }))
                     }
-                    className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                    className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                     placeholder="Năng lực, kế hoạch đào tạo, lưu ý công việc..."
                   />
                 </label>
@@ -2682,13 +2646,13 @@ export default function TenantAdminStaff({
               <button
                 type="button"
                 onClick={() => setFormMode(null)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"
+                className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
               >
                 <UserCog className="h-4 w-4" />
                 {formMode === "CREATE" ? "Tạo hồ sơ" : "Lưu thay đổi"}

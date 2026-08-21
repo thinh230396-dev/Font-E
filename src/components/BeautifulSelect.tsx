@@ -108,9 +108,36 @@ export default function BeautifulSelect({
     : options;
   const isTenantSelect = Boolean(rootRef.current?.closest('.role-shell--tenant'));
 
+  /**
+   * Rất nhiều nơi gọi không truyền class hình dạng nào — ví dụ ô "Chọn thao
+   * tác" trong hộp thoại vị trí ở trang Khu vực. Khi đó trigger không có viền
+   * lẫn đệm trái nên nhãn dán sát mép ô, còn mũi tên thì lệch khỏi khối.
+   *
+   * Chỉ bù hình dạng khi nơi gọi chưa tự lo: CSS của trigger nằm ngoài
+   * `@layer` nên luôn đè utility của Tailwind, áp vô điều kiện sẽ phá những
+   * chỗ cố ý truyền `pl-9` (chừa chỗ cho icon) hay `border-0 p-0` (nút phủ
+   * trong suốt).
+   */
+  const callerHandlesShape = className.split(' ').some((token) => {
+    // Bỏ tiền tố biến thể (sm:, hover:...) để `sm:px-3` cũng được tính là có đệm.
+    const utility = token.slice(token.lastIndexOf(':') + 1);
+    return utility === 'form-control'
+      || utility === 'sa-period-select'
+      || utility === 'border'
+      || utility.startsWith('border-')
+      || utility.startsWith('p-')
+      || utility.startsWith('px-')
+      || utility.startsWith('pl-')
+      || utility.startsWith('ps-');
+  });
+
   const updateMenuPosition = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
+    if (rect.width === 0 || rect.height === 0) {
+      setIsOpen(false);
+      return;
+    }
     const optionHeight = isTechnicianLayout ? 68 : 42;
     const estimatedHeight = Math.min(searchable ? 420 : 368, 72 + options.length * optionHeight);
     const spaceBelow = window.innerHeight - rect.bottom - 12;
@@ -131,16 +158,32 @@ export default function BeautifulSelect({
       const target = event.target as Node;
       if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setIsOpen(false);
     };
+    const closeOnFocusOutside = (event: FocusEvent) => {
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setIsOpen(false);
+    };
     const reposition = () => updateMenuPosition();
     document.addEventListener('mousedown', closeOnOutside);
+    document.addEventListener('focusin', closeOnFocusOutside);
     window.addEventListener('resize', reposition);
     window.addEventListener('scroll', reposition, true);
     return () => {
       document.removeEventListener('mousedown', closeOnOutside);
+      document.removeEventListener('focusin', closeOnFocusOutside);
       window.removeEventListener('resize', reposition);
       window.removeEventListener('scroll', reposition, true);
     };
   }, [isOpen, isTechnicianLayout, options.length, searchable]);
+
+  useEffect(() => {
+    if (!isOpen || searchable) return;
+    const frame = window.requestAnimationFrame(() => {
+      const optionButtons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)') || []);
+      const selectedIndex = optionButtons.findIndex((button) => button.dataset.optionValue === currentValue);
+      optionButtons[Math.max(0, selectedIndex)]?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentValue, isOpen, searchable]);
 
   useEffect(() => {
     if (!isOpen) setQuery('');
@@ -163,7 +206,51 @@ export default function BeautifulSelect({
     if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
       event.preventDefault();
       setIsOpen(true);
+    } else if (event.key === 'Escape' && isOpen) {
+      event.preventDefault();
+      setIsOpen(false);
     }
+  };
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      setIsOpen(false);
+      buttonRef.current?.focus();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setIsOpen(false);
+      buttonRef.current?.focus();
+      return;
+    }
+
+    if (['Enter', ' '].includes(event.key)) {
+      const focusedOption = document.activeElement as HTMLButtonElement | null;
+      const focusedValue = focusedOption?.dataset.optionValue;
+      const option = options.find((item) => item.value === focusedValue);
+      if (option && menuRef.current?.contains(focusedOption)) {
+        event.preventDefault();
+        chooseOption(option);
+      }
+      return;
+    }
+
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const optionButtons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)') || []);
+    if (!optionButtons.length) return;
+    event.preventDefault();
+    const currentIndex = optionButtons.findIndex((button) => button === document.activeElement);
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? optionButtons.length - 1
+        : event.key === 'ArrowUp'
+          ? (currentIndex <= 0 ? optionButtons.length - 1 : currentIndex - 1)
+          : (currentIndex < 0 || currentIndex === optionButtons.length - 1 ? 0 : currentIndex + 1);
+    optionButtons[nextIndex]?.focus();
   };
 
   const menu = isOpen && createPortal(
@@ -174,7 +261,7 @@ export default function BeautifulSelect({
       aria-label={selectProps['aria-label'] || name || 'Danh sách lựa chọn'}
       className={`beautiful-select-menu ${isTenantSelect ? 'beautiful-select-menu--tenant' : ''} fixed z-[10050] flex flex-col overflow-hidden rounded-xl border border-brand-outline/60 bg-brand-surface shadow-2xl`}
       style={menuStyle}
-      onKeyDown={(event) => { if (event.key === 'Escape') { setIsOpen(false); buttonRef.current?.focus(); } }}
+      onKeyDown={handleMenuKeyDown}
     >
       {searchable && (
         <div className="shrink-0 border-b border-brand-outline/40 p-2.5">
@@ -191,10 +278,11 @@ export default function BeautifulSelect({
           const previousGroup = index > 0 ? filteredOptions[index - 1].group : undefined;
           return (
             <div key={`${option.group || 'option'}-${option.value}`}>
-              {option.group && option.group !== previousGroup && <p className="px-3 pb-1 pt-2 text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">{option.group}</p>}
+              {option.group && option.group !== previousGroup && <p className="px-3 pb-1 pt-2 text-caption font-bold uppercase tracking-wider text-brand-text-muted">{option.group}</p>}
               <button
                 type="button"
                 role="option"
+                data-option-value={option.value}
                 aria-selected={option.value === currentValue}
                 disabled={option.disabled}
                 onClick={() => chooseOption(option)}
@@ -203,7 +291,7 @@ export default function BeautifulSelect({
                 {isTechnicianLayout ? (
                   <>
                     <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[11px] font-black ${
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-body font-black ${
                         option.tone === 'available'
                           ? 'bg-emerald-50 text-emerald-700'
                           : option.tone === 'busy'
@@ -217,16 +305,16 @@ export default function BeautifulSelect({
                       {option.value === 'ANY' ? 'TĐ' : option.label.trim().slice(0, 1).toLocaleUpperCase('vi')}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-extrabold leading-5 text-slate-800">
+                      <span className="block truncate text-caption font-extrabold leading-5 text-slate-800">
                         {option.label}
                       </span>
                       {option.description && (
-                        <span className="block truncate text-[11px] font-medium leading-4 text-slate-500">
+                        <span className="block truncate text-body font-medium leading-4 text-slate-500">
                           {option.description}
                         </span>
                       )}
                       {option.helper && (
-                        <span className={`mt-0.5 block truncate text-[10px] font-semibold leading-4 ${
+                        <span className={`mt-0.5 block truncate text-caption font-semibold leading-4 ${
                           option.tone === 'available' ? 'text-emerald-600' : option.tone === 'auto' ? 'text-violet-600' : 'text-rose-600'
                         }`}>
                           {option.helper}
@@ -235,7 +323,7 @@ export default function BeautifulSelect({
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
                       {option.status && (
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-extrabold ${
                           option.tone === 'available'
                             ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
                             : option.tone === 'busy'
@@ -310,7 +398,7 @@ export default function BeautifulSelect({
         aria-label={selectProps['aria-label']}
         onClick={() => setIsOpen((open) => !open)}
         onKeyDown={handleButtonKeyDown}
-        className={`beautiful-select-trigger ${className} flex items-center justify-between gap-3 text-left`}
+        className={`beautiful-select-trigger ${callerHandlesShape ? '' : 'beautiful-select-trigger--default-shape'} ${className} flex items-center justify-between gap-3 text-left`}
       >
         {isTechnicianLayout ? (
           <span className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
@@ -324,10 +412,10 @@ export default function BeautifulSelect({
                 : 'bg-violet-500'
             }`} />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-extrabold leading-5 text-slate-800">
+              <span className="block truncate text-caption font-extrabold leading-5 text-slate-800">
                 {selectedOption?.label || 'Chọn kỹ thuật viên'}
               </span>
-              <span className="block truncate text-[10px] font-semibold leading-4 text-slate-500">
+              <span className="block truncate text-caption font-semibold leading-4 text-slate-500">
                 {[selectedOption?.description, selectedOption?.status].filter(Boolean).join(' · ')}
               </span>
             </span>

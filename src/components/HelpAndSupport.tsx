@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import type { Ticket, TicketHistoryEntry, TicketMessage } from '../types';
 import { recordAuditLog } from '../utils/auditLogs';
+import { Modal } from './ui';
 
 interface HelpAndSupportProps {
   tickets: Ticket[];
@@ -282,44 +283,10 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
   const [replyText, setReplyText] = useState('');
 
   const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) || null;
-  const isTicketModalOpen = Boolean(selectedTicket);
   const categories = useMemo(() => Array.from(new Set(tickets.map((ticket) => ticket.category))).sort(), [tickets]);
 
-  useEffect(() => {
-    if (!isTicketModalOpen) return;
-
-    const root = document.documentElement;
-    const body = document.body;
-    const scrollY = window.scrollY;
-    const scrollbarWidth = Math.max(0, window.innerWidth - root.clientWidth);
-    const previousRootOverflow = root.style.overflow;
-    const previousBodyOverflow = body.style.overflow;
-    const previousBodyPosition = body.style.position;
-    const previousBodyTop = body.style.top;
-    const previousBodyWidth = body.style.width;
-    const previousBodyPaddingRight = body.style.paddingRight;
-
-    root.style.overflow = 'hidden';
-    body.style.overflow = 'hidden';
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
-
-    if (scrollbarWidth > 0) {
-      const currentPaddingRight = Number.parseFloat(window.getComputedStyle(body).paddingRight) || 0;
-      body.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`;
-    }
-
-    return () => {
-      root.style.overflow = previousRootOverflow;
-      body.style.overflow = previousBodyOverflow;
-      body.style.position = previousBodyPosition;
-      body.style.top = previousBodyTop;
-      body.style.width = previousBodyWidth;
-      body.style.paddingRight = previousBodyPaddingRight;
-      window.scrollTo(0, scrollY);
-    };
-  }, [isTicketModalOpen]);
+  /* Khóa cuộn nền trước đây tự xử lý ở đây; nay `ui/Modal` lo, cùng với Escape,
+     bẫy focus và trả focus về nút đã mở hộp thoại. */
 
   const metrics = useMemo(() => {
     const activeTickets = tickets.filter(isActive);
@@ -533,7 +500,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
               <p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">Ưu tiên phản hồi ticket chưa có phản hồi đầu tiên, sau đó điều phối các ticket đã quá hạn xử lý.</p>
             </div>
           </div>
-          <button onClick={() => setSlaFilter('BREACHED')} className="whitespace-nowrap rounded-lg bg-red-500 px-4 py-2 text-xs font-bold text-white">Xem ticket quá hạn</button>
+          <button onClick={() => setSlaFilter('BREACHED')} className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white">Xem ticket quá hạn</button>
         </div>
       )}
 
@@ -633,24 +600,30 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
       </div>
 
       {selectedTicket && (
-        <div className="sa-modal-backdrop fixed inset-0 z-[70] flex items-center justify-center overscroll-contain bg-brand-bg/70 p-2 backdrop-blur-sm sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTicketId(null); }}>
-          <aside role="dialog" aria-modal="true" aria-labelledby="ticket-detail-title" className="flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl sm:h-[min(94dvh,940px)]">
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-brand-outline/40 px-5 py-4 sm:px-6">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] font-bold text-brand-primary">{selectedTicket.id}</span><Badge className={PRIORITY_CONFIG[selectedTicket.priority].className}>{PRIORITY_CONFIG[selectedTicket.priority].label}</Badge><Badge className={STATUS_CONFIG[selectedTicket.status].className}>{STATUS_CONFIG[selectedTicket.status].label}</Badge></div>
-                <h2 id="ticket-detail-title" className="mt-2 text-base font-extrabold leading-snug text-brand-text">{selectedTicket.subject}</h2>
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-brand-text-muted">
-                  <span className="font-semibold text-brand-text">{selectedTicket.tenantName}</span>
-                  <span aria-hidden="true">•</span>
-                  <span>{selectedTicket.requesterName}</span>
-                  <span aria-hidden="true">•</span>
-                  <span>Tạo {formatDateTime(selectedTicket.createdAt)}</span>
-                  <span aria-hidden="true">•</span>
-                  <span>Cập nhật {formatRelativeTime(selectedTicket.updatedAt)}</span>
-                </div>
-              </div>
-              <button onClick={() => setSelectedTicketId(null)} aria-label="Đóng chi tiết" title="Đóng" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface-high text-brand-text-muted transition-colors hover:text-brand-text"><X className="h-5 w-5" /></button>
-            </div>
+        <Modal
+          open
+          onClose={() => setSelectedTicketId(null)}
+          title={selectedTicket.subject}
+          size="fullscreen"
+          /* Ô trả lời có thể đang soạn dở, nên bấm ra nền không được đóng. */
+          closeOnBackdrop={false}
+          bodyClassName="!p-0"
+          eyebrow={selectedTicket.id}
+          headerAside={
+            <span className="flex flex-wrap items-center gap-2"><Badge className={PRIORITY_CONFIG[selectedTicket.priority].className}>{PRIORITY_CONFIG[selectedTicket.priority].label}</Badge><Badge className={STATUS_CONFIG[selectedTicket.status].className}>{STATUS_CONFIG[selectedTicket.status].label}</Badge></span>
+          }
+          description={
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-semibold text-brand-text">{selectedTicket.tenantName}</span>
+              <span aria-hidden="true">•</span>
+              <span>{selectedTicket.requesterName}</span>
+              <span aria-hidden="true">•</span>
+              <span>Tạo {formatDateTime(selectedTicket.createdAt)}</span>
+              <span aria-hidden="true">•</span>
+              <span>Cập nhật {formatRelativeTime(selectedTicket.updatedAt)}</span>
+            </span>
+          }
+        >
 
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-[auto_minmax(0,1fr)_auto] lg:overflow-hidden">
             <div className="order-first shrink-0 border-b border-brand-outline/35 bg-brand-surface-lowest/35 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-l">
@@ -806,8 +779,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
               )}
             </div>
             </div>
-          </aside>
-        </div>
+        </Modal>
       )}
     </div>
   );

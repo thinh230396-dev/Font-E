@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
-import Modal from './components/Modal';
+import { AlertTriangle, Info } from 'lucide-react';
 import { 
   loadLocalStorageData, 
   saveLocalStorageData, 
@@ -28,6 +27,7 @@ import { recordAuditLog } from './utils/auditLogs';
 import { inferPaymentGateway, normalizeInvoicePaymentData } from './utils/invoicePayments';
 import { SUPPORT_MOCK_TICKETS } from './mockData/supportTickets';
 import useGlobalModalGuard from './hooks/useGlobalModalGuard';
+import { Button, Modal as UiModal, useToast } from './components/ui';
 import {
   deletePackageUpgradeRequest,
   fetchPackageUpgradeRequests,
@@ -51,7 +51,7 @@ import Header from './components/Header';
 import LoginPage from './components/LoginPage';
 import TenantAdminPortal from './components/NailTenantAdminPortal';
 import ReceptionistPortal from './components/ReceptionistPortal';
-import type { InterfaceLanguage } from './components/AccountPreferences';
+import { useLanguage } from './i18n';
 import { getDemoAccountByRole, type DemoAccount, type PortalRole } from './auth/demoAccounts';
 
 const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v2';
@@ -218,6 +218,7 @@ const normalizeInvoiceDueDate = (invoice: Invoice) => {
 
 export default function App() {
   useGlobalModalGuard();
+  const showToast = useToast();
 
   const [sessionAccount, setSessionAccount] = useState<DemoAccount | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -229,10 +230,9 @@ export default function App() {
     if (typeof window === 'undefined') return 'light';
     return localStorage.getItem('salonsys_theme') === 'dark' ? 'dark' : 'light';
   });
-  const [interfaceLanguage, setInterfaceLanguage] = useState<InterfaceLanguage>(() => {
-    if (typeof window === 'undefined') return 'vi';
-    return localStorage.getItem('salonsys_interface_language') === 'en' ? 'en' : 'vi';
-  });
+  // Ngôn ngữ nay do LanguageProvider ở `main.tsx` giữ, để mọi component đọc
+  // được qua context thay vì phải luồn prop qua từng cấp.
+  const { language: interfaceLanguage, setLanguage: setInterfaceLanguage } = useLanguage();
   const [systemSettings, setSystemSettings] = useState<SystemSettingsModel>(loadSystemSettings);
   
   // Navigation active tab state
@@ -271,21 +271,11 @@ export default function App() {
   // Selected tenant from overview to open details panel in tenant screen
   const [selectedTenantFromOverview, setSelectedTenantFromOverview] = useState<Tenant | null>(null);
 
-  // Custom toast state
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' | 'warning' } | null>(null);
-
   // Custom confirm modal state
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     message: string;
     onConfirm: () => void;
-  } | null>(null);
-
-  // Custom alert modal state
-  const [alertDialog, setAlertDialog] = useState<{
-    title: string;
-    message: string;
-    type: 'success' | 'info' | 'error' | 'warning';
   } | null>(null);
 
   const triggerConfirm = (title: string, message: string, onConfirm: () => void) => {
@@ -305,15 +295,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = themeMode;
+    const root = document.documentElement;
+    // Rất nhiều phần tử đang transition `background-color`/`color`. Khi token đổi
+    // giữa sáng và tối, trình duyệt bắt đầu transition từ giá trị cũ và có thể
+    // kẹt luôn ở đó — nền vẫn trắng trong khi chữ đã chuyển sang màu sáng, đọc
+    // không nổi. Tắt transition đúng trong khung hình đổi theme rồi bật lại.
+    root.classList.add('theme-switching');
+    root.dataset.theme = themeMode;
     localStorage.setItem('salonsys_theme', themeMode);
+    // Đọc layout để ép tính lại style ngay khi transition còn đang bị tắt.
+    void root.offsetHeight;
+    const timer = window.setTimeout(() => root.classList.remove('theme-switching'), 80);
+    return () => window.clearTimeout(timer);
   }, [themeMode]);
-
-  useEffect(() => {
-    document.documentElement.lang = interfaceLanguage;
-    document.documentElement.dataset.language = interfaceLanguage;
-    localStorage.setItem('salonsys_interface_language', interfaceLanguage);
-  }, [interfaceLanguage]);
 
   useEffect(() => {
     const handleSettingsUpdated = (event: Event) => {
@@ -350,39 +344,6 @@ export default function App() {
     setSessionAccount(null);
     void logoutAccount();
   };
-
-  // Auto-dismiss toast
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
-  // Global alert override (now shows a premium blocking modal dialog)
-  useEffect(() => {
-    const nativeAlert = window.alert;
-    window.alert = (message: string) => {
-      const lower = message.toLowerCase();
-      let type: 'success' | 'info' | 'error' | 'warning' = 'info';
-      let title = 'Thông báo';
-      if (lower.includes('thành công') || lower.includes('hoàn tất') || lower.includes('thành công!')) {
-        type = 'success';
-        title = 'Thành công';
-      } else if (lower.includes('cảnh báo') || lower.includes('yêu cầu')) {
-        type = 'warning';
-        title = 'Cảnh báo';
-      } else if (lower.includes('lỗi') || lower.includes('thất bại') || lower.includes('bắt buộc')) {
-        type = 'error';
-        title = 'Lỗi hệ thống';
-      }
-      setAlertDialog({ title, message, type });
-    };
-
-    return () => {
-      window.alert = nativeAlert;
-    };
-  }, []);
 
   // Sync state changes to LocalStorage
   useEffect(() => {
@@ -659,10 +620,7 @@ export default function App() {
       tenantName: tenant.name,
       status: tenant.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE'
     }).catch((error) => {
-      setToast({
-        message: error instanceof Error ? error.message : 'Không thể đồng bộ tài khoản đăng nhập.',
-        type: 'error'
-      });
+      showToast(error instanceof Error ? error.message : 'Không thể đồng bộ tài khoản đăng nhập.', 'error');
     });
   };
 
@@ -678,10 +636,7 @@ export default function App() {
       tenantName: admin.tenantName,
       status: admin.status
     }).catch((error) => {
-      setToast({
-        message: error instanceof Error ? error.message : 'Không thể đồng bộ tài khoản đăng nhập.',
-        type: 'error'
-      });
+      showToast(error instanceof Error ? error.message : 'Không thể đồng bộ tài khoản đăng nhập.', 'error');
     });
   };
 
@@ -689,7 +644,7 @@ export default function App() {
   const handleAddTenant = (newTenantData: Omit<Tenant, 'createdAt' | 'lastLogin'>) => {
     const newId = newTenantData.id.trim().toUpperCase();
     if (tenants.some((tenant) => tenant.id.toLowerCase() === newId.toLowerCase())) {
-      alert(`Mã tenant "${newId}" đã tồn tại. Vui lòng chọn mã khác.`);
+      showToast(`Mã tenant "${newId}" đã tồn tại. Vui lòng chọn mã khác.`, 'error');
       return;
     }
 
@@ -749,7 +704,7 @@ export default function App() {
       metadata: { package: newTenant.packageName, invoiceId: newInvoice.id }
     });
 
-    alert(`Đã thêm tenant "${newTenant.name}" thành công! Hóa đơn đầu tiên ${newInvoice.id} đã được khởi tạo.`);
+    showToast(`Đã thêm tenant "${newTenant.name}" thành công! Hóa đơn đầu tiên ${newInvoice.id} đã được khởi tạo.`);
   };
 
   const handleUpdateTenant = (id: string, updatedFields: Partial<Tenant>) => {
@@ -922,11 +877,11 @@ export default function App() {
     setTenants((current) => current.map((tenant) => (
       tenant.id === id ? { ...tenant, status: newStatus } : tenant
     )));
-    setAlertDialog({
-      title: 'Đã cập nhật trạng thái',
-      message: `Tenant "${currentTenant.name}" đã được chuyển sang trạng thái ${newStatus}.`,
-      type: newStatus === 'SUSPENDED' ? 'warning' : 'success'
-    });
+    showToast(
+      'Đã cập nhật trạng thái',
+      newStatus === 'SUSPENDED' ? 'warning' : 'success',
+      { description: `Tenant "${currentTenant.name}" đã được chuyển sang trạng thái ${newStatus}.` }
+    );
     if (currentTenant && currentTenant.status !== newStatus) {
       recordAuditLog({
         eventCode: 'TENANT.STATUS.UPDATED',
@@ -956,12 +911,12 @@ export default function App() {
 
   const handleMarkAllAlertsAsRead = () => {
     setAlerts(alerts.map(a => ({ ...a, isRead: true })));
-    alert('Đã đánh dấu tất cả cảnh báo hệ thống là đã đọc!');
+    showToast('Đã đánh dấu tất cả cảnh báo hệ thống là đã đọc!');
   };
 
   const handleClearAllAlerts = () => {
     setAlerts([]);
-    alert('Đã xóa sạch cảnh báo.');
+    showToast('Đã xóa sạch cảnh báo.');
   };
 
   // Invoice update status
@@ -1011,11 +966,7 @@ export default function App() {
       return t;
     }));
 
-    setAlertDialog({
-      title: 'Thông báo',
-      message: `Đã cập nhật hóa đơn ${id} thành trạng thái: ${newStatus}`,
-      type: 'info'
-    });
+    showToast(`Đã cập nhật hóa đơn ${id} thành trạng thái: ${newStatus}`, 'info');
     if (currentInvoice && currentInvoice.status !== newStatus) {
       recordAuditLog({
         eventCode: 'BILLING.INVOICE.UPDATED',
@@ -1057,7 +1008,7 @@ export default function App() {
 
   const handleCreateInvoice = (invoice: Invoice) => {
     if (invoices.some((current) => current.id === invoice.id || current.invoiceCode === invoice.invoiceCode)) {
-      alert(`Mã hóa đơn ${invoice.invoiceCode || invoice.id} đã tồn tại.`);
+      showToast(`Mã hóa đơn ${invoice.invoiceCode || invoice.id} đã tồn tại.`, 'error');
       return false;
     }
     setInvoices((current) => dedupeInvoices([normalizeInvoicePaymentData(normalizeInvoiceDueDate(invoice)), ...current]));
@@ -1078,18 +1029,18 @@ export default function App() {
 
     const packageHasTenants = tenants.some((tenant) => tenant.subscriptionPackageId === id || tenant.packageName === currentPackage.name);
     if (packageHasTenants && updatedFields.status === 'ARCHIVED') {
-      alert('Không thể lưu trữ ngay gói đang có tenant. Hãy dùng “Ngừng đăng ký” và chọn gói thay thế.');
+      showToast('Không thể lưu trữ ngay gói đang có tenant. Hãy dùng “Ngừng đăng ký” và chọn gói thay thế.', 'error');
       return;
     }
     if (packageHasTenants && updatedFields.status === 'DEPRECATED' && !currentPackage.retirementRequest) {
-      alert('Gói đang có tenant sử dụng. Hãy tạo yêu cầu “Ngừng đăng ký” để tenant được chuyển an toàn khi hết hạn.');
+      showToast('Gói đang có tenant sử dụng. Hãy tạo yêu cầu “Ngừng đăng ký” để tenant được chuyển an toàn khi hết hạn.', 'warning');
       return;
     }
 
     const nextName = updatedFields.name?.trim() || currentPackage.name;
     const duplicateName = packages.some((pkg) => pkg.id !== id && pkg.name.toLowerCase() === nextName.toLowerCase());
     if (duplicateName) {
-      alert(`Gói dịch vụ "${nextName}" đã tồn tại.`);
+      showToast(`Gói dịch vụ "${nextName}" đã tồn tại.`, 'error');
       return;
     }
 
@@ -1164,7 +1115,7 @@ export default function App() {
     const isDuplicate = packages.some(p => p.name.toLowerCase() === normalizedName.toLowerCase());
 
     if (isDuplicate) {
-      alert(`Gói dịch vụ "${normalizedName}" đã tồn tại.`);
+      showToast(`Gói dịch vụ "${normalizedName}" đã tồn tại.`, 'error');
       return;
     }
 
@@ -1192,7 +1143,7 @@ export default function App() {
       method: 'CLIENT /packages',
       metadata: { status: newPackage.status || 'DRAFT', monthlyPrice: newPackage.price }
     });
-    alert(`Đã thêm gói dịch vụ "${normalizedName}" thành công!`);
+    showToast(`Đã thêm gói dịch vụ "${normalizedName}" thành công!`);
   };
 
   const handleDeprecatePackage = (id: string) => {
@@ -1204,14 +1155,14 @@ export default function App() {
       category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id, method: `CLIENT /packages/${id}/deprecate`,
       changes: [{ field: 'status', before: targetPackage.status || 'ACTIVE', after: 'DEPRECATED' }]
     });
-    alert(`Đã ngưng cung cấp gói "${targetPackage?.name || id}". Các tenant đang dùng vẫn được giữ nguyên.`);
+    showToast(`Đã ngưng cung cấp gói "${targetPackage?.name || id}". Các tenant đang dùng vẫn được giữ nguyên.`);
   };
 
   const handleSchedulePackageRetirement = (id: string, replacementPackageName: string) => {
     const targetPackage = packages.find((pkg) => pkg.id === id);
     const replacementPackage = getSubscriptionPackage(packages, replacementPackageName);
     if (!targetPackage || !replacementPackage || replacementPackage.id === id || (replacementPackage.status || 'ACTIVE') !== 'ACTIVE') {
-      alert('Vui lòng chọn một gói thay thế đang hoạt động.');
+      showToast('Vui lòng chọn một gói thay thế đang hoạt động.', 'error');
       return;
     }
 
@@ -1228,7 +1179,7 @@ export default function App() {
       || Number(tenant.staffCount || 0) > replacementPackage.maxStaff
     ));
     if (incompatibleTenant) {
-      alert(`Gói ${replacementPackage.name} không đủ hạn mức cho tenant "${incompatibleTenant.name}". Vui lòng chọn gói thay thế khác.`);
+      showToast(`Gói ${replacementPackage.name} không đủ hạn mức cho tenant "${incompatibleTenant.name}". Vui lòng chọn gói thay thế khác.`, 'error');
       return;
     }
 
@@ -1250,7 +1201,7 @@ export default function App() {
       severity: 'high', status: 'success', category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id,
       method: `CLIENT /packages/${id}/retirement`, metadata: { replacementPackage: replacementPackage.name, affectedTenants: affectedTenants.length }
     });
-    alert(`Đã ngừng nhận đăng ký mới cho gói "${targetPackage.name}". ${affectedTenants.length} tenant hiện tại sẽ tự chuyển sang "${replacementPackage.name}" khi hết hạn.`);
+    showToast(`Đã ngừng nhận đăng ký mới cho gói "${targetPackage.name}". ${affectedTenants.length} tenant hiện tại sẽ tự chuyển sang "${replacementPackage.name}" khi hết hạn.`);
   };
 
   const handleCancelPackageRetirement = (id: string) => {
@@ -1267,7 +1218,7 @@ export default function App() {
       description: `Đã mở lại đăng ký và hủy lịch chuyển tenant của gói "${targetPackage.name}".`, severity: 'medium', status: 'success',
       category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id, method: `CLIENT /packages/${id}/retirement`
     });
-    alert(`Đã mở lại đăng ký cho gói "${targetPackage.name}". Các lịch chuyển gói đang chờ đã được hủy.`);
+    showToast(`Đã mở lại đăng ký cho gói "${targetPackage.name}". Các lịch chuyển gói đang chờ đã được hủy.`);
   };
 
   const handleReactivatePackage = (id: string) => {
@@ -1278,7 +1229,7 @@ export default function App() {
       severity: 'medium', status: 'success', category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id,
       method: `CLIENT /packages/${id}/reactivate`, changes: [{ field: 'status', before: targetPackage.status || 'DEPRECATED', after: 'ACTIVE' }]
     });
-    alert(`Đã mở bán lại gói "${targetPackage?.name || id}".`);
+    showToast(`Đã mở bán lại gói "${targetPackage?.name || id}".`);
   };
 
   const handleDeletePackage = (id: string) => {
@@ -1286,7 +1237,7 @@ export default function App() {
     if (!targetPackage) return;
     const hasTenants = tenants.some((tenant) => tenant.subscriptionPackageId === id || tenant.packageName === targetPackage.name);
     if (hasTenants) {
-      alert('Không thể xóa gói đang có tenant sử dụng. Hãy chuyển tenant sang gói khác hoặc lưu trữ gói này.');
+      showToast('Không thể xóa gói đang có tenant sử dụng. Hãy chuyển tenant sang gói khác hoặc lưu trữ gói này.', 'error');
       return;
     }
     setPackages(packages.filter(p => p.id !== id));
@@ -1294,7 +1245,7 @@ export default function App() {
       eventCode: 'PACKAGE.DELETED', event: 'Xóa gói dịch vụ', description: `Superadmin đã xóa gói "${targetPackage.name}" không còn tenant sử dụng.`,
       severity: 'high', status: 'success', category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id, method: `CLIENT /packages/${id}`
     });
-    alert(`Đã xóa gói dịch vụ "${targetPackage?.name || id}".`);
+    showToast(`Đã xóa gói dịch vụ "${targetPackage?.name || id}".`);
   };
 
   const handleTenantAdminsChange = (nextAdmins: TenantAdminAccount[]) => {
@@ -1348,11 +1299,11 @@ export default function App() {
   ) => {
     const existingPending = upgradeRequests.find((request) => request.tenantId === tenant.id && request.status === 'PENDING');
     if (existingPending) {
-      setAlertDialog({
-        title: 'Yêu cầu đang chờ duyệt',
-        message: `Tenant đã có yêu cầu nâng cấp lên gói ${existingPending.requestedPackageName}. Super Admin sẽ xử lý trong Quản lý Tenant → Yêu cầu nâng cấp.`,
-        type: 'warning'
-      });
+      showToast(
+        'Yêu cầu đang chờ duyệt',
+        'warning',
+        { description: `Tenant đã có yêu cầu nâng cấp lên gói ${existingPending.requestedPackageName}. Super Admin sẽ xử lý trong Quản lý Tenant → Yêu cầu nâng cấp.` }
+      );
       return;
     }
 
@@ -1382,11 +1333,11 @@ export default function App() {
       if (saved) return;
       setUpgradeRequests((current) => current.filter((item) => item.id !== request.id));
       setAlerts((current) => current.filter((alert) => alert.id !== `ALT-${request.id}`));
-      setAlertDialog({
-        title: 'Chưa gửi được yêu cầu',
-        message: 'Máy chủ chưa xác nhận yêu cầu nâng cấp. Vui lòng kiểm tra phiên đăng nhập và thử lại.',
-        type: 'error'
-      });
+      showToast(
+        'Chưa gửi được yêu cầu',
+        'error',
+        { description: 'Máy chủ chưa xác nhận yêu cầu nâng cấp. Vui lòng kiểm tra phiên đăng nhập và thử lại.' }
+      );
     });
     setAlerts((current) => [{
       id: `ALT-${request.id}`,
@@ -1426,11 +1377,7 @@ export default function App() {
     const targetPackage = packages.find((item) => item.id === request.requestedPackageId)
       || getSubscriptionPackage(packages, request.requestedPackageName);
     if (!tenant || !targetPackage) {
-      setAlertDialog({
-        title: 'Không thể xử lý',
-        message: 'Tenant hoặc gói được yêu cầu không còn tồn tại.',
-        type: 'error'
-      });
+      showToast('Không thể xử lý', 'error', { description: 'Tenant hoặc gói được yêu cầu không còn tồn tại.' });
       return false;
     }
 
@@ -1481,11 +1428,11 @@ export default function App() {
     };
     const persisted = await persistPackageUpgradeReview(reviewedRequest);
     if (!persisted) {
-      setAlertDialog({
-        title: 'Chưa thể lưu phê duyệt',
-        message: 'Máy chủ chưa xác nhận thao tác. Tenant và hóa đơn chưa bị thay đổi; vui lòng thử lại.',
-        type: 'error'
-      });
+      showToast(
+        'Chưa thể lưu phê duyệt',
+        'error',
+        { description: 'Máy chủ chưa xác nhận thao tác. Tenant và hóa đơn chưa bị thay đổi; vui lòng thử lại.' }
+      );
       return false;
     }
 
@@ -1536,15 +1483,17 @@ export default function App() {
       method: `PATCH /api/package-upgrade-requests/${request.id}`,
       metadata: { decision, targetPackage: targetPackage.name, invoiceId: invoiceId || '', effectiveDate }
     });
-    setAlertDialog({
-      title: decision === 'APPROVED' ? 'Đã duyệt nâng cấp' : 'Đã từ chối yêu cầu',
-      message: decision === 'APPROVED'
-        ? effectiveDate === 'immediate'
-          ? `Tenant "${tenant.name}" đã được cập nhật sang gói ${targetPackage.name}. Hóa đơn ${invoiceId} đã được tạo.`
-          : `Đã lên lịch chuyển tenant "${tenant.name}" sang gói ${targetPackage.name} vào ${tenant.subscriptionRenewsAt || tenant.trialEndDate || reviewedAt.slice(0, 10)}. Hóa đơn ${invoiceId} đã được tạo.`
-        : `Yêu cầu nâng cấp của tenant "${tenant.name}" đã được từ chối và lưu lý do.`,
-      type: decision === 'APPROVED' ? 'success' : 'info'
-    });
+    showToast(
+      decision === 'APPROVED' ? 'Đã duyệt nâng cấp' : 'Đã từ chối yêu cầu',
+      decision === 'APPROVED' ? 'success' : 'info',
+      {
+        description: decision === 'APPROVED'
+          ? effectiveDate === 'immediate'
+            ? `Tenant "${tenant.name}" đã được cập nhật sang gói ${targetPackage.name}. Hóa đơn ${invoiceId} đã được tạo.`
+            : `Đã lên lịch chuyển tenant "${tenant.name}" sang gói ${targetPackage.name} vào ${tenant.subscriptionRenewsAt || tenant.trialEndDate || reviewedAt.slice(0, 10)}. Hóa đơn ${invoiceId} đã được tạo.`
+          : `Yêu cầu nâng cấp của tenant "${tenant.name}" đã được từ chối và lưu lý do.`
+      }
+    );
     return true;
   };
 
@@ -1589,6 +1538,7 @@ export default function App() {
             showConfirm={triggerConfirm}
             upgradeRequests={upgradeRequests}
             onReviewUpgradeRequest={handleReviewUpgradeRequest}
+            reportCurrency={systemSettings.general.currency}
           />
         );
       case 'admins':
@@ -1611,8 +1561,9 @@ export default function App() {
         );
       case 'billing':
         return (
-          <BillingAndInvoices 
+          <BillingAndInvoices
             invoices={invoices}
+            tenants={tenants}
             onUpdateInvoiceStatus={handleUpdateInvoiceStatus}
             onUpdateInvoice={handleUpdateInvoice}
             onCreateInvoice={handleCreateInvoice}
@@ -1650,130 +1601,44 @@ export default function App() {
     }
   };
 
-  // Toast component JSX
-  const renderToast = () => {
-    if (!toast) return null;
-
-    const { message, type } = toast;
-    let bgClass = 'border-emerald-500/30 bg-emerald-50/95 dark:bg-emerald-950/95';
-    let iconColor = 'text-emerald-500';
-    let icon = <CheckCircle className="w-5 h-5" />;
-
-    if (type === 'error') {
-      bgClass = 'border-red-500/30 bg-red-50/95 dark:bg-red-950/95';
-      iconColor = 'text-red-500';
-      icon = <XCircle className="w-5 h-5" />;
-    } else if (type === 'warning') {
-      bgClass = 'border-amber-500/30 bg-amber-50/95 dark:bg-amber-950/95';
-      iconColor = 'text-amber-500';
-      icon = <AlertTriangle className="w-5 h-5" />;
-    } else if (type === 'info') {
-      bgClass = 'border-indigo-500/30 bg-indigo-50/95 dark:bg-indigo-950/95';
-      iconColor = 'text-indigo-500';
-      icon = <Info className="w-5 h-5" />;
-    }
-
-    return (
-      <div className="fixed top-5 right-5 z-[9999] animate-slideDown max-w-sm w-full">
-        <div className={`flex items-start gap-3 p-4 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-300 ${bgClass}`}>
-          <div className={`${iconColor} shrink-0 mt-0.5`}>
-            {icon}
-          </div>
-          <div className="flex-1 text-xs font-semibold text-brand-text leading-relaxed">
-            {message}
-          </div>
-          <button 
-            onClick={() => setToast(null)}
-            className="text-brand-text-muted hover:text-brand-text transition-colors cursor-pointer shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   // Confirm Modal component JSX
   const renderConfirmDialog = () => {
     if (!confirmDialog) return null;
 
     const { title, message, onConfirm } = confirmDialog;
 
+    /* Dùng `ui/Modal` chứ không phải Modal cũ: hộp thoại xác nhận gần như luôn
+       được mở TỪ TRONG một hộp thoại khác (bấm X ở modal tạo tenant sẽ hỏi
+       "Hủy tạo Tenant"). `ui/Modal` có ngăn xếp hộp thoại nên lớp xác nhận này
+       nằm đúng trên lớp gọi nó, Escape chỉ đóng nó thay vì đóng luôn biểu mẫu
+       phía dưới, và focus được trả về đúng nút đã mở. Modal cũ nằm ngoài ngăn
+       xếp đó nên bị lớp dưới che kín — nút X trông như không hoạt động. */
     return (
-      <Modal
-        isOpen={true}
+      <UiModal
+        open
         onClose={() => setConfirmDialog(null)}
-        maxWidth="md"
-        zIndex="z-[9999]"
+        size="small"
         title={title}
-        headerIcon={<Info className="w-5 h-5 text-brand-primary" />}
+        icon={<Info aria-hidden="true" />}
         footer={
           <>
-            <button
-              type="button"
-              onClick={() => setConfirmDialog(null)}
-              className="px-4 py-2 border border-brand-outline/40 hover:bg-brand-surface-high rounded-xl text-xs font-semibold text-brand-text transition-colors cursor-pointer"
-            >
+            <Button variant="secondary" onClick={() => setConfirmDialog(null)}>
               Hủy
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
               onClick={() => {
                 onConfirm();
                 setConfirmDialog(null);
               }}
-              className="px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-md"
             >
               Xác nhận
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-xs text-brand-text-muted leading-relaxed">{message}</p>
-      </Modal>
-    );
-  };
-
-  // Alert Modal component JSX
-  const renderAlertDialog = () => {
-    if (!alertDialog) return null;
-
-    const { title, message, type } = alertDialog;
-    
-    let iconBg = 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400';
-    let icon = <Info className="w-5 h-5" />;
-    
-    if (type === 'success') {
-      iconBg = 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400';
-      icon = <CheckCircle className="w-5 h-5" />;
-    } else if (type === 'error') {
-      iconBg = 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400';
-      icon = <XCircle className="w-5 h-5" />;
-    } else if (type === 'warning') {
-      iconBg = 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400';
-      icon = <AlertTriangle className="w-5 h-5" />;
-    }
-
-    return (
-      <Modal
-        isOpen={true}
-        onClose={() => setAlertDialog(null)}
-        maxWidth="md"
-        zIndex="z-[9999]"
-        title={title}
-        headerIcon={<div className={`p-1 rounded-lg ${iconBg}`}>{icon}</div>}
-        footer={
-          <button
-            type="button"
-            onClick={() => setAlertDialog(null)}
-            className="px-5 py-2 bg-brand-primary hover:bg-brand-primary/95 text-brand-on-primary rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-md w-full sm:w-auto text-center"
-          >
-            Đóng
-          </button>
-        }
-      >
-        <p className="text-xs text-brand-text-muted leading-relaxed whitespace-pre-wrap">{message}</p>
-      </Modal>
+        <p className="text-brand-text-muted">{message}</p>
+      </UiModal>
     );
   };
 
@@ -1843,6 +1708,10 @@ export default function App() {
         }}
         onUpdateTenant={handleUpdateTenant}
         onLogout={handleLogout}
+        themeMode={themeMode}
+        onThemeChange={setThemeMode}
+        interfaceLanguage={interfaceLanguage}
+        onLanguageChange={setInterfaceLanguage}
       />
     );
   }
@@ -1925,9 +1794,7 @@ export default function App() {
       </div>
 
       {/* Custom Global Dialogs */}
-      {renderToast()}
       {renderConfirmDialog()}
-      {renderAlertDialog()}
 
     </div>
   );

@@ -29,6 +29,7 @@ import {
   Zap,
 } from "lucide-react";
 import BeautifulSelect from "./BeautifulSelect";
+import { formatMoney as money } from "../utils/money";
 
 type CampaignType = "REMINDER" | "REVIEW" | "REBOOK" | "WINBACK" | "BROADCAST";
 type CampaignStatus = "AUTOMATED" | "ACTIVE" | "DRAFT" | "PAUSED" | "COMPLETED";
@@ -71,8 +72,6 @@ interface TenantAdminCustomerCareProps {
   onNotify?: (message: string) => void;
 }
 
-const money = (value: number) =>
-  new Intl.NumberFormat("vi-VN").format(value) + "đ";
 const typeMeta: Record<
   CampaignType,
   { label: string; icon: typeof Send; badge: string }
@@ -665,7 +664,7 @@ export default function TenantAdminCustomerCare({
     <div className="space-y-5">
       <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="tenant-page-kicker mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-violet-600">
+          <div className="tenant-page-kicker mb-2 flex flex-wrap items-center gap-2 text-caption font-bold text-violet-600">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             CRM đa kênh · Cập nhật 15:12
             <span className="text-slate-300">•</span>
@@ -674,7 +673,7 @@ export default function TenantAdminCustomerCare({
           <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">
             Chăm sóc khách hàng
           </h1>
-          <p className="mt-2 text-[11px] text-slate-500">
+          <p className="mt-2 text-body text-slate-500">
             Tự động nhắc lịch, xin đánh giá, mời quay lại và đo lường doanh thu
             từ từng chiến dịch.
           </p>
@@ -683,7 +682,7 @@ export default function TenantAdminCustomerCare({
           <button
             type="button"
             onClick={exportReport}
-            className="flex h-11 items-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+            className="flex h-11 items-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
           >
             <Download className="h-4 w-4" />
             Xuất báo cáo
@@ -691,7 +690,7 @@ export default function TenantAdminCustomerCare({
           <button
             type="button"
             onClick={() => setTemplatesOpen(true)}
-            className="flex h-11 items-center gap-2 border border-violet-200 bg-violet-50 px-4 text-[9px] font-black text-violet-700 shadow-sm"
+            className="flex h-11 items-center gap-2 border border-violet-200 bg-violet-50 px-4 text-caption font-black text-violet-700 shadow-sm"
           >
             <MessageCircle className="h-4 w-4" />
             Mẫu tin nhắn
@@ -700,7 +699,7 @@ export default function TenantAdminCustomerCare({
             type="button"
             onClick={openCreate}
             disabled={!canManage}
-            className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+            className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
           >
             <Plus className="h-4 w-4" />
             Tạo chiến dịch
@@ -717,10 +716,10 @@ export default function TenantAdminCustomerCare({
             <ShieldCheck className="h-4.5 w-4.5" />
           </span>
           <div>
-            <p className="text-[10px] font-black text-slate-800">
+            <p className="text-caption font-black text-slate-800">
               Phạm vi quyền: {roleLabel}
             </p>
-            <p className="mt-1 text-[8px] leading-4 text-slate-500">
+            <p className="mt-1 text-caption leading-4 text-slate-500">
               {canManage
                 ? "Được tạo/phê duyệt chiến dịch, cấu hình tự động, sử dụng mẫu tin và xem hiệu quả trong tenant; chỉ liên hệ khách đã đồng ý kênh tương ứng."
                 : readOnlyReason || "Chỉ được xem chiến dịch và báo cáo CRM."}
@@ -728,7 +727,7 @@ export default function TenantAdminCustomerCare({
           </div>
         </div>
         <span
-          className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-800 ring-amber-200"}`}
+          className={`w-fit rounded-full px-3 py-1.5 text-caption font-black ring-1 ${canManage ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-800 ring-amber-200"}`}
         >
           {canManage ? "Toàn quyền CRM tenant" : "Chỉ xem"}
         </span>
@@ -770,8 +769,8 @@ export default function TenantAdminCustomerCare({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[9px] font-bold text-slate-500">{label}</p>
-                <p className="mt-1.5 text-lg font-black tracking-tight text-slate-950">
+                <p className="text-caption font-bold text-slate-500">{label}</p>
+                <p className="ta-metric-value mt-1.5 text-slate-950">
                   {value}
                 </p>
               </div>
@@ -781,7 +780,7 @@ export default function TenantAdminCustomerCare({
                 <Icon className="h-4.5 w-4.5" />
               </span>
             </div>
-            <p className="mt-2 text-[8px] font-semibold text-slate-400">
+            <p className="mt-2 text-caption font-semibold text-slate-400">
               {detail}
             </p>
           </article>
@@ -796,7 +795,7 @@ export default function TenantAdminCustomerCare({
                 value={searchQuery}
                 onChange={(event) => onSearchQueryChange(event.target.value)}
                 placeholder="Tìm chiến dịch, đối tượng, nội dung..."
-                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[10px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-caption font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
               />
               {searchQuery && (
                 <button
@@ -813,7 +812,7 @@ export default function TenantAdminCustomerCare({
               <BeautifulSelect
                 value={selectedBranch}
                 onChange={(event) => onSelectedBranchChange(event.target.value)}
-                className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+                className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Tất cả chi nhánh</option>
                 <option value="Q3">Chi nhánh Quận 3</option>
@@ -824,7 +823,7 @@ export default function TenantAdminCustomerCare({
                 onChange={(event) =>
                   setStatusFilter(event.target.value as "ALL" | CampaignStatus)
                 }
-                className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+                className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Mọi trạng thái</option>
                 {Object.entries(statusMeta).map(([key, meta]) => (
@@ -850,10 +849,10 @@ export default function TenantAdminCustomerCare({
                 key={value}
                 type="button"
                 onClick={() => setTypeFilter(value)}
-                className={`h-8 shrink-0 border px-3 text-[8px] font-black shadow-sm ${typeFilter === value ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-500"}`}
+                className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${typeFilter === value ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-500"}`}
               >
                 {value === "ALL" ? "Tất cả chiến dịch" : typeMeta[value].label}
-                <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-[7px]">
+                <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">
                   {value === "ALL"
                     ? scoped.length
                     : scoped.filter((item) => item.type === value).length}
@@ -883,23 +882,23 @@ export default function TenantAdminCustomerCare({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-black text-slate-900">
+                        <span className="text-caption font-black text-slate-900">
                           {campaign.name}
                         </span>
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${statusMeta[campaign.status].badge}`}
+                          className={`rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${statusMeta[campaign.status].badge}`}
                         >
                           {statusMeta[campaign.status].label}
                         </span>
                       </span>
-                      <span className="mt-1.5 block text-[8px] text-slate-400">
+                      <span className="mt-1.5 block text-caption text-slate-400">
                         {campaign.id} · {campaign.audience}
                       </span>
                       <span className="mt-2 flex flex-wrap gap-1.5">
                         {campaign.channels.map((channel) => (
                           <span
                             key={channel}
-                            className={`rounded-md px-2 py-1 text-[7px] font-bold ${channelMeta[channel].className}`}
+                            className={`rounded-md px-2 py-1 text-caption font-bold ${channelMeta[channel].className}`}
                           >
                             {channelMeta[channel].label}
                           </span>
@@ -908,26 +907,26 @@ export default function TenantAdminCustomerCare({
                     </span>
                     <span className="grid shrink-0 grid-cols-3 gap-4 sm:w-[300px]">
                       <span>
-                        <span className="block text-[7px] text-slate-400">
+                        <span className="block text-caption text-slate-400">
                           Đã gửi
                         </span>
-                        <span className="mt-1 block text-[10px] font-black text-slate-800">
+                        <span className="mt-1 block text-caption font-black text-slate-800">
                           {campaign.sent}
                         </span>
                       </span>
                       <span>
-                        <span className="block text-[7px] text-slate-400">
+                        <span className="block text-caption text-slate-400">
                           Tỷ lệ mở
                         </span>
-                        <span className="mt-1 block text-[10px] font-black text-slate-800">
+                        <span className="mt-1 block text-caption font-black text-slate-800">
                           {openRate}%
                         </span>
                       </span>
                       <span>
-                        <span className="block text-[7px] text-slate-400">
+                        <span className="block text-caption text-slate-400">
                           Lịch tạo
                         </span>
-                        <span className="mt-1 block text-[10px] font-black text-emerald-700">
+                        <span className="mt-1 block text-caption font-black text-emerald-700">
                           {campaign.appointments}
                         </span>
                       </span>
@@ -941,18 +940,18 @@ export default function TenantAdminCustomerCare({
           {!filtered.length && (
             <div className="py-16 text-center">
               <Megaphone className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-3 text-[10px] font-black text-slate-600">
+              <p className="mt-3 text-caption font-black text-slate-600">
                 Không có chiến dịch phù hợp
               </p>
             </div>
           )}
           <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3">
-            <p className="text-[8px] text-slate-400">
+            <p className="text-caption text-slate-400">
               Hiển thị{" "}
               <strong className="text-slate-600">{filtered.length}</strong>{" "}
               chiến dịch
             </p>
-            <p className="text-[8px] font-semibold text-slate-400">
+            <p className="text-caption font-semibold text-slate-400">
               Doanh thu quy đổi:{" "}
               {money(filtered.reduce((sum, item) => sum + item.revenue, 0))}
             </p>
@@ -962,11 +961,11 @@ export default function TenantAdminCustomerCare({
           <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white shadow-lg">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[8px] font-black uppercase tracking-[0.16em] text-violet-300">
+                <p className="text-caption font-black uppercase tracking-[0.16em] text-violet-300">
                   Hàng đợi chăm sóc
                 </p>
                 <p className="mt-2 text-lg font-black">62 khách cần xử lý</p>
-                <p className="mt-1 text-[8px] text-slate-400">
+                <p className="mt-1 text-caption text-slate-400">
                   Ưu tiên theo tín hiệu và giá trị
                 </p>
               </div>
@@ -999,11 +998,11 @@ export default function TenantAdminCustomerCare({
                   key={item.label}
                   className="flex items-center justify-between rounded-xl bg-white/7 p-3"
                 >
-                  <span className="text-[8px] font-bold text-slate-300">
+                  <span className="text-caption font-bold text-slate-300">
                     {item.label}
                   </span>
                   <span
-                    className={`flex h-6 min-w-6 items-center justify-center rounded-lg px-1.5 text-[8px] font-black ${item.tone}`}
+                    className={`flex h-6 min-w-6 items-center justify-center rounded-lg px-1.5 text-caption font-black ${item.tone}`}
                   >
                     {item.value}
                   </span>
@@ -1019,7 +1018,7 @@ export default function TenantAdminCustomerCare({
                     )
                   : requireManage()
               }
-              className="mt-4 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/8 text-[8px] font-black text-white shadow-none"
+              className="mt-4 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/8 text-caption font-black text-white shadow-none"
             >
               <UsersRound className="h-3.5 w-3.5" />
               Mở danh sách xử lý
@@ -1028,10 +1027,10 @@ export default function TenantAdminCustomerCare({
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[9px] font-black text-slate-800">
+                <p className="text-caption font-black text-slate-800">
                   Hiệu quả theo kênh
                 </p>
-                <p className="mt-1 text-[8px] text-slate-400">
+                <p className="mt-1 text-caption text-slate-400">
                   Tỷ lệ mở trung bình
                 </p>
               </div>
@@ -1044,7 +1043,7 @@ export default function TenantAdminCustomerCare({
                 { label: "Email", value: 36, tone: "bg-violet-500" },
               ].map((item) => (
                 <div key={item.label}>
-                  <div className="mb-1.5 flex justify-between text-[8px]">
+                  <div className="mb-1.5 flex justify-between text-caption">
                     <span className="font-bold text-slate-600">
                       {item.label}
                     </span>
@@ -1082,16 +1081,16 @@ export default function TenantAdminCustomerCare({
             <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[9px] font-black uppercase tracking-wide text-violet-600">
+                  <span className="text-caption font-black uppercase tracking-wide text-violet-600">
                     {selected.id}
                   </span>
                   <span
-                    className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${typeMeta[selected.type].badge}`}
+                    className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${typeMeta[selected.type].badge}`}
                   >
                     {typeMeta[selected.type].label}
                   </span>
                   <span
-                    className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[selected.status].badge}`}
+                    className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[selected.status].badge}`}
                   >
                     {statusMeta[selected.status].label}
                   </span>
@@ -1102,7 +1101,7 @@ export default function TenantAdminCustomerCare({
                 >
                   {selected.name}
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-400">
+                <p className="mt-1 text-caption text-slate-400">
                   {selected.schedule} ·{" "}
                   {selected.branch === "ALL"
                     ? "Toàn tenant"
@@ -1124,13 +1123,13 @@ export default function TenantAdminCustomerCare({
                   <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-[8px] font-black uppercase tracking-[0.15em] text-violet-300">
+                        <p className="text-caption font-black uppercase tracking-[0.15em] text-violet-300">
                           Phễu chiến dịch
                         </p>
                         <p className="mt-2 text-xl font-black">
                           {selected.audience}
                         </p>
-                        <p className="mt-2 text-[9px] text-slate-400">
+                        <p className="mt-2 text-caption text-slate-400">
                           Kích hoạt: {selected.trigger}
                         </p>
                       </div>
@@ -1147,10 +1146,10 @@ export default function TenantAdminCustomerCare({
                           key={item.label}
                           className="rounded-xl bg-white/7 p-3"
                         >
-                          <p className="text-[7px] text-slate-400">
+                          <p className="text-caption text-slate-400">
                             {item.label}
                           </p>
-                          <p className="mt-1 text-[12px] font-black">
+                          <p className="mt-1 text-body font-black">
                             {item.value}
                           </p>
                         </div>
@@ -1160,10 +1159,10 @@ export default function TenantAdminCustomerCare({
                   <div className="rounded-2xl border border-slate-200 p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[9px] font-black text-slate-800">
+                        <p className="text-caption font-black text-slate-800">
                           Hiệu quả chuyển đổi
                         </p>
-                        <p className="mt-1 text-[8px] text-slate-400">
+                        <p className="mt-1 text-caption text-slate-400">
                           Ghi nhận trong phạm vi phân bổ chiến dịch
                         </p>
                       </div>
@@ -1171,8 +1170,8 @@ export default function TenantAdminCustomerCare({
                     </div>
                     <div className="mt-4 grid grid-cols-3 gap-2">
                       <div className="rounded-xl bg-blue-50 p-3">
-                        <p className="text-[7px] text-blue-600">Tỷ lệ mở</p>
-                        <p className="mt-1 text-[11px] font-black text-blue-800">
+                        <p className="text-caption text-blue-600">Tỷ lệ mở</p>
+                        <p className="mt-1 text-body font-black text-blue-800">
                           {Math.round(
                             (selected.opened / Math.max(1, selected.sent)) *
                               100,
@@ -1181,14 +1180,14 @@ export default function TenantAdminCustomerCare({
                         </p>
                       </div>
                       <div className="rounded-xl bg-emerald-50 p-3">
-                        <p className="text-[7px] text-emerald-600">Doanh thu</p>
-                        <p className="mt-1 text-[10px] font-black text-emerald-800">
+                        <p className="text-caption text-emerald-600">Doanh thu</p>
+                        <p className="mt-1 text-caption font-black text-emerald-800">
                           {money(selected.revenue)}
                         </p>
                       </div>
                       <div className="rounded-xl bg-violet-50 p-3">
-                        <p className="text-[7px] text-violet-600">ROI</p>
-                        <p className="mt-1 text-[11px] font-black text-violet-800">
+                        <p className="text-caption text-violet-600">ROI</p>
+                        <p className="mt-1 text-body font-black text-violet-800">
                           {selected.budget
                             ? (selected.revenue / selected.budget).toFixed(1)
                             : "—"}
@@ -1198,7 +1197,7 @@ export default function TenantAdminCustomerCare({
                     </div>
                   </div>
                   <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="text-[9px] font-black text-slate-800">
+                    <p className="text-caption font-black text-slate-800">
                       Luồng tự động
                     </p>
                     <div className="mt-3 space-y-2">
@@ -1207,10 +1206,10 @@ export default function TenantAdminCustomerCare({
                           key={step}
                           className="flex items-start gap-3 rounded-xl bg-slate-50 p-3"
                         >
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-[8px] font-black text-violet-700">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-caption font-black text-violet-700">
                             {index + 1}
                           </span>
-                          <p className="pt-1 text-[8px] leading-4 text-slate-600">
+                          <p className="pt-1 text-caption leading-4 text-slate-600">
                             {step}
                           </p>
                         </div>
@@ -1226,20 +1225,20 @@ export default function TenantAdminCustomerCare({
                           <MessageCircle className="h-4 w-4" />
                         </span>
                         <div>
-                          <p className="text-[8px] font-black text-slate-700">
+                          <p className="text-caption font-black text-slate-700">
                             Tin nhắn xem trước
                           </p>
-                          <p className="mt-0.5 text-[7px] text-slate-400">
+                          <p className="mt-0.5 text-caption text-slate-400">
                             {selected.channels
                               .map((item) => channelMeta[item].label)
                               .join(" + ")}
                           </p>
                         </div>
                       </div>
-                      <p className="mt-4 text-[9px] leading-5 text-slate-600">
+                      <p className="mt-4 text-caption leading-5 text-slate-600">
                         {selected.message}
                       </p>
-                      <div className="mt-4 rounded-lg bg-violet-600 px-3 py-2 text-center text-[8px] font-black text-white">
+                      <div className="mt-4 rounded-lg bg-violet-600 px-3 py-2 text-center text-caption font-black text-white">
                         Xác nhận / Đặt lịch ngay
                       </div>
                     </div>
@@ -1247,16 +1246,16 @@ export default function TenantAdminCustomerCare({
                   <div className="rounded-2xl border border-slate-200 p-4">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-xl bg-slate-50 p-3">
-                        <p className="text-[7px] text-slate-400">
+                        <p className="text-caption text-slate-400">
                           Người phụ trách
                         </p>
-                        <p className="mt-1 text-[8px] font-black text-slate-700">
+                        <p className="mt-1 text-caption font-black text-slate-700">
                           {selected.owner}
                         </p>
                       </div>
                       <div className="rounded-xl bg-slate-50 p-3">
-                        <p className="text-[7px] text-slate-400">Ngân sách</p>
-                        <p className="mt-1 text-[8px] font-black text-slate-700">
+                        <p className="text-caption text-slate-400">Ngân sách</p>
+                        <p className="mt-1 text-caption font-black text-slate-700">
                           {money(selected.budget)}
                         </p>
                       </div>
@@ -1265,7 +1264,7 @@ export default function TenantAdminCustomerCare({
                       {selected.channels.map((channel) => (
                         <span
                           key={channel}
-                          className={`rounded-lg px-2.5 py-1.5 text-[7px] font-bold ${channelMeta[channel].className}`}
+                          className={`rounded-lg px-2.5 py-1.5 text-caption font-bold ${channelMeta[channel].className}`}
                         >
                           {channelMeta[channel].label}
                         </span>
@@ -1273,7 +1272,7 @@ export default function TenantAdminCustomerCare({
                     </div>
                   </div>
                   <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="text-[9px] font-black text-slate-800">
+                    <p className="text-caption font-black text-slate-800">
                       Nhật ký phê duyệt
                     </p>
                     <div className="mt-3 space-y-3">
@@ -1282,7 +1281,7 @@ export default function TenantAdminCustomerCare({
                           <span
                             className={`mt-1 h-2 w-2 shrink-0 rounded-full ${index === 0 ? "bg-violet-500" : "bg-slate-300"}`}
                           />
-                          <p className="text-[8px] leading-4 text-slate-500">
+                          <p className="text-caption leading-4 text-slate-500">
                             {item}
                           </p>
                         </div>
@@ -1291,17 +1290,17 @@ export default function TenantAdminCustomerCare({
                   </div>
                   {selected.note && (
                     <div className="rounded-2xl bg-amber-50 p-4">
-                      <p className="text-[8px] font-black uppercase text-amber-600">
+                      <p className="text-caption font-black uppercase text-amber-600">
                         Lưu ý trước khi duyệt
                       </p>
-                      <p className="mt-2 text-[8px] leading-5 text-amber-800">
+                      <p className="mt-2 text-caption leading-5 text-amber-800">
                         {selected.note}
                       </p>
                     </div>
                   )}
                   <div className="flex items-start gap-2 rounded-2xl bg-violet-50 p-4">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-                    <p className="text-[8px] leading-4 text-violet-700">
+                    <p className="text-caption leading-4 text-violet-700">
                       Hệ thống tự loại khách không đồng ý nhận tin trên từng
                       kênh trước khi gửi.
                     </p>
@@ -1310,7 +1309,7 @@ export default function TenantAdminCustomerCare({
               </div>
             </div>
             <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-              <p className="text-[8px] font-semibold text-slate-400">
+              <p className="text-caption font-semibold text-slate-400">
                 Thao tác dưới quyền {roleLabel}
               </p>
               <div className="flex flex-wrap justify-end gap-2">
@@ -1318,7 +1317,7 @@ export default function TenantAdminCustomerCare({
                   type="button"
                   onClick={() => requestAction("DELETE", selected)}
                   disabled={!canManage}
-                  className="flex h-10 items-center gap-2 border border-rose-200 bg-white px-4 text-[8px] font-black text-rose-700 shadow-sm disabled:opacity-50"
+                  className="flex h-10 items-center gap-2 border border-rose-200 bg-white px-4 text-caption font-black text-rose-700 shadow-sm disabled:opacity-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Xóa
@@ -1327,7 +1326,7 @@ export default function TenantAdminCustomerCare({
                   type="button"
                   onClick={() => duplicateCampaign(selected)}
                   disabled={!canManage}
-                  className="flex h-10 items-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-black text-slate-600 shadow-sm disabled:opacity-50"
+                  className="flex h-10 items-center gap-2 border border-slate-200 bg-white px-4 text-caption font-black text-slate-600 shadow-sm disabled:opacity-50"
                 >
                   <Copy className="h-3.5 w-3.5" />
                   Sao chép
@@ -1337,7 +1336,7 @@ export default function TenantAdminCustomerCare({
                     type="button"
                     onClick={() => requestAction("PAUSE", selected)}
                     disabled={!canManage}
-                    className="flex h-10 items-center gap-2 border border-rose-200 bg-rose-50 px-4 text-[8px] font-black text-rose-700 shadow-sm disabled:opacity-50"
+                    className="flex h-10 items-center gap-2 border border-rose-200 bg-rose-50 px-4 text-caption font-black text-rose-700 shadow-sm disabled:opacity-50"
                   >
                     <Pause className="h-3.5 w-3.5" />
                     Tạm dừng
@@ -1347,7 +1346,7 @@ export default function TenantAdminCustomerCare({
                     type="button"
                     onClick={() => changeStatus(selected, "ACTIVE")}
                     disabled={!canManage}
-                    className="flex h-10 items-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[8px] font-black text-white shadow-sm disabled:opacity-50"
+                    className="flex h-10 items-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-sm disabled:opacity-50"
                   >
                     <Play className="h-3.5 w-3.5" />
                     {selected.status === "DRAFT"
@@ -1384,7 +1383,7 @@ export default function TenantAdminCustomerCare({
                 )}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[8px] font-black uppercase tracking-wide text-slate-400">
+                <p className="text-caption font-black uppercase tracking-wide text-slate-400">
                   Xác nhận thao tác
                 </p>
                 <h2
@@ -1397,7 +1396,7 @@ export default function TenantAdminCustomerCare({
                       ? "Không thể xóa chiến dịch"
                       : "Xóa vĩnh viễn chiến dịch?"}
                 </h2>
-                <p className="mt-1 truncate text-[9px] font-bold text-slate-500">
+                <p className="mt-1 truncate text-caption font-bold text-slate-500">
                   {pendingAction.campaign.name}
                 </p>
               </div>
@@ -1415,23 +1414,23 @@ export default function TenantAdminCustomerCare({
                 <>
                   <div className="flex items-start gap-2 rounded-2xl bg-amber-50 p-4">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    <p className="text-[8px] leading-4 text-amber-800">
+                    <p className="text-caption leading-4 text-amber-800">
                       Chiến dịch sẽ ngừng gửi mới ngay sau khi xác nhận. Dữ liệu
                       đã gửi, tương tác và doanh thu vẫn được giữ lại.
                     </p>
                   </div>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-black text-slate-700">
+                    <span className="mb-1.5 block text-caption font-black text-slate-700">
                       Lý do tạm dừng *
                     </span>
                     <textarea
                       value={pauseReason}
                       onChange={(event) => setPauseReason(event.target.value)}
                       placeholder="Ví dụ: Kiểm tra lại nội dung và nhóm khách nhận tin..."
-                      className="min-h-24 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-[9px] leading-5 outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-50"
+                      className="min-h-24 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-50"
                     />
                   </label>
-                  <p className="text-[8px] text-slate-400">
+                  <p className="text-caption text-slate-400">
                     Lý do sẽ được lưu vào nhật ký phê duyệt.
                   </p>
                 </>
@@ -1440,14 +1439,14 @@ export default function TenantAdminCustomerCare({
               pendingAction.blockers?.length ? (
                 <>
                   <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
-                    <p className="text-[9px] font-black text-rose-800">
+                    <p className="text-caption font-black text-rose-800">
                       Chiến dịch chưa đáp ứng điều kiện xóa:
                     </p>
                     <div className="mt-3 space-y-2">
                       {pendingAction.blockers.map((blocker) => (
                         <div
                           key={blocker}
-                          className="flex items-start gap-2 text-[8px] leading-4 text-rose-700"
+                          className="flex items-start gap-2 text-caption leading-4 text-rose-700"
                         >
                           <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                           {blocker}
@@ -1456,10 +1455,10 @@ export default function TenantAdminCustomerCare({
                     </div>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-[8px] font-black text-slate-700">
+                    <p className="text-caption font-black text-slate-700">
                       Quy tắc xóa an toàn
                     </p>
-                    <p className="mt-1.5 text-[8px] leading-4 text-slate-500">
+                    <p className="mt-1.5 text-caption leading-4 text-slate-500">
                       Được xóa bản nháp hoặc chiến dịch vừa tạo khi chưa gửi,
                       chưa có tương tác, lịch hẹn hay doanh thu. Chiến dịch đã
                       vận hành nên được tạm dừng để bảo toàn lịch sử.
@@ -1470,13 +1469,13 @@ export default function TenantAdminCustomerCare({
                 <>
                   <div className="flex items-start gap-2 rounded-2xl bg-rose-50 p-4">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
-                    <p className="text-[8px] leading-4 text-rose-800">
+                    <p className="text-caption leading-4 text-rose-800">
                       Thao tác này không thể hoàn tác. Chiến dịch mới chưa phát
                       sinh dữ liệu sẽ bị xóa khỏi danh sách.
                     </p>
                   </div>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-black text-slate-700">
+                    <span className="mb-1.5 block text-caption font-black text-slate-700">
                       Nhập <strong className="text-rose-600">XÓA</strong> để xác
                       nhận
                     </span>
@@ -1487,7 +1486,7 @@ export default function TenantAdminCustomerCare({
                       }
                       autoComplete="off"
                       placeholder="XÓA"
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-50"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-black outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-50"
                     />
                   </label>
                 </>
@@ -1497,7 +1496,7 @@ export default function TenantAdminCustomerCare({
               <button
                 type="button"
                 onClick={() => setPendingAction(null)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
               >
                 {pendingAction.type === "DELETE" &&
                 pendingAction.blockers?.length
@@ -1509,7 +1508,7 @@ export default function TenantAdminCustomerCare({
                   type="button"
                   onClick={() => pauseCampaign(pendingAction.campaign)}
                   disabled={!pauseReason.trim()}
-                  className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-[9px] font-black text-white shadow-lg shadow-rose-100 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+                  className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-caption font-black text-white shadow-lg shadow-rose-100 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
                 >
                   <Pause className="h-4 w-4" />
                   Xác nhận tạm dừng
@@ -1523,7 +1522,7 @@ export default function TenantAdminCustomerCare({
                     disabled={
                       deleteConfirmation.trim().toUpperCase() !== "XÓA"
                     }
-                    className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-[9px] font-black text-white shadow-lg shadow-rose-100 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+                    className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-caption font-black text-white shadow-lg shadow-rose-100 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
                   >
                     <Trash2 className="h-4 w-4" />
                     Xóa vĩnh viễn
@@ -1549,13 +1548,13 @@ export default function TenantAdminCustomerCare({
           >
             <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">
+                <p className="text-caption font-black uppercase tracking-wide text-violet-600">
                   Thư viện nội dung
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-900">
                   Mẫu tin nhắn đã duyệt
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-500">
+                <p className="mt-1 text-caption text-slate-500">
                   Sử dụng biến cá nhân hóa để giảm sai sót khi gửi.
                 </p>
               </div>
@@ -1597,16 +1596,16 @@ export default function TenantAdminCustomerCare({
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-[9px] font-black text-slate-800">
+                      <p className="text-caption font-black text-slate-800">
                         {template.title}
                       </p>
-                      <p className="mt-1 text-[7px] font-bold text-violet-500">
+                      <p className="mt-1 text-caption font-bold text-violet-500">
                         {template.type}
                       </p>
                     </div>
                     <MessageCircle className="h-4 w-4 text-slate-300" />
                   </div>
-                  <p className="mt-3 text-[8px] leading-5 text-slate-500">
+                  <p className="mt-3 text-caption leading-5 text-slate-500">
                     {template.text}
                   </p>
                   <button
@@ -1622,7 +1621,7 @@ export default function TenantAdminCustomerCare({
                       setFormOpen(true);
                     }}
                     disabled={!canManage}
-                    className="mt-4 flex h-9 w-full items-center justify-center gap-2 border border-violet-200 bg-violet-50 text-[8px] font-black text-violet-700 shadow-none disabled:opacity-50"
+                    className="mt-4 flex h-9 w-full items-center justify-center gap-2 border border-violet-200 bg-violet-50 text-caption font-black text-violet-700 shadow-none disabled:opacity-50"
                   >
                     <Copy className="h-3.5 w-3.5" />
                     Dùng mẫu này
@@ -1648,13 +1647,13 @@ export default function TenantAdminCustomerCare({
           >
             <header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">
+                <p className="text-caption font-black uppercase tracking-wide text-violet-600">
                   Thiết kế CRM
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-900">
                   Tạo chiến dịch chăm sóc
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-500">
+                <p className="mt-1 text-caption text-slate-500">
                   Chiến dịch được lưu bản nháp trước khi Tenant Admin phê duyệt.
                 </p>
               </div>
@@ -1669,12 +1668,12 @@ export default function TenantAdminCustomerCare({
             </header>
             <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
               {formError && (
-                <div className="rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700 sm:col-span-2">
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700 sm:col-span-2">
                   {formError}
                 </div>
               )}
               <label className="sm:col-span-2">
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Tên chiến dịch *
                 </span>
                 <input
@@ -1686,11 +1685,11 @@ export default function TenantAdminCustomerCare({
                     }))
                   }
                   placeholder="Ví dụ: Nhắc làm lại Gel sau 21 ngày"
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                 />
               </label>
               <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Loại chiến dịch *
                 </span>
                 <BeautifulSelect
@@ -1701,7 +1700,7 @@ export default function TenantAdminCustomerCare({
                       type: event.target.value as CampaignType,
                     }))
                   }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
                 >
                   {Object.entries(typeMeta).map(([key, meta]) => (
                     <option key={key} value={key}>
@@ -1711,7 +1710,7 @@ export default function TenantAdminCustomerCare({
                 </BeautifulSelect>
               </label>
               <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Phạm vi *
                 </span>
                 <BeautifulSelect
@@ -1722,7 +1721,7 @@ export default function TenantAdminCustomerCare({
                       branch: event.target.value as BranchScope,
                     }))
                   }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
                 >
                   <option value="ALL">Toàn tenant</option>
                   <option value="Q3">Chi nhánh Quận 3</option>
@@ -1730,7 +1729,7 @@ export default function TenantAdminCustomerCare({
                 </BeautifulSelect>
               </label>
               <div className="sm:col-span-2">
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Kênh gửi *
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -1739,7 +1738,7 @@ export default function TenantAdminCustomerCare({
                       key={channel}
                       type="button"
                       onClick={() => toggleChannel(channel)}
-                      className={`h-9 border px-3 text-[8px] font-black shadow-sm ${form.channels.includes(channel) ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-500"}`}
+                      className={`h-9 border px-3 text-caption font-black shadow-sm ${form.channels.includes(channel) ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-500"}`}
                     >
                       {form.channels.includes(channel) && (
                         <Check className="mr-1.5 inline h-3 w-3" />
@@ -1750,7 +1749,7 @@ export default function TenantAdminCustomerCare({
                 </div>
               </div>
               <label className="sm:col-span-2">
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Nhóm khách hàng *
                 </span>
                 <input
@@ -1762,11 +1761,11 @@ export default function TenantAdminCustomerCare({
                     }))
                   }
                   placeholder="Khách làm Gel từ 18–24 ngày trước..."
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-violet-400"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption outline-none focus:border-violet-400"
                 />
               </label>
               <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Điều kiện kích hoạt
                 </span>
                 <input
@@ -1778,11 +1777,11 @@ export default function TenantAdminCustomerCare({
                     }))
                   }
                   placeholder="Ngày thứ 21 sau dịch vụ"
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-violet-400"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption outline-none focus:border-violet-400"
                 />
               </label>
               <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Lịch gửi *
                 </span>
                 <input
@@ -1794,11 +1793,11 @@ export default function TenantAdminCustomerCare({
                     }))
                   }
                   placeholder="09:30 hằng ngày"
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-violet-400"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption outline-none focus:border-violet-400"
                 />
               </label>
               <label className="sm:col-span-2">
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Nội dung tin nhắn *
                 </span>
                 <textarea
@@ -1810,14 +1809,14 @@ export default function TenantAdminCustomerCare({
                     }))
                   }
                   placeholder="Dùng {{customer_name}}, {{appointment_time}}, {{service}} để cá nhân hóa..."
-                  className="min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  className="min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                 />
-                <span className="mt-1.5 block text-right text-[7px] text-slate-400">
+                <span className="mt-1.5 block text-right text-caption text-slate-400">
                   {form.message.length} ký tự
                 </span>
               </label>
               <label className="sm:col-span-2">
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Ngân sách dự kiến
                 </span>
                 <input
@@ -1832,7 +1831,7 @@ export default function TenantAdminCustomerCare({
                     }))
                   }
                   placeholder="0"
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] outline-none focus:border-violet-400"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption outline-none focus:border-violet-400"
                 />
               </label>
             </div>
@@ -1840,13 +1839,13 @@ export default function TenantAdminCustomerCare({
               <button
                 type="button"
                 onClick={() => setFormOpen(false)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"
+                className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
               >
                 <Check className="h-4 w-4" />
                 Lưu bản nháp

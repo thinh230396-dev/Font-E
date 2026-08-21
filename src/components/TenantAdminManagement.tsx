@@ -32,6 +32,7 @@ import {
   isUnlimitedBranches,
   isUnlimitedStaff
 } from '../utils/subscriptions';
+import { Modal, useToast } from './ui';
 
 interface TenantAdminManagementProps {
   tenants: Tenant[];
@@ -186,7 +187,7 @@ const StatusBadge = ({ status }: { status: AdminStatus }) => {
     : 'bg-brand-error/10 text-brand-error border-brand-error/20';
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cls}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-caption font-semibold border ${cls}`}>
       {status === 'ACTIVE' ? <CheckCircle className="w-3 h-3" /> : <MinusCircle className="w-3 h-3" />}
       {getStatusLabel(status)}
     </span>
@@ -195,7 +196,7 @@ const StatusBadge = ({ status }: { status: AdminStatus }) => {
 
 const DetailItem = ({ label, value }: { label: string; value: React.ReactNode }) => (
   <div className="bg-brand-surface-lowest border border-brand-outline/30 rounded-lg p-3 min-w-0">
-    <p className="text-[10px] uppercase font-bold text-brand-text-muted">{label}</p>
+    <p className="text-caption uppercase font-bold text-brand-text-muted">{label}</p>
     <div className="text-sm font-semibold text-brand-text mt-1 break-words">{value}</div>
   </div>
 );
@@ -234,6 +235,7 @@ const getDefaultTimezoneForCountry = (country: string) => {
 };
 
 export default function TenantAdminManagement({ tenants, packages, invitedAdmins, onInvitedAdminsChange, onUpdateTenant, showConfirm }: TenantAdminManagementProps) {
+  const showToast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | AdminRole>('ALL');
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -363,7 +365,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
     const isManagedByCurrentAdmin = editingAdmin.tenantIds.includes(tenantId);
     const isManagedByOtherAdmin = Boolean(tenant?.adminEmail?.trim()) && !isManagedByCurrentAdmin;
     if (isManagedByOtherAdmin) {
-      alert(`Tiệm "${tenant?.name}" đã có Tenant Admin quản lí. Vui lòng gỡ/chuyển admin hiện tại trước khi gán cho admin khác.`);
+      showToast(`Tiệm "${tenant?.name}" đã có Tenant Admin quản lí. Vui lòng gỡ/chuyển admin hiện tại trước khi gán cho admin khác.`, 'error');
       return;
     }
 
@@ -390,22 +392,22 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
     const originalNote = editingAdmin.note || '';
 
     if (!nextName || !nextEmail || !nextUsername || !nextPhone) {
-      alert('Vui lòng điền đầy đủ Tên, Gmail, Username và SĐT của Tenant Admin.');
+      showToast('Vui lòng điền đầy đủ Tên, Gmail, Username và SĐT của Tenant Admin.', 'error');
       return;
     }
 
     if (nextUsername.includes('@')) {
-      alert('Username đăng nhập không dùng định dạng Gmail. Vui lòng nhập username riêng.');
+      showToast('Username đăng nhập không dùng định dạng Gmail. Vui lòng nhập username riêng.', 'error');
       return;
     }
 
     if (nextPassword && nextPassword.length < 6) {
-      alert('Mật khẩu phải có ít nhất 6 ký tự.');
+      showToast('Mật khẩu phải có ít nhất 6 ký tự.', 'error');
       return;
     }
 
     if (editingAdmin.source === 'TENANT' && nextTenantIds.length === 0) {
-      alert('Tenant Admin đang hoạt động phải quản lý ít nhất 1 tiệm.');
+      showToast('Tenant Admin đang hoạt động phải quản lý ít nhất 1 tiệm.', 'error');
       return;
     }
 
@@ -415,7 +417,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       Boolean(tenant.adminEmail?.trim())
     ));
     if (tenantOwnedByOther) {
-      alert(`Không thể gán tiệm "${tenantOwnedByOther.name}" vì tiệm này đã có Tenant Admin quản lí (${tenantOwnedByOther.adminEmail}).`);
+      showToast(`Không thể gán tiệm "${tenantOwnedByOther.name}" vì tiệm này đã có Tenant Admin quản lí (${tenantOwnedByOther.adminEmail}).`, 'error');
       return;
     }
 
@@ -424,7 +426,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       admin.email.trim().toLowerCase() === nextEmail.toLowerCase()
     ));
     if (emailExists) {
-      alert('Gmail của Tenant Admin đã tồn tại trên hệ thống.');
+      showToast('Gmail của Tenant Admin đã tồn tại trên hệ thống.', 'error');
       return;
     }
 
@@ -433,7 +435,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       (admin.adminCode || admin.id).trim().toLowerCase() === nextAdminCode.toLowerCase()
     ));
     if (adminCodeExists) {
-      alert('Mã Tenant Admin đã tồn tại trên hệ thống.');
+      showToast('Mã Tenant Admin đã tồn tại trên hệ thống.', 'error');
       return;
     }
 
@@ -452,7 +454,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
     if (editTenantScopeEnabled && !areSameIds(nextTenantIds, editingAdmin.tenantIds)) changedFields.push('Tiệm đang quản lí');
 
     if (changedFields.length === 0) {
-      alert('Chưa có thông tin nào thay đổi.');
+      showToast('Chưa có thông tin nào thay đổi.', 'info');
       return;
     }
 
@@ -553,7 +555,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
 
       setSelectedAdmin((current) => current?.id === editingAdmin.id ? updatedAdmin : current);
       setEditingAdmin(null);
-      alert(`Đã cập nhật Tenant Admin "${nextName}".`);
+      showToast(`Đã cập nhật Tenant Admin "${nextName}".`);
     };
 
     showConfirm(
@@ -566,13 +568,13 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
   const handleInviteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteName.trim() || !inviteEmail.trim()) {
-      alert('Vui lòng điền tên và email.');
+      showToast('Vui lòng điền tên và email.', 'error');
       return;
     }
 
     const emailExists = admins.some((admin) => admin.email.trim().toLowerCase() === inviteEmail.trim().toLowerCase());
     if (emailExists) {
-      alert('Email Tenant Admin này đã tồn tại.');
+      showToast('Email Tenant Admin này đã tồn tại.', 'error');
       return;
     }
 
@@ -581,18 +583,18 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       (admin.adminCode || admin.id).trim().toLowerCase() === normalizedAdminCode.toLowerCase()
     ));
     if (adminCodeExists) {
-      alert('Mã Tenant Admin này đã tồn tại.');
+      showToast('Mã Tenant Admin này đã tồn tại.', 'error');
       return;
     }
 
     if (inviteTempPassword.trim() && inviteTempPassword.trim().length < 6) {
-      alert('Mật khẩu tạm phải có ít nhất 6 ký tự.');
+      showToast('Mật khẩu tạm phải có ít nhất 6 ký tự.', 'error');
       return;
     }
 
     const normalizedUsername = inviteUsername.trim() || inviteEmail.trim().split('@')[0];
     if (normalizedUsername.includes('@')) {
-      alert('Username đăng nhập không dùng định dạng email.');
+      showToast('Username đăng nhập không dùng định dạng email.', 'error');
       return;
     }
 
@@ -625,13 +627,13 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
     setInvitedAdmins([newAdmin, ...invitedAdmins]);
     resetInviteForm();
     setShowInviteModal(false);
-    alert(`Đã thêm Tenant Admin "${newAdmin.name}". Admin này chưa liên kết tiệm; hãy gán khi tạo hoặc cập nhật tenant.`);
+    showToast(`Đã thêm Tenant Admin "${newAdmin.name}". Admin này chưa liên kết tiệm; hãy gán khi tạo hoặc cập nhật tenant.`);
   };
 
   const toggleAdminStatus = (admin: AdminUser) => {
     const nextStatus: AdminStatus = admin.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
     updateAdminStatus(admin, nextStatus);
-    alert(`Đã ${nextStatus === 'ACTIVE' ? 'kích hoạt lại' : 'khóa tạm thời'} tài khoản của ${admin.name}`);
+    showToast(`Đã ${nextStatus === 'ACTIVE' ? 'kích hoạt lại' : 'khóa tạm thời'} tài khoản của ${admin.name}`);
   };
 
   const deleteAdmin = (admin: AdminUser) => {
@@ -644,12 +646,12 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       () => {
         if (isTenantAdmin) {
           updateAdminStatus(admin, 'SUSPENDED');
-          alert('Đã khóa tạm thời Tenant Admin.');
+          showToast('Đã khóa tạm thời Tenant Admin.');
           return;
         }
         setInvitedAdmins(invitedAdmins.filter((item) => item.id !== admin.id));
         if (selectedAdmin?.id === admin.id) setSelectedAdmin(null);
-        alert('Đã gỡ quyền quản trị viên.');
+        showToast('Đã gỡ quyền quản trị viên.');
       }
     );
   };
@@ -714,6 +716,29 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
     : selectedAdmin?.role === 'Owner'
       ? `Owner theo gói ${packageScopeLabel}`
       : `${permissions.length} quyền theo gói ${packageScopeLabel}`
+  const selectedAdminActions = selectedAdmin ? (
+    <>
+              <button
+                type="button"
+                onClick={() => toggleAdminStatus(selectedAdmin)}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  selectedAdmin.status === 'ACTIVE'
+                    ? 'bg-brand-error/10 text-brand-error border border-brand-error/20'
+                    : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5" />
+                {selectedAdmin.status === 'ACTIVE' ? 'Khóa tạm thời' : 'Mở khóa'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedAdmin(null)}
+                className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-5 py-2.5 rounded-lg text-sm font-bold transition-colors cursor-pointer"
+              >
+                Đóng
+              </button>
+    </>
+  ) : null;
 
   return (
     <div className="space-y-6">
@@ -756,7 +781,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                 key={role}
                 onClick={() => setRoleFilter(role)}
                 className={`
-                  px-3 py-1 text-[11px] font-medium transition-colors cursor-pointer
+                  px-3 py-1 text-body font-medium transition-colors cursor-pointer
                   ${roleFilter === role
                     ? 'bg-brand-primary text-brand-on-primary'
                     : 'bg-brand-surface hover:bg-brand-surface-high text-brand-text-muted'
@@ -774,7 +799,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-brand-outline/35 bg-brand-surface-lowest/40 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
+              <tr className="border-b border-brand-outline/35 bg-brand-surface-lowest/40 text-caption font-bold text-brand-text-muted uppercase tracking-wider">
                 <th className="py-3 px-5">Quản trị viên</th>
                 <th className="py-3 px-5">Tiệm liên kết</th>
                 <th className="py-3 px-5">Vai trò hệ thống</th>
@@ -800,7 +825,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                         </div>
                         <div className="flex flex-col">
                           <span className="font-bold text-brand-text">{admin.name}</span>
-                          <span className="text-[10px] text-brand-text-muted flex items-center gap-1 mt-0.5">
+                          <span className="text-caption text-brand-text-muted flex items-center gap-1 mt-0.5">
                             <Mail className="w-3 h-3" />
                             {admin.email}
                           </span>
@@ -815,11 +840,11 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                         </span>
                       </span>
                       {admin.tenantCount > 1 && (
-                        <span className="text-[9px] text-brand-text-muted/70 mt-1 block">{admin.tenantCount} tenant liên kết</span>
+                        <span className="text-caption text-brand-text-muted/70 mt-1 block">{admin.tenantCount} tenant liên kết</span>
                       )}
                     </td>
                     <td className="py-3.5 px-5">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      <span className={`px-2 py-0.5 rounded text-caption font-bold ${
                         admin.role === 'Owner'
                           ? 'bg-brand-tertiary/10 text-brand-tertiary border border-brand-tertiary/20'
                           : admin.role === 'Manager'
@@ -878,19 +903,15 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
       </div>
 
       {selectedAdmin && (
-        <div className="sa-modal-backdrop fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
-          <div className="bg-brand-surface border border-brand-outline rounded-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col">
-            <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/45 flex justify-between items-center">
-              <div>
-                <span className="text-sm font-bold text-brand-text">Chi tiết Tenant Admin</span>
-                <p className="text-[10px] text-brand-text-muted mt-0.5">Hồ sơ quản trị, quyền hạn, tenant liên kết, bảo mật và lịch sử thao tác</p>
-              </div>
-              <button type="button" onClick={() => setSelectedAdmin(null)} className="text-brand-text-muted hover:text-brand-text p-1 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6 overflow-y-auto">
+        <Modal
+          open
+          onClose={() => setSelectedAdmin(null)}
+          title="Chi tiết Tenant Admin"
+          description="Hồ sơ quản trị, quyền hạn, tenant liên kết, bảo mật và lịch sử thao tác"
+          size="fullscreen"
+          footer={selectedAdminActions}
+        >
+            <div className="space-y-6">
               <section className="flex flex-col lg:flex-row gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-2xl font-black text-brand-primary shrink-0 overflow-hidden">
                   {selectedAdmin.avatarUrl ? (
@@ -946,7 +967,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   ) : (
                     <table className="w-full text-left">
                       <thead className="bg-brand-surface-lowest/50 border-b border-brand-outline/30">
-                        <tr className="text-[10px] uppercase font-bold text-brand-text-muted">
+                        <tr className="text-caption uppercase font-bold text-brand-text-muted">
                           <th className="px-4 py-2.5">Tên tiệm / tenant code</th>
                           <th className="px-4 py-2.5">Địa chỉ</th>
                           <th className="px-4 py-2.5">Chi nhánh</th>
@@ -964,7 +985,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                               <tr className="hover:bg-brand-surface-high/25">
                                 <td className="px-4 py-3">
                                   <div className="font-bold text-brand-text">{tenant.name}</div>
-                                  <div className="text-[10px] text-brand-text-muted mt-0.5">{tenant.id} · {tenant.phone}</div>
+                                  <div className="text-caption text-brand-text-muted mt-0.5">{tenant.id} · {tenant.phone}</div>
                                 </td>
                                 <td className="px-4 py-3 text-brand-text-muted">
                                   <span className="inline-flex items-center gap-1">
@@ -982,12 +1003,12 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                                     <span>{branches.length} chi nhánh</span>
                                     {isBranchListOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                   </button>
-                                  <div className="text-[10px] text-brand-text-muted mt-1">
+                                  <div className="text-caption text-brand-text-muted mt-1">
                                     Giới hạn gói: {isUnlimitedBranches(limits.branchLimit) ? 'Không giới hạn' : `${limits.branchLimit} chi nhánh`}
                                   </div>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  <span className={`px-2 py-0.5 rounded-full text-caption font-bold ${
                                     tenant.status === 'ACTIVE'
                                       ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                       : tenant.status === 'OVERDUE'
@@ -1002,7 +1023,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                                 <tr className="bg-brand-surface-lowest/45">
                                   <td colSpan={4} className="px-4 pb-4">
                                     <div className="rounded-lg border border-brand-outline/25 bg-brand-surface/70 p-3 space-y-2">
-                                      <div className="flex items-center justify-between gap-3 text-[10px] uppercase font-bold text-brand-text-muted">
+                                      <div className="flex items-center justify-between gap-3 text-caption uppercase font-bold text-brand-text-muted">
                                         <span>Danh sách chi nhánh thuộc {tenant.name}</span>
                                         <span>{branches.length} / {isUnlimitedBranches(limits.branchLimit) ? 'Không giới hạn' : limits.branchLimit}</span>
                                       </div>
@@ -1016,12 +1037,12 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                                               <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0">
                                                   <p className="font-bold text-brand-text truncate">{branch.name}</p>
-                                                  <p className="mt-1 text-[11px] text-brand-text-muted flex items-start gap-1">
+                                                  <p className="mt-1 text-body text-brand-text-muted flex items-start gap-1">
                                                     <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
                                                     <span className="line-clamp-2">{branch.address || 'Chưa cập nhật địa chỉ'}</span>
                                                   </p>
                                                 </div>
-                                                <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                                <span className={`shrink-0 px-2 py-0.5 rounded-full text-caption font-bold border ${
                                                   isActive
                                                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                                     : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
@@ -1029,7 +1050,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                                                   {isActive ? 'Đang hoạt động' : 'Tạm ngưng'}
                                                 </span>
                                               </div>
-                                              <div className="mt-2 flex items-center justify-between gap-3 border-t border-brand-outline/20 pt-2 text-[11px]">
+                                              <div className="mt-2 flex items-center justify-between gap-3 border-t border-brand-outline/20 pt-2 text-body">
                                                 <span className="text-brand-text-muted">Nhân viên / Thợ</span>
                                                 <span className="font-bold text-brand-text">{staffUsed} thợ</span>
                                               </div>
@@ -1055,10 +1076,10 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                 <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-3">
                   <DetailItem label="Role Tenant Admin" value={selectedAdmin.role} />
                   <div className="bg-brand-surface-lowest border border-brand-outline/30 rounded-lg p-3">
-                    <p className="text-[10px] uppercase font-bold text-brand-text-muted mb-2">Danh sách quyền được cấp</p>
+                    <p className="text-caption uppercase font-bold text-brand-text-muted mb-2">Danh sách quyền được cấp</p>
                     <div className="flex flex-wrap gap-2">
                       {permissions.map((permission) => (
-                        <span key={permission} className="px-2 py-1 rounded-md bg-brand-primary/10 border border-brand-primary/20 text-[10px] font-bold text-brand-primary">
+                        <span key={permission} className="px-2 py-1 rounded-md bg-brand-primary/10 border border-brand-primary/20 text-caption font-bold text-brand-primary">
                           {permission}
                         </span>
                       ))}
@@ -1104,7 +1125,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   <DetailItem label="Mức quyền truy cập" value={accessScopeLabel} />
                   <DetailItem label="Trạng thái tài khoản" value={getStatusLabel(selectedAdmin.status)} />
                 </div>
-                <p className="text-[11px] text-brand-text-muted leading-relaxed">
+                <p className="text-body text-brand-text-muted leading-relaxed">
                   Phạm vi quyền được đồng bộ theo gói dịch vụ của tenant. Owner có toàn quyền thao tác trong tenant, nhưng số chi nhánh và số người dùng vẫn bị giới hạn theo gói đang sử dụng.
                 </p>
               </section>
@@ -1166,46 +1187,26 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                 </div>
               </section>
             </div>
-
-            <div className="px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => toggleAdminStatus(selectedAdmin)}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                  selectedAdmin.status === 'ACTIVE'
-                    ? 'bg-brand-error/10 text-brand-error border border-brand-error/20'
-                    : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                }`}
-              >
-                <Lock className="w-3.5 h-3.5" />
-                {selectedAdmin.status === 'ACTIVE' ? 'Khóa tạm thời' : 'Mở khóa'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedAdmin(null)}
-                className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-5 py-2.5 rounded-lg text-sm font-bold transition-colors cursor-pointer"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {editingAdmin && (
-        <div className="sa-modal-backdrop fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
-          <form onSubmit={handleEditSubmit} noValidate className="bg-brand-surface border border-brand-outline rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl">
-            <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/45 flex justify-between items-center">
-              <div>
-                <span className="text-sm font-bold text-brand-text">Chỉnh sửa Tenant Admin</span>
-                <p className="text-[10px] text-brand-text-muted mt-0.5">Cập nhật hồ sơ, đăng nhập và trạng thái xác thực</p>
-              </div>
-              <button type="button" onClick={() => setEditingAdmin(null)} className="text-brand-text-muted hover:text-brand-text p-1 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5 max-h-[72vh] overflow-y-auto">
+        <Modal
+          open
+          onClose={() => setEditingAdmin(null)}
+          title="Chỉnh sửa Tenant Admin"
+          description="Cập nhật hồ sơ, đăng nhập và trạng thái xác thực"
+          size="large"
+          closeOnBackdrop={false}
+          footer={
+            <>
+              <button type="button" onClick={() => setEditingAdmin(null)} className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text-muted px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer">Hủy</button>
+              <button type="submit" form="edit-tenant-admin-form" className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-5 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-2"><Edit className="w-3.5 h-3.5" /><span>Lưu chỉnh sửa</span></button>
+            </>
+          }
+        >
+          <form id="edit-tenant-admin-form" onSubmit={handleEditSubmit} noValidate>
+            <div className="space-y-5">
               <section className="flex flex-col sm:flex-row gap-4">
                 <div className="w-20 h-20 rounded-2xl bg-brand-surface-lowest border border-brand-outline/45 overflow-hidden flex items-center justify-center text-2xl font-black text-brand-primary shrink-0">
                   {editAvatar ? (
@@ -1215,7 +1216,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Ảnh đại diện</label>
+                  <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Ảnh đại diện</label>
                   <div className="flex flex-wrap gap-2">
                     <label className="inline-flex items-center gap-2 bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer border border-brand-outline/35">
                       <Upload className="w-3.5 h-3.5" />
@@ -1239,7 +1240,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                 <SectionTitle icon={UserCheck} title="Thông tin Tenant Admin" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Mã Tenant Admin</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Mã Tenant Admin</label>
                     <input
                       type="text"
                       value={editAdminCode}
@@ -1249,14 +1250,14 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Vai trò</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Vai trò</label>
                     <div className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs font-bold text-brand-text">
                       Owner (Chủ tiệm)
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Họ và tên *</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Họ và tên *</label>
                     <input
                       type="text"
                       value={editName}
@@ -1266,7 +1267,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Gmail của Owner *</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Gmail của Owner *</label>
                     <input
                       type="email"
                       value={editEmail}
@@ -1276,18 +1277,18 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Username đăng nhập *</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Username đăng nhập *</label>
                     <input
                       type="text"
                       value={editUsername}
                       onChange={(e) => setEditUsername(e.target.value)}
                       className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
                     />
-                    <span className="text-[10px] text-brand-text-muted/60 mt-1 block">Username không dùng định dạng Gmail.</span>
+                    <span className="text-caption text-brand-text-muted/60 mt-1 block">Username không dùng định dạng Gmail.</span>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Mật khẩu mới</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Mật khẩu mới</label>
                     <input
                       type="text"
                       placeholder="Để trống nếu không đổi"
@@ -1295,11 +1296,11 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                       onChange={(e) => setEditPassword(e.target.value)}
                       className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
                     />
-                    <span className="text-[10px] text-brand-text-muted/60 mt-1 block">Nhập tối thiểu 6 ký tự nếu muốn đổi mật khẩu.</span>
+                    <span className="text-caption text-brand-text-muted/60 mt-1 block">Nhập tối thiểu 6 ký tự nếu muốn đổi mật khẩu.</span>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Số điện thoại *</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Số điện thoại *</label>
                     <input
                       type="text"
                       value={editPhone}
@@ -1309,7 +1310,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
                     <BeautifulSelect
                       value={editCountry}
                       onChange={(e) => handleEditCountryChange(e.target.value)}
@@ -1325,7 +1326,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Timezone</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Timezone</label>
                     <input
                       type="text"
                       value={editTimezone}
@@ -1335,7 +1336,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Địa chỉ liên hệ</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Địa chỉ liên hệ</label>
                     <input
                       type="text"
                       value={editAddress}
@@ -1381,7 +1382,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                     {tenants.filter((tenant) => editingAdmin.tenantIds.includes(tenant.id)).map((tenant) => (
                       <div key={tenant.id} className="bg-brand-surface-lowest border border-brand-outline/40 rounded-lg p-3">
                         <p className="text-xs font-bold text-brand-text">{tenant.name}</p>
-                        <p className="text-[10px] text-brand-text-muted mt-1">{tenant.packageName} · Owner hiện tại: {tenant.adminEmail || 'Chưa gán Owner'}</p>
+                        <p className="text-caption text-brand-text-muted mt-1">{tenant.packageName} · Owner hiện tại: {tenant.adminEmail || 'Chưa gán Owner'}</p>
                       </div>
                     ))}
                     {editingAdmin.tenantIds.length === 0 && (
@@ -1392,7 +1393,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="bg-brand-warning/10 border border-brand-warning/20 text-brand-warning rounded-lg px-3 py-2 text-[11px] font-semibold">
+                    <div className="bg-brand-warning/10 border border-brand-warning/20 text-brand-warning rounded-lg px-3 py-2 text-body font-semibold">
                       Chỉ thay đổi danh sách tiệm khi bạn thật sự muốn chuyển Owner/quyền quản lí. Khi lưu, hệ thống sẽ hỏi xác nhận lần nữa.
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1421,11 +1422,11 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                             />
                             <span className="min-w-0">
                               <span className="block text-xs font-bold text-brand-text truncate">{tenant.name}</span>
-                              <span className="block text-[10px] text-brand-text-muted mt-0.5 truncate">
+                              <span className="block text-caption text-brand-text-muted mt-0.5 truncate">
                                 {tenant.packageName} · Owner hiện tại: {currentOwner}
                               </span>
                               {isManagedByOtherAdmin && (
-                                <span className="block text-[10px] text-brand-error mt-1">
+                                <span className="block text-caption text-brand-error mt-1">
                                   Không thể chọn vì đã có Tenant Admin quản lí
                                 </span>
                               )}
@@ -1448,38 +1449,26 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                 />
               </section>
             </div>
-
-            <div className="px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditingAdmin(null)}
-                className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text-muted px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <Edit className="w-3.5 h-3.5" />
-                <span>Lưu chỉnh sửa</span>
-              </button>
-            </div>
           </form>
-        </div>
+        </Modal>
       )}
 
       {showInviteModal && (
-        <div className="sa-modal-backdrop fixed inset-0 bg-brand-bg/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
-          <form onSubmit={handleInviteSubmit} className="bg-brand-surface border border-brand-outline rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl">
-            <div className="px-6 py-4 bg-brand-surface-high border-b border-brand-outline/45 flex justify-between items-center">
-              <span className="text-sm font-bold text-brand-text">Thêm Tenant Admin</span>
-              <button type="button" onClick={() => setShowInviteModal(false)} className="text-brand-text-muted hover:text-brand-text p-1 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5 max-h-[72vh] overflow-y-auto">
+        <Modal
+          open
+          onClose={() => setShowInviteModal(false)}
+          title="Thêm Tenant Admin"
+          size="large"
+          closeOnBackdrop={false}
+          footer={
+            <>
+              <button type="button" onClick={() => setShowInviteModal(false)} className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text-muted px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer">Hủy</button>
+              <button type="submit" form="invite-tenant-admin-form" className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-5 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-2"><UserCheck className="w-3.5 h-3.5" /><span>Thêm quản trị viên</span></button>
+            </>
+          }
+        >
+          <form id="invite-tenant-admin-form" onSubmit={handleInviteSubmit}>
+            <div className="space-y-5">
               <section className="flex flex-col sm:flex-row gap-4">
                 <div className="w-20 h-20 rounded-2xl bg-brand-surface-lowest border border-brand-outline/45 overflow-hidden flex items-center justify-center text-2xl font-black text-brand-primary shrink-0">
                   {inviteAvatar ? (
@@ -1489,7 +1478,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Ảnh đại diện</label>
+                  <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Ảnh đại diện</label>
                   <div className="flex flex-wrap gap-2">
                     <label className="inline-flex items-center gap-2 bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer border border-brand-outline/35">
                       <Upload className="w-3.5 h-3.5" />
@@ -1513,7 +1502,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                 <SectionTitle icon={UserCheck} title="Hồ sơ Tenant Admin" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Mã Tenant Admin</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Mã Tenant Admin</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -1532,7 +1521,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Họ và tên Admin *</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Họ và tên Admin *</label>
                     <input
                       type="text"
                       placeholder="Ví dụ: Nguyễn Văn Hải"
@@ -1544,7 +1533,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Địa chỉ Email *</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Địa chỉ Email *</label>
                     <input
                       type="email"
                       placeholder="name@email.com"
@@ -1556,7 +1545,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Username đăng nhập</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Username đăng nhập</label>
                     <input
                       type="text"
                       placeholder="Để trống sẽ dùng email"
@@ -1567,7 +1556,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Số điện thoại liên hệ</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Số điện thoại liên hệ</label>
                     <input
                       type="text"
                       placeholder="+84..."
@@ -1578,7 +1567,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
                     <BeautifulSelect
                       value={inviteCountry}
                       onChange={(e) => handleInviteCountryChange(e.target.value)}
@@ -1594,7 +1583,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Timezone</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Timezone</label>
                     <input
                       type="text"
                       value={inviteTimezone}
@@ -1604,7 +1593,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Địa chỉ liên hệ</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Địa chỉ liên hệ</label>
                     <input
                       type="text"
                       placeholder="Số nhà, đường, thành phố..."
@@ -1620,7 +1609,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                 <SectionTitle icon={Key} title="Truy cập ban đầu" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Mật khẩu tạm</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Mật khẩu tạm</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -1649,14 +1638,14 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                   </label>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Tiệm liên kết</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Tiệm liên kết</label>
                     <div className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text-muted">
                       Chưa liên kết tiệm
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Vai trò</label>
+                    <label className="block text-caption uppercase font-bold text-brand-text-muted mb-1.5">Vai trò</label>
                     <div className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs font-bold text-brand-text">
                       Owner (Chủ tiệm)
                     </div>
@@ -1675,25 +1664,8 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                 />
               </section>
             </div>
-
-            <div className="px-6 py-4 bg-brand-surface-high border-t border-brand-outline/40 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowInviteModal(false)}
-                className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text-muted px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Thêm quản trị viên</span>
-              </button>
-            </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

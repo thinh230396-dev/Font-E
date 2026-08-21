@@ -28,6 +28,7 @@ import {
   type SystemSettingsSection
 } from '../utils/systemSettings';
 import { recordAuditLog } from '../utils/auditLogs';
+import { Modal } from './ui';
 
 type SettingsTab = 'general' | 'billing' | 'notifications' | 'security';
 type NoticeType = 'success' | 'error' | 'info';
@@ -167,7 +168,7 @@ export default function SystemSettings() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatusCard label="Trạng thái cấu hình" value={isDirty ? 'Chưa lưu thay đổi' : 'Đã đồng bộ'} tone={isDirty ? 'warning' : 'success'} note={`Cập nhật: ${lastUpdated}`} />
-        <StatusCard label="Chế độ bảo trì" value={draft.general.maintenanceMode ? 'Đang bật' : 'Đang tắt'} tone={draft.general.maintenanceMode ? 'warning' : 'success'} note="Áp dụng cho truy cập tenant" />
+        <StatusCard label="Chế độ bảo trì" value={draft.general.maintenanceMode ? 'Đang bật' : 'Đang tắt'} tone={draft.general.maintenanceMode ? 'warning' : 'success'} note="Chỉ hiện cảnh báo trong trang quản trị" />
         <StatusCard label="Khóa công nợ" value={draft.billing.autoLock ? 'Tự động' : 'Thủ công'} tone={draft.billing.autoLock ? 'info' : 'neutral'} note={draft.billing.autoLock ? `Khóa sau ${draft.billing.lockDays} ngày` : 'Không tự động tạm ngưng'} />
         <StatusCard label="Dịch vụ email" value={draft.email.enabled ? 'Đã bật' : 'Đã tắt'} tone={draft.email.enabled ? 'info' : 'neutral'} note={draft.email.enabled ? `${draft.email.smtpServer}:${draft.email.smtpPort}` : 'Không gửi thông báo email'} />
       </div>
@@ -240,10 +241,10 @@ export default function SystemSettings() {
                 </div>
               </SettingsPanel>
 
-              <SettingsPanel icon={<Settings className="w-4 h-4" />} title="Vận hành hệ thống" description="Điều khiển trạng thái truy cập toàn nền tảng.">
+              <SettingsPanel icon={<Settings className="w-4 h-4" />} title="Vận hành hệ thống" description="Điều khiển trạng thái truy cập toàn nền tảng." pending="Hiện chỉ hiển thị dải cảnh báo trong trang quản trị của Superadmin. Việc chặn tenant đăng nhập cần xử lý ở phía máy chủ.">
                 <ToggleRow
                   label="Chế độ bảo trì"
-                  description="Tạm chặn tenant truy cập trong khi nâng cấp. Superadmin vẫn sử dụng được trang quản trị."
+                  description="Dự kiến tạm chặn tenant truy cập trong khi nâng cấp. Hiện chỉ hiện dải cảnh báo cho Superadmin."
                   checked={draft.general.maintenanceMode}
                   onChange={(checked) => updateSection('general', { maintenanceMode: checked })}
                   warning
@@ -263,7 +264,7 @@ export default function SystemSettings() {
 
           {activeTab === 'billing' && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <SettingsPanel icon={<CreditCard className="w-4 h-4" />} title="Công nợ & tạm ngưng dịch vụ" description="Quy tắc cảnh báo và xử lý tenant quá hạn thanh toán.">
+              <SettingsPanel icon={<CreditCard className="w-4 h-4" />} title="Công nợ & tạm ngưng dịch vụ" description="Quy tắc cảnh báo và xử lý tenant quá hạn thanh toán." pending="Giá trị được lưu lại nhưng chưa có tác vụ định kỳ nào đọc để tự tạm ngưng hay nhắc nợ.">
                 <ToggleRow label="Tự động tạm ngưng tenant nợ cước" description="Tác vụ định kỳ sẽ kiểm tra hóa đơn quá hạn và tạm ngưng tenant đủ điều kiện." checked={draft.billing.autoLock} onChange={(checked) => updateSection('billing', { autoLock: checked })} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Cảnh báo sau khi quá hạn" suffix="ngày" error={errors['billing.warnDays']}>
@@ -278,7 +279,7 @@ export default function SystemSettings() {
                 </div>
               </SettingsPanel>
 
-              <SettingsPanel icon={<Clock3 className="w-4 h-4" />} title="Chu kỳ hóa đơn & gia hạn" description="Mốc thời gian mặc định khi tạo hóa đơn định kỳ.">
+              <SettingsPanel icon={<Clock3 className="w-4 h-4" />} title="Chu kỳ hóa đơn & gia hạn" description="Mốc thời gian mặc định khi tạo hóa đơn định kỳ." pending="Hóa đơn định kỳ hiện dùng mốc mặc định trong mã nguồn, chưa đọc các giá trị này.">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Hạn thanh toán hóa đơn" suffix="ngày" error={errors['billing.invoiceDueDays']} hint="Tính từ ngày phát hành hóa đơn.">
                     <input className="form-control" type="number" min={1} max={90} value={draft.billing.invoiceDueDays} onChange={(event) => updateSection('billing', { invoiceDueDays: Number(event.target.value) })} />
@@ -296,7 +297,7 @@ export default function SystemSettings() {
 
           {activeTab === 'notifications' && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <SettingsPanel icon={<Mail className="w-4 h-4" />} title="Máy chủ SMTP" description="Thông số gửi thư kích hoạt, hóa đơn và cảnh báo hệ thống.">
+              <SettingsPanel icon={<Mail className="w-4 h-4" />} title="Máy chủ SMTP" description="Thông số gửi thư kích hoạt, hóa đơn và cảnh báo hệ thống." pending="Chưa có dịch vụ gửi thư nào được nối; thông số lưu sẵn để dùng khi backend email hoàn thiện.">
                 <ToggleRow label="Bật gửi email hệ thống" description="Tắt để ngừng toàn bộ email tự động từ SalonSys." checked={draft.email.enabled} onChange={(checked) => updateSection('email', { enabled: checked })} />
                 <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${draft.email.enabled ? '' : 'opacity-50'}`}>
                   <Field label="SMTP server" required error={errors['email.smtpServer']} className="sm:col-span-2">
@@ -330,7 +331,7 @@ export default function SystemSettings() {
                 <p className="text-[10px] text-brand-text-muted">Mật khẩu/API key không được lưu ở trình duyệt. Hãy quản lý bí mật SMTP ở biến môi trường của backend.</p>
               </SettingsPanel>
 
-              <SettingsPanel icon={<BellRing className="w-4 h-4" />} title="Quy tắc thông báo" description="Chọn các sự kiện nghiệp vụ được phép gửi email tự động.">
+              <SettingsPanel icon={<BellRing className="w-4 h-4" />} title="Quy tắc thông báo" description="Chọn các sự kiện nghiệp vụ được phép gửi email tự động." pending="Phụ thuộc vào máy chủ SMTP ở trên, nên hiện chưa có email nào được gửi đi.">
                 <ToggleRow label="Thông báo hóa đơn quá hạn" description="Gửi email tới Tenant Admin khi hóa đơn chuyển sang trạng thái quá hạn." checked={draft.email.notifyOverdue} disabled={!draft.email.enabled} onChange={(checked) => updateSection('email', { notifyOverdue: checked })} />
                 <ToggleRow label="Thông báo gói sắp hết hạn" description={`Gửi trước ${draft.billing.renewalReminderDays} ngày theo cấu hình thanh toán.`} checked={draft.email.notifyExpiring} disabled={!draft.email.enabled} onChange={(checked) => updateSection('email', { notifyExpiring: checked })} />
                 {!draft.email.enabled && <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-[11px] text-amber-500">Các quy tắc đang tạm vô hiệu vì dịch vụ email đã tắt.</div>}
@@ -340,7 +341,7 @@ export default function SystemSettings() {
 
           {activeTab === 'security' && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <SettingsPanel icon={<Clock3 className="w-4 h-4" />} title="Phiên đăng nhập" description="Giới hạn thời gian và số lần xác thực thất bại.">
+              <SettingsPanel icon={<Clock3 className="w-4 h-4" />} title="Phiên đăng nhập" description="Giới hạn thời gian và số lần xác thực thất bại." pending="Lớp xác thực đang dùng giới hạn cố định 5 lần đăng nhập sai và không đọc các giá trị này.">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Hết hạn phiên" suffix="phút" error={errors['security.sessionTimeout']} hint="Tự đăng xuất khi không có tương tác.">
                     <input className="form-control" type="number" min={5} max={1440} value={draft.security.sessionTimeout} onChange={(event) => updateSection('security', { sessionTimeout: Number(event.target.value) })} />
@@ -351,7 +352,7 @@ export default function SystemSettings() {
                 </div>
               </SettingsPanel>
 
-              <SettingsPanel icon={<ShieldCheck className="w-4 h-4" />} title="Chính sách bảo mật" description="Yêu cầu tối thiểu cho tài khoản quản trị và nhật ký.">
+              <SettingsPanel icon={<ShieldCheck className="w-4 h-4" />} title="Chính sách bảo mật" description="Yêu cầu tối thiểu cho tài khoản quản trị và nhật ký." pending="Bật MFA chưa thêm bước xác minh nào; độ dài mật khẩu tối thiểu chưa được biểu mẫu nào kiểm tra.">
                 <ToggleRow label="Bắt buộc MFA cho Superadmin" description="Yêu cầu mã xác thực thứ hai khi đăng nhập tài khoản quản trị hệ thống." checked={draft.security.requireMfaForSuperadmin} onChange={(checked) => updateSection('security', { requireMfaForSuperadmin: checked })} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Độ dài mật khẩu tối thiểu" suffix="ký tự" error={errors['security.passwordMinLength']}>
@@ -395,36 +396,36 @@ export default function SystemSettings() {
         </div>
       </div>
 
-      {showResetConfirm && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-          <button type="button" aria-label="Đóng xác nhận khôi phục" className="sa-modal-backdrop absolute inset-0 bg-slate-950/65 backdrop-blur-sm border-0 cursor-default" onClick={() => setShowResetConfirm(false)} />
-          <div role="dialog" aria-modal="true" aria-labelledby="reset-settings-title" className="relative w-full max-w-md rounded-2xl border border-brand-outline/45 bg-brand-surface p-5 shadow-2xl">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5" /></div>
-              <div>
-                <h3 id="reset-settings-title" className="text-sm font-bold text-brand-text">Khôi phục cấu hình mặc định?</h3>
-                <p className="text-xs text-brand-text-muted mt-2 leading-relaxed">Biểu mẫu sẽ trở về giá trị mặc định. Cấu hình đang lưu chỉ bị thay thế sau khi bạn nhấn “Lưu thay đổi”.</p>
-              </div>
-            </div>
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-5">
-              <button type="button" onClick={() => setShowResetConfirm(false)} className="px-4 py-2 rounded-lg border border-brand-outline/40 text-xs font-semibold text-brand-text-muted hover:text-brand-text cursor-pointer">Hủy</button>
-              <button type="button" onClick={handleReset} className="px-4 py-2 rounded-lg bg-amber-500 text-white text-xs font-bold cursor-pointer">Khôi phục mặc định</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        icon={<AlertTriangle className="w-5 h-5" />}
+        title="Khôi phục cấu hình mặc định?"
+        description="Biểu mẫu sẽ trở về giá trị mặc định. Cấu hình đang lưu chỉ bị thay thế sau khi bạn nhấn “Lưu thay đổi”."
+        size="small"
+        footer={
+          <>
+            <button type="button" onClick={() => setShowResetConfirm(false)} className="px-4 py-2 rounded-lg border border-brand-outline/40 text-xs font-semibold text-brand-text-muted hover:text-brand-text cursor-pointer">Hủy</button>
+            <button type="button" onClick={handleReset} className="px-4 py-2 rounded-lg bg-amber-500 text-white text-xs font-bold cursor-pointer">Khôi phục mặc định</button>
+          </>
+        }
+      />
     </div>
   );
 }
 
-function SettingsPanel({ icon, title, description, children }: { icon: ReactNode; title: string; description: string; children: ReactNode }) {
+function SettingsPanel({ icon, title, description, pending, children }: { icon: ReactNode; title: string; description: string; pending?: string; children: ReactNode }) {
   return (
     <section className="rounded-xl border border-brand-outline/35 bg-brand-surface-lowest/25 p-4 sm:p-5 space-y-4">
       <div className="flex items-start gap-3 pb-3 border-b border-brand-outline/25">
         <div className="w-8 h-8 rounded-lg bg-brand-primary/10 text-brand-primary flex items-center justify-center shrink-0">{icon}</div>
-        <div>
-          <h2 className="text-sm font-bold text-brand-text">{title}</h2>
-          <p className="text-[10px] text-brand-text-muted mt-1 leading-relaxed">{description}</p>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-bold text-brand-text">{title}</h2>
+            {pending && <span className="ui-badge ui-badge--small ui-badge--neutral">Chưa có hiệu lực</span>}
+          </div>
+          <p className="text-caption text-brand-text-muted mt-1 leading-relaxed">{description}</p>
+          {pending && <p className="text-caption text-brand-text-muted mt-1.5 leading-relaxed">{pending}</p>}
         </div>
       </div>
       {children}

@@ -1,12 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { PageHeader } from './ui';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, Banknote, Check, ChevronRight,
   CircleDollarSign, Clock3, CreditCard, Download, FileText, Landmark, LockKeyhole,
-  MoreHorizontal, Palette, Plus, ReceiptText, RefreshCcw, Search, ShieldCheck, Smartphone,
+  Minus, MoreHorizontal, Palette, Pencil, Plus, ReceiptText, RefreshCcw, RotateCcw, Search, ShieldCheck, Smartphone,
   Sparkles, UserRound, WalletCards, X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { formatMoney as money, normalizeMoneyText } from '../utils/money';
 import { NailDesign, PolishColor, colorSeed, designSeed } from './TenantAdminNailGallery';
 import { SalonService, serviceSeed } from './TenantAdminServices';
 import { inventorySeed } from './TenantAdminInventory';
@@ -73,7 +75,6 @@ interface TenantAdminPaymentsProps {
   onNotify?: (message: string) => void;
 }
 
-const money = (value: number) => new Intl.NumberFormat('vi-VN').format(value) + 'đ';
 const parsePaymentDate = (createdAt: string) => {
   const [day, month, year] = createdAt.split(' · ')[0].split('/').map(Number);
   return day && month && year ? new Date(year, month - 1, day) : null;
@@ -102,6 +103,9 @@ const methodMeta: Record<PaymentMethod, { label: string; icon: typeof Banknote; 
   MOMO: { label: 'MoMo', icon: Smartphone, className: 'bg-pink-50 text-pink-700 ring-pink-200' },
   ZALOPAY: { label: 'ZaloPay', icon: WalletCards, className: 'bg-cyan-50 text-cyan-700 ring-cyan-200' }
 };
+/** Tông của huy hiệu "chưa thu tiền" — cùng khuôn với methodMeta, chỉ khác màu trung tính. */
+const NO_METHOD_BADGE_CLASS = 'bg-slate-100 text-slate-500 ring-slate-200';
+
 const statusMeta: Record<PaymentStatus, { label: string; badge: string; dot: string }> = {
   PAID: { label: 'Đã thanh toán', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
   PARTIAL: { label: 'Thanh toán một phần', badge: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-500' },
@@ -157,6 +161,12 @@ const seed: PaymentRecord[] = [
   { id: 'INV-7825', customer: 'Lê Phương Anh', phone: '0901 486 320', branch: 'Q1', createdAt: '19/07/2026 · 14:34', subtotal: 980000, discount: 80000, tip: 0, deposit: 0, total: 900000, paid: 0, refunded: 0, status: 'PENDING', cashier: 'Thảo Nguyễn', source: 'Lịch hẹn trực tuyến', items: [{ name: 'Nail Art Premium', quantity: 1, amount: 980000, staff: 'Thảo Nguyễn' }], audit: ['14:34 · Tạo hóa đơn từ lịch hẹn trực tuyến', '14:34 · Áp dụng voucher 80.000đ'] }
 ];
 
+const TAX_RATE_PRESETS = [0, 5, 8, 10];
+const TAX_RATE_MIN = 0;
+const TAX_RATE_MAX = 100;
+/** Thuế suất luôn là số nguyên trong 0–100%, khớp điều kiện chặn ở submitInvoice. */
+const clampTaxRate = (value: number) => Math.min(TAX_RATE_MAX, Math.max(TAX_RATE_MIN, Math.round(value)));
+
 export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, branchLocked = false, tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify }: TenantAdminPaymentsProps) {
   const storageKey = `tenant-admin-payments-v1:${tenantName}`;
   const loyaltyStorageKey = `tenant-admin-loyalty-v1:${tenantName}`;
@@ -180,6 +190,8 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const [catalogCreateOpen, setCatalogCreateOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjust, setAdjust] = useState({ amount: '', method: 'CASH' as PaymentMethod, reference: '', reason: '' });
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [actualCashInput, setActualCashInput] = useState('2000000');
   const [shiftNote, setShiftNote] = useState('');
@@ -280,7 +292,14 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   }, [tenantName, colorStorageKey]);
 
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(records)); }, [records, storageKey]);
-  useEffect(() => { if (!selected && !createOpen && !catalogCreateOpen && !captureOpen && !refundOpen && !shiftModalOpen) return; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelected(null); setCreateOpen(false); setCatalogCreateOpen(false); setCaptureOpen(false); setRefundOpen(false); setShiftModalOpen(false); } }; addEventListener('keydown', close); return () => { document.body.style.overflow = previous; removeEventListener('keydown', close); }; }, [captureOpen, catalogCreateOpen, createOpen, refundOpen, selected, shiftModalOpen]);
+  useEffect(() => { if (!selected && !createOpen && !catalogCreateOpen && !captureOpen && !refundOpen && !adjustOpen && !shiftModalOpen) return; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelected(null); setCreateOpen(false); setCatalogCreateOpen(false); setCaptureOpen(false); setRefundOpen(false); setAdjustOpen(false); setShiftModalOpen(false); } }; addEventListener('keydown', close); return () => { document.body.style.overflow = previous; removeEventListener('keydown', close); }; }, [adjustOpen, captureOpen, catalogCreateOpen, createOpen, refundOpen, selected, shiftModalOpen]);
+  useEffect(() => {
+    if (!selected) return;
+    const audit = selected.audit.map(normalizeMoneyText);
+    if (audit.some((item, index) => item !== selected.audit[index])) {
+      setSelected({ ...selected, audit });
+    }
+  }, [selected]);
 
   const requireManage = () => { if (canManage) return true; onNotify?.(readOnlyReason || 'Gói hiện tại chỉ cho phép xem dữ liệu thanh toán.'); return false; };
   const scoped = useMemo(() => records.filter((record) => selectedBranch === 'ALL' || record.branch === selectedBranch), [records, selectedBranch]);
@@ -422,7 +441,12 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
 
   const invoiceSubtotal = invoiceBaseServicesSubtotal + invoiceNailSurchargeSubtotal;
   const invoiceDiscount = promoEvaluation.discountAmount;
-  const invoiceTax = Math.round(Math.max(0, invoiceSubtotal - invoiceDiscount) * Math.max(0, Number(invoice.taxRate) || 0) / 100);
+  // Ô nhập giữ nguyên chuỗi người dùng gõ (kể cả rỗng lúc đang xóa để gõ lại);
+  // giá trị số đã kẹp mới là thứ dùng để tính tiền, tô sáng chip và chạy nút tăng/giảm,
+  // nên gõ 150 cũng không làm dòng "Tiền thuế" nhảy sai trước lúc rời ô.
+  const taxRateValue = clampTaxRate(Number(invoice.taxRate) || 0);
+  const applyTaxRate = (next: number) => setInvoice((current) => ({ ...current, taxRate: String(clampTaxRate(next)) }));
+  const invoiceTax = Math.round(Math.max(0, invoiceSubtotal - invoiceDiscount) * taxRateValue / 100);
   const invoiceTotal = Math.max(0, invoiceSubtotal - invoiceDiscount + invoiceTax + Math.max(0, Number(invoice.tip) || 0));
 
   const openCreate = () => {
@@ -484,11 +508,11 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     const total = invoiceTotal;
     const paidAmount = invoice.invoiceStatus === 'PAID' ? total : invoice.invoiceStatus === 'PENDING' ? 0 : deposit;
     if (total <= 0) {
-      setFormError('Tổng hóa đơn phải lớn hơn 0đ.');
+      setFormError(`Tổng hóa đơn phải lớn hơn ${money(0)}.`);
       return;
     }
     if (invoice.invoiceStatus === 'PARTIAL' && (deposit <= 0 || deposit >= total)) {
-      setFormError(`Hóa đơn thanh toán một phần phải có số tiền đã thu lớn hơn 0đ và nhỏ hơn ${money(total)}.`);
+      setFormError(`Hóa đơn thanh toán một phần phải có số tiền đã thu lớn hơn ${money(0)} và nhỏ hơn ${money(total)}.`);
       return;
     }
     if (paidAmount > 0 && invoice.method !== 'CASH' && !invoice.reference.trim()) {
@@ -648,7 +672,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     if (selected.status === 'REFUNDED') { setFormError('Hóa đơn này đã được hoàn tiền. Không thể thực hiện hoàn tiền lần nữa.'); return; }
     const amount = Number(refund.amount);
     const refundable = selected.paid - selected.refunded;
-    if (!amount || amount <= 0 || amount > refundable) { setFormError(`Số tiền hoàn phải lớn hơn 0đ và không vượt quá ${money(refundable)}.`); return; }
+    if (!amount || amount <= 0 || amount > refundable) { setFormError(`Số tiền hoàn phải lớn hơn ${money(0)} và không vượt quá ${money(refundable)}.`); return; }
     if (refund.reason.trim().length < 8) { setFormError('Vui lòng nhập lý do hoàn tiền tối thiểu 8 ký tự.'); return; }
     const patch: Partial<PaymentRecord> = { refunded: selected.refunded + amount, status: 'REFUNDED', note: refund.reason.trim(), audit: [`14:45 · ${roleLabel} duyệt hoàn ${money(amount)} · ${refund.reason.trim()}`, ...selected.audit] };
 
@@ -673,28 +697,144 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     setRefundOpen(false);
     onNotify?.(`Đã ghi nhận yêu cầu hoàn ${money(amount)} cho ${selected.id}.`);
   };
-  const exportReport = () => { const header = 'Hoa don,Khach hang,Chi nhanh,Tong tien,Da thu,Hoan tien,Phuong thuc,Trang thai'; const body = filtered.map((record) => [record.id, record.customer, record.branch, record.total, record.paid, record.refunded, record.method ? methodMeta[record.method].label : 'Chua chon', statusMeta[record.status].label].join(',')).join('\n'); const blob = new Blob([header + '\n' + body], { type: 'text/csv;charset=utf-8' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'doi-soat-thanh-toan.csv'; link.click(); URL.revokeObjectURL(link.href); onNotify?.('Đã xuất báo cáo đối soát theo bộ lọc hiện tại.'); };
+  /**
+   * Sửa hoặc hủy khoản đã thu của một hóa đơn.
+   *
+   * Bản ghi chỉ lưu tổng "đã thu" chứ không lưu từng lần thu, nên ở đây điều
+   * chỉnh chính con số tổng đó: đặt về 0 tức là hủy sạch khoản thu và trả hóa
+   * đơn về "Chờ thanh toán". Hóa đơn đã hoàn tiền thì không đi lối này —
+   * tiền đã trả ra khỏi két nên phải xử lý bằng nghiệp vụ hoàn tiền.
+   */
+  const openAdjust = (record: PaymentRecord, clearAll = false) => {
+    if (!requireManage()) return;
+    if (record.status === 'REFUNDED') { onNotify?.(`Hóa đơn ${record.id} đã hoàn tiền nên phải xử lý qua nghiệp vụ hoàn tiền.`); return; }
+    setAdjust({ amount: clearAll ? '0' : String(record.paid), method: record.method || 'CASH', reference: record.reference || '', reason: '' });
+    setFormError('');
+    setSelected(record);
+    setAdjustOpen(true);
+  };
 
-  const MethodBadge = ({ method }: { method?: PaymentMethod }) => { if (!method) return <span className="text-[8px] font-bold text-slate-400">Chưa chọn</span>; const meta = methodMeta[method]; const Icon = meta.icon; return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${meta.className}`}><Icon className="h-3 w-3" />{meta.label}</span>; };
-  const invoiceInputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-semibold text-slate-800 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
+  const submitAdjust = (event: FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    const target = records.find((item) => item.id === selected.id);
+    if (!target) return;
+    if (target.status === 'REFUNDED') { setFormError('Hóa đơn đã hoàn tiền nên không thể sửa khoản thu.'); return; }
+    const nextPaid = Math.round(Number(adjust.amount));
+    if (!Number.isFinite(nextPaid) || nextPaid < 0 || nextPaid > target.total) {
+      setFormError(`Số tiền đã thu phải nằm trong khoảng ${money(0)} – ${money(target.total)}.`);
+      return;
+    }
+    if (nextPaid < target.refunded) {
+      setFormError(`Đã hoàn ${money(target.refunded)} cho hóa đơn này nên số đã thu không thể thấp hơn mức đó.`);
+      return;
+    }
+    if (nextPaid > 0 && adjust.method !== 'CASH' && !adjust.reference.trim()) {
+      setFormError('Khoản thu điện tử bắt buộc có mã giao dịch để đối soát.');
+      return;
+    }
+    if (adjust.reason.trim().length < 8) {
+      setFormError('Vui lòng nhập lý do điều chỉnh tối thiểu 8 ký tự để lưu vào nhật ký kiểm soát.');
+      return;
+    }
+    if (nextPaid === target.paid && adjust.method === (target.method || 'CASH') && adjust.reference.trim() === (target.reference || '')) {
+      setFormError('Chưa có gì thay đổi so với khoản thu hiện tại.');
+      return;
+    }
+    const nextStatus: PaymentStatus = nextPaid <= 0 ? 'PENDING' : nextPaid >= target.total ? 'PAID' : 'PARTIAL';
+    const now = new Date();
+    const stampedAt = `${now.toLocaleDateString('vi-VN')} · ${now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    const auditLine = nextPaid <= 0
+      ? `${stampedAt} · ${roleLabel} hủy toàn bộ khoản thu ${money(target.paid)} · ${adjust.reason.trim()}`
+      : `${stampedAt} · ${roleLabel} điều chỉnh khoản thu ${money(target.paid)} → ${money(nextPaid)} qua ${methodMeta[adjust.method].label} · ${adjust.reason.trim()}`;
+    const patch: Partial<PaymentRecord> = {
+      paid: nextPaid,
+      status: nextStatus,
+      method: nextPaid > 0 ? adjust.method : undefined,
+      reference: nextPaid > 0 ? (adjust.reference.trim() || `CASH-${Date.now().toString().slice(-6)}`) : undefined,
+      audit: [auditLine, ...target.audit]
+    };
 
-  return <div className="space-y-5">
-    <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div><div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Đối soát trực tiếp · Cập nhật 14:42<span className="text-slate-300">•</span><span className="text-slate-500">{tenantName}</span></div><h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">Thanh toán & đối soát</h1><p className="mt-2 text-[11px] text-slate-500">Theo dõi dòng tiền, công nợ, tiền cọc, hoàn tiền và lịch sử thao tác trên toàn tenant.</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={exportReport} className="flex h-11 items-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"><Download className="h-4 w-4" />Xuất đối soát</button><button type="button" onClick={openCreate} disabled={!canManage} className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[9px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Tạo hóa đơn</button><button type="button" onClick={() => openCapture()} disabled={!canManage} className="flex h-11 items-center gap-2 border border-emerald-700 bg-emerald-600 px-4 text-[9px] font-black text-white shadow-lg shadow-emerald-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><CircleDollarSign className="h-4 w-4" />Ghi nhận thanh toán</button></div></section>
+    // Tồn kho màu sơn bám theo mốc PAID giống hệt lúc thu tiền và lúc hoàn tiền:
+    // rời khỏi PAID thì trả màu về kho, vào PAID thì trừ đi. Không làm gì khi
+    // trạng thái PAID không đổi, tránh trừ/hoàn hai lần cho cùng một hóa đơn.
+    const wasPaid = target.status === 'PAID';
+    const isPaid = nextStatus === 'PAID';
+    if (wasPaid !== isPaid) {
+      target.items?.forEach((item) => {
+        if (!item.polishColorId) return;
+        updateInventoryForColorUsage({
+          tenantName,
+          colorId: item.polishColorId,
+          serviceQuantity: item.quantity || 1,
+          action: isPaid ? 'DEDUCT' : 'RESTORE',
+          inventorySeed,
+          colorSeed,
+          invoiceId: target.id,
+          actorName: roleLabel,
+        });
+      });
+    }
 
-    <section className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? 'border-violet-100 bg-gradient-to-r from-violet-50 to-white' : 'border-amber-200 bg-amber-50'}`}><div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? 'bg-violet-600 text-white' : 'bg-amber-100 text-amber-700'}`}><ShieldCheck className="h-4.5 w-4.5" /></span><div><p className="text-[10px] font-black text-slate-800">Phạm vi quyền: {roleLabel}</p><p className="mt-1 text-[8px] leading-4 text-slate-500">{canManage ? 'Được xem mọi chi nhánh, ghi nhận tiền thu, xuất đối soát, xử lý hoàn tiền và xem nhật ký trong tenant; không truy cập dữ liệu tenant khác.' : readOnlyReason || 'Chỉ được xem giao dịch và báo cáo doanh thu.'}</p></div></div><span className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-100 text-amber-800 ring-amber-200'}`}>{canManage ? 'Toàn quyền tài chính tenant' : 'Chỉ xem'}</span></section>
+    setRecords((current) => current.map((item) => item.id === target.id ? { ...item, ...patch } : item));
+    setSelected((current) => current?.id === target.id ? { ...current, ...patch } as PaymentRecord : current);
+    setAdjustOpen(false);
+    onNotify?.(nextPaid <= 0
+      ? `Đã hủy khoản thu của ${target.id}. Hóa đơn quay lại trạng thái chờ thanh toán.`
+      : `Đã cập nhật khoản thu của ${target.id} thành ${money(nextPaid)}.`);
+  };
 
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
+  const exportReport = () => { const header = 'Hoa don,Khach hang,Chi nhanh,Tong tien,Da thu,Hoan tien,Phuong thuc,Trang thai'; const body = filtered.map((record) => [record.id, record.customer, record.branch, record.total, record.paid, record.refunded, record.method ? methodMeta[record.method].label : 'Chua thu tien', statusMeta[record.status].label].join(',')).join('\n'); const blob = new Blob([header + '\n' + body], { type: 'text/csv;charset=utf-8' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'doi-soat-thanh-toan.csv'; link.click(); URL.revokeObjectURL(link.href); onNotify?.('Đã xuất báo cáo đối soát theo bộ lọc hiện tại.'); };
+
+  const MethodBadge = ({ method }: { method?: PaymentMethod }) => { if (!method) return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${NO_METHOD_BADGE_CLASS}`}><CircleDollarSign className="h-3 w-3" />Chưa thu tiền</span>; const meta = methodMeta[method]; const Icon = meta.icon; return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${meta.className}`}><Icon className="h-3 w-3" />{meta.label}</span>; };
+  /**
+   * Hóa đơn chưa thu đồng nào thì chưa có phương thức — đó là dữ liệu đúng, không
+   * phải biểu mẫu bỏ dở. Nhưng để trống một ô trong bảng mà không cho làm gì thì
+   * vô ích, nên chỗ đó thành nút mở luôn hộp thoại Ghi nhận thanh toán.
+   *
+   * Chỉ dùng cho bảng desktop: danh sách trên mobile bọc mỗi dòng trong một
+   * <button>, lồng thêm nút nữa là HTML sai.
+   */
+  const MethodCell = ({ record }: { record: PaymentRecord }) => {
+    if (record.method) return <MethodBadge method={record.method} />;
+    const collectable = record.status !== 'REFUNDED' && record.paid < record.total;
+    if (!canManage || !collectable) return <MethodBadge />;
+    return (
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); openCapture(record); }}
+        title={`Ghi nhận thanh toán cho ${record.id}`}
+        aria-label={`Chưa thu tiền — ghi nhận thanh toán cho hóa đơn ${record.id}`}
+        className={`ui-badge-button inline-flex items-center gap-1.5 border-0 px-2.5 py-1 font-bold shadow-none ring-1 ${NO_METHOD_BADGE_CLASS} hover:bg-emerald-50 hover:text-emerald-700 hover:ring-emerald-200`}
+      >
+        <CircleDollarSign className="h-3 w-3" />Chưa thu tiền
+      </button>
+    );
+  };
+
+  const invoiceInputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-semibold text-slate-800 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
+
+  return <div className="tenant-admin-payments space-y-5">
+    <PageHeader
+        title="Thanh toán & đối soát"
+        actions={(
+          <div className="flex flex-wrap gap-2"><button type="button" onClick={exportReport} className="flex h-11 items-center gap-2 border border-slate-200 bg-white px-4 font-semibold text-slate-600 shadow-sm"><Download className="h-4 w-4" />Xuất đối soát</button><button type="button" onClick={openCreate} disabled={!canManage} className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-4 font-semibold text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Tạo hóa đơn</button><button type="button" onClick={() => openCapture()} disabled={!canManage} className="flex h-11 items-center gap-2 border border-emerald-700 bg-emerald-600 px-4 font-semibold text-white shadow-lg shadow-emerald-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><CircleDollarSign className="h-4 w-4" />Ghi nhận thanh toán</button></div>
+        )}
+      />
+
+
+    <section className="tenant-admin-payment-kpis grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">{[
       { label: 'Doanh thu thuần', value: money(netRevenue), detail: `${periodScoped.length} hóa đơn trong kỳ`, icon: ArrowUpRight, tone: 'bg-emerald-50 text-emerald-600' },
       { label: 'Đã thu', value: money(collected), detail: `${periodScoped.filter((item) => item.paid > 0).length} hóa đơn có phát sinh`, icon: CircleDollarSign, tone: 'bg-violet-50 text-violet-600' },
       { label: 'Còn phải thu', value: money(outstanding), detail: `${periodScoped.filter((item) => item.paid < item.total).length} hóa đơn cần xử lý`, icon: Clock3, tone: 'bg-amber-50 text-amber-600' },
       { label: 'Đã hoàn tiền', value: money(refunded), detail: `${periodScoped.filter((item) => item.refunded > 0).length} giao dịch trong kỳ`, icon: ArrowDownRight, tone: 'bg-rose-50 text-rose-600' }
-    ].map(({ label, value, detail, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between gap-3"><div><p className="text-[9px] font-bold text-slate-500">{label}</p><p className="mt-1.5 text-lg font-black tracking-tight text-slate-950">{value}</p></div><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4.5 w-4.5" /></span></div><p className="mt-2 text-[8px] font-semibold text-slate-400">{detail}</p></article>)}</section>
+    ].map(({ label, value, detail, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between gap-3"><p className="text-caption font-bold text-slate-500">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4.5 w-4.5" /></span></div><p className="ta-money ta-money-kpi mt-3">{value}</p><p className="mt-2 text-caption font-semibold text-slate-400">{detail}</p></article>)}</section>
 
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.035)]">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
         <div className="flex min-w-fit items-center gap-2 px-1 pb-0.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><Clock3 className="h-4 w-4" /></span>
-          <div><p className="text-[9px] font-black text-slate-800">Lọc theo thời gian</p><p className="mt-0.5 text-[7px] text-slate-400">Áp dụng cho số liệu và giao dịch</p></div>
+          <div><p className="text-caption font-black text-slate-800">Lọc theo thời gian</p><p className="mt-0.5 text-caption text-slate-400">Áp dụng cho số liệu và giao dịch</p></div>
         </div>
         <div className="flex flex-wrap gap-2">
           {([
@@ -703,47 +843,57 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
             ['7D', '7 ngày'],
             ['30D', '30 ngày'],
             ['CUSTOM', 'Khoảng ngày']
-          ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setDatePreset(value)} className={`h-9 border px-3 text-[8px] font-black shadow-sm ${datePreset === value ? 'border-violet-200 bg-violet-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'}`}>{label}</button>)}
+          ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setDatePreset(value)} className={`h-9 border px-3 text-caption font-black shadow-sm ${datePreset === value ? 'border-violet-200 bg-violet-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'}`}>{label}</button>)}
         </div>
         {datePreset === 'CUSTOM' && <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-          <label className="block"><span className="mb-1 block text-[7px] font-bold text-slate-500">Từ ngày</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[8px] font-bold text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 sm:w-36" /></label>
-          <span className="hidden pb-2 text-[8px] text-slate-300 sm:block">—</span>
-          <label className="block"><span className="mb-1 block text-[7px] font-bold text-slate-500">Đến ngày</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[8px] font-bold text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 sm:w-36" /></label>
+          <label className="block"><span className="mb-1 block text-caption font-bold text-slate-500">Từ ngày</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-bold text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 sm:w-36" /></label>
+          <span className="hidden pb-2 text-caption text-slate-300 sm:block">—</span>
+          <label className="block"><span className="mb-1 block text-caption font-bold text-slate-500">Đến ngày</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-bold text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 sm:w-36" /></label>
         </div>}
         <div className="flex items-center gap-2 xl:ml-auto">
-          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[8px] font-bold text-slate-500"><strong className="text-slate-800">{periodScoped.length}</strong> hóa đơn trong kỳ</span>
-          {datePreset !== 'ALL' && <button type="button" onClick={() => { setDatePreset('ALL'); setDateFrom(''); setDateTo(''); }} className="h-8 border-0 bg-transparent px-2 text-[8px] font-bold text-violet-600 shadow-none">Xóa lọc</button>}
+          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-caption font-bold text-slate-500"><strong className="text-slate-800">{periodScoped.length}</strong> hóa đơn trong kỳ</span>
+          {datePreset !== 'ALL' && <button type="button" onClick={() => { setDatePreset('ALL'); setDateFrom(''); setDateTo(''); }} className="h-8 border-0 bg-transparent px-2 text-caption font-bold text-violet-600 shadow-none">Xóa lọc</button>}
         </div>
       </div>
     </section>
 
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]"><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between"><div className="relative w-full xl:w-72"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm hóa đơn, khách, mã giao dịch..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[10px] font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />{searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}</div><div className="flex flex-wrap gap-2"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect><BeautifulSelect value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as 'ALL' | PaymentMethod)} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"><option value="ALL">Mọi phương thức</option>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></div></div><div className="flex gap-2 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 py-3">{(['ALL', 'PAID', 'PARTIAL', 'PENDING', 'REFUNDED', 'FAILED'] as const).map((value) => <button key={value} type="button" onClick={() => setTab(value)} className={`h-8 shrink-0 border px-3 text-[8px] font-black shadow-sm ${tab === value ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'}`}>{value === 'ALL' ? 'Tất cả giao dịch' : statusMeta[value].label}<span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-[7px]">{value === 'ALL' ? periodScoped.length : periodScoped.filter((item) => item.status === value).length}</span></button>)}</div>
-      <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[930px] text-left"><thead><tr className="border-b border-slate-100 text-[8px] font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Hóa đơn</th><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Tổng tiền</th><th className="px-4 py-3">Đã thu / còn lại</th><th className="px-4 py-3">Phương thức</th><th className="px-5 py-3 text-right">Trạng thái</th></tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((record) => <tr key={record.id} onClick={() => setSelected(record)} className="cursor-pointer text-[9px] text-slate-600 hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{record.id}</p><p className="mt-1 text-[8px] text-slate-400">{record.createdAt}</p></td><td className="px-4 py-4"><p className="font-black text-slate-800">{record.customer}</p><p className="mt-1 text-[8px] text-slate-400">{record.phone} · {record.branch}</p></td><td className="px-4 py-4 font-black text-slate-900">{money(record.total)}{record.refunded > 0 && <p className="mt-1 text-[8px] font-bold text-rose-500">Đã hoàn {money(record.refunded)}</p>}</td><td className="px-4 py-4"><p className="font-black text-emerald-700">{money(record.paid)}</p><p className="mt-1 text-[8px] text-slate-400">Còn {money(Math.max(0, record.total - record.paid))}</p></td><td className="px-4 py-4"><MethodBadge method={record.method} /></td><td className="px-5 py-4 text-right"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[record.status].badge}`}><span className={`h-1.5 w-1.5 rounded-full ${statusMeta[record.status].dot}`} />{statusMeta[record.status].label}</span></td></tr>)}</tbody></table></div>
-      <div className="divide-y divide-slate-100 md:hidden">{filtered.map((record) => <button key={record.id} type="button" onClick={() => setSelected(record)} className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none"><span className="flex items-start justify-between gap-3"><span><span className="text-[9px] font-black text-slate-900">{record.id}</span><span className="mt-1 block text-[8px] text-slate-400">{record.customer} · {record.branch}</span></span><span className="text-[11px] font-black text-slate-900">{money(record.total)}</span></span><span className="mt-3 flex items-center justify-between"><MethodBadge method={record.method} /><span className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${statusMeta[record.status].badge}`}>{statusMeta[record.status].label}</span></span></button>)}</div>{!filtered.length && <div className="py-16 text-center"><ReceiptText className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-[10px] font-black text-slate-600">Không có giao dịch phù hợp</p></div>}<div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3"><p className="text-[8px] text-slate-400">Hiển thị <strong className="text-slate-600">{filtered.length}</strong> giao dịch</p><p className="text-[8px] font-semibold text-slate-400">Tổng theo bộ lọc: {money(filtered.reduce((sum, item) => sum + item.total, 0))}</p></div></div>
-      <aside className="space-y-4">
-        <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white shadow-lg">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-[0.16em] text-violet-300">Ca hiện tại</p>
-              <p className="mt-2 text-lg font-black">08:00–20:30</p>
-              <p className="mt-1 text-[8px] text-slate-400">Quản lý ca · Lê Hoàng Nam</p>
+    {/* Bảng hóa đơn cần tối thiểu 930px. Bố cục cũ tách 2 cột ngay từ 1280px và
+        cắt 280px cho cột phải, nhưng ở bề ngang đó sidebar điều hướng đã ăn mất
+        ~340px nên bảng chỉ còn ~642px — gần một phần ba bảng nằm ngoài màn hình.
+        Vì vậy bảng ăn trọn bề ngang, hai thẻ ca/việc cần xử lý xuống thành dải
+        ngang bên dưới. */}
+    <section className="tenant-admin-payment-ledger space-y-4"><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between"><div className="relative w-full xl:w-72"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm hóa đơn, khách, mã giao dịch..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-caption font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />{searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}</div><div className="flex flex-wrap gap-2"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect><BeautifulSelect value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as 'ALL' | PaymentMethod)} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">Mọi phương thức</option>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></div></div><div className="flex gap-2 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 py-3">{(['ALL', 'PAID', 'PARTIAL', 'PENDING', 'REFUNDED', 'FAILED'] as const).map((value) => <button key={value} type="button" onClick={() => setTab(value)} className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${tab === value ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'}`}>{value === 'ALL' ? 'Tất cả giao dịch' : statusMeta[value].label}<span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">{value === 'ALL' ? periodScoped.length : periodScoped.filter((item) => item.status === value).length}</span></button>)}</div>
+      <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[930px] text-left"><thead><tr className="border-b border-slate-100 text-caption font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Hóa đơn</th><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Tổng tiền</th><th className="px-4 py-3">Đã thu / còn lại</th><th className="px-4 py-3">Phương thức</th><th className="px-5 py-3 text-right">Trạng thái</th></tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((record) => <tr key={record.id} onClick={() => setSelected(record)} className="cursor-pointer text-caption text-slate-600 hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{record.id}</p><p className="mt-1 text-caption text-slate-400">{record.createdAt}</p></td><td className="px-4 py-4"><p className="font-black text-slate-800">{record.customer}</p><p className="mt-1 text-caption text-slate-400">{record.phone} · {record.branch}</p></td><td className="px-4 py-4 font-black text-slate-900">{money(record.total)}{record.refunded > 0 && <p className="mt-1 text-caption font-bold text-rose-500">Đã hoàn {money(record.refunded)}</p>}</td><td className="px-4 py-4"><p className="font-black text-emerald-700">{money(record.paid)}</p><p className="mt-1 text-caption text-slate-400">Còn {money(Math.max(0, record.total - record.paid))}</p></td><td className="px-4 py-4"><MethodCell record={record} /></td><td className="px-5 py-4 text-right"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}><span className={`h-1.5 w-1.5 rounded-full ${statusMeta[record.status].dot}`} />{statusMeta[record.status].label}</span></td></tr>)}</tbody></table></div>
+      <div className="divide-y divide-slate-100 md:hidden">{filtered.map((record) => <button key={record.id} type="button" onClick={() => setSelected(record)} className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none"><span className="flex items-start justify-between gap-3"><span><span className="text-caption font-black text-slate-900">{record.id}</span><span className="mt-1 block text-caption text-slate-400">{record.customer} · {record.branch}</span></span><span className="text-body font-black text-slate-900">{money(record.total)}</span></span><span className="mt-3 flex items-center justify-between"><MethodBadge method={record.method} /><span className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}>{statusMeta[record.status].label}</span></span></button>)}</div>{!filtered.length && <div className="py-16 text-center"><ReceiptText className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-caption font-black text-slate-600">Không có giao dịch phù hợp</p></div>}<div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3"><p className="text-caption text-slate-400">Hiển thị <strong className="text-slate-600">{filtered.length}</strong> giao dịch</p><p className="text-caption font-semibold text-slate-400">Tổng theo bộ lọc: {money(filtered.reduce((sum, item) => sum + item.total, 0))}</p></div></div>
+      {/* Dải ngang: nằm dọc thì hai thẻ này cao gấp đôi mức cần thiết, nên khi
+          xuống dưới bảng chúng được xếp lại cho thấp — thẻ ca dồn số liệu và nút
+          đóng ca về một hàng, việc cần xử lý đổi 3 dòng dọc thành 3 ô ngang. */}
+      <aside className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-4 text-white shadow-lg sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-300/20">
+                <RefreshCcw className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-caption font-black uppercase tracking-[0.16em] text-violet-300">Ca hiện tại</p>
+                <p className="mt-1 text-lg font-black leading-tight">08:00–20:30</p>
+                <p className="mt-0.5 text-caption text-slate-400">Quản lý ca · Lê Hoàng Nam</p>
+              </div>
             </div>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-300/20">
-              <RefreshCcw className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-2">
-            <div className="rounded-xl bg-white/7 p-3">
-              <p className="text-[7px] text-slate-400">Tiền mặt</p>
-              <p className="mt-1 text-[11px] font-black">
-                {money(scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0))}
-              </p>
-            </div>
-            <div className="rounded-xl bg-white/7 p-3">
-              <p className="text-[7px] text-slate-400">Điện tử</p>
-              <p className="mt-1 text-[11px] font-black">
-                {money(scoped.filter((item) => item.method && item.method !== 'CASH').reduce((sum, item) => sum + item.paid, 0))}
-              </p>
+            <div className="grid shrink-0 grid-cols-2 gap-2">
+              <div className="rounded-xl bg-white/7 px-3 py-2">
+                <p className="text-caption text-slate-400">Tiền mặt</p>
+                <p className="mt-0.5 text-body font-black">
+                  {money(scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0))}
+                </p>
+              </div>
+              <div className="rounded-xl bg-white/7 px-3 py-2">
+                <p className="text-caption text-slate-400">Điện tử</p>
+                <p className="mt-0.5 text-body font-black">
+                  {money(scoped.filter((item) => item.method && item.method !== 'CASH').reduce((sum, item) => sum + item.paid, 0))}
+                </p>
+              </div>
             </div>
           </div>
           <button
@@ -754,7 +904,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
               setActualCashInput(String(expected));
               setShiftModalOpen(true);
             }}
-            className="mt-4 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/8 text-[8px] font-black text-white shadow-none hover:bg-white/15"
+            className="mt-3 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/8 text-caption font-black text-white shadow-none hover:bg-white/15"
           >
             <LockKeyhole className="h-3.5 w-3.5" />
             Kiểm đếm & đóng ca
@@ -763,20 +913,20 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[9px] font-black text-slate-800">Việc cần xử lý</p>
-              <p className="mt-1 text-[8px] text-slate-400">Ưu tiên theo rủi ro tài chính</p>
+              <p className="text-caption font-black text-slate-800">Việc cần xử lý</p>
+              <p className="mt-1 text-caption text-slate-400">Ưu tiên theo rủi ro tài chính</p>
             </div>
-            <AlertCircle className="h-4 w-4 text-amber-500" />
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
           </div>
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
             {[
               { label: 'Hóa đơn còn công nợ', value: scoped.filter((item) => item.paid < item.total).length, tone: 'text-amber-600 bg-amber-50' },
               { label: 'Giao dịch lỗi cần kiểm tra', value: scoped.filter((item) => item.status === 'FAILED').length, tone: 'text-rose-600 bg-rose-50' },
               { label: 'Hoàn tiền chờ đối soát', value: scoped.filter((item) => item.refunded > 0).length, tone: 'text-violet-600 bg-violet-50' }
             ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
-                <span className="text-[8px] font-bold text-slate-600">{item.label}</span>
-                <span className={`flex h-6 min-w-6 items-center justify-center rounded-lg px-1.5 text-[8px] font-black ${item.tone}`}>{item.value}</span>
+              <div key={item.label} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 sm:flex-col sm:items-start sm:gap-1.5">
+                <span className={`flex h-6 min-w-6 items-center justify-center rounded-lg px-1.5 text-caption font-black ${item.tone} sm:order-first`}>{item.value}</span>
+                <span className="text-caption font-bold leading-4 text-slate-600">{item.label}</span>
               </div>
             ))}
           </div>
@@ -809,12 +959,12 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
               <div>
                 <div className="flex items-center gap-2">
                   <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
-                  <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Quy trình đóng ca & kiểm kê két</p>
+                  <p className="text-caption font-black uppercase tracking-wide text-violet-600">Quy trình đóng ca & kiểm kê két</p>
                 </div>
                 <h2 id="shift-modal-title" className="mt-1 text-xl font-black text-slate-950">
                   Kiểm đếm tiền & Đóng ca làm việc
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-500">
+                <p className="mt-1 text-caption text-slate-500">
                   Ca 08:00–20:30 · Quản lý ca: Lê Hoàng Nam · Chi nhánh {selectedBranch === 'ALL' ? 'Quận 3' : selectedBranch}
                 </p>
               </div>
@@ -831,77 +981,77 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
               <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white">
                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                  <span className="text-[9px] font-bold text-violet-300">Chi tiết doanh thu ca làm việc</span>
-                  <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[8px] font-black text-emerald-300 ring-1 ring-emerald-400/20">
+                  <span className="text-caption font-bold text-violet-300">Chi tiết doanh thu ca làm việc</span>
+                  <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-caption font-black text-emerald-300 ring-1 ring-emerald-400/20">
                     Đang hoạt động
                   </span>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <div className="rounded-xl bg-white/7 p-3">
-                    <p className="text-[7px] text-slate-400">Tiền mặt đầu ca</p>
-                    <p className="mt-1 text-[11px] font-black text-white">{money(2000000)}</p>
+                    <p className="text-caption text-slate-400">Tiền mặt đầu ca</p>
+                    <p className="mt-1 text-body font-black text-white">{money(2000000)}</p>
                   </div>
                   <div className="rounded-xl bg-white/7 p-3">
-                    <p className="text-[7px] text-slate-400">Thu tiền mặt trong ca</p>
-                    <p className="mt-1 text-[11px] font-black text-emerald-400">+{money(cashRevenue)}</p>
+                    <p className="text-caption text-slate-400">Thu tiền mặt trong ca</p>
+                    <p className="mt-1 text-body font-black text-emerald-400">+{money(cashRevenue)}</p>
                   </div>
                   <div className="rounded-xl bg-white/7 p-3 sm:col-span-1">
-                    <p className="text-[7px] text-slate-400">Thu điện tử / ngân hàng</p>
-                    <p className="mt-1 text-[11px] font-black text-violet-300">+{money(nonCashRevenue)}</p>
+                    <p className="text-caption text-slate-400">Thu điện tử / ngân hàng</p>
+                    <p className="mt-1 text-body font-black text-violet-300">+{money(nonCashRevenue)}</p>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between rounded-xl bg-white/10 p-3">
-                  <span className="text-[8px] font-bold text-slate-300">Tổng tiền mặt lý thuyết trong két</span>
+                  <span className="text-caption font-bold text-slate-300">Tổng tiền mặt lý thuyết trong két</span>
                   <span className="text-sm font-black text-emerald-300">{money(expectedCash)}</span>
                 </div>
               </div>
 
               <div className="space-y-4 rounded-2xl border border-slate-200 p-4">
-                <p className="text-[9px] font-black text-slate-800">Kiểm kê thực tế tại két tiền</p>
+                <p className="text-caption font-black text-slate-800">Kiểm kê thực tế tại két tiền</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="sm:col-span-2">
-                    <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số tiền mặt kiểm đếm thực tế (VNĐ) *</span>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Số tiền mặt kiểm đếm thực tế (VNĐ) *</span>
                     <input
                       type="number"
                       min="0"
                       step="1000"
                       value={actualCashInput}
                       onChange={(e) => setActualCashInput(e.target.value)}
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-black text-slate-900 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-body font-black text-slate-900 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                     />
                   </label>
                 </div>
 
-                <div className={`flex items-center justify-between rounded-xl p-3 text-[8px] font-bold ${
+                <div className={`flex items-center justify-between rounded-xl p-3 text-caption font-bold ${
                   cashDiff === 0 ? 'bg-emerald-50 text-emerald-800' : cashDiff > 0 ? 'bg-amber-50 text-amber-800' : 'bg-rose-50 text-rose-800'
                 }`}>
                   <span>Chênh lệch kiểm kê:</span>
-                  <span className="text-[10px] font-black">
+                  <span className="text-caption font-black">
                     {cashDiff === 0 ? '✓ Khớp hoàn toàn' : cashDiff > 0 ? `Thừa +${money(cashDiff)}` : `Thiếu -${money(Math.abs(cashDiff))}`}
                   </span>
                 </div>
 
                 <label className="block">
-                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Ghi chú bàn giao & niêm phong két</span>
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">Ghi chú bàn giao & niêm phong két</span>
                   <textarea
                     value={shiftNote}
                     onChange={(e) => setShiftNote(e.target.value)}
                     placeholder="Ghi chú tiền lẻ còn lại, hóa đơn nghi vấn hoặc bàn giao ca tiếp theo..."
-                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                   />
                 </label>
               </div>
             </div>
 
             <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">
-              <p className="hidden text-[8px] font-semibold text-slate-400 sm:block">
+              <p className="hidden text-caption font-semibold text-slate-400 sm:block">
                 Biên bản kiểm kê két sẽ được lưu vào nhật ký đối soát tenant.
               </p>
               <div className="ml-auto flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShiftModalOpen(false)}
-                  className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                  className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
                 >
                   Hủy
                 </button>
@@ -911,7 +1061,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                     setShiftModalOpen(false);
                     onNotify?.('Đã hoàn tất kiểm đếm và đóng ca làm việc thành công.');
                   }}
-                  className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"
+                  className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
                 >
                   <LockKeyhole className="h-4 w-4" />
                   Xác nhận đóng ca
@@ -923,98 +1073,145 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       );
     })()}
 
-    {createOpen && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"><button type="button" aria-label="Đóng biểu mẫu tạo hóa đơn" onClick={() => setCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitInvoice} role="dialog" aria-modal="true" aria-labelledby="create-invoice-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7"><div><p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Hóa đơn thủ công</p><h2 id="create-invoice-title" className="mt-1 text-xl font-black text-slate-950">Tạo hóa đơn mới</h2><p className="mt-1 text-[9px] text-slate-500">Tạo hóa đơn dịch vụ hoặc bán lẻ trong phạm vi tenant.</p></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<fieldset><legend className="mb-3 text-[9px] font-black text-slate-800">Khách hàng & nguồn hóa đơn</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tên khách hàng *</span><input value={invoice.customer} onChange={(event) => setInvoice((current) => ({ ...current, customer: event.target.value }))} placeholder="Nguyễn Minh Anh" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số điện thoại *</span><input inputMode="tel" value={invoice.phone} onChange={(event) => setInvoice((current) => ({ ...current, phone: event.target.value }))} placeholder="0912 345 678" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode }))} className={invoiceInputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã lịch hẹn (không bắt buộc)</span><input value={invoice.appointmentId} onChange={(event) => setInvoice((current) => ({ ...current, appointmentId: event.target.value }))} placeholder="APT-..." className={invoiceInputClass} /></label></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 text-[9px] font-black text-slate-800">Dịch vụ & thành tiền</legend><div className="grid gap-3 sm:grid-cols-2"><label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tên dịch vụ / sản phẩm *</span><input value={invoice.itemName} onChange={(event) => setInvoice((current) => ({ ...current, itemName: event.target.value }))} placeholder="Ví dụ: Gel Manicure + Nail Art" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Nhân viên phụ trách *</span><input value={invoice.staff} onChange={(event) => setInvoice((current) => ({ ...current, staff: event.target.value }))} placeholder="Tên kỹ thuật viên" className={invoiceInputClass} /></label><div className="grid grid-cols-[100px_1fr] gap-3"><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số lượng *</span><input type="number" min="1" step="1" value={invoice.quantity} onChange={(event) => setInvoice((current) => ({ ...current, quantity: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đơn giá *</span><input type="number" min="1" step="1000" value={invoice.unitPrice} onChange={(event) => setInvoice((current) => ({ ...current, unitPrice: event.target.value }))} placeholder="0" className={invoiceInputClass} /></label></div><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Giảm giá</span><input type="number" min="0" step="1000" value={invoice.discount} onChange={(event) => setInvoice((current) => ({ ...current, discount: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label></div><div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] text-white"><div className="p-4"><p className="text-[8px] font-bold text-slate-400">Tạm tính</p><p className="mt-1 text-base font-black">{money(invoiceSubtotal)}</p></div><div className="border-l border-white/10 p-4"><p className="text-[8px] font-bold text-violet-300">Tổng hóa đơn</p><p className="mt-1 text-base font-black">{money(invoiceTotal)}</p></div></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 text-[9px] font-black text-slate-800">Thanh toán ban đầu</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Đã thu / tiền cọc</span><input type="number" min="0" max={invoiceTotal || undefined} step="1000" value={invoice.deposit} onChange={(event) => setInvoice((current) => ({ ...current, deposit: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Phương thức</span><BeautifulSelect value={invoice.method} onChange={(event) => setInvoice((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className={invoiceInputClass}>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label>{Number(invoice.deposit) > 0 && invoice.method !== 'CASH' && <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giao dịch *</span><input value={invoice.reference} onChange={(event) => setInvoice((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className={invoiceInputClass} /></label>}<label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Ghi chú</span><textarea value={invoice.note} onChange={(event) => setInvoice((current) => ({ ...current, note: event.target.value }))} placeholder="Thông tin cần lưu cùng hóa đơn..." className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label></div></fieldset></div><footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7"><p className="hidden text-[8px] font-semibold text-slate-400 sm:block">Hóa đơn được lưu vào nhật ký kiểm soát tenant.</p><div className="ml-auto flex gap-2"><button type="button" onClick={() => setCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><ReceiptText className="h-4 w-4" />Tạo hóa đơn</button></div></footer></form></div>}
+    {createOpen && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"><button type="button" aria-label="Đóng biểu mẫu tạo hóa đơn" onClick={() => setCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitInvoice} role="dialog" aria-modal="true" aria-labelledby="create-invoice-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7"><div><p className="text-caption font-black uppercase tracking-wide text-violet-600">Hóa đơn thủ công</p><h2 id="create-invoice-title" className="mt-1 text-xl font-black text-slate-950">Tạo hóa đơn mới</h2><p className="mt-1 text-caption text-slate-500">Tạo hóa đơn dịch vụ hoặc bán lẻ trong phạm vi tenant.</p></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<fieldset><legend className="mb-3 text-caption font-black text-slate-800">Khách hàng & nguồn hóa đơn</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Tên khách hàng *</span><input value={invoice.customer} onChange={(event) => setInvoice((current) => ({ ...current, customer: event.target.value }))} placeholder="Nguyễn Minh Anh" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Số điện thoại *</span><input inputMode="tel" value={invoice.phone} onChange={(event) => setInvoice((current) => ({ ...current, phone: event.target.value }))} placeholder="0912 345 678" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Chi nhánh *</span><BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode }))} className={invoiceInputClass}><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Mã lịch hẹn (không bắt buộc)</span><input value={invoice.appointmentId} onChange={(event) => setInvoice((current) => ({ ...current, appointmentId: event.target.value }))} placeholder="APT-..." className={invoiceInputClass} /></label></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 text-caption font-black text-slate-800">Dịch vụ & thành tiền</legend><div className="grid gap-3 sm:grid-cols-2"><label className="sm:col-span-2"><span className="mb-1.5 block text-caption font-bold text-slate-600">Tên dịch vụ / sản phẩm *</span><input value={invoice.itemName} onChange={(event) => setInvoice((current) => ({ ...current, itemName: event.target.value }))} placeholder="Ví dụ: Gel Manicure + Nail Art" className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Nhân viên phụ trách *</span><input value={invoice.staff} onChange={(event) => setInvoice((current) => ({ ...current, staff: event.target.value }))} placeholder="Tên kỹ thuật viên" className={invoiceInputClass} /></label><div className="grid grid-cols-[100px_1fr] gap-3"><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Số lượng *</span><input type="number" min="1" step="1" value={invoice.quantity} onChange={(event) => setInvoice((current) => ({ ...current, quantity: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Đơn giá *</span><input type="number" min="1" step="1000" value={invoice.unitPrice} onChange={(event) => setInvoice((current) => ({ ...current, unitPrice: event.target.value }))} placeholder="0" className={invoiceInputClass} /></label></div><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Giảm giá</span><input type="number" min="0" step="1000" value={invoice.discount} onChange={(event) => setInvoice((current) => ({ ...current, discount: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label></div><div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] text-white"><div className="p-4"><p className="text-caption font-bold text-slate-400">Tạm tính</p><p className="mt-1 text-base font-black">{money(invoiceSubtotal)}</p></div><div className="border-l border-white/10 p-4"><p className="text-caption font-bold text-violet-300">Tổng hóa đơn</p><p className="mt-1 text-base font-black">{money(invoiceTotal)}</p></div></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 text-caption font-black text-slate-800">Thanh toán ban đầu</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Đã thu / tiền cọc</span><input type="number" min="0" max={invoiceTotal || undefined} step="1000" value={invoice.deposit} onChange={(event) => setInvoice((current) => ({ ...current, deposit: event.target.value }))} className={invoiceInputClass} /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Phương thức</span><BeautifulSelect value={invoice.method} onChange={(event) => setInvoice((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className={invoiceInputClass}>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label>{Number(invoice.deposit) > 0 && invoice.method !== 'CASH' && <label className="sm:col-span-2"><span className="mb-1.5 block text-caption font-bold text-slate-600">Mã giao dịch *</span><input value={invoice.reference} onChange={(event) => setInvoice((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className={invoiceInputClass} /></label>}<label className="sm:col-span-2"><span className="mb-1.5 block text-caption font-bold text-slate-600">Ghi chú</span><textarea value={invoice.note} onChange={(event) => setInvoice((current) => ({ ...current, note: event.target.value }))} placeholder="Thông tin cần lưu cùng hóa đơn..." className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label></div></fieldset></div><footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7"><p className="hidden text-caption font-semibold text-slate-400 sm:block">Hóa đơn được lưu vào nhật ký kiểm soát tenant.</p><div className="ml-auto flex gap-2"><button type="button" onClick={() => setCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"><ReceiptText className="h-4 w-4" />Tạo hóa đơn</button></div></footer></form></div>}
 
-    {selected && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><button type="button" aria-label="Đóng chi tiết hóa đơn" onClick={() => setSelected(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><section role="dialog" aria-modal="true" aria-labelledby="payment-detail-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7"><div><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-black uppercase tracking-wide text-violet-600">{selected.id}</span><span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${statusMeta[selected.status].badge}`}>{statusMeta[selected.status].label}</span></div><h2 id="payment-detail-title" className="mt-2 text-xl font-black text-slate-950">Chi tiết thanh toán</h2><p className="mt-1 text-[9px] text-slate-400">{selected.createdAt} · Chi nhánh {selected.branch === 'Q3' ? 'Quận 3' : 'Quận 1'}</p></div><button type="button" onClick={() => setSelected(null)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7"><div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]"><div className="space-y-4"><div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white"><div className="flex items-start justify-between"><div><p className="text-[8px] font-black uppercase tracking-[0.15em] text-violet-300">Tổng thanh toán</p><p className="mt-2 text-3xl font-black tracking-tight">{money(selected.total)}</p><p className="mt-2 text-[9px] text-slate-400">Đã thu {money(selected.paid)} · Còn {money(Math.max(0, selected.total - selected.paid))}</p></div><ReceiptText className="h-6 w-6 text-violet-300" /></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-300" style={{ width: `${Math.min(100, selected.total ? selected.paid / selected.total * 100 : 0)}%` }} /></div></div><div className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><UserRound className="h-4 w-4" /></span><div><p className="text-[11px] font-black text-slate-900">{selected.customer}</p><p className="mt-1 text-[8px] text-slate-400">{selected.phone} · {selected.appointmentId || 'Khách vãng lai'}</p><p className="mt-2 text-[8px] font-semibold text-slate-500">Thu ngân: {selected.cashier} · {selected.source}</p></div></div></div><div className="rounded-2xl border border-slate-200"><div className="border-b border-slate-100 px-4 py-3"><p className="text-[9px] font-black text-slate-800">Dịch vụ & sản phẩm</p></div><div className="divide-y divide-slate-100">{selected.items.map((item) => <div key={item.name} className="flex items-start justify-between gap-3 px-4 py-3"><div><p className="text-[9px] font-black text-slate-700">{item.name} × {item.quantity}</p><p className="mt-1 text-[8px] text-slate-400">Phụ trách: {item.staff}</p></div><p className="text-[9px] font-black text-slate-800">{money(item.amount)}</p></div>)}</div><div className="space-y-2 border-t border-slate-100 bg-slate-50 px-4 py-3 text-[8px]"><div className="flex justify-between text-slate-500"><span>Tạm tính</span><strong>{money(selected.subtotal)}</strong></div><div className="flex justify-between text-slate-500"><span>Giảm giá</span><strong>-{money(selected.discount)}</strong></div><div className="flex justify-between text-slate-500"><span>Tiền tip</span><strong>+{money(selected.tip)}</strong></div><div className="flex justify-between border-t border-slate-200 pt-2 text-[10px] font-black text-slate-900"><span>Tổng cộng</span><span>{money(selected.total)}</span></div></div></div></div><div className="space-y-4"><div className="rounded-2xl border border-slate-200 p-4"><p className="text-[8px] font-black uppercase text-slate-400">Phương thức & đối soát</p><div className="mt-3"><MethodBadge method={selected.method} /></div><div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[7px] text-slate-400">Mã giao dịch</p><p className="mt-1 truncate text-[8px] font-black text-slate-700">{selected.reference || 'Chưa có'}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[7px] text-slate-400">Tiền đặt cọc</p><p className="mt-1 text-[8px] font-black text-slate-700">{money(selected.deposit)}</p></div></div>{selected.refunded > 0 && <div className="mt-3 rounded-xl bg-rose-50 p-3"><p className="text-[8px] font-black text-rose-700">Đã hoàn {money(selected.refunded)}</p><p className="mt-1 text-[7px] text-rose-500">Giá trị thuần còn lại {money(selected.paid - selected.refunded)}</p></div>}</div><div className="rounded-2xl border border-slate-200 p-4"><p className="text-[9px] font-black text-slate-800">Nhật ký kiểm soát</p><div className="mt-3 space-y-3">{selected.audit.map((item, index) => <div key={`${item}-${index}`} className="flex gap-3"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${index === 0 ? 'bg-violet-500' : 'bg-slate-300'}`} /><p className="text-[8px] leading-4 text-slate-500">{item}</p></div>)}</div></div>{selected.note && <div className="rounded-2xl bg-amber-50 p-4"><p className="text-[8px] font-black uppercase text-amber-600">Ghi chú tài chính</p><p className="mt-2 text-[8px] leading-5 text-amber-800">{selected.note}</p></div>}<div className="flex items-start gap-2 rounded-2xl bg-violet-50 p-4"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" /><p className="text-[8px] leading-4 text-violet-700">Mọi cập nhật đều gắn với tài khoản, thời gian và phạm vi tenant để phục vụ kiểm toán nội bộ.</p></div></div></div></div><footer className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><p className="text-[8px] font-semibold text-slate-400">Thao tác dưới quyền {roleLabel}</p><div className="flex flex-wrap justify-end gap-2">{selected.status !== 'REFUNDED' && selected.paid < selected.total && <button type="button" onClick={() => openCapture(selected)} disabled={!canManage} className="flex h-10 items-center gap-2 border border-emerald-700 bg-emerald-600 px-4 text-[8px] font-black text-white shadow-sm disabled:opacity-50"><CircleDollarSign className="h-3.5 w-3.5" />Thu phần còn lại</button>}{selected.status !== 'REFUNDED' && selected.paid - selected.refunded > 0 && <button type="button" onClick={() => openRefund(selected)} disabled={!canManage} className="flex h-10 items-center gap-2 border border-rose-200 bg-rose-50 px-4 text-[8px] font-black text-rose-700 shadow-sm disabled:opacity-50"><ArrowDownRight className="h-3.5 w-3.5" />Hoàn tiền</button>}<button type="button" onClick={() => onNotify?.(`Đã chuẩn bị bản in ${selected.id}.`)} className="flex h-10 items-center gap-2 border border-slate-200 bg-white px-4 text-[8px] font-black text-slate-600 shadow-sm"><FileText className="h-3.5 w-3.5" />In hóa đơn</button></div></footer></section></div>}
+    {selected && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><button type="button" aria-label="Đóng chi tiết hóa đơn" onClick={() => setSelected(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><section role="dialog" aria-modal="true" aria-labelledby="payment-detail-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7"><div><div className="flex flex-wrap items-center gap-2"><span className="text-caption font-black uppercase tracking-wide text-violet-600">{selected.id}</span><span className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[selected.status].badge}`}>{statusMeta[selected.status].label}</span></div><h2 id="payment-detail-title" className="mt-2 text-xl font-black text-slate-950">Chi tiết thanh toán</h2><p className="mt-1 text-caption text-slate-400">{selected.createdAt} · Chi nhánh {selected.branch === 'Q3' ? 'Quận 3' : 'Quận 1'}</p></div><button type="button" onClick={() => setSelected(null)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7"><div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]"><div className="space-y-4"><div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white"><div className="flex items-start justify-between"><div><p className="text-caption font-black uppercase tracking-[0.15em] text-violet-300">Tổng thanh toán</p><p className="mt-2 text-3xl font-black tracking-tight">{money(selected.total)}</p><p className="mt-2 text-caption text-slate-400">Đã thu {money(selected.paid)} · Còn {money(Math.max(0, selected.total - selected.paid))}</p></div><ReceiptText className="h-6 w-6 text-violet-300" /></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-300" style={{ width: `${Math.min(100, selected.total ? selected.paid / selected.total * 100 : 0)}%` }} /></div></div><div className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><UserRound className="h-4 w-4" /></span><div><p className="text-body font-black text-slate-900">{selected.customer}</p><p className="mt-1 text-caption text-slate-400">{selected.phone} · {selected.appointmentId || 'Khách vãng lai'}</p><p className="mt-2 text-caption font-semibold text-slate-500">Thu ngân: {selected.cashier} · {selected.source}</p></div></div></div><div className="rounded-2xl border border-slate-200"><div className="border-b border-slate-100 px-4 py-3"><p className="text-caption font-black text-slate-800">Dịch vụ & sản phẩm</p></div><div className="divide-y divide-slate-100">{selected.items.map((item) => <div key={item.name} className="flex items-start justify-between gap-3 px-4 py-3"><div><p className="text-caption font-black text-slate-700">{item.name} × {item.quantity}</p><p className="mt-1 text-caption text-slate-400">Phụ trách: {item.staff}</p></div><p className="text-caption font-black text-slate-800">{money(item.amount)}</p></div>)}</div><div className="space-y-2 border-t border-slate-100 bg-slate-50 px-4 py-3 text-caption"><div className="flex justify-between text-slate-500"><span>Tạm tính</span><strong>{money(selected.subtotal)}</strong></div><div className="flex justify-between text-slate-500"><span>Giảm giá</span><strong>-{money(selected.discount)}</strong></div><div className="flex justify-between text-slate-500"><span>Tiền tip</span><strong>+{money(selected.tip)}</strong></div><div className="flex justify-between border-t border-slate-200 pt-2 text-caption font-black text-slate-900"><span>Tổng cộng</span><span>{money(selected.total)}</span></div></div></div></div><div className="space-y-4"><div className="rounded-2xl border border-slate-200 p-4"><p className="text-caption font-black uppercase text-slate-400">Phương thức & đối soát</p><div className="mt-3 flex flex-wrap items-center gap-2"><MethodBadge method={selected.method} />{canManage && selected.status !== 'REFUNDED' && selected.paid > 0 && <><button type="button" onClick={() => openAdjust(selected)} className="inline-flex h-8 min-h-0 items-center gap-1.5 border border-slate-200 bg-white px-2.5 text-caption font-bold text-slate-600 shadow-none"><Pencil className="h-3 w-3" />Sửa khoản thu</button><button type="button" onClick={() => openAdjust(selected, true)} className="inline-flex h-8 min-h-0 items-center gap-1.5 border border-rose-200 bg-rose-50 px-2.5 text-caption font-bold text-rose-700 shadow-none"><RotateCcw className="h-3 w-3" />Hủy khoản thu</button></>}</div><div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-xl bg-slate-50 p-3"><p className="text-caption text-slate-400">Mã giao dịch</p><p className="mt-1 truncate text-caption font-black text-slate-700">{selected.reference || 'Chưa có'}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-caption text-slate-400">Tiền đặt cọc</p><p className="mt-1 text-caption font-black text-slate-700">{money(selected.deposit)}</p></div></div>{selected.refunded > 0 && <div className="mt-3 rounded-xl bg-rose-50 p-3"><p className="text-caption font-black text-rose-700">Đã hoàn {money(selected.refunded)}</p><p className="mt-1 text-caption text-rose-500">Giá trị thuần còn lại {money(selected.paid - selected.refunded)}</p></div>}</div><div className="rounded-2xl border border-slate-200 p-4"><p className="text-caption font-black text-slate-800">Nhật ký kiểm soát</p><div className="mt-3 space-y-3">{selected.audit.map((item, index) => <div key={`${item}-${index}`} className="flex gap-3"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${index === 0 ? 'bg-violet-500' : 'bg-slate-300'}`} /><p className="text-caption leading-4 text-slate-500">{item}</p></div>)}</div></div>{selected.note && <div className="rounded-2xl bg-amber-50 p-4"><p className="text-caption font-black uppercase text-amber-600">Ghi chú tài chính</p><p className="mt-2 text-caption leading-5 text-amber-800">{selected.note}</p></div>}<div className="flex items-start gap-2 rounded-2xl bg-violet-50 p-4"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" /><p className="text-caption leading-4 text-violet-700">Mọi cập nhật đều gắn với tài khoản, thời gian và phạm vi tenant để phục vụ kiểm toán nội bộ.</p></div></div></div></div><footer className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><p className="text-caption font-semibold text-slate-400">Thao tác dưới quyền {roleLabel}</p><div className="flex flex-wrap justify-end gap-2">{selected.status !== 'REFUNDED' && selected.paid < selected.total && <button type="button" onClick={() => openCapture(selected)} disabled={!canManage} className="flex h-10 items-center gap-2 border border-emerald-700 bg-emerald-600 px-4 text-caption font-black text-white shadow-sm disabled:opacity-50"><CircleDollarSign className="h-3.5 w-3.5" />Thu phần còn lại</button>}{selected.status !== 'REFUNDED' && selected.paid - selected.refunded > 0 && <button type="button" onClick={() => openRefund(selected)} disabled={!canManage} className="flex h-10 items-center gap-2 border border-rose-200 bg-rose-50 px-4 text-caption font-black text-rose-700 shadow-sm disabled:opacity-50"><ArrowDownRight className="h-3.5 w-3.5" />Hoàn tiền</button>}<button type="button" onClick={() => onNotify?.(`Đã chuẩn bị bản in ${selected.id}.`)} className="flex h-10 items-center gap-2 border border-slate-200 bg-white px-4 text-caption font-black text-slate-600 shadow-sm"><FileText className="h-3.5 w-3.5" />In hóa đơn</button></div></footer></section></div>}
 
-    {captureOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setCaptureOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitCapture} className="relative w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5"><div><p className="text-[9px] font-black uppercase tracking-wide text-emerald-600">Thu tiền tại quầy</p><h2 className="mt-1 text-lg font-black text-slate-900">Ghi nhận thanh toán</h2><p className="mt-1 text-[9px] text-slate-500">Kiểm tra đúng số tiền và mã giao dịch trước khi xác nhận.</p></div><button type="button" onClick={() => setCaptureOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="grid gap-4 p-5 sm:grid-cols-2">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700 sm:col-span-2"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Hóa đơn cần thu *</span><BeautifulSelect value={capture.invoiceId} onChange={(event) => { const target = records.find((item) => item.id === event.target.value); setCapture((current) => ({ ...current, invoiceId: event.target.value, amount: String(target ? target.total - target.paid : 0) })); }} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]">{scoped.filter((item) => item.status !== 'REFUNDED' && item.paid < item.total).map((item) => <option key={item.id} value={item.id}>{item.id} · {item.customer} · Còn {money(item.total - item.paid)}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số tiền thu *</span><input type="number" min="0" step="1" value={capture.amount} onChange={(event) => setCapture((current) => ({ ...current, amount: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Phương thức *</span><BeautifulSelect value={capture.method} onChange={(event) => setCapture((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px]">{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label><label className="sm:col-span-2"><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Mã giao dịch {capture.method === 'CASH' ? '(không bắt buộc)' : '*'}</span><input value={capture.reference} onChange={(event) => setCapture((current) => ({ ...current, reference: event.target.value }))} placeholder={capture.method === 'CASH' ? 'Tự động tạo mã phiếu thu' : 'Nhập mã từ ngân hàng hoặc cổng thanh toán'} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-[10px] outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></label></div><footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4"><button type="button" onClick={() => setCaptureOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-[9px] font-black text-white shadow-lg shadow-emerald-200"><Check className="h-4 w-4" />Xác nhận đã thu</button></footer></form></div>}
+    {captureOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setCaptureOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitCapture} className="relative w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5"><div><p className="text-caption font-black uppercase tracking-wide text-emerald-600">Thu tiền tại quầy</p><h2 className="mt-1 text-lg font-black text-slate-900">Ghi nhận thanh toán</h2><p className="mt-1 text-caption text-slate-500">Kiểm tra đúng số tiền và mã giao dịch trước khi xác nhận.</p></div><button type="button" onClick={() => setCaptureOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="grid gap-4 p-5 sm:grid-cols-2">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700 sm:col-span-2"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<label className="sm:col-span-2"><span className="mb-1.5 block text-caption font-bold text-slate-600">Hóa đơn cần thu *</span><BeautifulSelect value={capture.invoiceId} onChange={(event) => { const target = records.find((item) => item.id === event.target.value); setCapture((current) => ({ ...current, invoiceId: event.target.value, amount: String(target ? target.total - target.paid : 0) })); }} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption">{scoped.filter((item) => item.status !== 'REFUNDED' && item.paid < item.total).map((item) => <option key={item.id} value={item.id}>{item.id} · {item.customer} · Còn {money(item.total - item.paid)}</option>)}</BeautifulSelect></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Số tiền thu *</span><input type="number" min="0" step="1" value={capture.amount} onChange={(event) => setCapture((current) => ({ ...current, amount: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-black outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Phương thức *</span><BeautifulSelect value={capture.method} onChange={(event) => setCapture((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption">{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label><label className="sm:col-span-2"><span className="mb-1.5 block text-caption font-bold text-slate-600">Mã giao dịch {capture.method === 'CASH' ? '(không bắt buộc)' : '*'}</span><input value={capture.reference} onChange={(event) => setCapture((current) => ({ ...current, reference: event.target.value }))} placeholder={capture.method === 'CASH' ? 'Tự động tạo mã phiếu thu' : 'Nhập mã từ ngân hàng hoặc cổng thanh toán'} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-caption outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></label></div><footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4"><button type="button" onClick={() => setCaptureOpen(false)} className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-caption font-black text-white shadow-lg shadow-emerald-200"><Check className="h-4 w-4" />Xác nhận đã thu</button></footer></form></div>}
 
-    {refundOpen && selected && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu hoàn tiền" onClick={() => setRefundOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitRefund} className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5"><div><p className="text-[9px] font-black uppercase tracking-wide text-rose-600">Kiểm soát hoàn tiền</p><h2 className="mt-1 text-lg font-black text-slate-900">Hoàn tiền {selected.id}</h2><p className="mt-1 text-[9px] text-slate-500">Có thể hoàn tối đa {money(selected.paid - selected.refunded)}.</p></div><button type="button" onClick={() => setRefundOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="space-y-4 p-5">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Số tiền hoàn *</span><input type="number" min="0" step="1" value={refund.amount} onChange={(event) => setRefund((current) => ({ ...current, amount: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" /></label><label><span className="mb-1.5 block text-[9px] font-bold text-slate-600">Lý do hoàn tiền *</span><textarea value={refund.reason} onChange={(event) => setRefund((current) => ({ ...current, reason: event.target.value }))} placeholder="Mô tả lý do, phạm vi dịch vụ và người đã xác nhận..." className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" /></label><div className="flex gap-2 rounded-xl bg-amber-50 p-3 text-[8px] leading-4 text-amber-800"><ShieldCheck className="h-4 w-4 shrink-0" />Thao tác hoàn tiền được lưu vào nhật ký kiểm soát và cần được đối soát lại với cổng thanh toán.</div></div><footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4"><button type="button" onClick={() => setRefundOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-[9px] font-black text-white shadow-lg shadow-rose-200"><ArrowDownRight className="h-4 w-4" />Xác nhận hoàn tiền</button></footer></form></div>}
+    {refundOpen && selected && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu hoàn tiền" onClick={() => setRefundOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitRefund} className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-5"><div><p className="text-caption font-black uppercase tracking-wide text-rose-600">Kiểm soát hoàn tiền</p><h2 className="mt-1 text-lg font-black text-slate-900">Hoàn tiền {selected.id}</h2><p className="mt-1 text-caption text-slate-500">Có thể hoàn tối đa {money(selected.paid - selected.refunded)}.</p></div><button type="button" onClick={() => setRefundOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></header><div className="space-y-4 p-5">{formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}<label><span className="mb-1.5 block text-caption font-bold text-slate-600">Số tiền hoàn *</span><input type="number" min="0" step="1" value={refund.amount} onChange={(event) => setRefund((current) => ({ ...current, amount: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-black outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Lý do hoàn tiền *</span><textarea value={refund.reason} onChange={(event) => setRefund((current) => ({ ...current, reason: event.target.value }))} placeholder="Mô tả lý do, phạm vi dịch vụ và người đã xác nhận..." className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" /></label><div className="flex gap-2 rounded-xl bg-amber-50 p-3 text-caption leading-4 text-amber-800"><ShieldCheck className="h-4 w-4 shrink-0" />Thao tác hoàn tiền được lưu vào nhật ký kiểm soát và cần được đối soát lại với cổng thanh toán.</div></div><footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4"><button type="button" onClick={() => setRefundOpen(false)} className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-caption font-black text-white shadow-lg shadow-rose-200"><ArrowDownRight className="h-4 w-4" />Xác nhận hoàn tiền</button></footer></form></div>}
+    {adjustOpen && selected && (
+      <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
+        <button type="button" aria-label="Đóng biểu mẫu điều chỉnh" onClick={() => setAdjustOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
+        <form onSubmit={submitAdjust} role="dialog" aria-modal="true" aria-labelledby="adjust-payment-title" className="relative w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5">
+            <div>
+              <p className="text-caption font-black uppercase tracking-wide text-amber-600">{selected.id}</p>
+              <h2 id="adjust-payment-title" className="mt-1 text-lg font-black text-slate-900">Điều chỉnh khoản thu</h2>
+              <p className="mt-1 text-caption text-slate-500">Đang ghi nhận đã thu {money(selected.paid)} / {money(selected.total)}. Đặt số tiền về {money(0)} để hủy toàn bộ khoản thu.</p>
+            </div>
+            <button type="button" onClick={() => setAdjustOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button>
+          </header>
+          <div className="grid gap-4 p-5 sm:grid-cols-2">
+            {formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700 sm:col-span-2"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}
+            <label>
+              <span className="mb-1.5 block text-caption font-bold text-slate-600">Số tiền đã thu *</span>
+              <input type="number" min="0" max={selected.total} step="1" value={adjust.amount} onChange={(event) => setAdjust((current) => ({ ...current, amount: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-black outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" />
+              <span className="mt-1 block text-caption font-semibold text-slate-400">Tối đa {money(selected.total)}</span>
+            </label>
+            <label>
+              <span className="mb-1.5 block text-caption font-bold text-slate-600">Phương thức</span>
+              {/* Số tiền về 0 thì không còn khoản thu nào để gắn phương thức. */}
+              <BeautifulSelect value={adjust.method} disabled={Number(adjust.amount) <= 0} onChange={(event) => setAdjust((current) => ({ ...current, method: event.target.value as PaymentMethod }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption">
+                {Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
+              </BeautifulSelect>
+            </label>
+            <label className="sm:col-span-2">
+              <span className="mb-1.5 block text-caption font-bold text-slate-600">Mã giao dịch{Number(adjust.amount) > 0 && adjust.method !== 'CASH' ? ' *' : ''}</span>
+              <input value={adjust.reference} disabled={Number(adjust.amount) <= 0} onChange={(event) => setAdjust((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-semibold outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100 disabled:opacity-60" />
+            </label>
+            <label className="sm:col-span-2">
+              <span className="mb-1.5 block text-caption font-bold text-slate-600">Lý do điều chỉnh *</span>
+              <textarea value={adjust.reason} onChange={(event) => setAdjust((current) => ({ ...current, reason: event.target.value }))} placeholder="Ví dụ: bấm nhầm ví MoMo, khách trả bằng tiền mặt" className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100" />
+              <span className="mt-1 block text-caption font-semibold text-slate-400">Lý do được ghi vào nhật ký kiểm soát cùng tên người thao tác.</span>
+            </label>
+          </div>
+          <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <button type="button" onClick={() => setAdjust((current) => ({ ...current, amount: '0' }))} className="border border-rose-200 bg-white px-4 text-caption font-bold text-rose-700 shadow-sm">Hủy toàn bộ khoản thu</button>
+            <div className="flex gap-2 sm:ml-auto">
+              <button type="button" onClick={() => setAdjustOpen(false)} className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm">Đóng</button>
+              <button type="submit" className="flex items-center gap-2 border border-amber-600 bg-amber-500 px-5 text-caption font-black text-white shadow-sm"><Check className="h-4 w-4" />Lưu điều chỉnh</button>
+            </div>
+          </footer>
+        </form>
+      </div>
+    )}
+
     {catalogCreateOpen && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6">
         <button type="button" aria-label="Đóng biểu mẫu tạo hóa đơn" onClick={() => setCatalogCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" />
         <form onSubmit={submitInvoice} role="dialog" aria-modal="true" aria-labelledby="catalog-create-invoice-title" className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
           <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">Tenant Admin · Hóa đơn thủ công</p>
+              <p className="text-caption font-black uppercase tracking-wide text-violet-600">Tenant Admin · Hóa đơn thủ công</p>
               <h2 id="catalog-create-invoice-title" className="mt-1 text-xl font-black text-slate-950">Tạo hóa đơn mới</h2>
-              <p className="mt-1 text-[9px] text-slate-500">Chọn dịch vụ và nhân viên trực tiếp từ danh mục của salon.</p>
+              <p className="mt-1 text-caption text-slate-500">Chọn dịch vụ và nhân viên trực tiếp từ danh mục của salon.</p>
             </div>
             <button type="button" onClick={() => setCatalogCreateOpen(false)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button>
           </header>
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
-            {formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-[8px] font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}
+            {formError && <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{formError}</div>}
             <fieldset>
-              <legend className="mb-3 text-[9px] font-black text-slate-800">Khách hàng & nguồn hóa đơn</legend>
+              <legend className="mb-3 text-caption font-black text-slate-800">Khách hàng & nguồn hóa đơn</legend>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tên khách hàng *</span><input value={invoice.customer} onChange={(event) => setInvoice((current) => ({ ...current, customer: event.target.value }))} placeholder="Nguyễn Minh Anh" className={invoiceInputClass} /></label>
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số điện thoại *</span><input inputMode="tel" value={invoice.phone} onChange={(event) => setInvoice((current) => ({ ...current, phone: event.target.value }))} placeholder="0912 345 678" className={invoiceInputClass} /></label>
+                <label><span className="mb-1.5 block text-caption font-bold text-slate-600">Tên khách hàng *</span><input value={invoice.customer} onChange={(event) => setInvoice((current) => ({ ...current, customer: event.target.value }))} placeholder="Nguyễn Minh Anh" className={invoiceInputClass} /></label>
+                <label><span className="mb-1.5 block text-caption font-bold text-slate-600">Số điện thoại *</span><input inputMode="tel" value={invoice.phone} onChange={(event) => setInvoice((current) => ({ ...current, phone: event.target.value }))} placeholder="0912 345 678" className={invoiceInputClass} /></label>
                 <label>
-                  <span className="mb-1.5 block text-[8px] font-bold text-slate-600">Chi nhánh *</span>
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">Chi nhánh *</span>
                   <BeautifulSelect value={invoice.branch} disabled={branchLocked} onChange={(event) => { setInvoice((current) => ({ ...current, branch: event.target.value as BranchCode, category: 'ALL', itemName: '', unitPrice: '', quantity: '1', staff: '' })); setInvoiceItems([]); }} className={invoiceInputClass}>
                     <option value="Q3">Chi nhánh Quận 3</option>
                     <option value="Q1">Chi nhánh Quận 1</option>
                   </BeautifulSelect>
                 </label>
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã lịch hẹn (không bắt buộc)</span><input value={invoice.appointmentId} onChange={(event) => setInvoice((current) => ({ ...current, appointmentId: event.target.value }))} placeholder="APT-..." className={invoiceInputClass} /></label>
+                <label><span className="mb-1.5 block text-caption font-bold text-slate-600">Mã lịch hẹn (không bắt buộc)</span><input value={invoice.appointmentId} onChange={(event) => setInvoice((current) => ({ ...current, appointmentId: event.target.value }))} placeholder="APT-..." className={invoiceInputClass} /></label>
               </div>
             </fieldset>
             <fieldset className="border-t border-slate-100 pt-5">
-              <legend className="mb-3 text-[9px] font-black text-slate-800">Chọn dịch vụ & nhân viên</legend>
+              <legend className="mb-3 text-caption font-black text-slate-800">Chọn dịch vụ & nhân viên</legend>
               <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
                 <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                   <div className="border-b border-slate-100 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div><p className="text-[9px] font-black text-slate-800">Bảng dịch vụ</p><p className="mt-0.5 text-[7px] text-slate-400">{availableInvoiceServices.length} dịch vụ phù hợp · có thể chọn nhiều dòng</p></div>
-                      {invoiceItems.length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-[7px] font-black text-violet-700"><Check className="h-3 w-3" />Đã chọn {invoiceItems.length} dịch vụ</span>}
+                      <div><p className="text-caption font-black text-slate-800">Bảng dịch vụ</p><p className="mt-0.5 text-caption text-slate-400">{availableInvoiceServices.length} dịch vụ phù hợp · có thể chọn nhiều dòng</p></div>
+                      {invoiceItems.length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-caption font-black text-violet-700"><Check className="h-3 w-3" />Đã chọn {invoiceItems.length} dịch vụ</span>}
                     </div>
                     <div className="relative mt-3">
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                      <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Tìm mã, tên hoặc danh mục dịch vụ..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-[9px] font-semibold outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
+                      <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Tìm mã, tên hoặc danh mục dịch vụ..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-caption font-semibold outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />
                     </div>
                     <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
-                      <button type="button" onClick={() => setInvoice((current) => ({ ...current, category: 'ALL' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === 'ALL' ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>Tất cả</button>
-                      {Object.entries(serviceCategoryLabels).map(([value, label]) => <button key={value} type="button" onClick={() => setInvoice((current) => ({ ...current, category: value as ServiceCategory }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-black ${invoice.category === value ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{label}</button>)}
+                      <button type="button" onClick={() => setInvoice((current) => ({ ...current, category: 'ALL' }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-caption font-black ${invoice.category === 'ALL' ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>Tất cả</button>
+                      {Object.entries(serviceCategoryLabels).map(([value, label]) => <button key={value} type="button" onClick={() => setInvoice((current) => ({ ...current, category: value as ServiceCategory }))} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-caption font-black ${invoice.category === value ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{label}</button>)}
                     </div>
                   </div>
                   <div className="max-h-64 overflow-auto">
                     <table className="w-full min-w-[650px] border-collapse text-left">
-                      <thead className="sticky top-0 z-10 bg-slate-50 text-[7px] font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Dịch vụ</th><th className="w-24 px-3 py-2.5 text-center">Số lượng</th><th className="px-3 py-2.5">Danh mục</th><th className="px-3 py-2.5 text-right">Đơn giá</th></tr></thead>
+                      <thead className="sticky top-0 z-10 bg-slate-50 text-caption font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Dịch vụ</th><th className="w-24 px-3 py-2.5 text-center">Số lượng</th><th className="px-3 py-2.5">Danh mục</th><th className="px-3 py-2.5 text-right">Đơn giá</th></tr></thead>
                       <tbody className="divide-y divide-slate-100">
                         {availableInvoiceServices.map((service) => {
                           const selectedItem = invoiceItems.find((item) => item.id === service.id);
                           const active = Boolean(selectedItem);
                           return <tr key={service.id} onClick={() => toggleInvoiceService(service)} className={`cursor-pointer transition-colors ${active ? 'bg-violet-50' : 'hover:bg-slate-50'}`}>
                             <td className="px-3 py-3"><button type="button" aria-label={`${active ? 'Bỏ chọn' : 'Chọn'} dịch vụ ${service.name}`} aria-pressed={active} onClick={(event) => { event.stopPropagation(); toggleInvoiceService(service); }} className={`flex h-5 w-5 items-center justify-center rounded-md border p-0 ${active ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check className="h-3 w-3" /></button></td>
-                            <td className="px-3 py-3"><p className="text-[9px] font-black text-slate-800">{service.name}</p><p className="mt-0.5 text-[7px] font-semibold text-slate-400">{service.id}</p></td>
-                            <td className="px-3 py-3"><input type="number" min="0" step="1" aria-label={`Số lượng ${service.name}`} value={selectedItem?.quantity || 0} onClick={(event) => event.stopPropagation()} onChange={(event) => updateInvoiceServiceQuantity(service, Number(event.target.value))} className={`h-8 w-16 rounded-lg border px-2 text-center text-[9px] font-black outline-none focus:ring-4 ${active ? 'border-violet-300 bg-white text-violet-700 focus:border-violet-500 focus:ring-violet-100' : 'border-slate-200 bg-slate-50 text-slate-500 focus:border-violet-400 focus:ring-violet-100'}`} /></td>
-                            <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-[7px] font-bold text-slate-600">{serviceCategoryLabels[service.category]}</span></td>
-                            <td className="px-3 py-3 text-right text-[9px] font-black text-slate-800">{money(service.price)}</td>
+                            <td className="px-3 py-3"><p className="text-caption font-black text-slate-800">{service.name}</p><p className="mt-0.5 text-caption font-semibold text-slate-400">{service.id}</p></td>
+                            <td className="px-3 py-3"><input type="number" min="0" step="1" aria-label={`Số lượng ${service.name}`} value={selectedItem?.quantity || 0} onClick={(event) => event.stopPropagation()} onChange={(event) => updateInvoiceServiceQuantity(service, Number(event.target.value))} className={`h-8 w-16 rounded-lg border px-2 text-center text-caption font-black outline-none focus:ring-4 ${active ? 'border-violet-300 bg-white text-violet-700 focus:border-violet-500 focus:ring-violet-100' : 'border-slate-200 bg-slate-50 text-slate-500 focus:border-violet-400 focus:ring-violet-100'}`} /></td>
+                            <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-caption font-bold text-slate-600">{serviceCategoryLabels[service.category]}</span></td>
+                            <td className="px-3 py-3 text-right text-caption font-black text-slate-800">{money(service.price)}</td>
                           </tr>;
                         })}
-                        {!availableInvoiceServices.length && <tr><td colSpan={5} className="px-4 py-10 text-center text-[8px] font-semibold text-slate-400">Không tìm thấy dịch vụ phù hợp.</td></tr>}
+                        {!availableInvoiceServices.length && <tr><td colSpan={5} className="px-4 py-10 text-center text-caption font-semibold text-slate-400">Không tìm thấy dịch vụ phù hợp.</td></tr>}
                       </tbody>
                     </table>
                   </div>
                 </section>
                 <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                   <div className="border-b border-slate-100 p-3">
-                    <div className="flex items-center justify-between gap-2"><div><p className="text-[9px] font-black text-slate-800">Bảng nhân viên</p><p className="mt-0.5 text-[7px] text-slate-400">{availableInvoiceStaff.length} nhân viên tại chi nhánh</p></div>{invoice.staff && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[7px] font-black text-emerald-700"><Check className="h-3 w-3" />Đã chọn</span>}</div>
-                    <div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Tìm tên hoặc vai trò nhân viên..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-[9px] font-semibold outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></div>
+                    <div className="flex items-center justify-between gap-2"><div><p className="text-caption font-black text-slate-800">Bảng nhân viên</p><p className="mt-0.5 text-caption text-slate-400">{availableInvoiceStaff.length} nhân viên tại chi nhánh</p></div>{invoice.staff && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-caption font-black text-emerald-700"><Check className="h-3 w-3" />Đã chọn</span>}</div>
+                    <div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Tìm tên hoặc vai trò nhân viên..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-caption font-semibold outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" /></div>
                   </div>
                   <div className="max-h-[313px] overflow-auto">
                     <table className="w-full min-w-[360px] border-collapse text-left">
-                      <thead className="sticky top-0 z-10 bg-slate-50 text-[7px] font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Nhân viên</th><th className="px-3 py-2.5">Vai trò</th></tr></thead>
+                      <thead className="sticky top-0 z-10 bg-slate-50 text-caption font-black uppercase text-slate-400"><tr><th className="w-10 px-3 py-2.5">Chọn</th><th className="px-3 py-2.5">Nhân viên</th><th className="px-3 py-2.5">Vai trò</th></tr></thead>
                       <tbody className="divide-y divide-slate-100">
                         {availableInvoiceStaff.map((staff) => {
                           const active = invoice.staff === staff.name;
                           return <tr key={staff.name} onClick={() => setInvoice((current) => ({ ...current, staff: staff.name }))} className={`cursor-pointer transition-colors ${active ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}>
                             <td className="px-3 py-3"><button type="button" aria-label={`Chọn nhân viên ${staff.name}`} aria-pressed={active} onClick={(event) => { event.stopPropagation(); setInvoice((current) => ({ ...current, staff: staff.name })); }} className={`flex h-5 w-5 items-center justify-center rounded-full border p-0 ${active ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check className="h-3 w-3" /></button></td>
-                            <td className="px-3 py-3"><div className="flex items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[8px] font-black text-slate-700">{staff.name.split(' ').map((part) => part[0]).slice(-2).join('')}</span><div><p className="text-[9px] font-black text-slate-800">{staff.name}</p><p className="mt-0.5 text-[7px] text-slate-400">Chi nhánh {staff.branch}</p></div></div></td>
-                            <td className="px-3 py-3 text-[8px] font-semibold text-slate-500">{staff.role}</td>
+                            <td className="px-3 py-3"><div className="flex items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-caption font-black text-slate-700">{staff.name.split(' ').map((part) => part[0]).slice(-2).join('')}</span><div><p className="text-caption font-black text-slate-800">{staff.name}</p><p className="mt-0.5 text-caption text-slate-400">Chi nhánh {staff.branch}</p></div></div></td>
+                            <td className="px-3 py-3 text-caption font-semibold text-slate-500">{staff.role}</td>
                           </tr>;
                         })}
-                        {!availableInvoiceStaff.length && <tr><td colSpan={3} className="px-4 py-10 text-center text-[8px] font-semibold text-slate-400">Không tìm thấy nhân viên phù hợp.</td></tr>}
+                        {!availableInvoiceStaff.length && <tr><td colSpan={3} className="px-4 py-10 text-center text-caption font-semibold text-slate-400">Không tìm thấy nhân viên phù hợp.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -1027,11 +1224,11 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/60 pb-2.5">
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-violet-600" />
-                      <p className="text-[10px] font-black text-slate-800">
+                      <p className="text-caption font-black text-slate-800">
                         Chọn Mẫu Nail tương ứng cho dịch vụ
                       </p>
                     </div>
-                    <span className="text-[8px] font-bold text-violet-700 bg-white px-2 py-0.5 rounded-full border border-violet-200">
+                    <span className="text-caption font-bold text-violet-700 bg-white px-2 py-0.5 rounded-full border border-violet-200">
                       Hiển thị các mẫu phù hợp theo liên kết ở trang Màu & mẫu Nail
                     </span>
                   </div>
@@ -1051,13 +1248,13 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
-                              <span className="text-[10px] font-black text-slate-900">
+                              <span className="text-caption font-black text-slate-900">
                                 {item.name}
                               </span>
-                              <span className="ml-2 text-[8px] font-bold text-slate-400">
+                              <span className="ml-2 text-caption font-bold text-slate-400">
                                 [{item.id}]
                               </span>
-                              <p className="text-[8px] text-slate-500 mt-0.5">
+                              <p className="text-caption text-slate-500 mt-0.5">
                                 Giá dịch vụ nền:{' '}
                                 <strong className="text-slate-800">{money(item.price)}</strong> / lượt
                               </p>
@@ -1068,7 +1265,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                                 <BeautifulSelect
                                   value={item.selectedDesignId || 'NONE'}
                                   onChange={(e) => updateInvoiceServiceDesign(item.id, e.target.value)}
-                                  className="h-10 w-full rounded-xl border border-violet-200 bg-violet-50/70 px-3 text-[9px] font-bold text-violet-950 focus:bg-white"
+                                  className="h-10 w-full rounded-xl border border-violet-200 bg-violet-50/70 px-3 text-caption font-bold text-violet-950 focus:bg-white"
                                 >
                                   <option value="NONE">
                                     -- Không chọn mẫu nail (Dùng giá dịch vụ nền) --
@@ -1081,19 +1278,19 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                                 </BeautifulSelect>
                               </div>
                             ) : (
-                              <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-[8px] font-semibold text-slate-500">
+                              <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-caption font-semibold text-slate-500">
                                 Chưa có mẫu nail liên kết với dịch vụ này
                               </span>
                             )}
                           </div>
 
                           {currentDesign && (
-                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 px-3.5 py-2 text-[8.5px]">
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 px-3.5 py-2 text-caption">
                               <div className="flex flex-wrap items-center gap-3">
                                 <span className="font-bold text-amber-950">
                                   Mẫu đã chọn: <strong className="font-black text-amber-900">{currentDesign.name}</strong>
                                 </span>
-                                <span className="rounded bg-amber-200/80 px-2 py-0.5 font-mono text-[8px] font-black text-amber-900">
+                                <span className="rounded bg-amber-200/80 px-2 py-0.5 font-mono text-caption font-black text-amber-900">
                                   Mã: {currentDesign.id}
                                 </span>
                                 <span className="font-black text-amber-800 bg-white px-2.5 py-0.5 rounded-full border border-amber-300">
@@ -1102,7 +1299,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                               </div>
                               <div className="font-black text-slate-800">
                                 Tổng dòng: {money(item.price)} + {money(currentDesign.surcharge)} ={' '}
-                                <span className="text-violet-700 font-black text-[9.5px]">
+                                <span className="text-violet-700 font-black text-caption">
                                   {money((item.price + currentDesign.surcharge) * item.quantity)}
                                 </span>
                               </div>
@@ -1113,13 +1310,13 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
                             <div className="flex items-center gap-1.5">
                               <Palette className="h-3.5 w-3.5 text-violet-600" />
-                              <span className="text-[9px] font-bold text-slate-700">Màu sơn sử dụng (Kho vật tư):</span>
+                              <span className="text-caption font-bold text-slate-700">Màu sơn sử dụng (Kho vật tư):</span>
                             </div>
                             <div className="w-full sm:w-80">
                               <BeautifulSelect
                                 value={item.selectedColorId || 'NONE'}
                                 onChange={(e) => updateInvoiceServiceColor(item.id, e.target.value)}
-                                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[9px] font-bold text-slate-800 focus:bg-white"
+                                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-bold text-slate-800 focus:bg-white"
                               >
                                 <option value="NONE">-- Chọn màu sơn (Từ kho vật tư) --</option>
                                 {nailColors.map((color) => {
@@ -1142,23 +1339,81 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
               )}
 
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giảm giá</span><input value={invoice.discountCode} onChange={(event) => setInvoice((current) => ({ ...current, discountCode: event.target.value }))} placeholder="MEMBER5, SALON10, VIP15, LOY-003..." className={invoiceInputClass} />{promoEvaluation.feedback && <span className={`mt-1 block text-[7.5px] font-bold leading-tight ${promoEvaluation.feedback.isError ? 'text-rose-600' : 'text-emerald-600'}`}>{promoEvaluation.feedback.text}</span>}</label>
-                <div><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Thuế VAT</span><div className="grid h-11 grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">{['0', '5', '8', '10'].map((rate) => <button key={rate} type="button" onClick={() => setInvoice((current) => ({ ...current, taxRate: rate }))} className={`min-h-0 rounded-none border-0 border-r border-slate-200 px-1 text-[8px] font-black shadow-none last:border-r-0 ${invoice.taxRate === rate ? 'bg-violet-600 text-white' : 'bg-transparent text-slate-500'}`}>{rate}%</button>)}</div><span className="mt-1 block text-[7px] font-semibold text-slate-400">Tiền thuế: {money(invoiceTax)}</span></div>
-                <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label>
+                <label><span className="mb-1.5 block text-caption font-bold text-slate-600">Mã giảm giá</span><input value={invoice.discountCode} onChange={(event) => setInvoice((current) => ({ ...current, discountCode: event.target.value }))} placeholder="MEMBER5, SALON10, VIP15, LOY-003..." className={invoiceInputClass} />{promoEvaluation.feedback && <span className={`mt-1 block text-caption font-bold leading-tight ${promoEvaluation.feedback.isError ? 'text-rose-600' : 'text-emerald-600'}`}>{promoEvaluation.feedback.text}</span>}</label>
+                <div>
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600" id="invoice-tax-rate-label">Thuế VAT</span>
+                  {/* Bốn mức hay dùng để bấm một phát, kèm ô nhập tăng/giảm cho những
+                      mức ngoài danh sách (2%, 3%, thuế suất đặc thù...). Cả hai cùng
+                      ghi vào một giá trị nên chip chỉ sáng khi trùng đúng mức đang áp
+                      dụng — gõ 3% thì không chip nào sáng, đúng như thực tế. */}
+                  <div role="group" aria-labelledby="invoice-tax-rate-label" className="grid grid-cols-4 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                    {TAX_RATE_PRESETS.map((rate) => {
+                      const isActive = taxRateValue === rate && invoice.taxRate.trim() !== '';
+                      return (
+                        <button
+                          key={rate}
+                          type="button"
+                          aria-pressed={isActive}
+                          onClick={() => applyTaxRate(rate)}
+                          className={`h-8 min-h-0 rounded-lg border-0 px-1 text-caption font-black shadow-none ${isActive ? 'bg-violet-600 text-white' : 'bg-transparent text-slate-500'}`}
+                        >
+                          {rate}%
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Mũi tên mặc định của trình duyệt bị ẩn: đã có hai nút tăng/giảm
+                      riêng, đủ to để bấm bằng ngón tay và có nhãn cho trình đọc màn hình. */}
+                  <div className="mt-1.5 flex h-11 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-1 focus-within:border-violet-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-violet-100">
+                    <button
+                      type="button"
+                      aria-label="Giảm thuế suất 1%"
+                      disabled={taxRateValue <= TAX_RATE_MIN}
+                      onClick={() => applyTaxRate(taxRateValue - 1)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent p-0 text-slate-500 shadow-none disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Minus aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={TAX_RATE_MIN}
+                      max={TAX_RATE_MAX}
+                      step="1"
+                      aria-label="Thuế suất VAT theo phần trăm"
+                      value={invoice.taxRate}
+                      onChange={(event) => setInvoice((current) => ({ ...current, taxRate: event.target.value }))}
+                      onBlur={() => applyTaxRate(taxRateValue)}
+                      className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-center text-caption font-black text-slate-800 shadow-none outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <span aria-hidden="true" className="text-caption font-black text-slate-400">%</span>
+                    <button
+                      type="button"
+                      aria-label="Tăng thuế suất 1%"
+                      disabled={taxRateValue >= TAX_RATE_MAX}
+                      onClick={() => applyTaxRate(taxRateValue + 1)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent p-0 text-slate-500 shadow-none disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Plus aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <span className="mt-1 block text-caption font-semibold text-slate-400">Tiền thuế: {money(invoiceTax)}</span>
+                </div>
+                <label><span className="mb-1.5 block text-caption font-bold text-slate-600">Tiền tip</span><input type="number" min="0" step="1000" value={invoice.tip} onChange={(event) => setInvoice((current) => ({ ...current, tip: event.target.value }))} className={invoiceInputClass} /></label>
               </div>
 
               {/* Tóm tắt hóa đơn tách rõ dịch vụ nền & phụ thu mẫu nail */}
               <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 text-white p-4 space-y-3 shadow-md">
                 <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                  <span className="text-[9px] font-black uppercase tracking-wider text-violet-300">
+                  <span className="text-caption font-black uppercase tracking-wider text-violet-300">
                     Tóm tắt hóa đơn dịch vụ
                   </span>
-                  <span className="text-[8px] font-bold text-slate-400">
+                  <span className="text-caption font-bold text-slate-400">
                     {invoiceItems.reduce((s, i) => s + i.quantity, 0)} lượt dịch vụ
                   </span>
                 </div>
 
-                <div className="space-y-2 text-[8.5px]">
+                <div className="space-y-2 text-caption">
                   {/* Dịch vụ nền */}
                   <div className="flex justify-between text-slate-300">
                     <span>Dịch vụ nền:</span>
@@ -1220,21 +1475,21 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
               </div>
             </fieldset>
             <fieldset className="border-t border-slate-100 pt-5">
-              <legend className="mb-3 text-[9px] font-black text-slate-800">Trạng thái & thanh toán ban đầu</legend>
+              <legend className="mb-3 text-caption font-black text-slate-800">Trạng thái & thanh toán ban đầu</legend>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Trạng thái hóa đơn *</span><div className="grid gap-2 sm:grid-cols-3">{(['PENDING', 'PARTIAL', 'PAID'] as const).map((status) => <button key={status} type="button" onClick={() => setInvoice((current) => ({ ...current, invoiceStatus: status, deposit: status === 'PENDING' ? '0' : current.deposit, reference: status === 'PENDING' ? '' : current.reference }))} className={`flex min-h-14 items-center justify-between rounded-xl border px-3 text-left shadow-none ${invoice.invoiceStatus === status ? status === 'PAID' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-4 ring-emerald-100' : status === 'PARTIAL' ? 'border-amber-500 bg-amber-50 text-amber-700 ring-4 ring-amber-100' : 'border-blue-500 bg-blue-50 text-blue-700 ring-4 ring-blue-100' : 'border-slate-200 bg-white text-slate-500'}`}><span><span className="block text-[9px] font-black">{statusMeta[status].label}</span><span className="mt-1 block text-[7px] font-semibold opacity-70">{status === 'PENDING' ? 'Chưa ghi nhận thu tiền' : status === 'PARTIAL' ? 'Đã thu một phần hóa đơn' : 'Đã thu đủ tổng hóa đơn'}</span></span><span className={`h-2.5 w-2.5 rounded-full ${statusMeta[status].dot}`} /></button>)}</div></div>
-                {invoice.invoiceStatus === 'PENDING' ? <div className="flex items-center gap-2 rounded-xl bg-blue-50 p-3 text-[8px] font-semibold text-blue-700 sm:col-span-2"><Clock3 className="h-4 w-4 shrink-0" />Hóa đơn được tạo với công nợ {money(invoiceTotal)} và chưa ghi nhận phương thức thanh toán.</div> : <>
-                  {invoice.invoiceStatus === 'PARTIAL' ? <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số tiền đã thu *</span><input type="number" min="0" max={Math.max(0, invoiceTotal - 1)} step="1" value={invoice.deposit} onChange={(event) => setInvoice((current) => ({ ...current, deposit: event.target.value }))} className={invoiceInputClass} /></label> : <div><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Số tiền đã thu</span><div className="flex h-11 items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[10px] font-black text-emerald-700">{money(invoiceTotal)}</div></div>}
-                  <label><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Phương thức *</span><BeautifulSelect value={invoice.method} onChange={(event) => setInvoice((current) => ({ ...current, method: event.target.value as PaymentMethod, reference: event.target.value === 'CASH' ? '' : current.reference }))} className={invoiceInputClass}>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label>
-                  {invoice.method !== 'CASH' && <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Mã giao dịch *</span><input value={invoice.reference} onChange={(event) => setInvoice((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className={invoiceInputClass} /></label>}
+                <div className="sm:col-span-2"><span className="mb-1.5 block text-caption font-bold text-slate-600">Trạng thái hóa đơn *</span><div className="grid gap-2 sm:grid-cols-3">{(['PENDING', 'PARTIAL', 'PAID'] as const).map((status) => <button key={status} type="button" onClick={() => setInvoice((current) => ({ ...current, invoiceStatus: status, deposit: status === 'PENDING' ? '0' : current.deposit, reference: status === 'PENDING' ? '' : current.reference }))} className={`flex min-h-14 items-center justify-between rounded-xl border px-3 text-left shadow-none ${invoice.invoiceStatus === status ? status === 'PAID' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-4 ring-emerald-100' : status === 'PARTIAL' ? 'border-amber-500 bg-amber-50 text-amber-700 ring-4 ring-amber-100' : 'border-blue-500 bg-blue-50 text-blue-700 ring-4 ring-blue-100' : 'border-slate-200 bg-white text-slate-500'}`}><span><span className="block text-caption font-black">{statusMeta[status].label}</span><span className="mt-1 block text-caption font-semibold opacity-70">{status === 'PENDING' ? 'Chưa ghi nhận thu tiền' : status === 'PARTIAL' ? 'Đã thu một phần hóa đơn' : 'Đã thu đủ tổng hóa đơn'}</span></span><span className={`h-2.5 w-2.5 rounded-full ${statusMeta[status].dot}`} /></button>)}</div></div>
+                {invoice.invoiceStatus === 'PENDING' ? <div className="flex items-center gap-2 rounded-xl bg-blue-50 p-3 text-caption font-semibold text-blue-700 sm:col-span-2"><Clock3 className="h-4 w-4 shrink-0" />Hóa đơn được tạo với công nợ {money(invoiceTotal)} và chưa ghi nhận phương thức thanh toán.</div> : <>
+                  {invoice.invoiceStatus === 'PARTIAL' ? <label><span className="mb-1.5 block text-caption font-bold text-slate-600">Số tiền đã thu *</span><input type="number" min="0" max={Math.max(0, invoiceTotal - 1)} step="1" value={invoice.deposit} onChange={(event) => setInvoice((current) => ({ ...current, deposit: event.target.value }))} className={invoiceInputClass} /></label> : <div><span className="mb-1.5 block text-caption font-bold text-slate-600">Số tiền đã thu</span><div className="flex h-11 items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-caption font-black text-emerald-700">{money(invoiceTotal)}</div></div>}
+                  <label><span className="mb-1.5 block text-caption font-bold text-slate-600">Phương thức *</span><BeautifulSelect value={invoice.method} onChange={(event) => setInvoice((current) => ({ ...current, method: event.target.value as PaymentMethod, reference: event.target.value === 'CASH' ? '' : current.reference }))} className={invoiceInputClass}>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></label>
+                  {invoice.method !== 'CASH' && <label className="sm:col-span-2"><span className="mb-1.5 block text-caption font-bold text-slate-600">Mã giao dịch *</span><input value={invoice.reference} onChange={(event) => setInvoice((current) => ({ ...current, reference: event.target.value }))} placeholder="Mã ngân hàng hoặc cổng thanh toán" className={invoiceInputClass} /></label>}
                 </>}
-                <label className="sm:col-span-2"><span className="mb-1.5 block text-[8px] font-bold text-slate-600">Ghi chú</span><textarea value={invoice.note} onChange={(event) => setInvoice((current) => ({ ...current, note: event.target.value }))} placeholder="Thông tin cần lưu cùng hóa đơn..." className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label>
+                <label className="sm:col-span-2"><span className="mb-1.5 block text-caption font-bold text-slate-600">Ghi chú</span><textarea value={invoice.note} onChange={(event) => setInvoice((current) => ({ ...current, note: event.target.value }))} placeholder="Thông tin cần lưu cùng hóa đơn..." className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></label>
               </div>
             </fieldset>
           </div>
           <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">
-            <p className="hidden text-[8px] font-semibold text-slate-400 sm:block">Giá lấy từ bảng dịch vụ; giảm giá, thuế và tip được lưu trong chi tiết hóa đơn.</p>
-            <div className="ml-auto flex gap-2"><button type="button" onClick={() => setCatalogCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"><ReceiptText className="h-4 w-4" />Tạo hóa đơn</button></div>
+            <p className="hidden text-caption font-semibold text-slate-400 sm:block">Giá lấy từ bảng dịch vụ; giảm giá, thuế và tip được lưu trong chi tiết hóa đơn.</p>
+            <div className="ml-auto flex gap-2"><button type="button" onClick={() => setCatalogCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"><ReceiptText className="h-4 w-4" />Tạo hóa đơn</button></div>
           </footer>
         </form>
       </div>

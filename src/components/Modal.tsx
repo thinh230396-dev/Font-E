@@ -86,7 +86,10 @@ export default function Modal({
   const maxWidthClass = getMaxWidthClass(maxWidth);
 
   return createPortal(
-    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center p-3 sm:p-5 md:p-6 overflow-hidden`}>
+    /* `ui-legacy-modal` là móc để CSS nhận ra lớp phủ này. Hộp thoại portal ra
+       document.body nên nó nằm ngoài `.tenant-admin-main` — thiếu móc thì các
+       quy tắc chế độ tối theo phạm vi không với tới được nội dung bên trong. */
+    <div className={`ui-legacy-modal fixed inset-0 ${zIndex} flex items-center justify-center p-3 sm:p-5 md:p-6 overflow-hidden`}>
       {/* Overlay Backdrop */}
       <div
         className="fixed inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity duration-200"

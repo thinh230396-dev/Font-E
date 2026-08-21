@@ -1,0 +1,19 @@
+Hạng mục,Cấu hình hiện tại,Phạm vi,Cập nhật bởi,Cập nhật lúc,Trạng thái
+Hồ sơ pháp lý & xuất hoá đơn,MST 0312345678 · Đã xác minh,Toàn tenant,Nguyễn Văn Boss,02/08 · 09:20,Đã xác minh
+Ngày nghỉ & giờ đặc biệt,3 mốc đã khai báo,Tất cả chi nhánh,Khánh Vy,05/08 · 16:40,Đang áp dụng
+Khung giờ nhận lịch,Bước 15 phút · Đệm 10 phút,Tất cả chi nhánh,Khánh Vy,05/08 · 16:52,Đang áp dụng
+Chính sách đặt lịch,Cọc 30% · Hủy trước 12 giờ,Tất cả chi nhánh,Lê Hoàng Nam,14/07 · 10:05,Đang áp dụng
+Bảo hành & làm lại,Bảo hành 7 ngày,Tất cả chi nhánh,Lê Hoàng Nam,20/07 · 11:15,Đang áp dụng
+Dữ liệu & quyền riêng tư khách,Ẩn 4 số cuối với lễ tân,Tất cả chi nhánh,Nguyễn Văn Boss,22/07 · 08:30,Đang áp dụng
+Hoá đơn & thuế,VAT 8% · Hoá đơn điện tử,Tất cả chi nhánh,Nguyễn Văn Boss,02/08 · 09:25,Đang áp dụng
+Phụ thu & tiền tip,Phụ thu cuối tuần 10%,Tất cả chi nhánh,Khánh Vy,28/07 · 15:10,Đang áp dụng
+Nhắc lịch cho khách,12 mẫu tự động,Tất cả chi nhánh,Khánh Vy,10/07 · 09:12,Đang hoạt động
+Thông báo nội bộ,5 loại cảnh báo đang bật,Theo chi nhánh,Lê Hoàng Nam,18/07 · 14:05,Đang hoạt động
+Vai trò & phân quyền,4 vai trò · 18 nhân viên,Theo chi nhánh,Lê Hoàng Nam,08/07 · 14:30,Đang áp dụng
+Phạm vi theo chi nhánh,Giới hạn theo chi nhánh phụ trách,Theo chi nhánh,Nguyễn Văn Boss,08/07 · 14:45,Đang áp dụng
+Kênh đặt lịch online,3/4 kênh đang kết nối,Toàn tenant,Khánh Vy,30/07 · 10:00,Thiếu 1 kênh
+Xuất dữ liệu kế toán,Hằng tháng · CSV,Toàn tenant,Nguyễn Văn Boss,01/08 · 07:30,Đang hoạt động
+Xác thực hai lớp,Bắt buộc với Owner và Manager,Toàn tenant,Nguyễn Văn Boss,08/07 · 14:30,Đang áp dụng
+Chính sách mật khẩu,Tối thiểu 10 ký tự · Đổi mỗi 90 ngày,Toàn tenant,Nguyễn Văn Boss,08/07 · 14:34,Đang áp dụng
+Phiên đăng nhập & thiết bị,Phiên 8 giờ · Tối đa 3 thiết bị,Toàn tenant,Nguyễn Văn Boss,08/07 · 14:38,Đang áp dụng
+Nhật ký truy cập & cảnh báo,Lưu 12 tháng · Cảnh báo qua email,Toàn tenant,Nguyễn Văn Boss,08/07 · 14:42,Đang áp dụng

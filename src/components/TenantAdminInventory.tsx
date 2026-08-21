@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { PageHeader } from './ui';
 import { getTenantAdminInitialData } from "../utils/mockDataReset";
 import {
   AlertTriangle,
@@ -24,6 +25,7 @@ import {
   Plus,
   RefreshCcw,
   Search,
+  ShieldAlert,
   ShieldCheck,
   Store,
   Truck,
@@ -31,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import BeautifulSelect from "./BeautifulSelect";
+import { formatCompactMoney, formatMoney as money } from "../utils/money";
 
 type BranchCode = "Q1" | "Q3";
 export type InventoryCategory =
@@ -106,6 +109,12 @@ interface StockForm {
   lot: string;
   expiry: string;
   reference: string;
+  reason: string;
+}
+
+interface QuarantineForm {
+  itemKey: string;
+  next: Extract<ItemState, "ACTIVE" | "QUARANTINE">;
   reason: string;
 }
 
@@ -203,8 +212,6 @@ const healthMeta: Record<
 
 const itemKey = (item: Pick<InventoryItem, "id" | "branch">) =>
   `${item.id}::${item.branch}`;
-const money = (value: number) =>
-  `${Math.round(value).toLocaleString("vi-VN")}đ`;
 const daysUntil = (date: string) =>
   date ? Math.ceil((Date.parse(date) - Date.parse(TODAY)) / 86_400_000) : 9999;
 const getHealth = (item: InventoryItem): StockHealth => {
@@ -695,7 +702,7 @@ const emptyItemForm = (branch: string): ItemForm => ({
   note: "",
 });
 const inputClass =
-  "h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100";
+  "h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100";
 
 export default function TenantAdminInventory({
   searchQuery,
@@ -725,6 +732,9 @@ export default function TenantAdminInventory({
   const [stockForm, setStockForm] = useState<StockForm | null>(null);
   const [receiveForm, setReceiveForm] = useState<StockForm | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm | null>(null);
+  const [quarantineForm, setQuarantineForm] = useState<QuarantineForm | null>(
+    null,
+  );
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -795,6 +805,9 @@ export default function TenantAdminInventory({
   }, [category, health, scopedItems, searchQuery]);
   const selectedItem = selectedKey
     ? items.find((item) => itemKey(item) === selectedKey) || null
+    : null;
+  const quarantineItem = quarantineForm
+    ? items.find((item) => itemKey(item) === quarantineForm.itemKey) || null
     : null;
   const stockActionItem = stockForm?.itemKey
     ? items.find((item) => itemKey(item) === stockForm.itemKey) || null
@@ -1163,6 +1176,70 @@ export default function TenantAdminInventory({
     setNotice(`Đã tạo mã vật tư ${id}.`);
   };
 
+  const openQuarantine = (item: InventoryItem) => {
+    if (!requireManage()) return;
+    setQuarantineForm({
+      itemKey: itemKey(item),
+      next: item.state === "QUARANTINE" ? "ACTIVE" : "QUARANTINE",
+      reason: "",
+    });
+    setFormError("");
+  };
+
+  const submitQuarantine = (event: FormEvent) => {
+    event.preventDefault();
+    if (!quarantineForm) return;
+    if (!requireManage()) return;
+    const source = items.find(
+      (item) => itemKey(item) === quarantineForm.itemKey,
+    );
+    if (!source) {
+      setFormError("Không tìm thấy mã vật tư.");
+      return;
+    }
+    const reason = quarantineForm.reason.trim();
+    if (!reason) {
+      setFormError(
+        quarantineForm.next === "QUARANTINE"
+          ? "Vui lòng nhập lý do cách ly."
+          : "Vui lòng nhập kết quả kiểm tra trước khi gỡ cách ly.",
+      );
+      return;
+    }
+    const quarantining = quarantineForm.next === "QUARANTINE";
+    const now = "20/07/2026 · 15:08";
+    const reference = `CL-260720-${String(Date.now()).slice(-3)}`;
+    setItems((current) =>
+      current.map((item) => {
+        if (itemKey(item) !== quarantineForm.itemKey) return item;
+        const movement: Movement = {
+          id: `${reference}-${item.id}`,
+          type: "ADJUST",
+          quantity: 0,
+          occurredAt: now,
+          actor: roleLabel,
+          reference,
+          note: `${quarantining ? "Cách ly" : "Gỡ cách ly"} lô ${item.lot || item.id}: ${reason}`,
+        };
+        return {
+          ...item,
+          state: quarantineForm.next,
+          note: quarantining
+            ? `Cách ly: ${reason}`
+            : `Đã gỡ cách ly (${now}): ${reason}`,
+          movements: [movement, ...item.movements],
+        };
+      }),
+    );
+    const success = quarantining
+      ? `Đã cách ly ${source.id} · lô ${source.lot || "không theo lô"}. Vật tư không được sử dụng cho khách.`
+      : `Đã gỡ cách ly ${source.id}. Vật tư được phép sử dụng trở lại.`;
+    setNotice(success);
+    onNotify?.(success);
+    setQuarantineForm(null);
+    setFormError("");
+  };
+
   const exportInventory = () => {
     if (!requireManage()) return;
     const rows = filteredItems.map((item) =>
@@ -1208,7 +1285,7 @@ export default function TenantAdminInventory({
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
             <Check className="h-4 w-4" />
           </span>
-          <p className="text-[9px] font-bold text-slate-700">{notice}</p>
+          <p className="text-caption font-bold text-slate-700">{notice}</p>
           <button
             type="button"
             onClick={() => setNotice("")}
@@ -1220,26 +1297,15 @@ export default function TenantAdminInventory({
         </div>
       )}
 
-      <section className="tenant-page-header flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="tenant-page-kicker mb-2 flex items-center gap-2 text-[10px] font-bold text-violet-600">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Dữ liệu kho {tenantName} cập nhật lúc 15:08
-          </div>
-          <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">
-            Kho vật tư
-          </h1>
-          <p className="mt-2 text-[11px] text-slate-500">
-            Kiểm soát tồn kho, lô–hạn dùng, nhập xuất, điều chuyển và kiểm kê
-            vật tư nail.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <PageHeader
+        title="Kho vật tư"
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <BeautifulSelect
             value={selectedBranch}
             onChange={(event) => onSelectedBranchChange(event.target.value)}
             aria-label="Chọn chi nhánh"
-            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-700 shadow-sm sm:w-48"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold text-slate-700 shadow-none sm:w-48"
           >
             <option value="Q3">Chi nhánh Quận 3</option>
             <option value="Q1">Chi nhánh Quận 1</option>
@@ -1249,7 +1315,7 @@ export default function TenantAdminInventory({
             type="button"
             onClick={exportInventory}
             disabled={!canManage}
-            className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             Xuất báo cáo
@@ -1262,7 +1328,7 @@ export default function TenantAdminInventory({
               setFormError("");
             }}
             disabled={!canManage}
-            className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-700 shadow-sm disabled:opacity-50"
+            className="flex h-10 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-700 shadow-none disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
             Thêm mã
@@ -1271,47 +1337,21 @@ export default function TenantAdminInventory({
             type="button"
             onClick={() => openStockAction("RECEIVE")}
             disabled={!canManage}
-            className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-[10px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+            className="flex h-10 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-none disabled:border-slate-300 disabled:bg-slate-300"
           >
             <ArrowDownToLine className="h-4 w-4" />
             Nhập kho
           </button>
-        </div>
-      </section>
-
-      <section
-        className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${canManage ? "border-violet-200 bg-violet-50/70" : "border-amber-200 bg-amber-50"}`}
-      >
-        <div className="flex items-start gap-3">
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${canManage ? "bg-violet-600 text-white" : "bg-amber-100 text-amber-700"}`}
-          >
-            <ShieldCheck className="h-4.5 w-4.5" />
-          </span>
-          <div>
-            <p className="text-[9px] font-black text-slate-800">
-              Phạm vi quyền: {roleLabel}
-            </p>
-            <p className="mt-1 text-[8px] leading-4 text-slate-500">
-              {canManage
-                ? "Có quyền tạo SKU, nhập kho, kiểm kê, điều chuyển và xuất báo cáo trong phạm vi tenant."
-                : readOnlyReason ||
-                  "Bạn được xem tồn kho và lịch sử nhưng không thể tạo giao dịch."}
-            </p>
           </div>
-        </div>
-        <span
-          className={`w-fit rounded-full px-3 py-1.5 text-[8px] font-black ring-1 ${canManage ? "bg-white text-violet-700 ring-violet-200" : "bg-white text-amber-700 ring-amber-200"}`}
-        >
-          {canManage ? "Toàn quyền kho" : "Chỉ xem"}
-        </span>
-      </section>
+        )}
+      />
+
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             label: "Giá trị tồn kho",
-            value: `${(inventoryValue / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} triệu`,
+            value: formatCompactMoney(inventoryValue),
             detail: `${scopedItems.length} mã tại phạm vi đã chọn`,
             icon: Warehouse,
             tone: "bg-blue-50 text-blue-600",
@@ -1344,8 +1384,8 @@ export default function TenantAdminInventory({
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[9px] font-bold text-slate-500">{label}</p>
-                <p className="mt-1.5 text-xl font-black tracking-tight text-slate-950">
+                <p className="text-caption font-bold text-slate-500">{label}</p>
+                <p className="ta-metric-value mt-1.5 text-slate-950">
                   {value}
                 </p>
               </div>
@@ -1355,7 +1395,7 @@ export default function TenantAdminInventory({
                 <Icon className="h-4.5 w-4.5" />
               </span>
             </div>
-            <p className="mt-2 text-[8px] font-semibold text-slate-400">
+            <p className="mt-2 text-caption font-semibold text-slate-400">
               {detail}
             </p>
           </article>
@@ -1369,7 +1409,7 @@ export default function TenantAdminInventory({
               <h2 className="text-xs font-black text-slate-900">
                 Cảnh báo cần ưu tiên
               </h2>
-              <p className="mt-1 text-[8px] text-slate-400">
+              <p className="mt-1 text-caption text-slate-400">
                 Sắp xếp theo mức ảnh hưởng vận hành
               </p>
             </div>
@@ -1410,11 +1450,11 @@ export default function TenantAdminInventory({
                 }}
                 className={`h-auto min-h-24 border p-4 text-left shadow-none ${item.tone}`}
               >
-                <p className="text-[8px] font-black uppercase tracking-wide">
+                <p className="text-caption font-black uppercase tracking-wide">
                   {item.title}
                 </p>
                 <p className="mt-2 text-2xl font-black">{item.value}</p>
-                <p className="mt-1 text-[8px] opacity-75">{item.detail}</p>
+                <p className="mt-1 text-caption opacity-75">{item.detail}</p>
               </button>
             ))}
           </div>
@@ -1422,14 +1462,14 @@ export default function TenantAdminInventory({
         <article className="rounded-2xl bg-gradient-to-br from-[#19152e] to-[#292148] p-5 text-white shadow-xl shadow-violet-950/10">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-violet-300">
+              <p className="text-caption font-bold uppercase tracking-[0.14em] text-violet-300">
                 Sức khỏe kho
               </p>
               <p className="mt-2 text-xl font-black">92,4% giao dịch khớp</p>
             </div>
             <PackageCheck className="h-5 w-5 text-violet-300" />
           </div>
-          <div className="mt-4 space-y-3 text-[8px]">
+          <div className="mt-4 space-y-3 text-caption">
             <div className="flex justify-between">
               <span className="text-slate-400">Vòng quay tồn kho</span>
               <strong>4,2 lần/năm</strong>
@@ -1440,14 +1480,14 @@ export default function TenantAdminInventory({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Đơn nhập đang chờ</span>
-              <strong>4 đơn · 18,6 triệu</strong>
+              <strong>4 đơn · {formatCompactMoney(18_600_000)}</strong>
             </div>
           </div>
           <button
             type="button"
             onClick={() => openStockAction("COUNT")}
             disabled={!canManage}
-            className="mt-5 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/10 text-[8px] font-black text-white shadow-none disabled:opacity-50"
+            className="mt-5 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/10 text-caption font-black text-white shadow-none disabled:opacity-50"
           >
             <ClipboardCheck className="h-3.5 w-3.5" />
             Bắt đầu kiểm kê
@@ -1463,7 +1503,7 @@ export default function TenantAdminInventory({
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
               placeholder="Tìm SKU, tên, lô, nhà cung cấp hoặc vị trí..."
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[10px] outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-caption outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
             />
             {searchQuery && (
               <button
@@ -1480,7 +1520,7 @@ export default function TenantAdminInventory({
             <button
               type="button"
               onClick={() => setShowFilters((value) => !value)}
-              className={`flex h-10 items-center gap-2 border px-3 text-[8px] font-bold shadow-sm ${showFilters || category !== "ALL" || health !== "ALL" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600"}`}
+              className={`flex h-10 items-center gap-2 border px-3 text-caption font-bold shadow-sm ${showFilters || category !== "ALL" || health !== "ALL" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600"}`}
             >
               <Filter className="h-3.5 w-3.5" />
               Bộ lọc
@@ -1508,7 +1548,7 @@ export default function TenantAdminInventory({
         {showFilters && (
           <div className="grid gap-3 border-b border-slate-100 bg-violet-50/40 p-4 sm:grid-cols-[1fr_1fr_auto]">
             <label>
-              <span className="mb-1.5 block text-[8px] font-black uppercase text-slate-500">
+              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">
                 Nhóm vật tư
               </span>
               <BeautifulSelect
@@ -1516,7 +1556,7 @@ export default function TenantAdminInventory({
                 onChange={(event) =>
                   setCategory(event.target.value as "ALL" | InventoryCategory)
                 }
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Tất cả nhóm</option>
                 {Object.entries(categoryMeta).map(([value, meta]) => (
@@ -1527,7 +1567,7 @@ export default function TenantAdminInventory({
               </BeautifulSelect>
             </label>
             <label>
-              <span className="mb-1.5 block text-[8px] font-black uppercase text-slate-500">
+              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">
                 Tình trạng kho
               </span>
               <BeautifulSelect
@@ -1535,7 +1575,7 @@ export default function TenantAdminInventory({
                 onChange={(event) =>
                   setHealth(event.target.value as "ALL" | StockHealth)
                 }
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[9px] font-bold"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Tất cả trạng thái</option>
                 {Object.entries(healthMeta).map(([value, meta]) => (
@@ -1548,7 +1588,7 @@ export default function TenantAdminInventory({
             <button
               type="button"
               onClick={resetFilters}
-              className="self-end border border-slate-200 bg-white px-4 text-[8px] font-bold text-slate-600 shadow-sm"
+              className="self-end border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
             >
               Đặt lại
             </button>
@@ -1561,7 +1601,7 @@ export default function TenantAdminInventory({
                 key={value}
                 type="button"
                 onClick={() => setHealth(value)}
-                className={`flex h-7 min-h-0 items-center gap-1.5 border-0 bg-transparent px-2 text-[8px] font-bold shadow-none ${health === value ? "text-violet-700" : "text-slate-500"}`}
+                className={`flex h-7 min-h-0 items-center gap-1.5 border-0 bg-transparent px-2 text-caption font-bold shadow-none ${health === value ? "text-violet-700" : "text-slate-500"}`}
               >
                 {value === "ALL" ? "Tất cả" : healthMeta[value].label}
                 <span
@@ -1575,7 +1615,7 @@ export default function TenantAdminInventory({
               </button>
             ),
           )}
-          <span className="ml-auto text-[8px] text-slate-400">
+          <span className="ml-auto text-caption text-slate-400">
             {filteredItems.length} mã phù hợp
           </span>
         </div>
@@ -1584,15 +1624,18 @@ export default function TenantAdminInventory({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1180px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/70 text-[8px] font-black uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-caption font-black uppercase tracking-wide text-slate-400">
                   <th className="px-5 py-3">Vật tư</th>
                   <th className="px-4 py-3">Nhóm & nhà cung cấp</th>
                   <th className="px-4 py-3">Tồn khả dụng</th>
                   <th className="px-4 py-3">Định mức</th>
                   <th className="px-4 py-3">Lô & hạn dùng</th>
                   <th className="px-4 py-3">Giá trị</th>
-                  <th className="px-4 py-3">Trạng thái</th>
-                  <th className="px-5 py-3 text-right">Thao tác</th>
+                  {/* Chốt bề ngang hai cột cuối như bảng khách hàng: nhãn trạng thái
+                      dài ngắn khác nhau ("Cách ly" vs "Sắp hết hạn") nên nếu để bảng
+                      tự co, cụm nút ở mỗi dòng lại nằm một chỗ và bị bóp xuống 2 dòng. */}
+                  <th className="w-36 px-4 py-3">Trạng thái</th>
+                  <th className="w-36 px-5 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1605,7 +1648,7 @@ export default function TenantAdminInventory({
                   return (
                     <tr
                       key={itemKey(item)}
-                      className="text-[9px] text-slate-600 hover:bg-slate-50/70"
+                      className="text-caption text-slate-600 hover:bg-slate-50/70"
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
@@ -1618,7 +1661,7 @@ export default function TenantAdminInventory({
                             <p className="font-black text-slate-800">
                               {item.name}
                             </p>
-                            <p className="mt-1 max-w-60 truncate text-[8px] text-slate-400">
+                            <p className="mt-1 max-w-60 truncate text-caption text-slate-400">
                               {item.id} · {item.variant} · {item.location}
                             </p>
                           </div>
@@ -1626,11 +1669,11 @@ export default function TenantAdminInventory({
                       </td>
                       <td className="px-4 py-3.5">
                         <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${categoryMeta[item.category].badge}`}
+                          className={`inline-flex rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${categoryMeta[item.category].badge}`}
                         >
                           {categoryMeta[item.category].label}
                         </span>
-                        <p className="mt-1.5 text-[8px] text-slate-400">
+                        <p className="mt-1.5 text-caption text-slate-400">
                           {item.supplier}
                         </p>
                       </td>
@@ -1639,7 +1682,7 @@ export default function TenantAdminInventory({
                           {Math.max(0, item.stock - item.reserved)} /{" "}
                           {item.stock} {item.unit}
                         </p>
-                        <p className="mt-1 text-[8px] text-slate-400">
+                        <p className="mt-1 text-caption text-slate-400">
                           Đã giữ {item.reserved} · đủ {daysCover(item)} ngày
                         </p>
                       </td>
@@ -1659,7 +1702,7 @@ export default function TenantAdminInventory({
                           {item.lot || "Không theo lô"}
                         </p>
                         <p
-                          className={`mt-1 text-[8px] ${daysUntil(item.expiry) <= 60 ? "font-bold text-orange-600" : "text-slate-400"}`}
+                          className={`mt-1 text-caption ${daysUntil(item.expiry) <= 60 ? "font-bold text-orange-600" : "text-slate-400"}`}
                         >
                           {item.expiry
                             ? `HSD ${new Date(item.expiry).toLocaleDateString("vi-VN")}`
@@ -1670,29 +1713,29 @@ export default function TenantAdminInventory({
                         <p className="font-black text-slate-800">
                           {money(item.stock * item.averageCost)}
                         </p>
-                        <p className="mt-1 text-[8px] text-slate-400">
+                        <p className="mt-1 text-caption text-slate-400">
                           {money(item.averageCost)}/{item.unit}
                         </p>
                       </td>
                       <td className="px-4 py-3.5">
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-bold ring-1 ${healthMeta[currentHealth].badge}`}
+                          className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${healthMeta[currentHealth].badge}`}
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${healthMeta[currentHealth].dot}`}
                           />
                           {healthMeta[currentHealth].label}
                         </span>
-                        <p className="mt-1.5 text-[7px] text-slate-400">
+                        <p className="mt-1.5 text-caption text-slate-400">
                           {branchLabels[item.branch]}
                         </p>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => setSelectedKey(itemKey(item))}
-                            className="border border-slate-200 bg-white px-3 text-[8px] font-bold text-slate-600 shadow-sm"
+                            className="ui-row-action inline-flex shrink-0 items-center border border-slate-200 bg-white px-2.5 font-bold text-slate-600"
                           >
                             Chi tiết
                           </button>
@@ -1701,7 +1744,7 @@ export default function TenantAdminInventory({
                             onClick={() => openStockAction("RECEIVE", item)}
                             disabled={!canManage}
                             aria-label={`Nhập thêm ${item.name}`}
-                            className="flex h-9 w-9 items-center justify-center border border-violet-200 bg-violet-50 p-0 text-violet-700 shadow-sm disabled:opacity-40"
+                            className="ui-row-action ui-row-action-icon flex shrink-0 items-center justify-center border border-violet-200 bg-violet-50 text-violet-700 disabled:opacity-40"
                           >
                             <Plus className="h-3.5 w-3.5" />
                           </button>
@@ -1715,13 +1758,13 @@ export default function TenantAdminInventory({
             {!filteredItems.length && (
               <div className="px-6 py-14 text-center">
                 <Search className="mx-auto h-7 w-7 text-slate-300" />
-                <p className="mt-3 text-[10px] font-black text-slate-600">
+                <p className="mt-3 text-caption font-black text-slate-600">
                   Không tìm thấy vật tư phù hợp
                 </p>
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="mt-2 border-0 bg-transparent px-2 text-[9px] font-bold text-violet-600 shadow-none"
+                  className="mt-2 border-0 bg-transparent px-2 text-caption font-bold text-violet-600 shadow-none"
                 >
                   Xóa tìm kiếm và bộ lọc
                 </button>
@@ -1746,43 +1789,43 @@ export default function TenantAdminInventory({
                       <PackageOpen className="h-4.5 w-4.5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[10px] font-black text-slate-800">
+                      <p className="truncate text-caption font-black text-slate-800">
                         {item.name}
                       </p>
-                      <p className="mt-1 text-[8px] text-slate-400">
+                      <p className="mt-1 text-caption text-slate-400">
                         {item.id} · {branchLabels[item.branch]}
                       </p>
                     </div>
                     <span
-                      className={`rounded-full px-2 py-1 text-[7px] font-bold ring-1 ${healthMeta[currentHealth].badge}`}
+                      className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${healthMeta[currentHealth].badge}`}
                     >
                       {healthMeta[currentHealth].label}
                     </span>
                   </div>
-                  <p className="mt-4 line-clamp-2 text-[8px] leading-4 text-slate-500">
+                  <p className="mt-4 line-clamp-2 text-caption leading-4 text-slate-500">
                     {item.variant} · {item.supplier} · {item.location}
                   </p>
                   <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3">
                     <div>
-                      <p className="text-[7px] text-slate-400">Tồn kho</p>
-                      <p className="mt-1 text-[10px] font-black text-slate-800">
+                      <p className="text-caption text-slate-400">Tồn kho</p>
+                      <p className="mt-1 text-caption font-black text-slate-800">
                         {item.stock} {item.unit}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[7px] text-slate-400">Khả dụng</p>
-                      <p className="mt-1 text-[10px] font-black text-violet-700">
+                      <p className="text-caption text-slate-400">Khả dụng</p>
+                      <p className="mt-1 text-caption font-black text-violet-700">
                         {Math.max(0, item.stock - item.reserved)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[7px] text-slate-400">Giá trị</p>
-                      <p className="mt-1 truncate text-[9px] font-black text-emerald-700">
+                      <p className="text-caption text-slate-400">Giá trị</p>
+                      <p className="mt-1 truncate text-caption font-black text-emerald-700">
                         {money(item.stock * item.averageCost)}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center justify-between text-[8px] text-slate-400">
+                  <div className="mt-4 flex items-center justify-between text-caption text-slate-400">
                     <span className="flex items-center gap-1">
                       <MapPin className="h-3 w-3" />
                       {item.location}
@@ -1795,12 +1838,12 @@ export default function TenantAdminInventory({
           </div>
         )}
         <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[8px] text-slate-400">
+          <p className="text-caption text-slate-400">
             Hiển thị{" "}
             <strong className="text-slate-600">{filteredItems.length}</strong>{" "}
             mã · Tồn kho tính theo giá vốn bình quân
           </p>
-          <p className="flex items-center gap-1.5 text-[8px] text-slate-400">
+          <p className="flex items-center gap-1.5 text-caption text-slate-400">
             <Store className="h-3.5 w-3.5" />
             {selectedBranch === "ALL"
               ? "Tất cả chi nhánh"
@@ -1839,12 +1882,12 @@ export default function TenantAdminInventory({
                       {selectedItem.name}
                     </h2>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[7px] font-bold ring-1 ${healthMeta[getHealth(selectedItem)].badge}`}
+                      className={`rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${healthMeta[getHealth(selectedItem)].badge}`}
                     >
                       {healthMeta[getHealth(selectedItem)].label}
                     </span>
                   </div>
-                  <p className="mt-1 text-[8px] text-slate-400">
+                  <p className="mt-1 text-caption text-slate-400">
                     {selectedItem.id} · {selectedItem.variant}
                   </p>
                 </div>
@@ -1862,7 +1905,7 @@ export default function TenantAdminInventory({
               <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-5 text-white">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-[8px] font-black uppercase tracking-[0.14em] text-violet-300">
+                    <p className="text-caption font-black uppercase tracking-[0.14em] text-violet-300">
                       Tồn kho tại {branchLabels[selectedItem.branch]}
                     </p>
                     <p className="mt-2 text-3xl font-black">
@@ -1871,7 +1914,7 @@ export default function TenantAdminInventory({
                         {selectedItem.unit}
                       </span>
                     </p>
-                    <p className="mt-2 text-[8px] text-slate-400">
+                    <p className="mt-2 text-caption text-slate-400">
                       Khả dụng{" "}
                       {Math.max(0, selectedItem.stock - selectedItem.reserved)}{" "}
                       · Đã giữ {selectedItem.reserved} · Đủ khoảng{" "}
@@ -1882,20 +1925,20 @@ export default function TenantAdminInventory({
                 </div>
                 <div className="mt-5 grid grid-cols-3 gap-3">
                   <div>
-                    <p className="text-[7px] text-slate-500">Giá vốn TB</p>
-                    <p className="mt-1 text-[10px] font-black">
+                    <p className="text-caption text-slate-500">Giá vốn TB</p>
+                    <p className="mt-1 text-caption font-black">
                       {money(selectedItem.averageCost)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[7px] text-slate-500">Giá trị tồn</p>
-                    <p className="mt-1 text-[10px] font-black text-emerald-300">
+                    <p className="text-caption text-slate-500">Giá trị tồn</p>
+                    <p className="mt-1 text-caption font-black text-emerald-300">
                       {money(selectedItem.stock * selectedItem.averageCost)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[7px] text-slate-500">Dùng 30 ngày</p>
-                    <p className="mt-1 text-[10px] font-black">
+                    <p className="text-caption text-slate-500">Dùng 30 ngày</p>
+                    <p className="mt-1 text-caption font-black">
                       {selectedItem.monthlyUse} {selectedItem.unit}
                     </p>
                   </div>
@@ -1903,10 +1946,10 @@ export default function TenantAdminInventory({
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-[8px] font-black uppercase text-slate-400">
+                  <p className="text-caption font-black uppercase text-slate-400">
                     Vị trí & định mức
                   </p>
-                  <div className="mt-3 space-y-2 text-[8px]">
+                  <div className="mt-3 space-y-2 text-caption">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Vị trí</span>
                       <strong>{selectedItem.location}</strong>
@@ -1928,10 +1971,10 @@ export default function TenantAdminInventory({
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-[8px] font-black uppercase text-slate-400">
+                  <p className="text-caption font-black uppercase text-slate-400">
                     Lô & truy xuất
                   </p>
-                  <div className="mt-3 space-y-2 text-[8px]">
+                  <div className="mt-3 space-y-2 text-caption">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Mã lô</span>
                       <strong>{selectedItem.lot || "Không theo lô"}</strong>
@@ -1961,10 +2004,10 @@ export default function TenantAdminInventory({
                 <div className="flex items-start gap-3">
                   <Truck className="mt-0.5 h-4 w-4 text-violet-500" />
                   <div>
-                    <p className="text-[9px] font-black text-slate-800">
+                    <p className="text-caption font-black text-slate-800">
                       {selectedItem.supplier}
                     </p>
-                    <p className="mt-1 text-[8px] text-slate-400">
+                    <p className="mt-1 text-caption text-slate-400">
                       {selectedItem.supplierPhone || "Chưa có số liên hệ"} · Giá
                       nhập gần nhất {money(selectedItem.unitCost)}/
                       {selectedItem.unit}
@@ -1975,20 +2018,20 @@ export default function TenantAdminInventory({
               <div
                 className={`mt-5 rounded-2xl p-4 ${getHealth(selectedItem) === "EXPIRING" ? "bg-orange-50" : getHealth(selectedItem) === "QUARANTINE" ? "bg-slate-100" : "bg-violet-50"}`}
               >
-                <p className="text-[8px] font-black uppercase tracking-wide text-slate-500">
+                <p className="text-caption font-black uppercase tracking-wide text-slate-500">
                   Lưu ý kiểm soát
                 </p>
-                <p className="mt-2 text-[9px] leading-5 text-slate-700">
+                <p className="mt-2 text-caption leading-5 text-slate-700">
                   {selectedItem.note || "Chưa có lưu ý cho mã vật tư này."}
                 </p>
               </div>
               <div className="mt-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-[10px] font-black text-slate-800">
+                    <h3 className="text-caption font-black text-slate-800">
                       Lịch sử giao dịch
                     </h3>
-                    <p className="mt-1 text-[8px] text-slate-400">
+                    <p className="mt-1 text-caption text-slate-400">
                       Nhập, xuất, điều chuyển và điều chỉnh gần nhất
                     </p>
                   </div>
@@ -2002,11 +2045,13 @@ export default function TenantAdminInventory({
                         className="flex items-start gap-3 p-3.5"
                       >
                         <span
-                          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${movement.quantity >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}
+                          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${movement.quantity === 0 ? "bg-amber-50 text-amber-600" : movement.quantity > 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}
                         >
                           {movement.type === "TRANSFER" ? (
                             <ArrowRightLeft className="h-3.5 w-3.5" />
-                          ) : movement.quantity >= 0 ? (
+                          ) : movement.quantity === 0 ? (
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                          ) : movement.quantity > 0 ? (
                             <ArrowDownToLine className="h-3.5 w-3.5" />
                           ) : (
                             <RefreshCcw className="h-3.5 w-3.5" />
@@ -2014,25 +2059,26 @@ export default function TenantAdminInventory({
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex justify-between gap-3">
-                            <p className="text-[9px] font-black text-slate-700">
-                              {movement.quantity > 0 ? "+" : ""}
-                              {movement.quantity} {selectedItem.unit}
+                            <p className="text-caption font-black text-slate-700">
+                              {movement.quantity === 0
+                                ? "Không đổi tồn"
+                                : `${movement.quantity > 0 ? "+" : ""}${movement.quantity} ${selectedItem.unit}`}
                             </p>
-                            <span className="shrink-0 text-[7px] text-slate-400">
+                            <span className="shrink-0 text-caption text-slate-400">
                               {movement.occurredAt}
                             </span>
                           </div>
-                          <p className="mt-1 text-[8px] text-slate-500">
+                          <p className="mt-1 text-caption text-slate-500">
                             {movement.reference} · {movement.actor}
                           </p>
-                          <p className="mt-1 text-[7px] leading-4 text-slate-400">
+                          <p className="mt-1 text-caption leading-4 text-slate-400">
                             {movement.note}
                           </p>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="p-6 text-center text-[8px] text-slate-400">
+                    <div className="p-6 text-center text-caption text-slate-400">
                       Chưa có giao dịch.
                     </div>
                   )}
@@ -2040,12 +2086,27 @@ export default function TenantAdminInventory({
               </div>
             </div>
             <footer className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <button
+                  type="button"
+                  onClick={() => openQuarantine(selectedItem)}
+                  disabled={!canManage}
+                  className={`flex h-10 items-center justify-center gap-2 whitespace-nowrap border px-3 text-caption font-black shadow-sm disabled:opacity-50 ${selectedItem.state === "QUARANTINE" ? "border-emerald-200 bg-white text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}
+                >
+                  {selectedItem.state === "QUARANTINE" ? (
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                  ) : (
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                  )}
+                  {selectedItem.state === "QUARANTINE"
+                    ? "Gỡ cách ly"
+                    : "Cách ly"}
+                </button>
                 <button
                   type="button"
                   onClick={() => openStockAction("RECEIVE", selectedItem)}
                   disabled={!canManage}
-                  className="flex h-11 items-center justify-center gap-2 border border-emerald-200 bg-emerald-50 px-3 text-[8px] font-black text-emerald-700 shadow-sm disabled:opacity-50"
+                  className="flex h-10 items-center justify-center gap-2 whitespace-nowrap border border-emerald-200 bg-emerald-50 px-3 text-caption font-black text-emerald-700 shadow-sm disabled:opacity-50"
                 >
                   <ArrowDownToLine className="h-3.5 w-3.5" />
                   Nhập
@@ -2054,7 +2115,7 @@ export default function TenantAdminInventory({
                   type="button"
                   onClick={() => openStockAction("COUNT", selectedItem)}
                   disabled={!canManage}
-                  className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-[8px] font-black text-slate-700 shadow-sm disabled:opacity-50"
+                  className="flex h-10 items-center justify-center gap-2 whitespace-nowrap border border-slate-200 bg-white px-3 text-caption font-black text-slate-700 shadow-sm disabled:opacity-50"
                 >
                   <ClipboardCheck className="h-3.5 w-3.5" />
                   Kiểm kê
@@ -2063,7 +2124,7 @@ export default function TenantAdminInventory({
                   type="button"
                   onClick={() => openStockAction("TRANSFER", selectedItem)}
                   disabled={!canManage}
-                  className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-3 text-[8px] font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+                  className="flex h-10 items-center justify-center gap-2 whitespace-nowrap border border-violet-700 bg-violet-600 px-3 text-caption font-black text-white shadow-sm disabled:border-slate-300 disabled:bg-slate-300"
                 >
                   <ArrowRightLeft className="h-3.5 w-3.5" />
                   Điều chuyển
@@ -2071,6 +2132,126 @@ export default function TenantAdminInventory({
               </div>
             </footer>
           </section>
+        </div>
+      )}
+
+      {quarantineForm && quarantineItem && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <button
+            type="button"
+            aria-label="Đóng biểu mẫu cách ly"
+            onClick={() => setQuarantineForm(null)}
+            className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+          />
+          <form
+            onSubmit={submitQuarantine}
+            className="relative max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl bg-white shadow-2xl"
+          >
+            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
+              <div>
+                <p className="text-caption font-black uppercase tracking-wide text-amber-600">
+                  Kiểm soát chất lượng
+                </p>
+                <h2 className="mt-1 text-lg font-black text-slate-900">
+                  {quarantineForm.next === "QUARANTINE"
+                    ? "Cách ly vật tư"
+                    : "Gỡ cách ly vật tư"}
+                </h2>
+                <p className="mt-1 text-caption text-slate-500">
+                  {quarantineForm.next === "QUARANTINE"
+                    ? "Vật tư sẽ được đánh dấu không sử dụng cho khách, tồn kho giữ nguyên."
+                    : "Vật tư được phép sử dụng trở lại sau khi kiểm tra đạt."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuarantineForm(null)}
+                aria-label="Đóng"
+                className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="space-y-4 p-5 sm:p-6">
+              {formError && (
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">
+                  {formError}
+                </div>
+              )}
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${categoryMeta[quarantineItem.category].badge}`}
+                >
+                  <PackageOpen className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-caption font-black text-slate-800">
+                    {quarantineItem.name}
+                  </p>
+                  <p className="mt-0.5 text-caption text-slate-500">
+                    {quarantineItem.id} · Lô{" "}
+                    {quarantineItem.lot || "không theo lô"} ·{" "}
+                    {branchLabels[quarantineItem.branch]} ·{" "}
+                    {quarantineItem.stock} {quarantineItem.unit}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <label
+                  htmlFor="quarantine-reason"
+                  className="mb-1.5 block text-caption font-bold text-slate-600"
+                >
+                  {quarantineForm.next === "QUARANTINE"
+                    ? "Lý do cách ly"
+                    : "Kết quả kiểm tra"}
+                </label>
+                <textarea
+                  id="quarantine-reason"
+                  rows={3}
+                  value={quarantineForm.reason}
+                  onChange={(event) =>
+                    setQuarantineForm((current) =>
+                      current
+                        ? { ...current, reason: event.target.value }
+                        : current,
+                    )
+                  }
+                  placeholder={
+                    quarantineForm.next === "QUARANTINE"
+                      ? "Ví dụ: Lô nghi ngờ lỗi độ kết dính, chờ nhà cung cấp xác nhận."
+                      : "Ví dụ: Nhà cung cấp đã kiểm định lại, lô đạt tiêu chuẩn."
+                  }
+                  className="w-full rounded-2xl border border-slate-200 p-3 text-caption text-slate-700 shadow-sm"
+                />
+                <p className="mt-1.5 text-caption text-slate-400">
+                  Lý do được lưu vào lưu ý kiểm soát và lịch sử giao dịch của mã
+                  vật tư.
+                </p>
+              </div>
+            </div>
+            <footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 p-4 sm:px-6">
+              <button
+                type="button"
+                onClick={() => setQuarantineForm(null)}
+                className="flex h-11 items-center justify-center border border-slate-200 bg-white px-4 text-caption font-black text-slate-700 shadow-sm"
+              >
+                Huỷ
+              </button>
+              <button
+                type="submit"
+                className={`flex h-11 items-center justify-center gap-2 border px-4 text-caption font-black text-white shadow-lg ${quarantineForm.next === "QUARANTINE" ? "border-amber-600 bg-amber-500 shadow-amber-200" : "border-emerald-700 bg-emerald-600 shadow-emerald-200"}`}
+              >
+                {quarantineForm.next === "QUARANTINE" ? (
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                ) : (
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                )}
+                {quarantineForm.next === "QUARANTINE"
+                  ? "Xác nhận cách ly"
+                  : "Xác nhận gỡ cách ly"}
+              </button>
+            </footer>
+          </form>
         </div>
       )}
 
@@ -2088,7 +2269,7 @@ export default function TenantAdminInventory({
           >
             <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">
+                <p className="text-caption font-black uppercase tracking-wide text-violet-600">
                   Giao dịch kho
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-900">
@@ -2098,7 +2279,7 @@ export default function TenantAdminInventory({
                       ? "Điều chuyển vật tư"
                       : "Chốt kiểm kê thực tế"}
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-500">
+                <p className="mt-1 text-caption text-slate-500">
                   Mọi thay đổi được lưu người thao tác, thời gian và chứng từ.
                 </p>
               </div>
@@ -2113,13 +2294,13 @@ export default function TenantAdminInventory({
             </header>
             <div className="space-y-4 p-5 sm:p-6">
               {formError && (
-                <div className="rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700">
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">
                   {formError}
                 </div>
               )}
               {stockForm.itemLocked && stockActionItem ? (
                 <div>
-                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">
                     Vật tư kiểm kê
                   </span>
                   <div className="flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
@@ -2129,15 +2310,15 @@ export default function TenantAdminInventory({
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-black text-slate-800">{stockActionItem.name}</p>
-                        <span className="rounded-full bg-white px-2 py-1 text-[7px] font-black text-violet-700 ring-1 ring-violet-200">Đã cố định</span>
+                        <span className="rounded-full bg-white px-2 py-1 text-caption font-black text-violet-700 ring-1 ring-violet-200">Đã cố định</span>
                       </div>
-                      <p className="mt-1 text-[8px] text-slate-500">{stockActionItem.id} · {stockActionItem.variant} · {branchLabels[stockActionItem.branch]}</p>
+                      <p className="mt-1 text-caption text-slate-500">{stockActionItem.id} · {stockActionItem.variant} · {branchLabels[stockActionItem.branch]}</p>
                     </div>
                   </div>
                 </div>
               ) : (
                 <label>
-                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">
                     Mã vật tư *
                   </span>
                   <BeautifulSelect
@@ -2172,7 +2353,7 @@ export default function TenantAdminInventory({
               )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <label>
-                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">
                     {stockForm.action === "COUNT"
                       ? "Tồn thực tế *"
                       : "Số lượng *"}
@@ -2194,7 +2375,7 @@ export default function TenantAdminInventory({
                 </label>
                 {stockForm.action === "TRANSFER" ? (
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Chi nhánh nhận *
                     </span>
                     <BeautifulSelect
@@ -2217,7 +2398,7 @@ export default function TenantAdminInventory({
                   </label>
                 ) : (
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Mã chứng từ
                     </span>
                     <input
@@ -2238,15 +2419,15 @@ export default function TenantAdminInventory({
               {stockForm.action === "COUNT" && stockActionItem && (
                 <div className="grid grid-cols-3 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div>
-                    <p className="text-[8px] font-bold text-slate-400">Tồn hệ thống</p>
-                    <p className="mt-1 text-lg font-black text-slate-900">{stockActionItem.stock} <span className="text-[8px] text-slate-400">{stockActionItem.unit}</span></p>
+                    <p className="text-caption font-bold text-slate-400">Tồn hệ thống</p>
+                    <p className="mt-1 text-lg font-black text-slate-900">{stockActionItem.stock} <span className="text-caption text-slate-400">{stockActionItem.unit}</span></p>
                   </div>
                   <div>
-                    <p className="text-[8px] font-bold text-slate-400">Đếm thực tế</p>
-                    <p className="mt-1 text-lg font-black text-violet-700">{stockForm.quantity === "" ? "—" : Number(stockForm.quantity)} <span className="text-[8px] text-slate-400">{stockActionItem.unit}</span></p>
+                    <p className="text-caption font-bold text-slate-400">Đếm thực tế</p>
+                    <p className="mt-1 text-lg font-black text-violet-700">{stockForm.quantity === "" ? "—" : Number(stockForm.quantity)} <span className="text-caption text-slate-400">{stockActionItem.unit}</span></p>
                   </div>
                   <div>
-                    <p className="text-[8px] font-bold text-slate-400">Chênh lệch</p>
+                    <p className="text-caption font-bold text-slate-400">Chênh lệch</p>
                     {stockForm.quantity === "" ? <p className="mt-1 text-lg font-black text-slate-400">—</p> : <p className={`mt-1 text-lg font-black ${Number(stockForm.quantity) - stockActionItem.stock === 0 ? "text-emerald-600" : "text-amber-600"}`}>{Number(stockForm.quantity) - stockActionItem.stock > 0 ? "+" : ""}{Number(stockForm.quantity) - stockActionItem.stock}</p>}
                   </div>
                 </div>
@@ -2254,7 +2435,7 @@ export default function TenantAdminInventory({
               {stockForm.action === "RECEIVE" && (
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Đơn giá nhập
                     </span>
                     <input
@@ -2272,7 +2453,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Mã lô
                     </span>
                     <input
@@ -2288,7 +2469,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Hạn dùng
                     </span>
                     <input
@@ -2307,7 +2488,7 @@ export default function TenantAdminInventory({
                 </div>
               )}
               <label>
-                <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">
                   Lý do / ghi chú
                 </span>
                 <textarea
@@ -2319,11 +2500,11 @@ export default function TenantAdminInventory({
                         : current,
                     )
                   }
-                  className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                   placeholder={stockForm.action === "COUNT" ? "Bắt buộc nếu số lượng thực tế có chênh lệch..." : "Lý do điều chuyển..."}
                 />
               </label>
-              <div className="flex items-start gap-2 rounded-xl bg-violet-50 p-3 text-[8px] leading-4 text-violet-700">
+              <div className="flex items-start gap-2 rounded-xl bg-violet-50 p-3 text-caption leading-4 text-violet-700">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
                 Giao dịch được ghi vào lịch sử kho và gắn với quyền {roleLabel}.
               </div>
@@ -2332,13 +2513,13 @@ export default function TenantAdminInventory({
               <button
                 type="button"
                 onClick={() => setStockForm(null)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"
+                className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 {stockForm.action === "COUNT" ? "Hoàn tất kiểm kê" : "Xác nhận điều chuyển"}
@@ -2362,13 +2543,13 @@ export default function TenantAdminInventory({
           >
             <header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">
+                <p className="text-caption font-black uppercase tracking-wide text-violet-600">
                   Danh mục vật tư
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-900">
                   Thêm mã vật tư mới
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-500">
+                <p className="mt-1 text-caption text-slate-500">
                   Thiết lập nhận diện, định mức, nhà cung cấp và truy xuất lô.
                 </p>
               </div>
@@ -2383,18 +2564,18 @@ export default function TenantAdminInventory({
             </header>
             <div className="space-y-5 p-5 sm:p-6">
               {formError && (
-                <div className="rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700">
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">
                   {formError}
                 </div>
               )}
               <fieldset>
-                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <Barcode className="h-4 w-4 text-violet-600" />
                   Nhận diện vật tư
                 </legend>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       SKU *
                     </span>
                     <input
@@ -2411,7 +2592,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label className="lg:col-span-2">
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Tên vật tư *
                     </span>
                     <input
@@ -2428,7 +2609,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Nhóm
                     </span>
                     <BeautifulSelect
@@ -2454,7 +2635,7 @@ export default function TenantAdminInventory({
                     </BeautifulSelect>
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Biến thể / quy cách
                     </span>
                     <input
@@ -2471,7 +2652,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Barcode
                     </span>
                     <input
@@ -2489,13 +2670,13 @@ export default function TenantAdminInventory({
                 </div>
               </fieldset>
               <fieldset className="border-t border-slate-100 pt-5">
-                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <Warehouse className="h-4 w-4 text-emerald-600" />
                   Tồn kho & định mức
                 </legend>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Chi nhánh
                     </span>
                     <BeautifulSelect
@@ -2517,7 +2698,7 @@ export default function TenantAdminInventory({
                     </BeautifulSelect>
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Vị trí lưu *
                     </span>
                     <input
@@ -2534,7 +2715,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Đơn vị
                     </span>
                     <input
@@ -2550,7 +2731,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Tồn đầu
                     </span>
                     <input
@@ -2568,7 +2749,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Tối thiểu
                     </span>
                     <input
@@ -2586,7 +2767,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Tối đa
                     </span>
                     <input
@@ -2604,7 +2785,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Giá nhập
                     </span>
                     <input
@@ -2622,7 +2803,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Lead time (ngày)
                     </span>
                     <input
@@ -2645,13 +2826,13 @@ export default function TenantAdminInventory({
                 </div>
               </fieldset>
               <fieldset className="border-t border-slate-100 pt-5">
-                <legend className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-800">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <Truck className="h-4 w-4 text-blue-600" />
                   Nhà cung cấp & lô
                 </legend>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Nhà cung cấp *
                     </span>
                     <input
@@ -2667,7 +2848,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Điện thoại
                     </span>
                     <input
@@ -2683,7 +2864,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Mã lô
                     </span>
                     <input
@@ -2699,7 +2880,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Hạn dùng
                     </span>
                     <input
@@ -2716,7 +2897,7 @@ export default function TenantAdminInventory({
                     />
                   </label>
                   <label className="sm:col-span-2">
-                    <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
                       Ghi chú kiểm soát
                     </span>
                     <textarea
@@ -2728,7 +2909,7 @@ export default function TenantAdminInventory({
                             : current,
                         )
                       }
-                      className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[10px] leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                      className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                     />
                   </label>
                 </div>
@@ -2738,13 +2919,13 @@ export default function TenantAdminInventory({
               <button
                 type="button"
                 onClick={() => setItemForm(null)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"
+                className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
               >
                 <Plus className="h-4 w-4" />
                 Tạo mã vật tư
@@ -2767,13 +2948,13 @@ export default function TenantAdminInventory({
           >
             <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-wide text-violet-600">
+                <p className="text-caption font-black uppercase tracking-wide text-violet-600">
                   Phiếu nhập kho nhiều vật tư
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-900">
                   Thêm vật tư vào kho
                 </h2>
-                <p className="mt-1 text-[9px] text-slate-500">
+                <p className="mt-1 text-caption text-slate-500">
                   Vật tư đã chọn được giữ cố định; bạn có thể bổ sung thêm mã
                   khác vào cùng phiếu.
                 </p>
@@ -2789,21 +2970,21 @@ export default function TenantAdminInventory({
             </header>
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
               {formError && (
-                <div className="rounded-xl bg-rose-50 p-3 text-[9px] font-bold text-rose-700">
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">
                   {formError}
                 </div>
               )}
               <section>
                 <div className="mb-3 flex items-center justify-between">
                   <div>
-                    <h3 className="text-[10px] font-black text-slate-800">
+                    <h3 className="text-caption font-black text-slate-800">
                       Vật tư trong phiếu
                     </h3>
-                    <p className="mt-1 text-[8px] text-slate-400">
+                    <p className="mt-1 text-caption text-slate-400">
                       {receiveForm.receiveLines.length} vật tư đã được thêm
                     </p>
                   </div>
-                  <span className="rounded-full bg-violet-50 px-3 py-1.5 text-[8px] font-black text-violet-700">
+                  <span className="rounded-full bg-violet-50 px-3 py-1.5 text-caption font-black text-violet-700">
                     Không đổi sai vật tư
                   </span>
                 </div>
@@ -2831,12 +3012,12 @@ export default function TenantAdminInventory({
                                   {item.name}
                                 </p>
                                 {line.locked && (
-                                  <span className="rounded-full bg-violet-100 px-2 py-1 text-[7px] font-black text-violet-700">
+                                  <span className="rounded-full bg-violet-100 px-2 py-1 text-caption font-black text-violet-700">
                                     Vật tư đã chọn
                                   </span>
                                 )}
                               </div>
-                              <p className="mt-1 text-[8px] text-slate-400">
+                              <p className="mt-1 text-caption text-slate-400">
                                 {item.id} · {item.variant} ·{" "}
                                 {branchLabels[item.branch]}
                               </p>
@@ -2869,7 +3050,7 @@ export default function TenantAdminInventory({
                         </div>
                         <div className="mt-4 grid gap-3 sm:grid-cols-4">
                           <label>
-                            <span className="mb-1.5 block text-[8px] font-bold text-slate-600">
+                            <span className="mb-1.5 block text-caption font-bold text-slate-600">
                               Số lượng ({item.unit}) *
                             </span>
                             <input
@@ -2900,7 +3081,7 @@ export default function TenantAdminInventory({
                             />
                           </label>
                           <label>
-                            <span className="mb-1.5 block text-[8px] font-bold text-slate-600">
+                            <span className="mb-1.5 block text-caption font-bold text-slate-600">
                               Đơn giá nhập
                             </span>
                             <input
@@ -2929,7 +3110,7 @@ export default function TenantAdminInventory({
                             />
                           </label>
                           <label>
-                            <span className="mb-1.5 block text-[8px] font-bold text-slate-600">
+                            <span className="mb-1.5 block text-caption font-bold text-slate-600">
                               Mã lô
                             </span>
                             <input
@@ -2956,7 +3137,7 @@ export default function TenantAdminInventory({
                             />
                           </label>
                           <label>
-                            <span className="mb-1.5 block text-[8px] font-bold text-slate-600">
+                            <span className="mb-1.5 block text-caption font-bold text-slate-600">
                               Hạn dùng
                             </span>
                             <input
@@ -2988,14 +3169,14 @@ export default function TenantAdminInventory({
                     );
                   })}
                   {!receiveForm.receiveLines.length && (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-[9px] font-bold text-slate-500">
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-caption font-bold text-slate-500">
                       Chọn một vật tư bên dưới để bắt đầu phiếu nhập.
                     </div>
                   )}
                 </div>
               </section>
               <section className="rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-4">
-                <p className="text-[9px] font-black text-slate-800">
+                <p className="text-caption font-black text-slate-800">
                   Thêm vật tư khác
                 </p>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -3047,7 +3228,7 @@ export default function TenantAdminInventory({
                       );
                       setFormError("");
                     }}
-                    className="flex h-11 shrink-0 items-center justify-center gap-2 border border-violet-200 bg-white px-4 text-[9px] font-black text-violet-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex h-11 shrink-0 items-center justify-center gap-2 border border-violet-200 bg-white px-4 text-caption font-black text-violet-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Plus className="h-4 w-4" />
                     Thêm vào phiếu
@@ -3056,7 +3237,7 @@ export default function TenantAdminInventory({
               </section>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label>
-                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">
                     Mã chứng từ
                   </span>
                   <input
@@ -3073,7 +3254,7 @@ export default function TenantAdminInventory({
                   />
                 </label>
                 <label>
-                  <span className="mb-1.5 block text-[9px] font-bold text-slate-600">
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">
                     Ghi chú chung
                   </span>
                   <input
@@ -3092,7 +3273,7 @@ export default function TenantAdminInventory({
               </div>
             </div>
             <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6">
-              <p className="hidden text-[8px] font-bold text-slate-500 sm:block">
+              <p className="hidden text-caption font-bold text-slate-500 sm:block">
                 {receiveForm.receiveLines.length} vật tư ·{" "}
                 {receiveForm.receiveLines.reduce(
                   (sum, line) => sum + (Number(line.quantity) || 0),
@@ -3104,13 +3285,13 @@ export default function TenantAdminInventory({
                 <button
                   type="button"
                   onClick={() => setReceiveForm(null)}
-                  className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                  className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-[9px] font-black text-white shadow-lg shadow-violet-200"
+                  className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   Xác nhận nhập kho

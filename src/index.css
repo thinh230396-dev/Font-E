@@ -1,10 +1,59 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
-@theme {
+/* ==========================================================================
+   SalonSys — hệ design token duy nhất
+   Nguồn chuẩn: README.md. Khi README và CSS xung đột, README thắng.
+   Mọi giá trị dùng lại trong file này phải tham chiếu token, không viết
+   giá trị rời rạc. Không tạo thêm namespace token song song.
+   ========================================================================== */
+/* `static` để Tailwind luôn emit mọi token ra :root, kể cả token chưa được
+   dùng tới — component phải luôn tham chiếu được bằng var(). */
+@theme static {
+  /* --- Font (README §4.1) --- */
   --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
-  
+
+  /* --- Thang chữ (README §4.2). Sàn nội dung là 14px theo §4.3. --- */
+  --text-caption: 0.8125rem;            /* 13px — chú thích, metadata */
+  --text-caption--line-height: 1.125rem;
+  --text-caption--font-weight: 500;
+  --text-body: 0.875rem;                /* 14px — nội dung, label, button */
+  --text-body--line-height: 1.25rem;
+  --text-body-lg: 1rem;                 /* 16px — nội dung đọc dài */
+  --text-body-lg--line-height: 1.5rem;
+  --text-page-description: 1rem;        /* 16px — mô tả dưới tiêu đề trang */
+  --text-page-description--line-height: 1.5rem;
+  --text-page-description--font-weight: 400;
+  --text-label: 0.875rem;               /* 14px — nhãn form, tab, button */
+  --text-label--line-height: 1.25rem;
+  --text-label--font-weight: 600;
+  --text-subsection-title: 1rem;        /* 16px — tiêu đề nhóm bên trong card */
+  --text-subsection-title--line-height: 1.5rem;
+  --text-subsection-title--font-weight: 600;
+  --text-card-title: clamp(1rem, 0.95rem + 0.2vw, 1.125rem); /* 16–18px */
+  --text-card-title--line-height: 1.4;
+  --text-card-title--font-weight: 700;
+  --text-section-title: clamp(1.25rem, 1.15rem + 0.35vw, 1.5rem); /* 20–24px */
+  --text-section-title--line-height: 1.3;
+  --text-section-title--font-weight: 700;
+  --text-page-title: clamp(1.75rem, 1.65rem + 0.35vw, 2rem); /* 28–32px */
+  --text-page-title--line-height: 1.2;
+  --text-page-title--font-weight: 700;
+  --text-kpi: clamp(1.75rem, 1.65rem + 0.35vw, 2rem); /* 28–32px */
+  --text-kpi--line-height: 1.2;
+  --text-kpi--font-weight: 700;
+  --text-display: 2rem;                 /* 32px — số liệu lớn */
+  --text-display--line-height: 1.2;
+  --text-display--font-weight: 700;
+
+  /* --- Spacing (README §6) ---
+     Tailwind v4 sinh toàn bộ thang từ --spacing. 0.25rem = 4px, nên
+     space-1…space-12 của README ánh xạ 1:1 sang p-1…p-12, gap-1…gap-12.
+     Không khai báo thang thứ hai. */
+  --spacing: 0.25rem;
+
+  /* --- Màu ngữ nghĩa (README §5.1) --- */
   --color-brand-bg: #f8fafc;
   --color-brand-surface: #ffffff;
   --color-brand-surface-high: #f1f5f9;
@@ -19,11 +68,46 @@
   --color-brand-outline: #e2e8f0;
   --color-brand-text: #0f172a;
   --color-brand-text-muted: #64748b;
-}
 
-:root {
-  --modal-backdrop-color: rgb(15 23 42 / 0.48);
-  --modal-backdrop-filter: blur(8px) saturate(0.72);
+  /* --- Bán kính (README §9.1 card 12px, §10.3 & §11.2 control 8px) --- */
+  --radius-control: 0.5rem;             /* 8px — button, input, select */
+  --radius-card: 0.75rem;               /* 12px — card, panel, bảng */
+  --radius-pill: 9999px;
+
+  /* --- Độ nổi --- */
+  --shadow-card: 0 1px 3px rgb(15 23 42 / 0.06), 0 8px 22px rgb(15 23 42 / 0.035);
+  --shadow-floating: 0 18px 46px rgb(15 23 42 / 0.14);
+
+  /* --- Kích thước (README §7.1, §10.2, §11.2, §12.1) --- */
+  --size-sidebar: 16.25rem;             /* 260px */
+  --size-sidebar-collapsed: 4.5rem;     /* 72px */
+  --size-topbar: 4.25rem;               /* 68px */
+  --size-control-sm: 2.25rem;           /* 36px — button small */
+  --size-control: 2.625rem;             /* 42px — button/input medium */
+  --size-control-lg: 3rem;              /* 48px — button large */
+  --size-row: 3rem;                     /* 48px — chiều cao dòng bảng */
+  --size-content-max: 97.5rem;          /* 1560px — bề rộng nội dung tối đa */
+  --size-icon-sm: 1rem;                 /* 16px */
+  --size-icon: 1.125rem;                /* 18px */
+  --size-icon-lg: 1.5rem;               /* 24px */
+
+  /* --- Lớp hiển thị ---
+     --z-overlay nằm trên mọi overlay tự dựng còn lại (cao nhất đang dùng là
+     9999) để hộp thoại mới luôn phủ đúng trong lúc migrate dần. */
+  --z-sticky: 100;
+  --z-sidebar: 500;
+  --z-overlay: 10000;
+  --z-dropdown: 10050;
+  --z-toast: 12000;
+
+  /* --- Chuyển động --- */
+  --motion-fast: 140ms;
+  --motion-normal: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- Nền mờ của lớp phủ --- */
+  --backdrop-color: rgb(15 23 42 / 0.48);
+  --backdrop-filter: blur(8px) saturate(0.72);
 }
 
 html[data-theme="dark"] {
@@ -41,9 +125,20 @@ html[data-theme="dark"] {
   --color-brand-outline: #334155;
   --color-brand-text: #f8fafc;
   --color-brand-text-muted: #94a3b8;
-  --modal-backdrop-color: rgb(6 10 22 / 0.58);
-  --modal-backdrop-filter: blur(8px) saturate(0.68);
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.24), 0 10px 26px rgb(0 0 0 / 0.16);
+  --shadow-floating: 0 22px 60px rgb(0 0 0 / 0.48);
+  --backdrop-color: rgb(6 10 22 / 0.58);
+  --backdrop-filter: blur(8px) saturate(0.68);
   color-scheme: dark;
+}
+
+/* Xem `App.tsx` — trong khoảnh khắc đổi sáng/tối, mọi transition bị tắt để không
+   phần tử nào kẹt lại ở màu của theme cũ. */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation: none !important;
 }
 
 /* Base custom scrollbar */
@@ -396,6 +491,573 @@ html[data-theme="dark"] :is([class~="border-violet-200"], [class~="ring-violet-1
 html[data-theme="dark"] :is([class~="border-amber-200"], [class~="ring-amber-100"], [class~="ring-amber-200"]) { border-color: rgb(245 158 11 / 0.34) !important; --tw-ring-color: rgb(245 158 11 / 0.34) !important; }
 html[data-theme="dark"] :is([class~="border-rose-200"], [class~="ring-rose-100"], [class~="ring-rose-200"], [class~="border-red-200"], [class~="ring-red-100"], [class~="ring-red-200"]) { border-color: rgb(244 63 94 / 0.34) !important; --tw-ring-color: rgb(244 63 94 / 0.34) !important; }
 
+/* Same normalization for the opacity-suffixed variants (bg-white/90, bg-violet-50/70,
+   text-violet-700/80 ...). `class~=` only matches whole class tokens, so without these
+   rules the background stays light in dark mode while the text color is force-lightened
+   above — light text on a light surface (Nail gallery cards, design detail modal).
+   The `:not([class*=":..."])` guard keeps hover:/focus: variants from applying at rest.
+   bg-white is listed opacity-by-opacity on purpose: bg-white/5..20 are deliberate
+   translucent highlights on dark surfaces and must stay translucent. */
+html[data-theme="dark"] :is(
+  [class~="bg-white/40"], [class~="bg-white/50"], [class~="bg-white/60"], [class~="bg-white/70"],
+  [class~="bg-white/75"], [class~="bg-white/80"], [class~="bg-white/90"], [class~="bg-white/95"],
+  [class*="bg-slate-50/"]:not([class*=":bg-slate-50/"]),
+  [class*="bg-slate-100/"]:not([class*=":bg-slate-100/"]),
+  [class*="bg-gray-50/"]:not([class*=":bg-gray-50/"]),
+  [class*="bg-gray-100/"]:not([class*=":bg-gray-100/"])
+) {
+  background-color: var(--color-brand-surface) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class*="bg-emerald-50/"]:not([class*=":bg-emerald-50/"]),
+  [class*="bg-emerald-100/"]:not([class*=":bg-emerald-100/"])
+) {
+  background-color: color-mix(in srgb, #10b981 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class*="bg-blue-50/"]:not([class*=":bg-blue-50/"]),
+  [class*="bg-blue-100/"]:not([class*=":bg-blue-100/"])
+) {
+  background-color: color-mix(in srgb, #3b82f6 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class*="bg-cyan-50/"]:not([class*=":bg-cyan-50/"]),
+  [class*="bg-cyan-100/"]:not([class*=":bg-cyan-100/"])
+) {
+  background-color: color-mix(in srgb, #06b6d4 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class*="bg-violet-50/"]:not([class*=":bg-violet-50/"]),
+  [class*="bg-violet-100/"]:not([class*=":bg-violet-100/"])
+) {
+  background-color: color-mix(in srgb, #8b5cf6 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class*="bg-amber-50/"]:not([class*=":bg-amber-50/"]),
+  [class*="bg-amber-100/"]:not([class*=":bg-amber-100/"])
+) {
+  background-color: color-mix(in srgb, #f59e0b 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class*="bg-rose-50/"]:not([class*=":bg-rose-50/"]),
+  [class*="bg-rose-100/"]:not([class*=":bg-rose-100/"]),
+  [class*="bg-red-50/"]:not([class*=":bg-red-50/"]),
+  [class*="bg-red-100/"]:not([class*=":bg-red-100/"])
+) {
+  background-color: color-mix(in srgb, #f43f5e 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is([class*="text-emerald-600/"], [class*="text-emerald-700/"], [class*="text-emerald-800/"], [class*="text-emerald-900/"]) { color: #6ee7b7 !important; }
+html[data-theme="dark"] :is([class*="text-blue-600/"], [class*="text-blue-700/"], [class*="text-blue-800/"], [class*="text-blue-900/"]) { color: #93c5fd !important; }
+html[data-theme="dark"] :is([class*="text-cyan-600/"], [class*="text-cyan-700/"], [class*="text-cyan-800/"], [class*="text-cyan-900/"]) { color: #67e8f9 !important; }
+html[data-theme="dark"] :is([class*="text-violet-600/"], [class*="text-violet-700/"], [class*="text-violet-800/"], [class*="text-violet-900/"]) { color: #c4b5fd !important; }
+html[data-theme="dark"] :is([class*="text-amber-600/"], [class*="text-amber-700/"], [class*="text-amber-800/"], [class*="text-amber-900/"]) { color: #fcd34d !important; }
+html[data-theme="dark"] :is([class*="text-rose-600/"], [class*="text-rose-700/"], [class*="text-rose-800/"], [class*="text-rose-900/"], [class*="text-red-600/"], [class*="text-red-700/"], [class*="text-red-800/"], [class*="text-red-900/"]) { color: #fda4af !important; }
+html[data-theme="dark"] :is([class*="text-slate-700/"], [class*="text-slate-800/"], [class*="text-slate-900/"], [class*="text-gray-700/"], [class*="text-gray-800/"], [class*="text-gray-900/"]) { color: var(--color-brand-text) !important; }
+
+/* Light surface gradients (bg-gradient-to-* from-violet-50 to-white ...) are invisible to
+   the token overrides above: they paint background-IMAGE, not background-color, so in dark
+   mode the panel stayed light while its text was force-lightened.
+   Flatten them to a dark surface. Only the light stops (50/100 + their /opacity variants)
+   are listed — saturated gradients (from-violet-500, from-[#171328] ...) are intentional
+   and must keep painting. `from-slate-100` is deliberately absent: its single use is the
+   nail-art preview canvas, which is meant to stay light like a photo. */
+html[data-theme="dark"] :is(
+  [class~="from-white"], [class*="from-white/"],
+  [class~="from-slate-50"], [class*="from-slate-50/"],
+  [class~="from-gray-50"], [class*="from-gray-50/"],
+  [class~="from-gray-100"], [class*="from-gray-100/"]
+) {
+  background-image: none !important;
+  background-color: var(--color-brand-surface-high) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="from-emerald-50"], [class*="from-emerald-50/"],
+  [class~="from-emerald-100"], [class*="from-emerald-100/"],
+  [class~="from-teal-50"], [class~="from-green-50"]
+) {
+  background-image: none !important;
+  background-color: color-mix(in srgb, #10b981 16%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="from-blue-50"], [class*="from-blue-50/"],
+  [class~="from-blue-100"], [class~="from-sky-50"], [class~="from-indigo-50"]
+) {
+  background-image: none !important;
+  background-color: color-mix(in srgb, #3b82f6 16%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="from-cyan-50"], [class*="from-cyan-50/"], [class~="from-cyan-100"]
+) {
+  background-image: none !important;
+  background-color: color-mix(in srgb, #06b6d4 16%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="from-violet-50"], [class*="from-violet-50/"],
+  [class~="from-violet-100"], [class~="from-purple-50"], [class~="from-fuchsia-50"]
+) {
+  background-image: none !important;
+  background-color: color-mix(in srgb, #8b5cf6 16%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="from-amber-50"], [class*="from-amber-50/"],
+  [class~="from-amber-100"], [class~="from-orange-50"], [class~="from-yellow-50"]
+) {
+  background-image: none !important;
+  background-color: color-mix(in srgb, #f59e0b 16%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="from-rose-50"], [class*="from-rose-50/"],
+  [class~="from-rose-100"], [class~="from-red-50"], [class~="from-red-100"],
+  [class~="from-pink-50"], [class*="from-pink-50/"], [class~="from-pink-100"]
+) {
+  background-image: none !important;
+  background-color: color-mix(in srgb, #f43f5e 16%, var(--color-brand-surface)) !important;
+}
+
+/* --- Hoàn thiện vùng phủ của lớp chuẩn hoá chế độ tối -----------------------
+   Các quy tắc ở trên chỉ liệt kê 7 sắc (emerald/blue/cyan/violet/amber/rose/red)
+   và chỉ tới bậc 900. Mã nguồn còn dùng pink, fuchsia, purple, orange, indigo,
+   sky, teal, bậc nền 200 và bậc chữ 950 — những lớp đó không được ánh xạ nên ở
+   chế độ tối vẫn giữ màu của chế độ sáng: mảng nền hồng nhạt kèm chữ đã bị làm
+   sáng (màn Thu & Chi), hoặc `text-rose-950` gần như đen trên thẻ nền tối.
+   Khối này phủ nốt phần còn thiếu, kèm cả biến thể có độ mờ (`/70`, `/80`…).
+   `:not([class*=":..."])` loại các biến thể trạng thái (`hover:`, `focus:`…)
+   để chúng không đè lên trạng thái nghỉ. */
+
+html[data-theme="dark"] :is(
+  [class~="bg-slate-200"],
+  [class*="bg-slate-200/"]:not([class*=":bg-slate-200/"]),
+  [class~="bg-gray-200"],
+  [class*="bg-gray-200/"]:not([class*=":bg-gray-200/"]),
+  [class~="bg-zinc-200"],
+  [class*="bg-zinc-200/"]:not([class*=":bg-zinc-200/"]),
+  [class~="bg-neutral-200"],
+  [class*="bg-neutral-200/"]:not([class*=":bg-neutral-200/"]),
+  [class~="bg-stone-200"],
+  [class*="bg-stone-200/"]:not([class*=":bg-stone-200/"])
+) {
+  background-color: var(--color-brand-surface-high) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-slate-950"],
+  [class*="text-slate-950/"]:not([class*=":text-slate-950/"]),
+  [class~="text-gray-950"],
+  [class*="text-gray-950/"]:not([class*=":text-gray-950/"]),
+  [class~="text-zinc-950"],
+  [class*="text-zinc-950/"]:not([class*=":text-zinc-950/"]),
+  [class~="text-neutral-950"],
+  [class*="text-neutral-950/"]:not([class*=":text-neutral-950/"]),
+  [class~="text-stone-950"],
+  [class*="text-stone-950/"]:not([class*=":text-stone-950/"])
+) {
+  color: var(--color-brand-text) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-rose-50"],
+  [class*="bg-rose-50/"]:not([class*=":bg-rose-50/"]),
+  [class~="bg-rose-100"],
+  [class*="bg-rose-100/"]:not([class*=":bg-rose-100/"]),
+  [class~="bg-rose-200"],
+  [class*="bg-rose-200/"]:not([class*=":bg-rose-200/"]),
+  [class~="bg-red-50"],
+  [class*="bg-red-50/"]:not([class*=":bg-red-50/"]),
+  [class~="bg-red-100"],
+  [class*="bg-red-100/"]:not([class*=":bg-red-100/"]),
+  [class~="bg-red-200"],
+  [class*="bg-red-200/"]:not([class*=":bg-red-200/"])
+) {
+  background-color: color-mix(in srgb, #f43f5e 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-rose-600"],
+  [class*="text-rose-600/"]:not([class*=":text-rose-600/"]),
+  [class~="text-rose-700"],
+  [class*="text-rose-700/"]:not([class*=":text-rose-700/"]),
+  [class~="text-rose-800"],
+  [class*="text-rose-800/"]:not([class*=":text-rose-800/"]),
+  [class~="text-rose-900"],
+  [class*="text-rose-900/"]:not([class*=":text-rose-900/"]),
+  [class~="text-rose-950"],
+  [class*="text-rose-950/"]:not([class*=":text-rose-950/"]),
+  [class~="text-red-600"],
+  [class*="text-red-600/"]:not([class*=":text-red-600/"]),
+  [class~="text-red-700"],
+  [class*="text-red-700/"]:not([class*=":text-red-700/"]),
+  [class~="text-red-800"],
+  [class*="text-red-800/"]:not([class*=":text-red-800/"]),
+  [class~="text-red-900"],
+  [class*="text-red-900/"]:not([class*=":text-red-900/"]),
+  [class~="text-red-950"],
+  [class*="text-red-950/"]:not([class*=":text-red-950/"])
+) {
+  color: #fda4af !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-pink-50"],
+  [class*="bg-pink-50/"]:not([class*=":bg-pink-50/"]),
+  [class~="bg-pink-100"],
+  [class*="bg-pink-100/"]:not([class*=":bg-pink-100/"]),
+  [class~="bg-pink-200"],
+  [class*="bg-pink-200/"]:not([class*=":bg-pink-200/"]),
+  [class~="bg-fuchsia-50"],
+  [class*="bg-fuchsia-50/"]:not([class*=":bg-fuchsia-50/"]),
+  [class~="bg-fuchsia-100"],
+  [class*="bg-fuchsia-100/"]:not([class*=":bg-fuchsia-100/"]),
+  [class~="bg-fuchsia-200"],
+  [class*="bg-fuchsia-200/"]:not([class*=":bg-fuchsia-200/"])
+) {
+  background-color: color-mix(in srgb, #d946ef 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-pink-600"],
+  [class*="text-pink-600/"]:not([class*=":text-pink-600/"]),
+  [class~="text-pink-700"],
+  [class*="text-pink-700/"]:not([class*=":text-pink-700/"]),
+  [class~="text-pink-800"],
+  [class*="text-pink-800/"]:not([class*=":text-pink-800/"]),
+  [class~="text-pink-900"],
+  [class*="text-pink-900/"]:not([class*=":text-pink-900/"]),
+  [class~="text-pink-950"],
+  [class*="text-pink-950/"]:not([class*=":text-pink-950/"]),
+  [class~="text-fuchsia-600"],
+  [class*="text-fuchsia-600/"]:not([class*=":text-fuchsia-600/"]),
+  [class~="text-fuchsia-700"],
+  [class*="text-fuchsia-700/"]:not([class*=":text-fuchsia-700/"]),
+  [class~="text-fuchsia-800"],
+  [class*="text-fuchsia-800/"]:not([class*=":text-fuchsia-800/"]),
+  [class~="text-fuchsia-900"],
+  [class*="text-fuchsia-900/"]:not([class*=":text-fuchsia-900/"]),
+  [class~="text-fuchsia-950"],
+  [class*="text-fuchsia-950/"]:not([class*=":text-fuchsia-950/"])
+) {
+  color: #f0abfc !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-orange-50"],
+  [class*="bg-orange-50/"]:not([class*=":bg-orange-50/"]),
+  [class~="bg-orange-100"],
+  [class*="bg-orange-100/"]:not([class*=":bg-orange-100/"]),
+  [class~="bg-orange-200"],
+  [class*="bg-orange-200/"]:not([class*=":bg-orange-200/"])
+) {
+  background-color: color-mix(in srgb, #f97316 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-orange-600"],
+  [class*="text-orange-600/"]:not([class*=":text-orange-600/"]),
+  [class~="text-orange-700"],
+  [class*="text-orange-700/"]:not([class*=":text-orange-700/"]),
+  [class~="text-orange-800"],
+  [class*="text-orange-800/"]:not([class*=":text-orange-800/"]),
+  [class~="text-orange-900"],
+  [class*="text-orange-900/"]:not([class*=":text-orange-900/"]),
+  [class~="text-orange-950"],
+  [class*="text-orange-950/"]:not([class*=":text-orange-950/"])
+) {
+  color: #fdba74 !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-amber-50"],
+  [class*="bg-amber-50/"]:not([class*=":bg-amber-50/"]),
+  [class~="bg-amber-100"],
+  [class*="bg-amber-100/"]:not([class*=":bg-amber-100/"]),
+  [class~="bg-amber-200"],
+  [class*="bg-amber-200/"]:not([class*=":bg-amber-200/"]),
+  [class~="bg-yellow-50"],
+  [class*="bg-yellow-50/"]:not([class*=":bg-yellow-50/"]),
+  [class~="bg-yellow-100"],
+  [class*="bg-yellow-100/"]:not([class*=":bg-yellow-100/"]),
+  [class~="bg-yellow-200"],
+  [class*="bg-yellow-200/"]:not([class*=":bg-yellow-200/"])
+) {
+  background-color: color-mix(in srgb, #f59e0b 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-amber-600"],
+  [class*="text-amber-600/"]:not([class*=":text-amber-600/"]),
+  [class~="text-amber-700"],
+  [class*="text-amber-700/"]:not([class*=":text-amber-700/"]),
+  [class~="text-amber-800"],
+  [class*="text-amber-800/"]:not([class*=":text-amber-800/"]),
+  [class~="text-amber-900"],
+  [class*="text-amber-900/"]:not([class*=":text-amber-900/"]),
+  [class~="text-amber-950"],
+  [class*="text-amber-950/"]:not([class*=":text-amber-950/"]),
+  [class~="text-yellow-600"],
+  [class*="text-yellow-600/"]:not([class*=":text-yellow-600/"]),
+  [class~="text-yellow-700"],
+  [class*="text-yellow-700/"]:not([class*=":text-yellow-700/"]),
+  [class~="text-yellow-800"],
+  [class*="text-yellow-800/"]:not([class*=":text-yellow-800/"]),
+  [class~="text-yellow-900"],
+  [class*="text-yellow-900/"]:not([class*=":text-yellow-900/"]),
+  [class~="text-yellow-950"],
+  [class*="text-yellow-950/"]:not([class*=":text-yellow-950/"])
+) {
+  color: #fcd34d !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-emerald-50"],
+  [class*="bg-emerald-50/"]:not([class*=":bg-emerald-50/"]),
+  [class~="bg-emerald-100"],
+  [class*="bg-emerald-100/"]:not([class*=":bg-emerald-100/"]),
+  [class~="bg-emerald-200"],
+  [class*="bg-emerald-200/"]:not([class*=":bg-emerald-200/"]),
+  [class~="bg-green-50"],
+  [class*="bg-green-50/"]:not([class*=":bg-green-50/"]),
+  [class~="bg-green-100"],
+  [class*="bg-green-100/"]:not([class*=":bg-green-100/"]),
+  [class~="bg-green-200"],
+  [class*="bg-green-200/"]:not([class*=":bg-green-200/"]),
+  [class~="bg-lime-50"],
+  [class*="bg-lime-50/"]:not([class*=":bg-lime-50/"]),
+  [class~="bg-lime-100"],
+  [class*="bg-lime-100/"]:not([class*=":bg-lime-100/"]),
+  [class~="bg-lime-200"],
+  [class*="bg-lime-200/"]:not([class*=":bg-lime-200/"])
+) {
+  background-color: color-mix(in srgb, #10b981 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-emerald-600"],
+  [class*="text-emerald-600/"]:not([class*=":text-emerald-600/"]),
+  [class~="text-emerald-700"],
+  [class*="text-emerald-700/"]:not([class*=":text-emerald-700/"]),
+  [class~="text-emerald-800"],
+  [class*="text-emerald-800/"]:not([class*=":text-emerald-800/"]),
+  [class~="text-emerald-900"],
+  [class*="text-emerald-900/"]:not([class*=":text-emerald-900/"]),
+  [class~="text-emerald-950"],
+  [class*="text-emerald-950/"]:not([class*=":text-emerald-950/"]),
+  [class~="text-green-600"],
+  [class*="text-green-600/"]:not([class*=":text-green-600/"]),
+  [class~="text-green-700"],
+  [class*="text-green-700/"]:not([class*=":text-green-700/"]),
+  [class~="text-green-800"],
+  [class*="text-green-800/"]:not([class*=":text-green-800/"]),
+  [class~="text-green-900"],
+  [class*="text-green-900/"]:not([class*=":text-green-900/"]),
+  [class~="text-green-950"],
+  [class*="text-green-950/"]:not([class*=":text-green-950/"]),
+  [class~="text-lime-600"],
+  [class*="text-lime-600/"]:not([class*=":text-lime-600/"]),
+  [class~="text-lime-700"],
+  [class*="text-lime-700/"]:not([class*=":text-lime-700/"]),
+  [class~="text-lime-800"],
+  [class*="text-lime-800/"]:not([class*=":text-lime-800/"]),
+  [class~="text-lime-900"],
+  [class*="text-lime-900/"]:not([class*=":text-lime-900/"]),
+  [class~="text-lime-950"],
+  [class*="text-lime-950/"]:not([class*=":text-lime-950/"])
+) {
+  color: #6ee7b7 !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-teal-50"],
+  [class*="bg-teal-50/"]:not([class*=":bg-teal-50/"]),
+  [class~="bg-teal-100"],
+  [class*="bg-teal-100/"]:not([class*=":bg-teal-100/"]),
+  [class~="bg-teal-200"],
+  [class*="bg-teal-200/"]:not([class*=":bg-teal-200/"])
+) {
+  background-color: color-mix(in srgb, #14b8a6 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-teal-600"],
+  [class*="text-teal-600/"]:not([class*=":text-teal-600/"]),
+  [class~="text-teal-700"],
+  [class*="text-teal-700/"]:not([class*=":text-teal-700/"]),
+  [class~="text-teal-800"],
+  [class*="text-teal-800/"]:not([class*=":text-teal-800/"]),
+  [class~="text-teal-900"],
+  [class*="text-teal-900/"]:not([class*=":text-teal-900/"]),
+  [class~="text-teal-950"],
+  [class*="text-teal-950/"]:not([class*=":text-teal-950/"])
+) {
+  color: #5eead4 !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-cyan-50"],
+  [class*="bg-cyan-50/"]:not([class*=":bg-cyan-50/"]),
+  [class~="bg-cyan-100"],
+  [class*="bg-cyan-100/"]:not([class*=":bg-cyan-100/"]),
+  [class~="bg-cyan-200"],
+  [class*="bg-cyan-200/"]:not([class*=":bg-cyan-200/"])
+) {
+  background-color: color-mix(in srgb, #06b6d4 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-cyan-600"],
+  [class*="text-cyan-600/"]:not([class*=":text-cyan-600/"]),
+  [class~="text-cyan-700"],
+  [class*="text-cyan-700/"]:not([class*=":text-cyan-700/"]),
+  [class~="text-cyan-800"],
+  [class*="text-cyan-800/"]:not([class*=":text-cyan-800/"]),
+  [class~="text-cyan-900"],
+  [class*="text-cyan-900/"]:not([class*=":text-cyan-900/"]),
+  [class~="text-cyan-950"],
+  [class*="text-cyan-950/"]:not([class*=":text-cyan-950/"])
+) {
+  color: #67e8f9 !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-blue-50"],
+  [class*="bg-blue-50/"]:not([class*=":bg-blue-50/"]),
+  [class~="bg-blue-100"],
+  [class*="bg-blue-100/"]:not([class*=":bg-blue-100/"]),
+  [class~="bg-blue-200"],
+  [class*="bg-blue-200/"]:not([class*=":bg-blue-200/"]),
+  [class~="bg-sky-50"],
+  [class*="bg-sky-50/"]:not([class*=":bg-sky-50/"]),
+  [class~="bg-sky-100"],
+  [class*="bg-sky-100/"]:not([class*=":bg-sky-100/"]),
+  [class~="bg-sky-200"],
+  [class*="bg-sky-200/"]:not([class*=":bg-sky-200/"])
+) {
+  background-color: color-mix(in srgb, #3b82f6 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-blue-600"],
+  [class*="text-blue-600/"]:not([class*=":text-blue-600/"]),
+  [class~="text-blue-700"],
+  [class*="text-blue-700/"]:not([class*=":text-blue-700/"]),
+  [class~="text-blue-800"],
+  [class*="text-blue-800/"]:not([class*=":text-blue-800/"]),
+  [class~="text-blue-900"],
+  [class*="text-blue-900/"]:not([class*=":text-blue-900/"]),
+  [class~="text-blue-950"],
+  [class*="text-blue-950/"]:not([class*=":text-blue-950/"]),
+  [class~="text-sky-600"],
+  [class*="text-sky-600/"]:not([class*=":text-sky-600/"]),
+  [class~="text-sky-700"],
+  [class*="text-sky-700/"]:not([class*=":text-sky-700/"]),
+  [class~="text-sky-800"],
+  [class*="text-sky-800/"]:not([class*=":text-sky-800/"]),
+  [class~="text-sky-900"],
+  [class*="text-sky-900/"]:not([class*=":text-sky-900/"]),
+  [class~="text-sky-950"],
+  [class*="text-sky-950/"]:not([class*=":text-sky-950/"])
+) {
+  color: #93c5fd !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-indigo-50"],
+  [class*="bg-indigo-50/"]:not([class*=":bg-indigo-50/"]),
+  [class~="bg-indigo-100"],
+  [class*="bg-indigo-100/"]:not([class*=":bg-indigo-100/"]),
+  [class~="bg-indigo-200"],
+  [class*="bg-indigo-200/"]:not([class*=":bg-indigo-200/"])
+) {
+  background-color: color-mix(in srgb, #6366f1 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-indigo-600"],
+  [class*="text-indigo-600/"]:not([class*=":text-indigo-600/"]),
+  [class~="text-indigo-700"],
+  [class*="text-indigo-700/"]:not([class*=":text-indigo-700/"]),
+  [class~="text-indigo-800"],
+  [class*="text-indigo-800/"]:not([class*=":text-indigo-800/"]),
+  [class~="text-indigo-900"],
+  [class*="text-indigo-900/"]:not([class*=":text-indigo-900/"]),
+  [class~="text-indigo-950"],
+  [class*="text-indigo-950/"]:not([class*=":text-indigo-950/"])
+) {
+  color: #a5b4fc !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-violet-50"],
+  [class*="bg-violet-50/"]:not([class*=":bg-violet-50/"]),
+  [class~="bg-violet-100"],
+  [class*="bg-violet-100/"]:not([class*=":bg-violet-100/"]),
+  [class~="bg-violet-200"],
+  [class*="bg-violet-200/"]:not([class*=":bg-violet-200/"]),
+  [class~="bg-purple-50"],
+  [class*="bg-purple-50/"]:not([class*=":bg-purple-50/"]),
+  [class~="bg-purple-100"],
+  [class*="bg-purple-100/"]:not([class*=":bg-purple-100/"]),
+  [class~="bg-purple-200"],
+  [class*="bg-purple-200/"]:not([class*=":bg-purple-200/"])
+) {
+  background-color: color-mix(in srgb, #8b5cf6 18%, var(--color-brand-surface)) !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="text-violet-600"],
+  [class*="text-violet-600/"]:not([class*=":text-violet-600/"]),
+  [class~="text-violet-700"],
+  [class*="text-violet-700/"]:not([class*=":text-violet-700/"]),
+  [class~="text-violet-800"],
+  [class*="text-violet-800/"]:not([class*=":text-violet-800/"]),
+  [class~="text-violet-900"],
+  [class*="text-violet-900/"]:not([class*=":text-violet-900/"]),
+  [class~="text-violet-950"],
+  [class*="text-violet-950/"]:not([class*=":text-violet-950/"]),
+  [class~="text-purple-600"],
+  [class*="text-purple-600/"]:not([class*=":text-purple-600/"]),
+  [class~="text-purple-700"],
+  [class*="text-purple-700/"]:not([class*=":text-purple-700/"]),
+  [class~="text-purple-800"],
+  [class*="text-purple-800/"]:not([class*=":text-purple-800/"]),
+  [class~="text-purple-900"],
+  [class*="text-purple-900/"]:not([class*=":text-purple-900/"]),
+  [class~="text-purple-950"],
+  [class*="text-purple-950/"]:not([class*=":text-purple-950/"])
+) {
+  color: #c4b5fd !important;
+}
+
+/* `text-slate-600/500` là bậc chữ phụ dùng khắp nơi, nhưng lớp ánh xạ ở trên chỉ
+   bắt từ 700 trở lên, còn khối `.tenant-admin-main` lại chỉ áp trong vùng nội
+   dung — nên nhãn trong các modal dựng ở lớp phủ riêng (ví dụ "Thêm chi nhánh")
+   vẫn giữ #475569, gần như chìm vào nền tối. Bậc nền 300 cũng vậy: nút vô hiệu
+   và công tắc tắt vẫn là mảng xám sáng. */
+html[data-theme="dark"] :is(
+  [class~="text-slate-600"], [class*="text-slate-600/"]:not([class*=":text-slate-600/"]),
+  [class~="text-slate-500"], [class*="text-slate-500/"]:not([class*=":text-slate-500/"]),
+  [class~="text-gray-600"], [class~="text-gray-500"]
+) {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] :is(
+  [class~="bg-slate-300"], [class~="bg-gray-300"]
+) {
+  background-color: var(--color-brand-surface-highest) !important;
+}
+
 html[data-theme="dark"] button:disabled,
 html[data-theme="dark"] [aria-disabled="true"] {
   opacity: 0.58;
@@ -528,31 +1190,31 @@ button.account-system-settings:hover {
   }
 }
 
-button[class*="brand-error"],
-button[class*="red-"] {
+button[class*="brand-error"]:not([class*="text-white"]),
+button[class*="red-"]:not([class*="text-white"]) {
   border-color: #fca5a5;
   color: #b91c1c;
   box-shadow: 0 1px 2px rgba(185, 28, 28, 0.08);
 }
 
-button[class*="brand-error"]:not(:disabled):hover,
-button[class*="red-"]:not(:disabled):hover {
+button[class*="brand-error"]:not([class*="text-white"]):not(:disabled):hover,
+button[class*="red-"]:not([class*="text-white"]):not(:disabled):hover {
   background-color: #fee2e2;
   border-color: #ef4444;
   color: #991b1b;
 }
 
-button[class*="brand-warning"],
-button[class*="orange-"],
-button[class*="amber-"] {
+button[class*="brand-warning"]:not([class*="text-white"]),
+button[class*="orange-"]:not([class*="text-white"]),
+button[class*="amber-"]:not([class*="text-white"]) {
   border-color: #fdba74;
   color: #c2410c;
   box-shadow: 0 1px 2px rgba(194, 65, 12, 0.08);
 }
 
-button[class*="brand-warning"]:not(:disabled):hover,
-button[class*="orange-"]:not(:disabled):hover,
-button[class*="amber-"]:not(:disabled):hover {
+button[class*="brand-warning"]:not([class*="text-white"]):not(:disabled):hover,
+button[class*="orange-"]:not([class*="text-white"]):not(:disabled):hover,
+button[class*="amber-"]:not([class*="text-white"]):not(:disabled):hover {
   background-color: #ffedd5;
   border-color: #fb923c;
   color: #9a3412;
@@ -673,6 +1335,25 @@ button[class*="amber-"]:not(:disabled):hover {
   color: var(--color-brand-text-muted) !important;
 }
 
+/* Hình dạng mặc định — xem `callerHandlesShape` trong BeautifulSelect.tsx.
+   Đệm trái 12px khớp `px-3` của các ô nhập khác; đệm phải nhỏ hơn vì khối mũi
+   tên 28px đã chiếm chỗ. */
+.beautiful-select-trigger--default-shape {
+  padding-left: calc(var(--spacing) * 3);
+  border-width: 1px;
+  border-style: solid;
+  border-radius: var(--radius-control);
+}
+
+/* `.role-shell--* button` kéo mọi <button> về 2.5rem, nhưng trigger tuy là
+   <button> vẫn phải cao đúng chiều cao control (§10.2) để thẳng hàng với ô nhập
+   và nút bên cạnh — rõ nhất ở chân hộp thoại, nơi nó đứng cạnh nút chính.
+   Selector hai lớp để thắng `.role-shell--* button`. */
+.role-shell .beautiful-select-trigger,
+.ui-modal-layer .beautiful-select-trigger {
+  min-height: var(--size-control);
+}
+
 .beautiful-select-menu {
   z-index: 10050 !important;
   pointer-events: auto;
@@ -752,9 +1433,9 @@ html[data-theme="dark"] .beautiful-select-menu {
   border: 0 !important;
   border-radius: 0.25rem;
   background: transparent !important;
-  color: var(--color-brand-primary);
+  color: var(--accent-text, var(--color-brand-primary));
   box-shadow: none !important;
-  font-size: 0.6875rem;
+  font-size: var(--text-caption);
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
@@ -764,44 +1445,9 @@ html[data-theme="dark"] .beautiful-select-menu {
 .subscription-feature-toggle:not(:disabled):hover {
   border: 0 !important;
   background: transparent !important;
-  color: color-mix(in srgb, var(--color-brand-primary) 75%, white);
+  color: var(--accent-strong, var(--color-brand-primary));
   box-shadow: none !important;
   transform: none !important;
-}
-
-/* Tenant Admin Nail: tăng khả năng đọc trên màn hình desktop độ phân giải cao. */
-.nail-admin .text-\[7px\] {
-  font-size: 0.75rem !important;
-  line-height: 1.45 !important;
-}
-
-.nail-admin .text-\[8px\] {
-  font-size: 0.8125rem !important;
-  line-height: 1.45 !important;
-}
-
-.nail-admin .text-\[9px\] {
-  font-size: 0.875rem !important;
-  line-height: 1.45 !important;
-}
-
-.nail-admin .text-\[10px\] {
-  font-size: 0.9375rem !important;
-  line-height: 1.45 !important;
-}
-
-.nail-admin .text-\[11px\] {
-  font-size: 1rem !important;
-  line-height: 1.45 !important;
-}
-
-.nail-admin h1 {
-  font-size: 2.25rem;
-  line-height: 1.15;
-}
-
-.nail-admin aside nav > button {
-  min-height: 2.75rem;
 }
 
 /* Trường ngày trong trung tâm nhân sự: giữ bố cục ổn định và dễ nhận biết. */
@@ -850,33 +1496,6 @@ html[data-theme="dark"] .beautiful-select-menu {
 html[data-theme="dark"] .reception-workspace {
   background: var(--color-brand-bg);
   color: var(--color-brand-text);
-}
-
-html[data-theme="dark"] .reception-sidebar {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, #064e3b 30%, var(--color-brand-surface-lowest)), var(--color-brand-surface-lowest)) !important;
-  background-color: var(--color-brand-surface-lowest) !important;
-  border-right: 1px solid color-mix(in srgb, var(--color-brand-outline) 62%, transparent);
-  color: var(--color-brand-text);
-}
-
-html[data-theme="dark"] .reception-sidebar nav button:not([class*="bg-emerald-400"]) {
-  color: color-mix(in srgb, var(--color-brand-text) 72%, transparent) !important;
-}
-
-html[data-theme="dark"] .reception-sidebar nav button:not([class*="bg-emerald-400"]):hover {
-  background: color-mix(in srgb, var(--color-brand-surface-high) 58%, transparent) !important;
-  color: var(--color-brand-text) !important;
-}
-
-html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] {
-  background: color-mix(in srgb, #10b981 72%, #022c22) !important;
-  color: #ecfdf5 !important;
-}
-
-html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] span,
-html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] svg {
-  color: #ecfdf5 !important;
 }
 
 html[data-theme="dark"] .reception-sidebar [class~="bg-white/5"] {
@@ -1474,33 +2093,6 @@ html[data-theme="dark"] .reception-workspace [aria-disabled="true"] {
   box-shadow: none !important;
 }
 
-html[data-theme="dark"] .reception-sidebar {
-  background:
-    radial-gradient(circle at 20% 0%, rgb(16 185 129 / 0.17), transparent 18rem),
-    linear-gradient(180deg, #061b1a 0%, #06131d 58%, #050d17 100%) !important;
-  border-right-color: #203a43 !important;
-  box-shadow: 14px 0 40px rgb(0 0 0 / 0.3) !important;
-}
-
-html[data-theme="dark"] .reception-sidebar nav button:not([class*="bg-emerald-400"]) {
-  color: #c5d8d7 !important;
-}
-
-html[data-theme="dark"] .reception-sidebar nav button:not([class*="bg-emerald-400"]):hover {
-  background: rgb(52 211 153 / 0.11) !important;
-  color: #f0fdfa !important;
-}
-
-html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] {
-  background: #34d399 !important;
-  color: #052e2b !important;
-  box-shadow: 0 12px 26px rgb(0 0 0 / 0.3) !important;
-}
-
-html[data-theme="dark"] .reception-sidebar nav button[class*="bg-emerald-400"] :is(span, svg) {
-  color: #052e2b !important;
-}
-
 html[data-theme="dark"] .reception-workspace header[class*="sticky"][class*="bg-brand-surface"] {
   background-color: rgb(16 29 48 / 0.96) !important;
   border-bottom-color: #304761 !important;
@@ -1616,6 +2208,66 @@ html[data-theme="dark"] .reception-workspace .reception-customer-detail .custome
 html[data-theme="dark"] .reception-workspace .reception-customer-detail .customer-detail-footer {
   background: #13243a !important;
   border-color: #344b65 !important;
+}
+
+/* Màn Hồ sơ khách hàng của Tenant Admin dùng lại đúng bộ lớp
+   `.reception-customer-detail` của quầy lễ tân, nhưng khối tối ở trên bị khoá
+   trong `.reception-workspace` nên modal chi tiết khách hàng bên Tenant Admin
+   không nhận được gì: header vẫn là gradient sáng `#ecfdf5 → #fff` trong khi
+   chữ đã bị đảo sang màu sáng. Lặp lại với sắc độ tối của Tenant Admin. */
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail .customer-detail-header {
+  background:
+    radial-gradient(circle at 92% 0%, rgb(52 211 153 / 0.14), transparent 18rem),
+    linear-gradient(125deg, #0b2f2a 0%, #14202f 58%, #111827 100%) !important;
+  border-color: #334155 !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail .customer-detail-body {
+  background: #0f172a !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail .customer-detail-card {
+  background: #111827 !important;
+  border-color: #334155 !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.2) !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail :is(
+  .customer-detail-stat,
+  .customer-detail-subcard,
+  .customer-detail-empty
+) {
+  background: #1f2937 !important;
+  border-color: #3b4a5f !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail :is(
+  .customer-detail-icon,
+  .customer-detail-amount,
+  .customer-detail-chip
+) {
+  background: #243244 !important;
+  border-color: #44546b !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail .customer-detail-safety {
+  background-color: color-mix(in srgb, #f43f5e 13%, #111827) !important;
+  border-color: rgb(251 113 133 / 0.38) !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail .customer-detail-safety.border-emerald-200 {
+  background-color: color-mix(in srgb, #10b981 13%, #111827) !important;
+  border-color: rgb(52 211 153 / 0.38) !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .reception-customer-detail .customer-detail-footer {
+  background: #111827 !important;
+  border-color: #334155 !important;
 }
 
 /* Superadmin sidebar navigation cards */
@@ -1793,54 +2445,85 @@ html[data-theme="dark"] .sidebar-nav-card--active .sidebar-nav-icon {
 /* Shared role workspace system
    One visual grammar for Superadmin, Tenant Admin and Receptionist. */
 .role-shell {
-  --role-accent: #7c3aed;
-  --role-accent-strong: #6d28d9;
-  --role-accent-soft: rgb(124 58 237 / 0.1);
-  --role-focus: rgb(124 58 237 / 0.24);
-  --role-card-radius: 1rem;
-  --role-control-radius: 0.75rem;
-  --role-shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 7px 22px rgb(15 23 42 / 0.035);
-  --role-shadow-md: 0 16px 38px rgb(15 23 42 / 0.08);
+  /* Accent là điểm khác biệt có chủ đích duy nhất giữa ba vai trò.
+     Mọi thứ còn lại — bán kính, độ nổi, thang chữ — dùng token chung. */
+  --accent: #7c3aed;
+  --accent-strong: #6d28d9;
+  --accent-soft: rgb(124 58 237 / 0.1);
+  --accent-focus: rgb(124 58 237 / 0.24);
+  /* Thang màu phân loại cho biểu đồ nhiều chuỗi.
+     README §5.1 chỉ có màu ngữ nghĩa (trạng thái), không có thang phân loại —
+     mà "Tiền mặt" hay "Khách thành viên" không phải trạng thái, nên không được
+     mượn tông success/warning. Thang này dẫn xuất từ --accent nên tự đúng theo
+     từng cổng và tự đổi nền ở dark mode; màu không bao giờ là tín hiệu duy
+     nhất, mọi chuỗi đều kèm nhãn và số (§5.2). */
+  --chart-1: var(--accent);
+  --chart-2: color-mix(in srgb, var(--accent) 58%, var(--color-brand-surface));
+  --chart-3: color-mix(in srgb, var(--accent) 30%, var(--color-brand-surface));
+  --chart-4: color-mix(in srgb, var(--color-brand-text-muted) 62%, var(--color-brand-surface));
+  --chart-5: color-mix(in srgb, var(--color-brand-text-muted) 30%, var(--color-brand-surface));
   font-family: var(--font-sans);
-  font-size: 0.875rem;
+  font-size: var(--text-body);
   line-height: 1.5;
   font-kerning: normal;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   background:
-    radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--role-accent) 7%, transparent), transparent 34rem),
+    radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 34rem),
     var(--color-brand-bg);
 }
 
-.role-shell--tenant {
-  --role-accent: #7c3aed;
-  --role-accent-strong: #6d28d9;
-  --role-accent-soft: rgb(124 58 237 / 0.1);
-  --role-focus: rgb(124 58 237 / 0.24);
+/* --accent đủ tương phản khi làm NỀN của nút chính, nhưng dùng làm MÀU CHỮ
+   trên nền của vai trò thì chỉ đạt 2,87–3,86 so với ngưỡng 4,5 của WCAG AA
+   (README §19.2). --accent-text là biến thể chỉ dành cho chữ: cùng sắc, khác
+   độ đậm, đạt ≥4,5 trên mọi bậc nền của vai trò. Nền, viền và ô icon vẫn dùng
+   --accent để bản sắc màu không đổi. */
+/* Superadmin — indigo. Giá trị lấy từ --sa-color-primary cũ. */
+.role-shell--superadmin {
+  --accent: #7061e8;
+  --accent-strong: #5e4fda;
+  --accent-soft: rgb(112 97 232 / 0.1);
+  --accent-focus: rgb(112 97 232 / 0.24);
+  --accent-text: var(--accent-strong);
 }
 
+.role-shell--superadmin .text-brand-primary {
+  color: var(--accent-text);
+}
+
+/* Tenant Admin — hồng salon. Giá trị lấy từ --ta-color-primary cũ. */
+.role-shell--tenant {
+  --accent: #f43f78;
+  --accent-strong: #e11d62;
+  --accent-soft: rgb(244 63 120 / 0.1);
+  --accent-focus: rgb(244 63 120 / 0.28);
+  --accent-text: var(--accent-strong);
+}
+
+/* Receptionist — xanh ngọc. */
 .role-shell--reception {
-  --role-accent: #059669;
-  --role-accent-strong: #047857;
-  --role-accent-soft: rgb(5 150 105 / 0.1);
-  --role-focus: rgb(5 150 105 / 0.22);
+  --accent: #059669;
+  --accent-strong: #047857;
+  --accent-soft: rgb(5 150 105 / 0.1);
+  --accent-focus: rgb(5 150 105 / 0.22);
+  --accent-text: var(--accent-strong);
 }
 
 .role-shell :is(
   .text-\[7px\],
   .text-\[8px\]
 ) {
-  font-size: 0.75rem !important;
-  line-height: 1.45 !important;
+  font-size: var(--text-caption) !important;
+  line-height: var(--text-caption--line-height) !important;
 }
 
 .role-shell :is(
   .text-\[9px\],
   .text-\[10px\]
 ) {
-  font-size: 0.8125rem !important;
-  line-height: 1.5 !important;
+  font-size: var(--text-caption) !important;
+  line-height: var(--text-caption--line-height) !important;
 }
 
 .role-shell :is(
@@ -1848,8 +2531,8 @@ html[data-theme="dark"] .sidebar-nav-card--active .sidebar-nav-icon {
   .text-\[12px\],
   .text-xs
 ) {
-  font-size: 0.875rem !important;
-  line-height: 1.5 !important;
+  font-size: var(--text-body) !important;
+  line-height: var(--text-body--line-height) !important;
 }
 
 .role-shell .text-sm {
@@ -1904,7 +2587,7 @@ html[data-theme="dark"] .sidebar-nav-card--active .sidebar-nav-icon {
 
 .role-main :is(article, section)[class*="rounded-"][class*="border"] {
   border-color: color-mix(in srgb, var(--color-brand-outline) 78%, transparent);
-  box-shadow: var(--role-shadow-sm);
+  box-shadow: var(--shadow-card);
 }
 
 .role-main :is(article, section)[class*="rounded-"][class*="border"]:not([role="dialog"]) {
@@ -1913,55 +2596,50 @@ html[data-theme="dark"] .sidebar-nav-card--active .sidebar-nav-icon {
 
 .role-main :is(input, textarea, select, .beautiful-select-trigger) {
   min-height: 2.625rem;
-  border-radius: var(--role-control-radius);
+  border-radius: var(--radius-control);
   font-family: var(--font-sans);
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
 }
 
 .role-main :is(input, textarea, select, .beautiful-select-trigger):focus,
 .role-main :is(input, textarea, select, .beautiful-select-trigger):focus-visible {
-  border-color: var(--role-accent) !important;
-  box-shadow: 0 0 0 4px var(--role-focus) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 4px var(--accent-focus) !important;
   outline: none;
 }
 
 .role-shell button {
-  border-radius: var(--role-control-radius);
+  border-radius: var(--radius-control);
   font-family: var(--font-sans);
   letter-spacing: -0.005em;
 }
 
 .role-shell button:focus-visible,
 .role-shell a:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--role-accent) 76%, white);
+  outline: 2px solid color-mix(in srgb, var(--accent) 76%, white);
   outline-offset: 2px;
 }
 
-.role-main table {
-  font-size: 0.8125rem;
+.role-main table:not(.ui-table) {
+  font-size: var(--text-body);
 }
 
-.role-main thead th {
+.role-main :not(.ui-table) > thead th {
   color: color-mix(in srgb, var(--color-brand-text-muted) 88%, var(--color-brand-text));
-  font-size: 0.75rem !important;
+  font-size: var(--text-caption) !important;
   font-weight: 800;
   line-height: 1.35;
   letter-spacing: 0.035em;
 }
 
-.role-main tbody td {
-  font-size: 0.8125rem !important;
-  line-height: 1.5;
+.role-main :not(.ui-table) > tbody td {
+  font-size: var(--text-body) !important;
+  line-height: var(--text-body--line-height);
 }
 
 .role-main :is(.rounded-full, [class*="rounded-full"])[class*="text-"] {
   font-variant-numeric: tabular-nums;
-}
-
-html[data-theme="dark"] .role-shell {
-  --role-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.18), 0 10px 26px rgb(0 0 0 / 0.13);
-  --role-shadow-md: 0 18px 44px rgb(0 0 0 / 0.3);
 }
 
 html[data-theme="dark"] .role-topbar {
@@ -1997,23 +2675,8 @@ html[data-theme="dark"] .role-topbar {
 
 /* Superadmin UI standard — aligned with README.md */
 .role-shell--superadmin {
-  --sa-color-primary: #7c3aed;
-  --sa-color-primary-hover: #6d28d9;
-  --sa-color-primary-subtle: #f5f3ff;
-  --sa-color-surface: var(--color-brand-surface);
-  --sa-color-surface-muted: var(--color-brand-surface-high);
-  --sa-color-border: color-mix(in srgb, var(--color-brand-outline) 84%, transparent);
-  --sa-color-text: var(--color-brand-text);
-  --sa-color-text-secondary: var(--color-brand-text-muted);
-  --sa-radius-control: 0.5rem;
-  --sa-radius-card: 0.75rem;
-  --sa-shadow-card: 0 1px 3px rgb(15 23 42 / 0.06), 0 8px 22px rgb(15 23 42 / 0.035);
-  --sa-shadow-floating: 0 18px 46px rgb(15 23 42 / 0.14);
-  --sa-duration-fast: 140ms;
-  --sa-duration-normal: 200ms;
-  --sa-easing: cubic-bezier(0.2, 0, 0, 1);
   min-width: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-body);
 }
 
 .role-shell--superadmin .role-topbar {
@@ -2024,7 +2687,7 @@ html[data-theme="dark"] .role-topbar {
 .role-shell--superadmin .role-sidebar {
   background:
     radial-gradient(circle at 18% 0%, rgb(124 58 237 / 0.08), transparent 17rem),
-    var(--sa-color-surface);
+    var(--color-brand-surface);
 }
 
 .role-shell--superadmin .superadmin-main {
@@ -2041,19 +2704,19 @@ html[data-theme="dark"] .role-topbar {
   top: 0.75rem;
   z-index: 2000;
   padding: 0.625rem 0.875rem;
-  border-radius: var(--sa-radius-control);
-  background: var(--sa-color-primary);
+  border-radius: var(--radius-control);
+  background: var(--accent);
   color: white;
   font-size: 0.875rem;
   font-weight: 700;
-  box-shadow: var(--sa-shadow-floating);
+  box-shadow: var(--shadow-floating);
   transform: translateY(-180%);
-  transition: transform var(--sa-duration-fast) var(--sa-easing);
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
 
 .superadmin-skip-link:focus {
   transform: translateY(0);
-  outline: 3px solid color-mix(in srgb, var(--sa-color-primary) 48%, white);
+  outline: 3px solid color-mix(in srgb, var(--accent) 48%, white);
   outline-offset: 2px;
 }
 
@@ -2074,9 +2737,15 @@ html[data-theme="dark"] .role-topbar {
   line-height: 1.5 !important;
 }
 
+/* `text-sm` của Tailwind là 14px và trùng đúng token --text-body. Quy tắc
+   `.role-shell .text-sm` phía trên ép nó thành 15px — một bậc không có trong
+   thang chữ ở README §4.2 — và dùng !important nên component không lấy lại
+   được. Quy tắc này trả riêng cổng Superadmin về đúng token; phải giữ
+   !important để thắng quy tắc kia, và nên xóa cả hai khi hai cổng còn lại
+   được migrate. */
 .role-shell--superadmin .text-sm {
-  font-size: 0.9375rem !important;
-  line-height: 1.5 !important;
+  font-size: var(--text-body) !important;
+  line-height: var(--text-body--line-height) !important;
 }
 
 .role-shell--superadmin h1 {
@@ -2106,35 +2775,35 @@ html[data-theme="dark"] .role-topbar {
   article,
   section
 )[class*="rounded-"][class*="border"] {
-  border-color: var(--sa-color-border);
-  border-radius: var(--sa-radius-card);
-  box-shadow: var(--sa-shadow-card);
+  border-color: color-mix(in srgb, var(--color-brand-outline) 84%, transparent);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
 .role-shell--superadmin .role-main :is(input, textarea, select, .beautiful-select-trigger) {
   min-height: 2.625rem;
-  border-color: var(--sa-color-border);
-  border-radius: var(--sa-radius-control);
-  background-color: var(--sa-color-surface);
-  color: var(--sa-color-text);
+  border-color: color-mix(in srgb, var(--color-brand-outline) 84%, transparent);
+  border-radius: var(--radius-control);
+  background-color: var(--color-brand-surface);
+  color: var(--color-brand-text);
   font-size: 0.875rem;
 }
 
 .role-shell--superadmin .role-main :is(input, textarea, select, .beautiful-select-trigger)::placeholder {
-  color: color-mix(in srgb, var(--sa-color-text-secondary) 82%, transparent);
+  color: color-mix(in srgb, var(--color-brand-text-muted) 82%, transparent);
 }
 
 .role-shell--superadmin button {
   min-height: 2.5rem;
-  border-radius: var(--sa-radius-control);
+  border-radius: var(--radius-control);
   font-size: 0.875rem;
   font-weight: 600;
   transition:
-    background-color var(--sa-duration-fast) var(--sa-easing),
-    border-color var(--sa-duration-fast) var(--sa-easing),
-    color var(--sa-duration-fast) var(--sa-easing),
-    box-shadow var(--sa-duration-fast) var(--sa-easing),
-    transform var(--sa-duration-fast) var(--sa-easing);
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
 }
 
 .role-shell--superadmin button[class*="h-7"],
@@ -2148,25 +2817,25 @@ html[data-theme="dark"] .role-topbar {
 }
 
 .role-shell--superadmin :is(button, a):focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--sa-color-primary) 48%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--accent) 48%, transparent);
   outline-offset: 2px;
 }
 
-.role-shell--superadmin .role-main table {
+.role-shell--superadmin .role-main table:not(.ui-table) {
   width: 100%;
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-.role-shell--superadmin .role-main thead th {
+.role-shell--superadmin .role-main :not(.ui-table) > thead th {
   height: 2.75rem;
-  color: var(--sa-color-text-secondary);
-  font-size: 0.75rem !important;
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-caption) !important;
   font-weight: 700;
   letter-spacing: 0.035em;
 }
 
-.role-shell--superadmin .role-main tbody td {
+.role-shell--superadmin .role-main :not(.ui-table) > tbody td {
   min-height: 2.75rem;
   font-size: 0.875rem !important;
   line-height: 1.5;
@@ -2182,13 +2851,7 @@ html[data-theme="dark"] .role-topbar {
 
 .role-shell--superadmin .role-main [role="dialog"],
 .role-shell--superadmin .role-main + [role="dialog"] {
-  box-shadow: var(--sa-shadow-floating);
-}
-
-html[data-theme="dark"] .role-shell--superadmin {
-  --sa-color-primary-subtle: #2e1065;
-  --sa-shadow-card: 0 1px 3px rgb(0 0 0 / 0.24), 0 10px 26px rgb(0 0 0 / 0.16);
-  --sa-shadow-floating: 0 22px 60px rgb(0 0 0 / 0.48);
+  box-shadow: var(--shadow-floating);
 }
 
 @media (max-width: 639px) {
@@ -2203,27 +2866,17 @@ html[data-theme="dark"] .role-shell--superadmin {
 
 /* Tenant Admin UI standard — aligned with README.md */
 .role-shell--tenant {
-  --ta-color-primary: #f43f78;
-  --ta-color-primary-hover: #e11d62;
-  --ta-color-primary-subtle: #fff1f6;
-  --ta-color-accent: #fb7185;
-  --ta-color-surface: #ffffff;
-  --ta-color-surface-muted: #fff8fb;
-  --ta-color-border: #f4dfe7;
-  --ta-color-text: #0f172a;
-  --ta-color-text-secondary: #64748b;
-  --ta-radius-control: 0.5rem;
-  --ta-radius-card: 0.75rem;
-  --ta-shadow-card: 0 1px 3px rgb(15 23 42 / 0.055), 0 8px 22px rgb(15 23 42 / 0.035);
-  --ta-shadow-floating: 0 20px 52px rgb(15 23 42 / 0.16);
-  --ta-duration-fast: 140ms;
-  --ta-duration-normal: 200ms;
-  --ta-easing: cubic-bezier(0.2, 0, 0, 1);
+  /* Viền ngả hồng là một phần bản sắc của cổng chủ tiệm. */
+  --color-brand-outline: #f4dfe7;
+  --shadow-card: 0 1px 3px rgb(15 23 42 / 0.055), 0 8px 22px rgb(15 23 42 / 0.035);
+  --shadow-floating: 0 20px 52px rgb(15 23 42 / 0.16);
   min-width: 0;
   background:
     radial-gradient(circle at 84% -10%, rgb(244 63 120 / 0.09), transparent 34rem),
     radial-gradient(circle at 12% 28%, rgb(255 178 123 / 0.06), transparent 28rem),
     #fff8fb;
+  color: var(--color-brand-text);
+  font-family: var(--font-sans);
   font-size: 0.875rem;
 }
 
@@ -2341,6 +2994,7 @@ html[data-theme="dark"] .role-shell--superadmin {
 
 .role-shell--tenant .tenant-admin-main {
   min-width: 0;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .role-shell--tenant .tenant-admin-main:focus {
@@ -2353,14 +3007,15 @@ html[data-theme="dark"] .role-shell--superadmin {
   top: 0.75rem;
   z-index: 2000;
   padding: 0.625rem 0.875rem;
-  border-radius: var(--ta-radius-control);
-  background: var(--ta-color-primary);
+  border-radius: var(--radius-control);
+  background: var(--accent);
   color: white;
-  font-size: 0.875rem;
-  font-weight: 700;
-  box-shadow: var(--ta-shadow-floating);
+  font-size: var(--text-label);
+  font-weight: var(--text-label--font-weight);
+  line-height: var(--text-label--line-height);
+  box-shadow: var(--shadow-floating);
   transform: translateY(-180%);
-  transition: transform var(--ta-duration-fast) var(--ta-easing);
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
 
 .tenant-admin-skip-link:focus {
@@ -2373,16 +3028,16 @@ html[data-theme="dark"] .role-shell--superadmin {
   .text-\[7px\],
   .text-\[8px\]
 ) {
-  font-size: 0.75rem !important;
-  line-height: 1.45 !important;
+  font-size: var(--text-caption) !important;
+  line-height: var(--text-caption--line-height) !important;
 }
 
 .role-shell--tenant :is(
   .text-\[9px\],
   .text-\[10px\]
 ) {
-  font-size: 0.8125rem !important;
-  line-height: 1.5 !important;
+  font-size: var(--text-caption) !important;
+  line-height: var(--text-caption--line-height) !important;
 }
 
 .role-shell--tenant :is(
@@ -2390,73 +3045,76 @@ html[data-theme="dark"] .role-shell--superadmin {
   .text-\[12px\],
   .text-xs
 ) {
-  font-size: 0.875rem !important;
-  line-height: 1.5 !important;
+  font-size: var(--text-caption) !important;
+  line-height: var(--text-caption--line-height) !important;
 }
 
 .role-shell--tenant .text-sm {
-  font-size: 0.9375rem !important;
-  line-height: 1.5 !important;
+  font-size: var(--text-body) !important;
+  line-height: var(--text-body--line-height) !important;
 }
 
 .role-shell--tenant h1 {
-  font-size: clamp(1.625rem, 2vw, 1.75rem);
-  line-height: 1.285;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-size: var(--text-page-title);
+  line-height: var(--text-page-title--line-height);
+  font-weight: var(--text-page-title--font-weight);
+  letter-spacing: -0.035em;
 }
 
-.role-shell--tenant h2 {
-  font-size: clamp(1.125rem, 1.5vw, 1.375rem);
-  line-height: 1.35;
-  font-weight: 700;
+.role-shell--tenant .tenant-admin-main h2:not(.ta-section-title):not(.text-section-title) {
+  font-size: var(--text-card-title) !important;
+  line-height: var(--text-card-title--line-height) !important;
+  font-weight: var(--text-card-title--font-weight) !important;
+  letter-spacing: -0.012em;
 }
 
-.role-shell--tenant h3 {
-  font-size: 1rem;
-  line-height: 1.5;
-  font-weight: 600;
+.role-shell--tenant .tenant-admin-main h3:not(.ta-card-title):not(.text-card-title):not(.ta-section-title):not(.text-section-title),
+.role-shell--tenant .tenant-admin-main h4:not(.ta-card-title):not(.text-card-title):not(.ta-section-title):not(.text-section-title) {
+  font-size: var(--text-subsection-title) !important;
+  line-height: var(--text-subsection-title--line-height) !important;
+  font-weight: var(--text-subsection-title--font-weight) !important;
 }
 
 .role-shell--tenant .role-main :is(
   article,
   section
 )[class*="rounded-"][class*="border"] {
-  border-color: var(--ta-color-border);
-  border-radius: var(--ta-radius-card);
-  box-shadow: var(--ta-shadow-card);
+  border-color: var(--color-brand-outline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
 .role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger) {
   min-height: 2.625rem;
-  border-color: var(--ta-color-border);
-  border-radius: var(--ta-radius-control);
-  background-color: var(--ta-color-surface);
-  color: var(--ta-color-text);
-  font-size: 0.875rem;
+  border-color: var(--color-brand-outline);
+  border-radius: var(--radius-control);
+  background-color: var(--color-brand-surface);
+  color: var(--color-brand-text);
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
 }
 
 .role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger)::placeholder {
-  color: color-mix(in srgb, var(--ta-color-text-secondary) 82%, transparent);
+  color: color-mix(in srgb, var(--color-brand-text-muted) 82%, transparent);
 }
 
 .role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger):focus,
 .role-shell--tenant .role-main :is(input, textarea, select, .beautiful-select-trigger):focus-visible {
-  border-color: var(--ta-color-primary) !important;
+  border-color: var(--accent) !important;
   box-shadow: 0 0 0 4px rgb(244 63 120 / 0.14) !important;
 }
 
 .role-shell--tenant button {
   min-height: 2.5rem;
-  border-radius: var(--ta-radius-control);
+  border-radius: var(--radius-control);
   font-size: 0.875rem;
   font-weight: 600;
   transition:
-    background-color var(--ta-duration-fast) var(--ta-easing),
-    border-color var(--ta-duration-fast) var(--ta-easing),
-    color var(--ta-duration-fast) var(--ta-easing),
-    box-shadow var(--ta-duration-fast) var(--ta-easing),
-    transform var(--ta-duration-fast) var(--ta-easing);
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
 }
 
 .role-shell--tenant button[class*="h-7"],
@@ -2681,19 +3339,20 @@ html[data-theme="dark"] .role-shell--superadmin {
 
 .role-shell--tenant .tenant-page-header h1 {
   margin: 0;
-  color: #0f172a;
-  font-size: clamp(1.5rem, 2vw, 1.875rem);
-  font-weight: 850;
-  line-height: 1.15;
+  color: var(--color-brand-text);
+  font-size: var(--text-page-title);
+  font-weight: var(--text-page-title--font-weight);
+  line-height: var(--text-page-title--line-height);
   letter-spacing: -0.035em;
 }
 
 .role-shell--tenant .tenant-page-header h1 + p {
   max-width: 46rem;
   margin-top: 0.45rem;
-  color: #64748b;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-page-description);
+  font-weight: var(--text-page-description--font-weight);
+  line-height: var(--text-page-description--line-height);
 }
 
 .role-shell--tenant .tenant-page-kicker {
@@ -2706,8 +3365,9 @@ html[data-theme="dark"] .role-shell--superadmin {
   gap: 0.55rem 1.25rem;
   margin-top: 0.8rem;
   color: #64748b;
-  font-size: 0.6875rem;
-  font-weight: 700;
+  font-size: var(--text-caption);
+  font-weight: var(--text-caption--font-weight);
+  line-height: var(--text-caption--line-height);
 }
 
 .role-shell--tenant .tenant-page-header button {
@@ -2722,19 +3382,220 @@ html[data-theme="dark"] .role-shell--superadmin {
 
 .role-shell--tenant .tenant-admin-main:not([data-page="overview"]):not([data-page="branches"]):not([data-page="customers"]) > div[class*="space-y-"] > section:first-of-type h1 {
   margin: 0;
-  color: #0f172a;
-  font-size: clamp(1.5rem, 2vw, 1.875rem);
-  font-weight: 850;
-  line-height: 1.15;
+  color: var(--color-brand-text);
+  font-size: var(--text-page-title);
+  font-weight: var(--text-page-title--font-weight);
+  line-height: var(--text-page-title--line-height);
   letter-spacing: -0.035em;
 }
 
 .role-shell--tenant .tenant-admin-main:not([data-page="overview"]):not([data-page="branches"]):not([data-page="customers"]) > div[class*="space-y-"] > section:first-of-type h1 + p {
   max-width: 46rem;
   margin-top: 0.45rem;
-  color: #64748b;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-page-description);
+  font-weight: var(--text-page-description--font-weight);
+  line-height: var(--text-page-description--line-height);
+}
+
+/* Tenant Admin typography primitives. Pages can use these classes directly;
+   structural selectors below keep legacy screens on the same scale while
+   they are migrated away from arbitrary Tailwind font sizes. */
+/* Tiêu đề trang của Tenant Admin đậm hơn một bậc so với token chung (700 → 800).
+   Đây là cổng có 17 trang và người dùng nhảy giữa các trang liên tục, nên tiêu
+   đề cần nặng hơn phần còn lại mà không phải to hơn. Chỉ áp cho shell này; token
+   --text-page-title--font-weight giữ nguyên cho Superadmin và Lễ tân. */
+.role-shell--tenant .ta-page-title,
+.role-shell--tenant .tenant-admin-main h1 {
+  color: var(--color-brand-text);
+  font-size: var(--text-page-title);
+  font-weight: 800;
+  line-height: var(--text-page-title--line-height);
+  letter-spacing: -0.035em;
+  text-transform: none;
+}
+
+.role-shell--tenant .ta-page-description,
+.role-shell--tenant .tenant-admin-main h1 + p {
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-page-description);
+  font-weight: var(--text-page-description--font-weight);
+  line-height: var(--text-page-description--line-height);
+}
+
+.role-shell--tenant .ta-section-title {
+  color: var(--color-brand-text);
+  font-size: var(--text-section-title) !important;
+  font-weight: var(--text-section-title--font-weight);
+  line-height: var(--text-section-title--line-height) !important;
+  letter-spacing: -0.025em;
+}
+
+.role-shell--tenant .ta-card-title {
+  color: var(--color-brand-text);
+  font-size: var(--text-card-title) !important;
+  font-weight: var(--text-card-title--font-weight);
+  line-height: var(--text-card-title--line-height) !important;
+  letter-spacing: -0.012em;
+}
+
+.role-shell--tenant .ta-subsection-title {
+  color: var(--color-brand-text);
+  font-size: var(--text-subsection-title) !important;
+  font-weight: var(--text-subsection-title--font-weight);
+  line-height: var(--text-subsection-title--line-height) !important;
+  letter-spacing: -0.006em;
+}
+
+.role-shell--tenant .ta-body {
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: var(--text-body--line-height);
+}
+
+.role-shell--tenant .ta-body-lg {
+  font-size: var(--text-body-lg);
+  font-weight: 400;
+  line-height: var(--text-body-lg--line-height);
+}
+
+.role-shell--tenant .ta-label {
+  font-size: var(--text-label);
+  font-weight: var(--text-label--font-weight);
+  line-height: var(--text-label--line-height);
+}
+
+.role-shell--tenant .ta-caption {
+  font-size: var(--text-caption);
+  font-weight: var(--text-caption--font-weight);
+  line-height: var(--text-caption--line-height);
+}
+
+.role-shell--tenant .ta-metric-value {
+  display: block;
+  max-width: 100%;
+  font-size: var(--text-kpi);
+  font-weight: var(--text-kpi--font-weight);
+  line-height: var(--text-kpi--line-height);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums lining-nums;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+/* Bridge the repeated legacy KPI-card pattern to the semantic metric token.
+   Keeping this selector scoped to paragraphs avoids inflating card headings. */
+.role-shell--tenant .tenant-admin-main p.mt-1\.5.font-black.tracking-tight:is(.text-lg, .text-xl, .text-2xl) {
+  font-size: var(--text-kpi) !important;
+  font-weight: var(--text-kpi--font-weight) !important;
+  line-height: var(--text-kpi--line-height) !important;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.role-shell--tenant .ta-kpi-label {
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: var(--text-caption--line-height);
+}
+
+.role-shell--tenant .ta-supporting-text {
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-caption);
+  font-weight: 400;
+  line-height: var(--text-caption--line-height);
+}
+
+/* Tiền tệ dùng cùng typography với trang Thanh toán. Formatter chịu trách
+   nhiệm ký hiệu/locale; primitive này chỉ kiểm soát nhịp chữ và căn số. */
+.role-shell--tenant .ta-money,
+.role-shell--tenant .tenant-admin-main .ui-table-numeric {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.012em;
+}
+
+.role-shell--tenant .ta-money {
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.role-shell--tenant .ta-money-cell {
+  display: block;
+  color: var(--color-brand-text);
+  font-size: var(--text-body);
+  font-weight: 700;
+  line-height: var(--text-body--line-height);
+  text-align: right;
+}
+
+/* Số tiền trong thẻ KPI căn TRÁI, thẳng cột với nhãn phía trên và dòng chú thích
+   phía dưới trong cùng thẻ. Trước đây luật này căn phải, khiến trang Thanh toán &
+   đối soát là trang duy nhất trong 17 trang Tenant Admin có con số lệch khỏi hai
+   dòng chữ quanh nó — 16 trang còn lại dùng .ta-metric-value và đều căn trái.
+
+   Riêng .ta-money-cell ở trên vẫn căn phải: đó là ô trong bảng, nơi các con số
+   xếp thành cột dọc và cần thẳng hàng đơn vị để so sánh (README §12.3). */
+.role-shell--tenant .ta-money-kpi {
+  display: block;
+  max-width: 100%;
+  color: var(--color-brand-text);
+  font-size: var(--text-kpi);
+  font-weight: var(--text-kpi--font-weight);
+  line-height: var(--text-kpi--line-height);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.03em;
+  overflow: visible;
+  text-align: left;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.role-shell--tenant .tenant-admin-payment-kpis article {
+  min-width: 0;
+}
+
+.role-shell--tenant .tenant-admin-payment-ledger table :is(th, td):nth-child(3),
+.role-shell--tenant .tenant-admin-payment-ledger table :is(th, td):nth-child(4) {
+  font-variant-numeric: tabular-nums lining-nums;
+  text-align: right;
+}
+
+.role-shell--tenant .tenant-admin-main :is(button, [role="tab"]),
+.role-shell--tenant .beautiful-select-menu--tenant {
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
+}
+
+/* Compatibility bridge for legacy Tenant Admin screens. Arbitrary sizes stay
+   readable and resolve to the same two semantic levels until their JSX is
+   migrated to the primitives above. */
+.role-shell--tenant :is(
+  .text-\[5\.5px\],
+  .text-\[6\.5px\],
+  .text-\[7\.5px\],
+  .text-\[8\.5px\],
+  .text-\[9\.5px\],
+  .text-\[13px\]
+) {
+  font-size: var(--text-caption) !important;
+  line-height: var(--text-caption--line-height) !important;
+}
+
+.role-shell--tenant :is(.font-black, .font-extrabold) {
+  font-weight: 700 !important;
+}
+
+/* BeautifulSelect được portal ra ngoài role shell, vì vậy class biến thể
+   tenant phải tự mang typography của Tenant Admin. */
+.beautiful-select-menu--tenant {
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
 }
 
 .role-shell--tenant .tenant-admin-main:not([data-page="overview"]):not([data-page="branches"]):not([data-page="customers"]) > div[class*="space-y-"] > section:first-of-type > div:first-child > div:first-child[class*="mb-2"] {
@@ -2786,14 +3647,11 @@ html[data-theme="dark"] .role-shell--superadmin {
 }
 
 .role-shell--tenant .tenant-demo-strip {
-  padding: 0.6rem 0.75rem;
-  border-color: #f3dbe4;
-  background: #fff;
-}
-
-.role-shell--tenant .tenant-demo-strip button {
-  min-height: 2.25rem;
-  height: 2.25rem;
+  /* Nền và viền lấy từ token để dải này đúng ở cả chế độ sáng lẫn tối
+     (trước đây cố định #fff nên chế độ tối hiện một dải trắng). */
+  padding: 0.4rem 0.6rem;
+  border-color: var(--color-brand-outline);
+  background: var(--color-brand-surface);
 }
 
 .role-shell--tenant :is(.bg-violet-600, .bg-violet-500) {
@@ -2871,6 +3729,31 @@ html[data-theme="dark"] .role-shell--superadmin {
     linear-gradient(to bottom, transparent 74%, #f8edf1 75%, transparent 76%);
 }
 
+/* Ô biểu tượng của thẻ chỉ số và đường lưới biểu đồ ở màn Tổng quan được viết
+   thẳng bằng mã hex sáng, không đi qua token nào — ở chế độ tối chúng thành các
+   mảng/vạch chói trên nền tối. */
+html[data-theme="dark"] .tenant-stat--purple {
+  color: #f0abfc;
+  background: rgb(217 70 239 / 0.18);
+}
+
+html[data-theme="dark"] .tenant-stat--orange {
+  color: #fdba74;
+  background: rgb(249 115 22 / 0.18);
+}
+
+html[data-theme="dark"] .tenant-stat--blue {
+  color: #93c5fd;
+  background: rgb(59 130 246 / 0.18);
+}
+
+html[data-theme="dark"] .tenant-revenue-chart {
+  background:
+    linear-gradient(to bottom, transparent 24%, rgb(148 163 184 / 0.16) 25%, transparent 26%),
+    linear-gradient(to bottom, transparent 49%, rgb(148 163 184 / 0.16) 50%, transparent 51%),
+    linear-gradient(to bottom, transparent 74%, rgb(148 163 184 / 0.16) 75%, transparent 76%);
+}
+
 .tenant-service-donut {
   background: conic-gradient(
     #f43f78 0 45.2%,
@@ -2882,21 +3765,21 @@ html[data-theme="dark"] .role-shell--superadmin {
   box-shadow: inset 0 0 0 1px rgb(244 63 120 / 0.08);
 }
 
-.role-shell--tenant .role-main table {
+.role-shell--tenant .role-main table:not(.ui-table) {
   width: 100%;
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-.role-shell--tenant .role-main thead th {
+.role-shell--tenant .role-main :not(.ui-table) > thead th {
   min-height: 2.75rem;
-  color: var(--ta-color-text-secondary);
+  color: var(--color-brand-text-muted);
   font-size: 0.75rem !important;
   font-weight: 700;
   letter-spacing: 0.035em;
 }
 
-.role-shell--tenant .role-main tbody td {
+.role-shell--tenant .role-main :not(.ui-table) > tbody td {
   min-height: 2.75rem;
   font-size: 0.875rem !important;
   line-height: 1.5;
@@ -2911,14 +3794,10 @@ html[data-theme="dark"] .role-shell--superadmin {
 }
 
 html[data-theme="dark"] .role-shell--tenant {
-  --ta-color-primary-subtle: #2e1065;
-  --ta-color-surface: #111827;
-  --ta-color-surface-muted: #1e293b;
-  --ta-color-border: #334155;
-  --ta-color-text: #f8fafc;
-  --ta-color-text-secondary: #94a3b8;
-  --ta-shadow-card: 0 1px 3px rgb(0 0 0 / 0.24), 0 10px 26px rgb(0 0 0 / 0.16);
-  --ta-shadow-floating: 0 22px 60px rgb(0 0 0 / 0.48);
+  /* Ở chế độ tối, viền ngả hồng bị bỏ để giữ tương phản. */
+  --color-brand-outline: #334155;
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.24), 0 10px 26px rgb(0 0 0 / 0.16);
+  --shadow-floating: 0 22px 60px rgb(0 0 0 / 0.48);
   background:
     radial-gradient(circle at 86% -8%, rgb(124 58 237 / 0.11), transparent 34rem),
     var(--color-brand-bg);
@@ -2926,6 +3805,262 @@ html[data-theme="dark"] .role-shell--tenant {
 
 html[data-theme="dark"] .role-shell--tenant .role-topbar {
   background-color: rgb(17 24 39 / 0.96) !important;
+}
+
+/* --- Chế độ tối cho thanh điều hướng Tenant Admin -------------------------
+   JSX của thanh bên khai báo nền tối (`bg-[#111625] text-white`), nhưng khối
+   `.role-shell--tenant .role-sidebar` ở trên ghi đè bằng nền hồng-trắng kèm
+   `!important` — nên thanh bên thực chất là thanh SÁNG và không hề đổi khi bật
+   chế độ tối. Phải viết lại từng quy tắc tương ứng, không thể chỉ đảo token. */
+html[data-theme="dark"] .role-shell--tenant .role-sidebar {
+  background:
+    radial-gradient(circle at 14% 0%, rgb(244 63 120 / 0.14), transparent 17rem),
+    linear-gradient(180deg, #141b2d 0%, #0e1320 52%, #131a2b 100%) !important;
+  border-right: 1px solid #263149 !important;
+  color: #cbd5e1 !important;
+  box-shadow: 16px 0 42px rgb(0 0 0 / 0.4) !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .role-sidebar > div:first-child {
+  border-bottom-color: #263149 !important;
+}
+
+/* Mục đang mở giữ nguyên dải hồng thương hiệu — đây là điểm neo thị giác của
+   thanh bên, đổi màu theo nền tối sẽ mất luôn dấu hiệu "đang ở đâu". */
+html[data-theme="dark"] .role-shell--tenant .role-sidebar nav button[aria-current="page"] {
+  box-shadow: 0 10px 24px rgb(244 63 120 / 0.35) !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .role-sidebar nav button:not([aria-current="page"]) {
+  color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .role-sidebar nav button:not([aria-current="page"]):hover {
+  color: #fbcfe8 !important;
+  background: rgb(244 63 120 / 0.16) !important;
+}
+
+/* Nhãn nhóm ("Vận hành", "Khách hàng"…) dùng text-slate-600 — trên nền tối là
+   xám đậm trên xanh đen, gần như không đọc được. */
+html[data-theme="dark"] .role-shell--tenant .role-sidebar :is(.text-slate-600, .text-slate-500) {
+  color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .role-sidebar :is(.text-slate-400, .text-slate-300) {
+  color: #cbd5e1 !important;
+}
+
+/* Thẻ gói đăng ký ở đáy thanh bên. */
+html[data-theme="dark"] .role-shell--tenant .role-sidebar > button.m-3 {
+  border-color: #2b3654 !important;
+  background: #151d2f !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .role-sidebar > button.m-3 :is(.text-slate-300, .text-slate-400, .text-slate-500) {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .role-sidebar > div:last-child {
+  border-top-color: #263149 !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant .tenant-sidebar-toggle {
+  border-color: #263149 !important;
+  background: #151d2f !important;
+  color: #cbd5e1 !important;
+}
+
+/* Dải quyền gói (`.tenant-access-strip` và biến thể `data-compact-access`) cũng
+   ghi cứng `background: #fff !important`. Trên trang Khách hàng, bộ chọn
+   `section:nth-of-type(2)` còn khớp trúng cả khối bảng danh sách, nên ở chế độ
+   tối cả bảng giữ nguyên nền trắng trong khi chữ đã chuyển sang màu sáng. Lặp
+   lại đúng bộ chọn đó với tiền tố data-theme để chắc chắn thắng. */
+html[data-theme="dark"] .role-shell--tenant :is(
+  .tenant-access-strip,
+  .tenant-admin-main[data-compact-access="true"] > div[class*="space-y-"] > section:nth-of-type(2)
+) {
+  border-color: #334155 !important;
+  background: #111827 !important;
+}
+
+html[data-theme="dark"] .role-shell--tenant :is(
+  .tenant-access-strip,
+  .tenant-admin-main[data-compact-access="true"] > div[class*="space-y-"] > section:nth-of-type(2)
+) > div > div > p:first-child {
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .role-shell--tenant .beautiful-select-trigger[aria-expanded="true"] {
+  border-color: #f43f78 !important;
+  background: linear-gradient(180deg, #26303f 0%, #161f2e 100%) !important;
+  box-shadow: 0 0 0 4px rgb(244 63 120 / 0.24) !important;
+}
+
+/* Ô mũi tên của BeautifulSelect vẫn giữ nền hồng nhạt `#fff1f6` ở chế độ tối,
+   thành một ô sáng chói cạnh ô chọn đã tối. */
+html[data-theme="dark"] .role-shell--tenant .beautiful-select-arrow {
+  color: #fbcfe8;
+  border-color: #4c2233;
+  background: rgb(190 24 93 / 0.24);
+}
+
+/* Vỏ modal/drawer viết nền sáng bằng mã hex tuỳ ý (`bg-[#f6f7fb]`, `bg-[#f5f7fb]`)
+   nên không lớp ánh xạ nào ở trên bắt được: ở chế độ tối nền modal vẫn trắng xám
+   trong khi thẻ con và chữ bên trong đã chuyển sang tối. */
+html[data-theme="dark"] :is(
+  [class*="bg-[#f6f7fb]"],
+  [class*="bg-[#f5f7fb]"],
+  [class*="bg-[#f8fafc]"],
+  [class*="bg-[#ede9fe]"]
+) {
+  background-color: var(--color-brand-bg) !important;
+}
+
+/* BeautifulSelect của Tenant Admin ghi cứng bảng màu sáng kèm `!important`
+   (`.role-shell--tenant .beautiful-select-trigger` và `.beautiful-select-menu--tenant`
+   ở trên), nên ở chế độ tối ô chọn vẫn trắng và chữ vẫn xám đậm. Phải nói lại
+   với độ đặc hiệu cao hơn, không thể chỉ dựa vào token. */
+html[data-theme="dark"] .role-shell--tenant .beautiful-select-trigger {
+  border-color: #334155 !important;
+  background: linear-gradient(180deg, #1f2937 0%, #111827 100%) !important;
+  color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] .beautiful-select-menu--tenant {
+  --color-brand-surface: #111827;
+  --color-brand-surface-high: #1f2937;
+  --color-brand-surface-lowest: #0b1120;
+  --color-brand-outline: #334155;
+  --color-brand-text: #e2e8f0;
+  --color-brand-text-muted: #94a3b8;
+  border-color: #334155 !important;
+  background: linear-gradient(180deg, #1f2937 0%, #111827 30%) !important;
+}
+
+html[data-theme="dark"] .beautiful-select-menu--tenant > .shrink-0 {
+  border-color: #334155 !important;
+  background: #1f2937;
+}
+
+html[data-theme="dark"] .beautiful-select-menu--tenant input {
+  border-color: #334155 !important;
+  background: #0b1120 !important;
+  color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] .beautiful-select-menu--tenant .beautiful-select-option {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .beautiful-select-menu--tenant .beautiful-select-option:not(:disabled):hover {
+  background: rgb(190 24 93 / 0.22) !important;
+  color: #fbcfe8 !important;
+}
+
+html[data-theme="dark"] .beautiful-select-menu--tenant .beautiful-select-option[aria-selected="true"] {
+  background: rgb(190 24 93 / 0.3) !important;
+  color: #fbcfe8 !important;
+}
+
+/* --- Chế độ tối cho các màn Tenant Admin chưa migrate ---------------------
+   Phần lớn màn hình tenant admin còn viết màu cứng bằng thang slate của
+   Tailwind (`bg-white`, `text-slate-900`, `border-slate-200`…) thay vì token
+   `brand-*`. Ở chế độ tối chúng giữ nguyên nền trắng và chữ đen, cho ra chữ
+   xám đậm trên nền xanh đen — đọc không nổi.
+
+   Ánh xạ lại ngay tại đây thay vì sửa hàng chục file màn hình: khi từng màn
+   được migrate sang token theo README-MIGRATION, các quy tắc này tự hết tác
+   dụng vì lớp `slate` sẽ không còn nữa. Chỉ nhắm vào phần nội dung
+   (`.tenant-admin-main`) và các lớp phủ, không đụng thanh bên vốn đã tối sẵn. */
+html[data-theme="dark"] .role-shell--tenant .tenant-admin-main,
+html[data-theme="dark"] .role-shell--tenant .role-topbar,
+html[data-theme="dark"] .beautiful-select-menu--tenant,
+html[data-theme="dark"] .ui-legacy-modal,
+html[data-theme="dark"] .ui-modal-layer {
+  /* Nền: trắng và các sắc xám nhạt đổi thành nền tối theo bậc. */
+  :is(.bg-white, .bg-slate-50, .bg-slate-50\/70, .bg-slate-50\/80) {
+    background-color: #111827;
+  }
+
+  :is(.bg-slate-100, .bg-slate-200) {
+    background-color: #1f2937;
+  }
+
+  /* Chữ: đảo thang slate — càng đậm ở nền sáng thì càng nhạt ở nền tối. */
+  :is(.text-slate-900, .text-slate-950) {
+    color: #f1f5f9;
+  }
+
+  :is(.text-slate-800, .text-slate-700) {
+    color: #e2e8f0;
+  }
+
+  :is(.text-slate-600, .text-slate-500) {
+    color: #cbd5e1;
+  }
+
+  /* slate-400 dùng cho chữ phụ; ở nền tối phải sáng hơn mới đạt tương phản. */
+  :is(.text-slate-400, .text-slate-300) {
+    color: #94a3b8;
+  }
+
+  /* Viền: các sắc xám nhạt gần như tàng hình trên nền tối. */
+  :is(.border-slate-100, .border-slate-200, .border-slate-300) {
+    border-color: #334155;
+  }
+
+  :is(.divide-slate-100, .divide-slate-200) > * + * {
+    border-color: #334155;
+  }
+
+  /* Nền trạng thái nhạt (emerald-50, rose-50…) giữ đúng ý nghĩa màu nhưng phải
+     tối lại, nếu không chúng thành những mảng chói giữa nền tối. */
+  :is(.bg-emerald-50, .bg-emerald-50\/60, .bg-emerald-50\/80, .bg-emerald-50\/90) {
+    background-color: rgb(6 78 59 / 0.5);
+  }
+
+  :is(.bg-rose-50, .bg-rose-50\/60, .bg-rose-50\/80, .bg-rose-50\/90) {
+    background-color: rgb(76 5 25 / 0.5);
+  }
+
+  :is(.bg-amber-50, .bg-amber-50\/60, .bg-amber-50\/80, .bg-amber-50\/95) {
+    background-color: rgb(69 39 3 / 0.5);
+  }
+
+  /* Cam dùng cho cảnh báo hạn dùng ở màn kho — tông riêng, không gộp với vàng. */
+  :is(.bg-orange-50, .bg-orange-100) {
+    background-color: rgb(67 20 7 / 0.5);
+  }
+
+  :is(.bg-violet-50, .bg-pink-50, .bg-pink-50\/20, .bg-pink-50\/40) {
+    background-color: rgb(59 7 100 / 0.4);
+  }
+
+  :is(.text-emerald-700, .text-emerald-800, .text-emerald-900) {
+    color: #6ee7b7;
+  }
+
+  :is(.text-rose-700, .text-rose-800, .text-rose-900) {
+    color: #fda4af;
+  }
+
+  /* Kèm cả biến thể có độ mờ (`text-amber-900/90`): Tailwind sinh ra một lớp
+     riêng nên nếu không liệt kê, chữ vẫn giữ màu tối của chế độ sáng. */
+  :is(.text-amber-700, .text-amber-800, .text-amber-900, .text-amber-800\/90, .text-amber-900\/90) {
+    color: #fcd34d;
+  }
+
+  :is(.text-orange-600, .text-orange-700, .text-orange-800, .text-orange-900) {
+    color: #fdba74;
+  }
+
+  :is(.text-violet-600, .text-violet-700, .text-pink-600, .text-pink-700, .text-pink-950) {
+    color: #f0abfc;
+  }
+
+  :is(.text-rose-800\/90, .text-rose-900\/90) {
+    color: #fda4af;
+  }
 }
 
 @media (max-width: 639px) {
@@ -2939,6 +4074,12 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
 
   .role-shell--tenant .tenant-page-header {
     padding-bottom: 1rem;
+  }
+
+  .role-shell--tenant .ta-page-title,
+  .role-shell--tenant .tenant-admin-main h1 {
+    font-size: var(--text-page-title);
+    line-height: var(--text-page-title--line-height);
   }
 
   .role-shell--tenant .tenant-access-strip {
@@ -2955,17 +4096,13 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   --color-brand-surface-lowest: #f8f9fc;
   --color-brand-outline: #dde2ed;
   --color-brand-text: #182033;
-  --color-brand-text-muted: #6f7788;
+  --color-brand-text-muted: #61687b;
   --color-brand-primary: #7061e8;
   --color-brand-secondary: #17b890;
   --color-brand-tertiary: #f4a340;
   --color-brand-error: #ef6576;
-  --sa-color-primary: #7061e8;
-  --sa-color-primary-hover: #5e4fda;
-  --sa-color-primary-subtle: #f0edff;
-  --sa-radius-card: 1.125rem;
-  --sa-radius-control: 0.75rem;
-  --sa-shadow-card: 0 1px 2px rgb(31 39 65 / 0.03), 0 12px 36px rgb(31 39 65 / 0.055);
+  /* Bán kính cũ (18px card / 12px control) đã bỏ để theo README §9.1 và §10.3. */
+  --shadow-card: 0 1px 2px rgb(31 39 65 / 0.03), 0 12px 36px rgb(31 39 65 / 0.055);
   background:
     radial-gradient(circle at 82% -8%, rgb(112 97 232 / 0.075), transparent 30rem),
     var(--color-brand-bg);
@@ -3073,7 +4210,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
 .sa-brand-copy small {
   margin-top: 0.3rem;
   color: rgb(221 218 244 / 0.55);
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3110,7 +4247,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   margin: 0 0 0.5rem;
   padding: 0 0.75rem;
   color: rgb(203 203 224 / 0.42);
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -3220,7 +4357,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   padding: 0 0.4rem;
   border: 1px solid transparent;
   border-radius: 999px;
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -3282,14 +4419,14 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
 
 .sa-system-status strong {
   color: rgb(246 247 251 / 0.84);
-  font-size: 0.6875rem;
+  font-size: var(--text-body);
   font-weight: 750;
 }
 
 .sa-system-status small {
   margin-top: 0.18rem;
   color: rgb(201 203 220 / 0.45);
-  font-size: 0.5625rem;
+  font-size: var(--text-caption);
 }
 
 .sa-status-pulse {
@@ -3312,7 +4449,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   border: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 0.6875rem;
+  font-size: var(--text-body);
 }
 
 .role-shell--superadmin .sa-collapse-button:hover {
@@ -3397,7 +4534,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   border-radius: 0.8rem;
   background: #f7f8fb;
   box-shadow: inset 0 1px 2px rgb(31 39 65 / 0.025);
-  font-size: 0.75rem;
+  font-size: var(--text-body);
 }
 
 .role-shell--superadmin .sa-global-search input:focus {
@@ -3413,7 +4550,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   border: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
 }
 
 .role-shell--superadmin .sa-topbar > div:last-child > div > button,
@@ -3498,14 +4635,14 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
 
 .sa-profile-trigger-copy p {
   color: var(--color-brand-text);
-  font-size: 0.72rem;
+  font-size: var(--text-body);
   font-weight: 780;
 }
 
 .sa-profile-trigger-copy span {
   margin-top: 0.22rem;
   color: var(--color-brand-text-muted);
-  font-size: 0.55rem;
+  font-size: var(--text-caption);
   font-weight: 550;
 }
 
@@ -3606,7 +4743,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   border: 1px solid rgb(94 221 188 / 0.13);
   border-radius: 999px;
   background: rgb(53 197 160 / 0.1);
-  font-size: 0.5rem;
+  font-size: var(--text-caption);
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -3654,14 +4791,14 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
 
 .sa-profile-access-card strong {
   color: rgb(255 255 255 / 0.9);
-  font-size: 0.64rem;
+  font-size: var(--text-caption);
   font-weight: 750;
 }
 
 .sa-profile-access-card small {
   margin-top: 0.18rem;
   color: rgb(255 255 255 / 0.44);
-  font-size: 0.54rem;
+  font-size: var(--text-caption);
 }
 
 .sa-profile-actions {
@@ -3672,7 +4809,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   margin: 0 0 0.4rem;
   padding: 0 0.35rem;
   color: #969dac;
-  font-size: 0.54rem;
+  font-size: var(--text-caption);
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3730,14 +4867,14 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
 
 .sa-profile-action-title {
   color: var(--color-brand-text);
-  font-size: 0.67rem;
+  font-size: var(--text-body);
   font-weight: 750;
 }
 
 .sa-profile-action-note {
   margin-top: 0.22rem;
   color: var(--color-brand-text-muted);
-  font-size: 0.55rem;
+  font-size: var(--text-caption);
   font-weight: 500;
 }
 
@@ -3777,7 +4914,7 @@ html[data-theme="dark"] .role-shell--tenant .role-topbar {
   border-radius: 0.75rem;
   background: rgb(239 101 118 / 0.045);
   box-shadow: none !important;
-  font-size: 0.64rem;
+  font-size: var(--text-caption);
   font-weight: 750;
 }
 
@@ -3862,9 +4999,9 @@ body.system-modal-open :is(
   [class~="fixed"][class~="inset-0"][class~="bg-slate-950/65"],
   [class~="fixed"][class~="inset-0"][class~="bg-slate-950/70"]
 ) {
-  background: var(--modal-backdrop-color) !important;
-  -webkit-backdrop-filter: var(--modal-backdrop-filter) !important;
-  backdrop-filter: var(--modal-backdrop-filter) !important;
+  background: var(--backdrop-color) !important;
+  -webkit-backdrop-filter: var(--backdrop-filter) !important;
+  backdrop-filter: var(--backdrop-filter) !important;
 }
 
 .role-shell--superadmin .role-main :is(article, section)[class*="rounded-"][class*="border"] {
@@ -3885,18 +5022,19 @@ body.system-modal-open :is(
   transform: translateY(-1px);
 }
 
-.role-shell--superadmin .role-main :is(input, textarea, select, .beautiful-select-trigger) {
-  border-color: #dfe3ed;
-  border-radius: 0.75rem;
-  background-color: #fff;
+/* Chỉ áp cho control chưa migrate. Control trong Field lấy thẳng từ token. */
+.role-shell--superadmin .role-main :not(.ui-field) > :is(input, textarea, select, .beautiful-select-trigger) {
+  border-color: var(--color-brand-outline);
+  border-radius: var(--radius-control);
+  background-color: var(--color-brand-surface);
 }
 
-.role-shell--superadmin .role-main thead {
-  background: #f8f9fc;
+.role-shell--superadmin .role-main :not(.ui-table) > thead {
+  background: var(--color-brand-surface-lowest);
 }
 
-.role-shell--superadmin .role-main thead th {
-  color: #81889a;
+.role-shell--superadmin .role-main :not(.ui-table) > thead th {
+  color: var(--color-brand-text-muted);
   letter-spacing: 0.055em;
 }
 
@@ -3976,10 +5114,25 @@ body.system-modal-open :is(
   letter-spacing: -0.045em;
 }
 
-/* Page titles: keep the visual hierarchy unmistakable across every role.
-   This intentionally overrides component-level text utilities that previously
-   reduced some Tenant Admin and Superadmin titles to a medium-bold weight. */
-.role-shell .role-main h1 {
+/* Tiêu đề trang: quy tắc này tồn tại để thắng các lớp tiện ích cỡ chữ đặt ở
+   cấp component (ví dụ `text-xl sm:text-2xl font-bold` trên chính thẻ h1) —
+   nếu bỏ đi, tiêu đề của một số màn sẽ tụt xuống cỡ chữ của tiêu đề mục.
+
+   Trước đây một quy tắc gộp cho cả Superadmin lẫn Lễ tân đặt 30–36px / 900,
+   nằm ngoài token --text-page-title (28–32px / 700, README §4.2) và ghi đè
+   luôn quy tắc cấp vai trò vốn đã đúng. Nay tách làm hai: Superadmin về đúng
+   token, Lễ tân giữ nguyên giá trị cũ để đợt migrate của cổng đó xử lý. */
+.role-shell--superadmin .role-main h1 {
+  font-size: var(--text-page-title);
+  font-weight: var(--text-page-title--font-weight);
+  line-height: var(--text-page-title--line-height);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+.role-shell--reception .role-main h1 {
   font-size: clamp(1.875rem, 2.35vw, 2.25rem);
   font-weight: 900;
   line-height: 1.12;
@@ -4000,7 +5153,7 @@ body.system-modal-open :is(
   border-radius: 999px;
   background: rgb(255 255 255 / 0.075);
   color: rgb(255 255 255 / 0.76);
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
   font-weight: 750;
   letter-spacing: 0.055em;
   text-transform: uppercase;
@@ -4075,10 +5228,12 @@ body.system-modal-open :is(
   transform: translateY(-2px);
 }
 
-.sa-metric-card--violet { --metric-color: #7061e8; }
-.sa-metric-card--emerald { --metric-color: #17b890; }
-.sa-metric-card--amber { --metric-color: #f4a340; }
-.sa-metric-card--rose { --metric-color: #ef6576; }
+/* --metric-color là tham số cục bộ của card, không phải hệ token riêng:
+   mỗi modifier chỉ chọn một màu ngữ nghĩa đã có. */
+.sa-metric-card--violet { --metric-color: var(--color-brand-primary); }
+.sa-metric-card--emerald { --metric-color: var(--color-brand-secondary); }
+.sa-metric-card--amber { --metric-color: var(--color-brand-tertiary); }
+.sa-metric-card--rose { --metric-color: var(--color-brand-error); }
 
 .sa-metric-icon {
   display: flex;
@@ -4100,7 +5255,7 @@ body.system-modal-open :is(
 
 .sa-metric-label {
   color: var(--color-brand-text-muted);
-  font-size: 0.6875rem;
+  font-size: var(--text-body);
   font-weight: 700;
 }
 
@@ -4118,24 +5273,34 @@ body.system-modal-open :is(
 
 .sa-metric-value span {
   color: var(--color-brand-text-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   font-weight: 600;
   letter-spacing: 0;
 }
 
 .sa-metric-note {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.35rem;
   margin-top: 0.45rem;
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
   font-weight: 650;
-  white-space: nowrap;
+  text-wrap: pretty;
 }
 
-.sa-positive { color: #159675; }
-.sa-warning { color: #cf8123; }
-.sa-danger { color: #d34d61; }
+.sa-metric-note > svg {
+  flex: none;
+  margin-top: 0.15rem;
+}
+
+.sa-positive { color: #0c765c; }
+.sa-warning { color: #925810; }
+.sa-danger { color: #b83247; }
+
+html[data-theme="dark"] .sa-positive { color: #3fbf9c; }
+html[data-theme="dark"] .sa-warning { color: #dfa04d; }
+html[data-theme="dark"] .sa-danger { color: #ea8391; }
 
 .role-shell--superadmin .sa-panel {
   min-width: 0;
@@ -4164,7 +5329,7 @@ body.system-modal-open :is(
 .sa-panel-heading p {
   margin-top: 0.25rem;
   color: var(--color-brand-text-muted);
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
 }
 
 .sa-soft-badge,
@@ -4174,11 +5339,11 @@ body.system-modal-open :is(
   align-items: center;
   justify-content: center;
   padding: 0 0.45rem;
-  color: #7061e8;
+  color: var(--accent-text);
   border: 1px solid rgb(112 97 232 / 0.12);
   border-radius: 999px;
   background: rgb(112 97 232 / 0.07);
-  font-size: 0.5625rem;
+  font-size: var(--text-caption);
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -4186,9 +5351,13 @@ body.system-modal-open :is(
 
 .sa-alert-count {
   min-width: 1.35rem;
-  color: #d94f63;
+  color: #b83247;
   border-color: rgb(239 101 118 / 0.15);
   background: rgb(239 101 118 / 0.08);
+}
+
+html[data-theme="dark"] .sa-alert-count {
+  color: #ea8391;
 }
 
 .sa-chart-summary {
@@ -4199,7 +5368,7 @@ body.system-modal-open :is(
 
 .sa-chart-summary span {
   color: var(--color-brand-text-muted);
-  font-size: 0.5625rem;
+  font-size: var(--text-caption);
 }
 
 .sa-chart-summary strong {
@@ -4207,8 +5376,12 @@ body.system-modal-open :is(
   align-items: center;
   gap: 0.2rem;
   margin-top: 0.15rem;
-  color: #159675;
-  font-size: 0.75rem;
+  color: #0c765c;
+  font-size: var(--text-caption);
+}
+
+html[data-theme="dark"] .sa-chart-summary strong {
+  color: #3fbf9c;
 }
 
 .sa-chart {
@@ -4216,6 +5389,31 @@ body.system-modal-open :is(
   height: 15rem;
   padding: 1rem 1.25rem 0.85rem;
   border-top: 1px solid #edf0f5;
+}
+
+/* Chỗ đứng của biểu đồ khi trong kỳ chưa thu được hóa đơn nào. Giữ đúng chiều
+   cao của biểu đồ để bố cục trang không nhảy khi đổi khoảng thời gian. */
+.sa-chart-empty {
+  display: flex;
+  height: 15rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #edf0f5;
+  text-align: center;
+}
+
+.sa-chart-empty p {
+  max-width: 26rem;
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-body);
+}
+
+.sa-chart-empty p:first-child {
+  color: var(--color-brand-text);
+  font-weight: 650;
 }
 
 .sa-chart-grid {
@@ -4260,7 +5458,7 @@ body.system-modal-open :is(
 
 .role-shell--superadmin .sa-chart-column:hover,
 .role-shell--superadmin .sa-chart-column:focus-visible {
-  color: #7061e8;
+  color: var(--accent-text);
   background: transparent;
   box-shadow: none;
   transform: none;
@@ -4283,7 +5481,7 @@ body.system-modal-open :is(
 .sa-chart-label {
   position: absolute;
   bottom: 0;
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
   font-weight: 700;
 }
 
@@ -4299,7 +5497,7 @@ body.system-modal-open :is(
   border-radius: 0.45rem;
   background: #26283e;
   box-shadow: 0 8px 18px rgb(20 22 38 / 0.18);
-  font-size: 0.5625rem;
+  font-size: var(--text-caption);
   font-weight: 700;
   opacity: 0;
   pointer-events: none;
@@ -4319,7 +5517,7 @@ body.system-modal-open :is(
   height: 2.15rem;
   align-items: center;
   justify-content: center;
-  color: #7061e8;
+  color: var(--accent-text);
   border-radius: 0.7rem;
   background: rgb(112 97 232 / 0.08);
 }
@@ -4370,7 +5568,7 @@ body.system-modal-open :is(
 
 .sa-donut-center span {
   color: var(--color-brand-text-muted);
-  font-size: 0.5625rem;
+  font-size: var(--text-caption);
   font-weight: 650;
 }
 
@@ -4390,7 +5588,7 @@ body.system-modal-open :is(
   border: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
 }
 
 .role-shell--superadmin .sa-status-row:hover,
@@ -4418,12 +5616,12 @@ body.system-modal-open :is(
   align-items: center;
   gap: 0.3rem;
   padding: 0 0.5rem;
-  color: #7061e8;
+  color: var(--accent-text);
   border: 1px solid rgb(112 97 232 / 0.14);
   border-radius: 999px;
   background: rgb(112 97 232 / 0.075);
   box-shadow: none;
-  font-size: 0.5625rem;
+  font-size: var(--text-caption);
 }
 
 .role-shell--superadmin .sa-text-button {
@@ -4432,11 +5630,11 @@ body.system-modal-open :is(
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.4rem;
-  color: #7061e8;
+  color: var(--accent-text);
   border: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
 }
 
 .role-shell--superadmin .sa-text-button:hover {
@@ -4452,14 +5650,14 @@ body.system-modal-open :is(
 }
 
 .role-shell--superadmin .sa-tenant-table thead {
-  background: #f8f9fc;
+  background: var(--color-brand-surface-lowest);
 }
 
 .role-shell--superadmin .sa-tenant-table th {
   height: 2.6rem;
   padding: 0 1rem;
-  color: #858c9d;
-  font-size: 0.6rem !important;
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-caption) !important;
   font-weight: 750;
   letter-spacing: 0.055em;
   text-align: left;
@@ -4470,8 +5668,8 @@ body.system-modal-open :is(
   height: 4.35rem;
   padding: 0 1rem;
   color: var(--color-brand-text-muted);
-  border-top: 1px solid #edf0f5;
-  font-size: 0.6875rem !important;
+  border-top: 1px solid var(--color-brand-outline);
+  font-size: var(--text-body) !important;
   white-space: nowrap;
 }
 
@@ -4506,7 +5704,7 @@ body.system-modal-open :is(
   border: 1px solid rgb(112 97 232 / 0.12);
   border-radius: 0.7rem;
   background: linear-gradient(145deg, #f3f0ff, #e9e5ff);
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
   font-weight: 800;
 }
 
@@ -4520,7 +5718,7 @@ body.system-modal-open :is(
   max-width: 13rem;
   overflow: hidden;
   color: var(--color-brand-text);
-  font-size: 0.7rem;
+  font-size: var(--text-body);
   text-overflow: ellipsis;
 }
 
@@ -4529,7 +5727,7 @@ body.system-modal-open :is(
   margin-top: 0.18rem;
   overflow: hidden;
   color: var(--color-brand-text-muted);
-  font-size: 0.5625rem;
+  font-size: var(--text-caption);
   font-weight: 500;
   text-overflow: ellipsis;
 }
@@ -4543,7 +5741,7 @@ body.system-modal-open :is(
   padding: 0 0.5rem;
   border: 1px solid;
   border-radius: 999px;
-  font-size: 0.5625rem;
+  font-size: var(--text-caption);
   font-weight: 700;
 }
 
@@ -4597,18 +5795,18 @@ body.system-modal-open :is(
 
 .sa-empty-state p {
   margin-top: 0.5rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-body);
 }
 
 .role-shell--superadmin .sa-empty-state button {
   min-height: 1.75rem;
   margin-top: 0.4rem;
   padding: 0 0.5rem;
-  color: #7061e8;
+  color: var(--accent-text);
   border: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
 }
 
 .sa-alert-panel {
@@ -4669,7 +5867,7 @@ body.system-modal-open :is(
   display: block;
   overflow: hidden;
   color: var(--color-brand-text);
-  font-size: 0.6875rem;
+  font-size: var(--text-body);
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4680,7 +5878,7 @@ body.system-modal-open :is(
   margin-top: 0.25rem;
   overflow: hidden;
   color: var(--color-brand-text-muted);
-  font-size: 0.6rem;
+  font-size: var(--text-body);
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -4689,8 +5887,8 @@ body.system-modal-open :is(
 .sa-alert-item time {
   display: block;
   margin-top: 0.35rem;
-  color: #9aa0ae;
-  font-size: 0.55rem;
+  color: var(--color-brand-text-muted);
+  font-size: var(--text-caption);
 }
 
 .role-shell--superadmin .sa-alert-item button {
@@ -4709,7 +5907,7 @@ body.system-modal-open :is(
 }
 
 .role-shell--superadmin .sa-alert-item button:hover {
-  color: #159675;
+  color: #0c765c;
   background: rgb(23 184 144 / 0.08);
   box-shadow: none;
   transform: none;
@@ -4723,16 +5921,18 @@ body.system-modal-open :is(
 .sa-empty-alerts strong {
   margin-top: 0.6rem;
   color: var(--color-brand-text);
-  font-size: 0.75rem;
+  font-size: var(--text-body);
 }
 
 .sa-empty-alerts p {
   margin-top: 0.3rem;
   color: var(--color-brand-text-muted);
-  font-size: 0.625rem;
+  font-size: var(--text-caption);
 }
 
 html[data-theme="dark"] .role-shell--superadmin {
+  /* #5e4fda chỉ đạt 2,87 trên nền tối; #9d97f6 đạt 5,15 trên bậc nền sáng nhất. */
+  --accent-text: #9d97f6;
   --color-brand-bg: #0d1020;
   --color-brand-surface: #15192b;
   --color-brand-surface-high: #1e2338;
@@ -4866,5 +6066,1170 @@ html[data-theme="dark"] .role-shell--superadmin .sa-package-pill {
 
   .role-shell--superadmin .sa-metric-card:hover {
     transform: none;
+  }
+}
+
+/* ==========================================================================
+   Lớp component dùng chung — src/components/ui/
+   Mọi giá trị lấy từ design token. Không hex rời rạc, không ghi đè cưỡng bức.
+   Bộ chọn có dạng `button.ui-btn--*` để thắng các luật `.role-shell--x button`
+   đã có mà không cần ghi đè cưỡng bức.
+   ========================================================================== */
+
+/* --- Button (README §10) --------------------------------------------------- */
+.ui-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--spacing) * 2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
+  font-weight: var(--text-label--font-weight);
+  line-height: var(--text-label--line-height);
+  white-space: nowrap;
+  cursor: pointer;
+  /* Không transition màu nền/chữ/viền: các giá trị này đến từ token, và khi
+     token đổi (chuyển sáng/tối) trình duyệt giữ nguyên giá trị đang transition
+     khiến nút kẹt ở màu cũ. Phản hồi tức thì cũng hợp với công cụ vận hành. */
+  transition: box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.ui-btn-content {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+}
+
+.ui-btn.is-loading .ui-btn-content {
+  visibility: hidden;
+}
+
+.ui-btn-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.ui-btn-icon > svg {
+  width: var(--size-icon);
+  height: var(--size-icon);
+}
+
+.ui-btn-spinner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.ui-btn-spinner > svg {
+  width: var(--size-icon);
+  height: var(--size-icon);
+  animation: ui-spin 900ms linear infinite;
+}
+
+@keyframes ui-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Kích thước (§10.2). */
+button.ui-btn--small {
+  min-height: var(--size-control-sm);
+  padding-inline: calc(var(--spacing) * 3);
+  gap: calc(var(--spacing) * 1.5);
+}
+
+button.ui-btn--medium {
+  min-height: var(--size-control);
+  padding-inline: calc(var(--spacing) * 4);
+}
+
+button.ui-btn--large {
+  min-height: var(--size-control-lg);
+  padding-inline: calc(var(--spacing) * 5);
+}
+
+button.ui-btn--icon {
+  padding-inline: 0;
+  aspect-ratio: 1;
+}
+
+button.ui-btn--icon.ui-btn--small { width: var(--size-control-sm); }
+button.ui-btn--icon.ui-btn--medium { width: var(--size-control); }
+button.ui-btn--icon.ui-btn--large { width: var(--size-control-lg); }
+
+button.ui-btn--block {
+  width: 100%;
+}
+
+/* Biến thể (§10.1). Primary dùng accent của vai trò đang hoạt động. */
+button.ui-btn--primary {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+button.ui-btn--primary:not(:disabled):hover {
+  background-color: var(--accent-strong);
+  border-color: var(--accent-strong);
+  transform: none;
+}
+
+button.ui-btn--secondary {
+  background-color: var(--color-brand-surface);
+  border-color: var(--color-brand-outline);
+  color: var(--color-brand-text);
+}
+
+button.ui-btn--secondary:not(:disabled):hover {
+  background-color: var(--color-brand-surface-high);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  transform: none;
+}
+
+button.ui-btn--ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--color-brand-text-muted);
+}
+
+button.ui-btn--ghost:not(:disabled):hover {
+  background-color: var(--accent-soft);
+  color: var(--accent-strong);
+  transform: none;
+}
+
+button.ui-btn--danger {
+  background-color: var(--color-brand-error);
+  border-color: var(--color-brand-error);
+  color: #ffffff;
+}
+
+button.ui-btn--danger:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--color-brand-error) 84%, #000000);
+  border-color: color-mix(in srgb, var(--color-brand-error) 84%, #000000);
+  transform: none;
+}
+
+button.ui-btn--link {
+  min-height: 0;
+  padding: 0;
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+button.ui-btn--link:not(:disabled):hover {
+  color: var(--accent-strong);
+  transform: none;
+}
+
+.ui-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button.ui-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Huy hiệu bấm được — ví dụ ô "Phương thức" của hóa đơn chưa thu tiền: nó phải
+   trông y hệt các huy hiệu Tiền mặt / MoMo / Thẻ bên cạnh, chỉ khác là bấm được.
+
+   `.role-shell button` và `.role-shell--* button` ép mọi <button> về chiều cao
+   và bo góc của control, nên phải nói lại rõ ở đây; quy tắc đặt sau các quy tắc
+   đó để thắng bằng thứ tự thay vì phải dùng !important. */
+button.ui-badge-button {
+  min-height: 0;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+}
+
+/* Nút tác vụ trong ô của bảng — "Chi tiết", nút gọi, nút đặt lịch...
+
+   Ở đây nút là tác vụ phụ của một dòng dữ liệu, không phải control chính của
+   màn hình, nên phải nhỏ hơn một bậc (32px) so với nút trên thanh tiêu đề
+   (40px). `button { min-height: 2.25rem }` là quy tắc không nằm trong layer nên
+   nó thắng mọi utility `min-h-*` của Tailwind; phải nói lại ở đây, và đặt sau
+   các quy tắc `.role-shell* button` để thắng bằng thứ tự thay vì !important.
+
+   `white-space: nowrap` là phần quan trọng nhất: cột tác vụ hẹp nên nếu để nhãn
+   xuống dòng, nút cao gấp rưỡi và cả bảng bị lệch nhịp. */
+button.ui-row-action,
+a.ui-row-action {
+  min-height: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-control);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+button.ui-row-action-icon,
+a.ui-row-action-icon {
+  min-width: 2rem;
+  width: 2rem;
+  padding: 0;
+}
+
+/* Dòng chọn trong danh sách (radio dạng dòng) — ví dụ chọn kỹ thuật viên trong
+   hộp thoại đặt lịch online.
+
+   Là <button> để bấm được bằng bàn phím, nhưng nó đóng vai một MỤC DANH SÁCH
+   chứ không phải một nút lệnh: `button { border-radius }` và hiệu ứng nhấc lên
+   khi hover của nút làm cả danh sách nảy lên từng dòng một. */
+button.ui-pick-row {
+  border-radius: 0.75rem;
+}
+
+button.ui-pick-row:not(:disabled):hover {
+  transform: none;
+}
+
+/* --- Field (README §11.1) -------------------------------------------------- */
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  /* Khoảng cách label–control 6–8px, control–message 4–6px (§11.2). */
+  gap: calc(var(--spacing) * 1.5);
+}
+
+.ui-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 1);
+  font-size: var(--text-label);
+  font-weight: var(--text-label--font-weight);
+  line-height: var(--text-label--line-height);
+  line-height: var(--text-body--line-height);
+  color: var(--color-brand-text);
+}
+
+.ui-field-required {
+  color: var(--color-brand-error);
+  font-weight: 700;
+}
+
+.ui-field > :is(input, textarea, select, .beautiful-select-trigger) {
+  min-height: var(--size-control);
+  padding-inline: calc(var(--spacing) * 3);
+  border: 1px solid var(--color-brand-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-brand-surface);
+  color: var(--color-brand-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.ui-field > :is(input, textarea, select):focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-focus);
+}
+
+.ui-field.is-invalid > :is(input, textarea, select, .beautiful-select-trigger) {
+  border-color: var(--color-brand-error);
+}
+
+.ui-field.is-invalid > :is(input, textarea, select):focus-visible {
+  border-color: var(--color-brand-error);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand-error) 22%, transparent);
+}
+
+.ui-field-helper,
+.ui-field-error {
+  margin: 0;
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+}
+
+.ui-field-helper {
+  color: var(--color-brand-text-muted);
+}
+
+.ui-field-error {
+  color: var(--color-brand-error);
+  font-weight: 600;
+}
+
+/* --- Switch (README §11.3) ------------------------------------------------- */
+.ui-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  cursor: pointer;
+  /* BẮT BUỘC: control thật là <input> ẩn dùng position:absolute. Thiếu dòng này
+     nó neo vào phần tử được định vị gần nhất — thường là chính thẻ hộp thoại —
+     nên bỏ qua độ cuộn của vùng nội dung và nằm lệch hàng trăm pixel so với
+     công tắc nhìn thấy. Lúc bấm, input nhận tiêu điểm và trình duyệt cuộn mọi
+     tổ tiên để lộ nó ra, kể cả tổ tiên overflow:hidden: ruột hộp thoại trôi
+     lên, đầu hộp thoại biến mất và chân hộp thoại thụt vào giữa. */
+  position: relative;
+}
+
+.ui-switch:has(.ui-switch-input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Control thật vẫn nằm trong cây tiêu điểm, chỉ ẩn khỏi thị giác. */
+.ui-switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.ui-switch-track {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: 2.75rem;
+  height: 1.5rem;
+  border: 1px solid var(--color-brand-outline);
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-surface-high);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.ui-switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-surface);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-50%);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.ui-switch-input:checked + .ui-switch-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.ui-switch-input:checked + .ui-switch-track .ui-switch-thumb {
+  transform: translate(1.25rem, -50%);
+}
+
+.ui-switch-input:focus-visible + .ui-switch-track {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--accent-focus);
+}
+
+.ui-switch-text {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--color-brand-text);
+}
+
+/* --- StatusBadge (README §15.1) -------------------------------------------- */
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 1.5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-weight: var(--text-label--font-weight);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-badge--medium {
+  min-height: calc(var(--spacing) * 7);
+  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2.5);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+}
+
+.ui-badge--small {
+  min-height: calc(var(--spacing) * 6);
+  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+}
+
+.ui-badge-icon {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: none;
+}
+
+/* Nền nhạt, chữ đậm để bảo đảm dễ đọc (§5.2).
+   Tỉ lệ pha được chọn theo trường hợp xấu nhất trong 6 tổ hợp (3 vai trò ×
+   2 chế độ): bậc pha cũ chỉ đạt 2,84–4,34 nên không tông nào qua ngưỡng 4,5.
+   Sắc màu giữ nguyên, chỉ đậm thêm phần màu chữ. */
+.ui-badge--success {
+  background: color-mix(in srgb, var(--color-brand-secondary) 14%, var(--color-brand-surface));
+  border-color: color-mix(in srgb, var(--color-brand-secondary) 34%, transparent);
+  /* 72% chỉ đạt 3,61 trên nền sáng; 58% đạt ngưỡng 4,5 mà vẫn rõ sắc xanh ngọc. */
+  color: color-mix(in srgb, var(--color-brand-secondary) 58%, var(--color-brand-text));
+}
+
+.ui-badge--info {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  color: color-mix(in srgb, var(--accent) 58%, var(--color-brand-text));
+}
+
+.ui-badge--warning {
+  background: color-mix(in srgb, var(--color-brand-tertiary) 16%, var(--color-brand-surface));
+  border-color: color-mix(in srgb, var(--color-brand-tertiary) 38%, transparent);
+  color: color-mix(in srgb, var(--color-brand-tertiary) 46%, var(--color-brand-text));
+}
+
+.ui-badge--danger {
+  background: color-mix(in srgb, var(--color-brand-error) 13%, var(--color-brand-surface));
+  border-color: color-mix(in srgb, var(--color-brand-error) 34%, transparent);
+  color: color-mix(in srgb, var(--color-brand-error) 58%, var(--color-brand-text));
+}
+
+.ui-badge--neutral {
+  background: var(--color-brand-surface-high);
+  border-color: var(--color-brand-outline);
+  color: color-mix(in srgb, var(--color-brand-text-muted) 62%, var(--color-brand-text));
+}
+
+/* --- Nền theo tông ngữ nghĩa --------------------------------------------
+   Dùng cho thẻ/panel cần đọc được trạng thái ngay khi liếc (ví dụ sơ đồ ghế).
+   Cùng bảng tông với StatusBadge, nên một trạng thái luôn cùng một màu ở mọi
+   nơi. Màu không bao giờ là tín hiệu duy nhất — luôn đi kèm nhãn và icon. */
+.ui-tone {
+  border: 1px solid var(--color-brand-outline);
+  border-radius: var(--radius-card);
+  background-color: var(--color-brand-surface);
+}
+
+.ui-tone--success {
+  border-color: color-mix(in srgb, var(--color-brand-secondary) 30%, transparent);
+  background-color: color-mix(in srgb, var(--color-brand-secondary) 8%, var(--color-brand-surface));
+}
+
+.ui-tone--info {
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  background-color: color-mix(in srgb, var(--accent) 7%, var(--color-brand-surface));
+}
+
+.ui-tone--warning {
+  border-color: color-mix(in srgb, var(--color-brand-tertiary) 34%, transparent);
+  background-color: color-mix(in srgb, var(--color-brand-tertiary) 10%, var(--color-brand-surface));
+}
+
+.ui-tone--danger {
+  border-color: color-mix(in srgb, var(--color-brand-error) 30%, transparent);
+  background-color: color-mix(in srgb, var(--color-brand-error) 8%, var(--color-brand-surface));
+}
+
+.ui-tone--neutral {
+  border-color: var(--color-brand-outline);
+  background-color: var(--color-brand-surface-high);
+}
+
+/* --- DataTable (README §12) ------------------------------------------------ */
+.ui-table-wrap {
+  border: 1px solid var(--color-brand-outline);
+  border-radius: var(--radius-card);
+  background: var(--color-brand-surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.ui-table-scroll {
+  overflow-x: auto;
+}
+
+.ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.ui-table-caption {
+  padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+  text-align: left;
+  font-size: var(--text-caption);
+  color: var(--color-brand-text-muted);
+}
+
+.ui-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+  background: var(--color-brand-surface-high);
+  border-bottom: 1px solid var(--color-brand-outline);
+  text-align: left;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-brand-text-muted);
+  white-space: nowrap;
+}
+
+.ui-table tbody td {
+  /* Chiều cao dòng 44–56px (§12.1). */
+  height: var(--size-row);
+  padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 4);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-brand-outline) 70%, transparent);
+  color: var(--color-brand-text);
+  vertical-align: middle;
+}
+
+.ui-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ui-table tbody tr.is-clickable {
+  cursor: pointer;
+}
+
+.ui-table tbody tr.is-clickable:hover td {
+  background: var(--accent-soft);
+}
+
+/* Số, tiền và phần trăm căn phải, dùng tabular numbers (§12.1, §4.3). */
+.ui-table .ui-table-numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.ui-table .ui-table-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ui-table-state {
+  padding: 0;
+}
+
+.ui-table-state-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 12) calc(var(--spacing) * 5);
+  text-align: center;
+}
+
+.ui-table-state-icon,
+.ui-table-state-spinner {
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+  color: var(--color-brand-text-muted);
+}
+
+.ui-table-state-spinner {
+  animation: ui-spin 900ms linear infinite;
+}
+
+.ui-table-state--error .ui-table-state-icon {
+  color: var(--color-brand-error);
+}
+
+.ui-table-state-title {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--color-brand-text);
+}
+
+.ui-table-state-text {
+  margin: 0;
+  max-width: 46ch;
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  color: var(--color-brand-text-muted);
+}
+
+.ui-table-state-action {
+  min-height: var(--size-control-sm);
+  padding-inline: calc(var(--spacing) * 3);
+  border: 1px solid var(--color-brand-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-brand-surface);
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--color-brand-text);
+  cursor: pointer;
+}
+
+.ui-table-footer {
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+  border-top: 1px solid var(--color-brand-outline);
+  background: var(--color-brand-surface-high);
+  font-size: var(--text-caption);
+  color: var(--color-brand-text-muted);
+}
+
+@media (max-width: 639px) {
+  .ui-table-col-hide-sm { display: none; }
+}
+
+@media (max-width: 767px) {
+  .ui-table-col-hide-md { display: none; }
+}
+
+@media (max-width: 1023px) {
+  .ui-table-col-hide-lg { display: none; }
+}
+
+/* --- Shell lễ tân ----------------------------------------------------------
+   Thanh bên nền tối là bản sắc của cổng lễ tân (giống thanh bên riêng của hai
+   cổng còn lại), giữ nguyên ở cả hai chế độ sáng/tối để nhân viên nhận ra
+   không gian làm việc ngay. Trạng thái mục đang mở dựa trên aria-current nên
+   không phụ thuộc vào tên class tiện ích. */
+.reception-sidebar {
+  --reception-nav-ink: #ecfdf5;
+  background:
+    radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 18rem),
+    #071e1a;
+  color: var(--reception-nav-ink);
+  border-right: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: 12px 0 36px rgb(0 0 0 / 0.22);
+}
+
+.reception-sidebar nav button {
+  min-height: var(--size-control);
+  color: color-mix(in srgb, var(--reception-nav-ink) 72%, transparent);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.reception-sidebar nav button:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--reception-nav-ink);
+  transform: none;
+}
+
+.reception-sidebar nav button[aria-current="page"] {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.reception-sidebar nav button[aria-current="page"] :is(span, svg) {
+  color: #ffffff;
+  opacity: 1;
+}
+
+.reception-sidebar :is(button, a):focus-visible {
+  outline: 2px solid var(--reception-nav-ink);
+  outline-offset: 2px;
+}
+
+/* Nút đăng xuất: hành động phá hủy phiên nên dùng tông cảnh báo khi hover. */
+.reception-sidebar .reception-logout {
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: transparent;
+  color: color-mix(in srgb, var(--reception-nav-ink) 78%, transparent);
+  cursor: pointer;
+}
+
+.reception-sidebar .reception-logout:hover {
+  background: color-mix(in srgb, var(--color-brand-error) 22%, transparent);
+  color: #ffffff;
+  transform: none;
+}
+
+/* Nút đóng menu trên mobile nằm trên nền tối. */
+.reception-sidebar .ui-btn--ghost {
+  color: color-mix(in srgb, var(--reception-nav-ink) 70%, transparent);
+}
+
+.reception-sidebar .ui-btn--ghost:not(:disabled):hover {
+  background: rgb(255 255 255 / 0.1);
+  color: var(--reception-nav-ink);
+}
+
+/* --- Modal (README §13) ---------------------------------------------------- */
+.ui-modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--spacing) * 4);
+}
+
+/* Lớp phủ mượn lớp vai trò của trang (xem Modal.tsx) để hộp thoại dùng đúng
+   accent của cổng đang mở. Chỉ lấy token màu: nền và bóng của shell phải bị vô
+   hiệu, nếu không lớp phủ sẽ tô kín trang phía sau và nuốt mất backdrop. */
+.ui-modal-layer[class*="role-shell--"] {
+  background: none;
+  box-shadow: none;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.ui-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop-color);
+  -webkit-backdrop-filter: var(--backdrop-filter);
+  backdrop-filter: var(--backdrop-filter);
+}
+
+.ui-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100dvh - var(--spacing) * 8);
+  border: 1px solid var(--color-brand-outline);
+  border-radius: var(--radius-card);
+  background: var(--color-brand-surface);
+  box-shadow: var(--shadow-floating);
+  overflow: hidden;
+}
+
+.ui-modal:focus {
+  outline: none;
+}
+
+/* Kích thước theo §13.2. */
+.ui-modal--small { max-width: 28rem; }
+.ui-modal--medium { max-width: 40rem; }
+.ui-modal--large { max-width: 55rem; }
+
+/* Không gian làm việc chiếm trọn màn hình (§13.1: nội dung phức tạp, nhiều
+   vùng). Vẫn là dialog thật — chỉ khác kích thước, mọi hành vi giữ nguyên. */
+.ui-modal--fullscreen {
+  max-width: 100rem;
+  /* stretch để không bị align-items:center của lớp phủ bóp lại chiều cao */
+  align-self: stretch;
+  max-height: 100%;
+}
+
+.ui-modal--fullscreen .ui-modal-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ui-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 4);
+  padding: calc(var(--spacing) * 5);
+  border-bottom: 1px solid var(--color-brand-outline);
+}
+
+.ui-modal-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--spacing) * 3);
+  min-width: 0;
+}
+
+.ui-modal-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--spacing) * 10);
+  height: calc(var(--spacing) * 10);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.ui-modal-icon > svg {
+  width: var(--size-icon);
+  height: var(--size-icon);
+}
+
+.ui-modal-heading-text { min-width: 0; }
+
+.ui-modal-eyebrow {
+  margin: 0 0 calc(var(--spacing) * 0.5);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+.ui-modal-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(var(--spacing) * 2);
+}
+
+.ui-modal-title {
+  margin: 0;
+  font-size: var(--text-card-title);
+  line-height: var(--text-card-title--line-height);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--color-brand-text);
+}
+
+.ui-modal-description {
+  margin: calc(var(--spacing) * 1.5) 0 0;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--color-brand-text-muted);
+}
+
+.ui-modal-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--size-control-sm);
+  height: var(--size-control-sm);
+  min-height: var(--size-control-sm);
+  padding: 0;
+  border: 1px solid var(--color-brand-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-brand-surface);
+  color: var(--color-brand-text-muted);
+  cursor: pointer;
+}
+
+.ui-modal-close:hover {
+  background: var(--color-brand-surface-high);
+  color: var(--color-brand-text);
+  transform: none;
+}
+
+.ui-modal-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ui-modal-close > svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+.ui-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--spacing) * 5);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--color-brand-text);
+}
+
+.ui-modal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+  border-top: 1px solid var(--color-brand-outline);
+  background: var(--color-brand-surface-high);
+}
+
+/* Trên mobile hộp thoại gần toàn màn hình, giữ khoảng cách an toàn (§13.2). */
+@media (max-width: 639px) {
+  .ui-modal-layer {
+    padding: calc(var(--spacing) * 2);
+    align-items: flex-end;
+  }
+
+  .ui-modal {
+    max-height: calc(100dvh - var(--spacing) * 6);
+  }
+
+  .ui-modal-footer > .ui-btn {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-btn-spinner > svg,
+  .ui-table-state-spinner {
+    animation-duration: 2400ms;
+  }
+}
+
+/* --- Toast (README §20.4) ----------------------------------------------------
+   Nằm trên --z-overlay để thông báo phát ra từ trong hộp thoại vẫn đọc được. */
+.ui-toast-layer {
+  position: fixed;
+  top: calc(var(--spacing) * 5);
+  right: calc(var(--spacing) * 5);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 2);
+  width: min(24rem, calc(100vw - var(--spacing) * 8));
+  /* Lớp chứa phủ toàn vùng góc màn hình; chỉ từng toast mới nhận chuột. */
+  pointer-events: none;
+}
+
+.ui-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+  border: 1px solid var(--color-brand-outline);
+  border-left-width: 3px;
+  border-radius: var(--radius-card);
+  background: var(--color-brand-surface);
+  box-shadow: var(--shadow-floating);
+  animation: ui-toast-enter 180ms var(--motion-ease);
+}
+
+@keyframes ui-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--spacing) * -2));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ui-toast-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ui-toast-icon > svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.ui-toast-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.ui-toast-message {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: 600;
+  color: var(--color-brand-text);
+}
+
+.ui-toast-description {
+  margin-top: calc(var(--spacing) * 1);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  color: var(--color-brand-text-muted);
+}
+
+.ui-toast-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: calc(var(--spacing) * 1);
+  margin: calc(var(--spacing) * -1);
+  border-radius: var(--radius-control);
+  color: var(--color-brand-text-muted);
+  cursor: pointer;
+}
+
+.ui-toast-close:hover {
+  background: var(--color-brand-surface-high);
+  color: var(--color-brand-text);
+}
+
+.ui-toast-close > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* Chỉ viền trái và biểu tượng mang màu ngữ nghĩa — nền giữ trung tính để
+   thông báo không trở thành mảng màu lớn (README §5.2). */
+.ui-toast--success { border-left-color: var(--color-brand-secondary); }
+.ui-toast--success .ui-toast-icon { color: var(--color-brand-secondary); }
+.ui-toast--info { border-left-color: var(--color-brand-primary); }
+.ui-toast--info .ui-toast-icon { color: var(--color-brand-primary); }
+.ui-toast--warning { border-left-color: var(--color-brand-tertiary); }
+.ui-toast--warning .ui-toast-icon { color: var(--color-brand-tertiary); }
+.ui-toast--error { border-left-color: var(--color-brand-error); }
+.ui-toast--error .ui-toast-icon { color: var(--color-brand-error); }
+
+@media (max-width: 639px) {
+  .ui-toast-layer {
+    top: calc(var(--spacing) * 3);
+    right: calc(var(--spacing) * 3);
+    left: calc(var(--spacing) * 3);
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-toast {
+    animation: none;
+  }
+}
+
+
+/* ==========================================================================
+   CHUẨN HOÁ MÀU TRẠNG THÁI Ở CHẾ ĐỘ SÁNG — cổng Superadmin
+   Dự án đã có sẵn một lớp chuẩn hoá cho chế độ tối, nhưng chế độ sáng thì
+   chưa: các bậc 400–600 của Tailwind dùng làm màu CHỮ trên nền trắng chỉ đạt
+   1,74–3,0 so với ngưỡng 4,5 (README §19.2) — nhãn "Enterprise" và "Đang hoạt
+   động" gần như không đọc được.
+
+   Ba giá trị dưới đây là bậc đậm nhất còn giữ nguyên sắc màu, đã đo đạt ≥4,5
+   trên mọi bậc nền sáng của vai trò. Chỉ đổi màu CHỮ; nền, viền và biến thể
+   hover: và focus: giữ nguyên, nên tín hiệu trạng thái không đổi.
+   ========================================================================== */
+html:not([data-theme="dark"]) .role-shell--superadmin :is(
+  [class~="text-emerald-400"],
+  [class~="text-emerald-500"],
+  [class~="text-emerald-600"],
+  [class~="text-teal-400"],
+  [class~="text-teal-500"],
+  [class~="text-teal-600"],
+  [class~="text-green-400"],
+  [class~="text-green-500"],
+  [class~="text-green-600"],
+  [class~="text-brand-secondary"]
+) {
+  color: #0c765c;
+}
+
+html:not([data-theme="dark"]) .role-shell--superadmin :is(
+  [class~="text-amber-400"],
+  [class~="text-amber-500"],
+  [class~="text-amber-600"],
+  [class~="text-orange-400"],
+  [class~="text-orange-500"],
+  [class~="text-orange-600"],
+  [class~="text-yellow-500"],
+  [class~="text-yellow-600"],
+  [class~="text-brand-tertiary"]
+) {
+  color: #925810;
+}
+
+html:not([data-theme="dark"]) .role-shell--superadmin :is(
+  [class~="text-sky-400"],
+  [class~="text-sky-500"],
+  [class~="text-sky-600"],
+  [class~="text-blue-400"],
+  [class~="text-blue-500"],
+  [class~="text-blue-600"],
+  [class~="text-cyan-500"],
+  [class~="text-cyan-600"],
+  [class~="text-indigo-400"],
+  [class~="text-indigo-500"],
+  [class~="text-violet-400"],
+  [class~="text-violet-500"],
+  [class~="text-purple-400"],
+  [class~="text-purple-500"]
+) {
+  color: #15628f;
+}
+
+/* Sắc trung tính nhạt dùng làm màu chữ chỉ đạt 2,26. Trả về token chữ phụ. */
+html:not([data-theme="dark"]) .role-shell--superadmin :is(
+  [class~="text-slate-400"],
+  [class~="text-slate-500"],
+  [class~="text-gray-400"],
+  [class~="text-gray-500"],
+  [class~="text-zinc-400"],
+  [class~="text-neutral-400"]
+) {
+  color: var(--color-brand-text-muted);
+}
+
+html:not([data-theme="dark"]) .role-shell--superadmin :is(
+  [class~="text-red-400"],
+  [class~="text-red-500"],
+  [class~="text-red-600"],
+  [class~="text-rose-400"],
+  [class~="text-rose-500"],
+  [class~="text-rose-600"],
+  [class~="text-pink-500"],
+  [class~="text-pink-600"],
+  [class~="text-brand-error"]
+) {
+  color: #b83247;
+}
+
+/* ==========================================================================
+   BẢN IN
+   Trước đây "In hóa đơn" gọi thẳng window.print() mà không có quy tắc in nào,
+   nên bản in gồm cả sidebar, header và bảng danh sách phía sau hộp thoại.
+   Quy tắc dưới đây thu hẹp bản in về đúng vùng được đánh dấu
+   `data-print-region`, và giấu các nút bấm bên trong vùng đó.
+   ========================================================================== */
+@media print {
+  /* Ẩn bằng visibility chứ không phải display: phần tử cha vẫn giữ nguyên cây
+     bố cục, nhờ đó vùng cần in bên trong vẫn hiện ra được. */
+  body * {
+    visibility: hidden;
+  }
+
+  [data-print-region],
+  .ui-print-region,
+  [data-print-region] *,
+  .ui-print-region * {
+    visibility: visible;
+  }
+
+  [data-print-hide],
+  [data-print-hide] * {
+    display: none !important;
+  }
+
+  /* Lớp phủ tối và hiệu ứng mờ của hộp thoại không được xuất hiện trên giấy. */
+  .sa-modal-backdrop,
+  .ui-modal-layer,
+  .ui-modal-backdrop {
+    position: static !important;
+    padding: 0 !important;
+    background: none !important;
+    backdrop-filter: none !important;
+  }
+
+  [data-print-region],
+  .ui-print-region {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto !important;
+    max-height: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Thân hộp thoại vốn tự cuộn; nếu giữ nguyên thì bản in bị cắt còn đúng một
+     màn hình. Mở khoá chiều cao để nội dung tràn sang trang tiếp theo. */
+  [data-print-region] *,
+  .ui-print-region * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  @page {
+    margin: 14mm;
   }
 }
