@@ -3,6 +3,7 @@ import { BRANCH_MODEL_OPTIONS } from '../utils/branches';
 export type NailPageId =
   | 'overview'
   | 'subscription'
+  | 'announcements'
   | 'branches'
   | 'appointments'
   | 'stations'
@@ -154,7 +155,7 @@ export interface NailModuleConfig {
 
 const d = (label: string, value: string) => ({ label, value });
 
-export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscription' | 'support'>, NailModuleConfig> = {
+export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscription' | 'support' | 'announcements'>, NailModuleConfig> = {
   branches: {
     id: 'branches', eyebrow: 'Phạm vi quản trị tenant', title: 'Chi nhánh', description: 'Quản lý các chi nhánh thuộc tenant, người phụ trách, giờ hoạt động và hiệu suất theo gói đăng ký.', primaryAction: 'Thêm chi nhánh', secondaryAction: 'Xuất danh sách',
     stats: [

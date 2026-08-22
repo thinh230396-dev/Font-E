@@ -336,7 +336,7 @@ export default function TenantAdminSubscription({
       return;
     }
     onRequestUpgrade(selectedPlan, billingView, effectiveDate);
-    onNotify(`Đã gửi yêu cầu chuyển sang gói ${selectedPlan.name}. Super Admin sẽ xem tại Quản lý Tenant → Yêu cầu nâng cấp.`);
+    onNotify(`Đã gửi yêu cầu chuyển sang gói ${selectedPlan.name} (${billingView === 'yearly' ? 'Hằng năm' : 'Hằng tháng'}). Super Admin sẽ xem tại Quản lý Tenant → Yêu cầu nâng cấp.`);
     setSelectedPlan(null);
   };
 
@@ -769,16 +769,109 @@ export default function TenantAdminSubscription({
                   />
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-black text-slate-600">
-                    Link ảnh biên lai / UNC
-                  </label>
-                  <input
-                    value={paymentProofForm.url}
-                    onChange={(e) => setPaymentProofForm((prev) => ({ ...prev, url: e.target.value }))}
-                    placeholder="https://... hoặc mã ảnh UNC"
-                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption outline-none focus:border-emerald-500"
-                  />
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-black text-slate-700">
+                      Ảnh biên lai chuyển tiền / UNC
+                    </label>
+                    <span className="text-[11px] text-slate-400">Chọn file tải lên hoặc dán link</span>
+                  </div>
+
+                  <div className="mt-1.5 flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <input
+                        value={paymentProofForm.url}
+                        onChange={(e) => setPaymentProofForm((prev) => ({ ...prev, url: e.target.value }))}
+                        placeholder="https://... hoặc tải ảnh từ thiết bị"
+                        className="h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-caption outline-none focus:border-emerald-500"
+                      />
+                      
+                      <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-caption font-bold text-slate-700 shadow-sm hover:bg-slate-50">
+                        <UploadCloud className="h-4 w-4 text-violet-600" />
+                        <span>Tải ảnh lên</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const base64 = event.target?.result as string;
+                                if (base64) {
+                                  setPaymentProofForm((prev) => ({ ...prev, url: base64 }));
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {/* Quick sample image buttons for ease of testing/use */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] font-bold text-slate-400">Gợi ý mẫu:</span>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentProofForm((prev) => ({
+                          ...prev,
+                          url: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80'
+                        }))}
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 hover:border-violet-300 hover:text-violet-700"
+                      >
+                        Mẫu UNC Techcombank
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentProofForm((prev) => ({
+                          ...prev,
+                          url: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=600&auto=format&fit=crop&q=80'
+                        }))}
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 hover:border-violet-300 hover:text-violet-700"
+                      >
+                        Mẫu VietQR xác nhận
+                      </button>
+                      {paymentProofForm.url && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentProofForm((prev) => ({ ...prev, url: '' }))}
+                          className="text-[10px] font-bold text-rose-500 hover:underline"
+                        >
+                          Xóa ảnh
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Image Preview if provided */}
+                    {paymentProofForm.url && (
+                      <div className="mt-1 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-2.5">
+                        <img
+                          src={paymentProofForm.url}
+                          alt="Biên lai UNC"
+                          className="h-16 w-24 rounded-lg object-cover shadow-sm ring-1 ring-emerald-300"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-black text-emerald-900">Đã gắn biên lai thanh toán</p>
+                          <p className="mt-0.5 truncate text-[11px] text-emerald-700 font-mono">
+                            {paymentProofForm.url.startsWith('data:') ? 'Ảnh đính kèm từ thiết bị (Base64)' : paymentProofForm.url}
+                          </p>
+                          <a
+                            href={paymentProofForm.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-block text-[10px] font-bold text-violet-700 hover:underline"
+                          >
+                            Mở xem ảnh kích thước lớn ↗
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -823,7 +916,103 @@ export default function TenantAdminSubscription({
       </div>
     )}
 
-    {selectedPlan && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Xác nhận thay đổi gói"><section className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="bg-gradient-to-br from-[#171328] to-[#43256e] p-6 text-white"><div className="flex items-start justify-between"><div><p className="text-caption font-black uppercase tracking-[0.15em] text-violet-200">Yêu cầu thay đổi gói</p><h2 className="mt-2 text-xl font-black">{current.name} <ArrowRight className="mx-2 inline h-4 w-4" /> {selectedPlan.name}</h2></div><button type="button" onClick={() => setSelectedPlan(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10"><X className="h-4 w-4" /></button></div></div><div className="space-y-4 p-6"><div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-4"><p className="text-caption text-slate-400">Giá dự kiến</p><p className="mt-1 text-sm font-black text-slate-900">{money(billingView === 'yearly' ? getYearlyPackagePrice(selectedPlan) : selectedPlan.price, selectedPlan.currency || 'USD')}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-caption text-slate-400">Chu kỳ</p><p className="mt-1 text-sm font-black text-slate-900">{billingView === 'yearly' ? 'Hằng năm' : 'Hằng tháng'}</p></div></div><fieldset><legend className="text-caption font-black text-slate-700">Thời điểm áp dụng</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">{(['next_cycle', 'immediate'] as const).map((value) => <label key={value} className={`cursor-pointer rounded-2xl border p-4 ${effectiveDate === value ? 'border-violet-400 bg-violet-50' : 'border-slate-200'}`}><input type="radio" className="sr-only" checked={effectiveDate === value} onChange={() => setEffectiveDate(value)} /><p className="text-caption font-black text-slate-800">{value === 'next_cycle' ? 'Chu kỳ tiếp theo' : 'Áp dụng ngay'}</p><p className="mt-1 text-caption leading-4 text-slate-500">{value === 'next_cycle' ? `Từ ${date(renewalDate)}` : 'Có thể phát sinh tiền chênh lệch'}</p></label>)}</div></fieldset><div className="flex gap-2 rounded-xl bg-blue-50 p-3 text-caption leading-4 text-blue-700"><Info className="h-4 w-4 shrink-0" />Đây là yêu cầu phê duyệt. Super Admin sẽ xác nhận giá cuối cùng trước khi gói được thay đổi.</div></div><div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => setSelectedPlan(null)} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600">Hủy</button><button type="button" onClick={requestPlan} className="h-11 rounded-xl bg-violet-600 px-5 text-caption font-black text-white">Gửi yêu cầu thay đổi</button></div></section></div>}
+    {selectedPlan && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Xác nhận thay đổi gói">
+        <section className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div className="bg-gradient-to-br from-[#171328] to-[#43256e] p-6 text-white">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-caption font-black uppercase tracking-[0.15em] text-violet-200">Yêu cầu thay đổi gói</p>
+                <h2 className="mt-2 text-xl font-black">
+                  {current.name} <ArrowRight className="mx-2 inline h-4 w-4" /> {selectedPlan.name}
+                </h2>
+              </div>
+              <button type="button" onClick={() => setSelectedPlan(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-5 p-6">
+            {/* Billing Cycle Selector inside Modal */}
+            <div>
+              <label className="text-caption font-black text-slate-700">Chu kỳ thanh toán</label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBillingView('monthly')}
+                  className={`flex flex-col rounded-2xl border p-3.5 text-left transition ${billingView === 'monthly' ? 'border-violet-500 bg-violet-50/70 ring-2 ring-violet-200' : 'border-slate-200 bg-slate-50 hover:bg-slate-100/70'}`}
+                >
+                  <span className="text-caption font-black text-slate-900">Hằng tháng</span>
+                  <span className="mt-1 text-[11px] font-bold text-slate-500">
+                    {money(selectedPlan.price, selectedPlan.currency || 'USD')} / tháng
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingView('yearly')}
+                  className={`flex flex-col rounded-2xl border p-3.5 text-left transition ${billingView === 'yearly' ? 'border-violet-500 bg-violet-50/70 ring-2 ring-violet-200' : 'border-slate-200 bg-slate-50 hover:bg-slate-100/70'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-caption font-black text-slate-900">Hằng năm</span>
+                    {selectedPlan.yearlyDiscountPercent ? (
+                      <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-700">
+                        -{selectedPlan.yearlyDiscountPercent}%
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className="mt-1 text-[11px] font-bold text-slate-500">
+                    {money(getYearlyPackagePrice(selectedPlan), selectedPlan.currency || 'USD')} / năm
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-caption text-slate-400">Giá dự kiến</p>
+                <p className="mt-1 text-sm font-black text-slate-900">
+                  {money(billingView === 'yearly' ? getYearlyPackagePrice(selectedPlan) : selectedPlan.price, selectedPlan.currency || 'USD')}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-caption text-slate-400">Kỳ thanh toán</p>
+                <p className="mt-1 text-sm font-black text-violet-700">
+                  {billingView === 'yearly' ? '12 tháng (Hằng năm)' : '1 tháng (Hằng tháng)'}
+                </p>
+              </div>
+            </div>
+
+            <fieldset>
+              <legend className="text-caption font-black text-slate-700">Thời điểm áp dụng</legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {(['next_cycle', 'immediate'] as const).map((value) => (
+                  <label key={value} className={`cursor-pointer rounded-2xl border p-4 ${effectiveDate === value ? 'border-violet-400 bg-violet-50' : 'border-slate-200'}`}>
+                    <input type="radio" className="sr-only" checked={effectiveDate === value} onChange={() => setEffectiveDate(value)} />
+                    <p className="text-caption font-black text-slate-800">{value === 'next_cycle' ? 'Chu kỳ tiếp theo' : 'Áp dụng ngay'}</p>
+                    <p className="mt-1 text-caption leading-4 text-slate-500">{value === 'next_cycle' ? `Từ ${date(renewalDate)}` : 'Có thể phát sinh tiền chênh lệch'}</p>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="flex gap-2 rounded-xl bg-blue-50 p-3 text-caption leading-4 text-blue-700">
+              <Info className="h-4 w-4 shrink-0" />
+              Đây là yêu cầu phê duyệt. Super Admin sẽ xác nhận giá cuối cùng và xuất hóa đơn tương ứng với chu kỳ đã chọn.
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end">
+            <button type="button" onClick={() => setSelectedPlan(null)} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600">
+              Hủy
+            </button>
+            <button type="button" onClick={requestPlan} className="h-11 rounded-xl bg-violet-600 px-5 text-caption font-black text-white">
+              Gửi yêu cầu thay đổi
+            </button>
+          </div>
+        </section>
+      </div>
+    )}
 
     {showPayment && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Phương thức thanh toán">

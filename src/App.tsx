@@ -8,7 +8,7 @@ import {
   INITIAL_ALERTS, 
   INITIAL_INVOICES
 } from './data';
-import { Tenant, SubscriptionPackage, SystemAlert, Invoice, TenantStatus, TenantAdminAccount, Ticket, PackageUpgradeRequest } from './types';
+import { Tenant, SubscriptionPackage, SystemAlert, Invoice, TenantStatus, TenantAdminAccount, Ticket, PackageUpgradeRequest, SystemAnnouncement } from './types';
 import { convertMoney, normalizeCurrency } from './utils/money';
 import {
   getSubscriptionPackage,
@@ -17,6 +17,7 @@ import {
   getYearlyPackagePrice,
   normalizeSubscriptionPackage
 } from './utils/subscriptions';
+import { loadSystemAnnouncements, saveSystemAnnouncements } from './utils/systemAnnouncements';
 import {
   loadSystemSettings,
   SYSTEM_SETTINGS_STORAGE_KEY,
@@ -123,6 +124,7 @@ const SubscriptionPackages = lazy(() => import('./components/SubscriptionPackage
 const BillingAndInvoices = lazy(() => import('./components/BillingAndInvoices'));
 const SystemReports = lazy(() => import('./components/SystemReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
+const SuperAdminAnnouncements = lazy(() => import('./components/SuperAdminAnnouncements'));
 const AccountPreferences = lazy(() => import('./components/AccountPreferences'));
 const SecurityAndLogs = lazy(() => import('./components/SecurityAndLogs'));
 const HelpAndSupport = lazy(() => import('./components/HelpAndSupport'));
@@ -277,6 +279,7 @@ export default function App() {
       ...storedTickets
     ];
   });
+  const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>(loadSystemAnnouncements);
 
   // Global search state in Header
   const [searchQuery, setSearchQuery] = useState('');
@@ -383,6 +386,10 @@ export default function App() {
   useEffect(() => {
     savePackageUpgradeRequests(upgradeRequests);
   }, [upgradeRequests]);
+
+  useEffect(() => {
+    saveSystemAnnouncements(announcements);
+  }, [announcements]);
 
   useEffect(() => {
     let active = true;
@@ -953,6 +960,17 @@ export default function App() {
     showToast('Đã đánh dấu tất cả cảnh báo hệ thống là đã đọc!');
   };
 
+  const handleToggleArchiveAlert = (id: string) => {
+    setAlerts(alerts.map(a => a.id === id ? { ...a, isArchived: !a.isArchived } : a));
+    const target = alerts.find(a => a.id === id);
+    showToast(target?.isArchived ? 'Đã khôi phục cảnh báo.' : 'Đã lưu trữ cảnh báo để làm gọn màn hình.');
+  };
+
+  const handleDeleteAlert = (id: string) => {
+    setAlerts(alerts.filter(a => a.id !== id));
+    showToast('Đã xóa cảnh báo khỏi hệ thống.');
+  };
+
   const handleClearAllAlerts = () => {
     setAlerts([]);
     showToast('Đã xóa sạch cảnh báo.');
@@ -962,6 +980,8 @@ export default function App() {
   const handleUpdateInvoiceStatus = (id: string, newStatus: Invoice['status'], paymentDetails: Partial<Invoice> = {}) => {
     const currentInvoice = invoices.find((invoice) => invoice.id === id);
     const now = new Date().toISOString();
+    const nowFormatted = now.replace('T', ' ').slice(0, 16);
+
     setInvoices((current) => current.map((inv) => inv.id === id ? normalizeInvoicePaymentData({
       ...inv,
       ...paymentDetails,
@@ -973,43 +993,144 @@ export default function App() {
         {
           id: `ACT-${Date.now()}`,
           action: 'Đổi trạng thái hóa đơn',
-          description: `${currentInvoice.status} → ${newStatus}`,
+          description: `${currentInvoice.status} → ${newStatus}${paymentDetails.paymentMethod ? ` (Kênh: ${paymentDetails.paymentMethod})` : ''}`,
           actor: 'superadmin@salonsys.vn',
           createdAt: now
         }
       ] : (paymentDetails.activities || inv.activities)
     }) : inv));
     
-    // Also sync back to tenant's customInvoices
+    // Sync to Tenant state and activate package / extend subscription when invoice is PAID
     setTenants(prevTenants => prevTenants.map(t => {
-      if (t.customInvoices && t.customInvoices.some(inv => inv.id === id)) {
+      const isTargetTenant = (currentInvoice && t.id === currentInvoice.tenantId) ||
+        (t.customInvoices && t.customInvoices.some(inv => inv.id === id || inv.invoiceCode === id));
+      
+      if (!isTargetTenant) return t;
+
+      let updatedCustomInvoices = t.customInvoices;
+      if (t.customInvoices) {
+        updatedCustomInvoices = t.customInvoices.map(inv => {
+          if (inv.id === id || inv.invoiceCode === id) {
+            let displayStatus = 'Đang chờ';
+            if (newStatus === 'PAID') displayStatus = 'Đã thanh toán';
+            else if (newStatus === 'OVERDUE') displayStatus = 'Quá hạn';
+            else if (newStatus === 'CANCELLED') displayStatus = 'Đã hủy';
+            return {
+              ...inv,
+              status: displayStatus,
+              paymentMethod: paymentDetails.paymentMethod || inv.paymentMethod,
+              transactionCode: paymentDetails.transactionCode || inv.transactionCode
+            };
+          }
+          return inv;
+        });
+      }
+
+      if (newStatus === 'PAID') {
+        const inv = currentInvoice;
+        const customInv = t.customInvoices?.find(i => i.id === id || i.invoiceCode === id);
+        const invPackageId = inv?.packageId || (customInv as any)?.packageId;
+        const invPlanName = inv?.planName || (customInv as any)?.packageName || (customInv as any)?.planName;
+        const invCycle = inv?.billingCycle || (customInv as any)?.billingCycle || (customInv as any)?.duration;
+        const invCurrency = inv?.currency || (customInv as any)?.currency;
+        const invAmount = inv?.amount || customInv?.amount || 0;
+
+        const isPlanChange = inv?.type === 'PLAN_CHANGE' || Boolean(invPackageId) || Boolean(t.pendingSubscriptionChange);
+        const targetPackage = (invPackageId ? packages.find(p => p.id === invPackageId) : null)
+          || (invPlanName ? getSubscriptionPackage(packages, invPlanName) : null)
+          || (t.pendingSubscriptionChange?.packageId ? packages.find(p => p.id === t.pendingSubscriptionChange?.packageId) : null)
+          || getSubscriptionPackage(packages, t.packageName);
+
+        const cycle = (invCycle || t.pendingSubscriptionChange?.billingCycle || t.billingCycle || 'monthly') as 'monthly' | 'yearly';
+        const cycleDays = getBillingCycleDays(cycle);
+        const pricing = targetPackage ? getSubscriptionPrice(packages, targetPackage.name, cycle) : { price: invAmount || t.subscriptionPrice, currency: t.subscriptionCurrency || 'VND' };
+
+        const paymentActivity = {
+          date: nowFormatted,
+          user: 'Super Admin',
+          type: 'payment',
+          description: `Xác nhận thanh toán hóa đơn ${inv?.invoiceCode || customInv?.invoiceCode || id} (${(invAmount || pricing.price).toLocaleString('vi-VN')} ${invCurrency || pricing.currency}). ${isPlanChange && targetPackage ? `Gói ${targetPackage.name} đã kích hoạt toàn diện.` : 'Dịch vụ đã được gia hạn.'}`
+        };
+
+        const nextStatus: TenantStatus = t.status === 'SUSPENDED' && t.paymentStatus === 'OVERDUE' ? 'ACTIVE' : t.status === 'OVERDUE' || t.status === 'EXPIRING' || t.status === 'TRIAL' ? 'ACTIVE' : t.status;
+
+        if (isPlanChange && targetPackage) {
+          return {
+            ...t,
+            packageName: targetPackage.name,
+            plan: targetPackage.name,
+            subscriptionPlan: targetPackage.name,
+            subscriptionPackageId: targetPackage.id,
+            subscriptionPackageVersion: targetPackage.version || 1,
+            subscriptionPrice: pricing.price,
+            subscriptionCurrency: pricing.currency,
+            billingCycle: cycle,
+            planStartDate: now.slice(0, 10),
+            subscriptionStartedAt: now.slice(0, 10),
+            subscriptionRenewsAt: getIsoDateAfterDays(cycleDays),
+            daysRemaining: cycleDays,
+            status: nextStatus,
+            paymentStatus: 'PAID',
+            pendingSubscriptionChange: undefined,
+            allowOnlineBooking: targetPackage.capabilities?.some(c => c.key === 'online_booking' && c.enabled) ?? true,
+            customInvoices: updatedCustomInvoices,
+            customActivities: [paymentActivity, ...(t.customActivities || [])],
+            lastSync: now
+          };
+        } else {
+          return {
+            ...t,
+            status: nextStatus,
+            paymentStatus: 'PAID',
+            subscriptionRenewsAt: getIsoDateAfterDays(cycleDays),
+            daysRemaining: cycleDays,
+            customInvoices: updatedCustomInvoices,
+            customActivities: [paymentActivity, ...(t.customActivities || [])],
+            lastSync: now
+          };
+        }
+      }
+
+      if (newStatus === 'OVERDUE') {
         return {
           ...t,
-          customInvoices: t.customInvoices.map(inv => {
-            if (inv.id === id) {
-              let displayStatus = 'Đang chờ';
-              if (newStatus === 'PAID') displayStatus = 'Đã thanh toán';
-              else if (newStatus === 'OVERDUE') displayStatus = 'Quá hạn';
-              else if (newStatus === 'CANCELLED') displayStatus = 'Đã hủy';
-              return {
-                ...inv,
-                status: displayStatus,
-                paymentMethod: paymentDetails.paymentMethod || inv.paymentMethod,
-                transactionCode: paymentDetails.transactionCode || inv.transactionCode
-              };
-            }
-            return inv;
-          })
+          paymentStatus: 'OVERDUE',
+          customInvoices: updatedCustomInvoices,
+          lastSync: now
         };
       }
-      return t;
+
+      return {
+        ...t,
+        customInvoices: updatedCustomInvoices,
+        lastSync: now
+      };
     }));
 
-    showToast(`Đã cập nhật hóa đơn ${id} thành trạng thái: ${newStatus}`, 'info');
+    // If there's an upgrade request linked to this invoice, finalize it to APPROVED
+    if (newStatus === 'PAID' && currentInvoice) {
+      setUpgradeRequests((current) => current.map((req) => {
+        if (req.invoiceId === id || (req.tenantId === currentInvoice.tenantId && req.status === 'PENDING')) {
+          const reviewed = {
+            ...req,
+            status: 'APPROVED' as const,
+            reviewedAt: now,
+            reviewedBy: 'Super Admin',
+            reviewNote: 'Đã xác nhận thanh toán và tự động kích hoạt gói.',
+            invoiceId: id
+          };
+          void persistPackageUpgradeReview(reviewed);
+          return reviewed;
+        }
+        return req;
+      }));
+    }
+
+    showToast(`Đã cập nhật hóa đơn ${id} thành trạng thái: ${newStatus}`, newStatus === 'PAID' ? 'success' : 'info');
     if (currentInvoice && currentInvoice.status !== newStatus) {
       recordAuditLog({
-        eventCode: 'BILLING.INVOICE.UPDATED',
-        event: 'Cập nhật trạng thái hóa đơn',
+        eventCode: newStatus === 'PAID' ? 'BILLING.PAYMENT.CONFIRMED' : 'BILLING.INVOICE.UPDATED',
+        event: newStatus === 'PAID' ? 'Xác nhận thanh toán hóa đơn' : 'Cập nhật trạng thái hóa đơn',
         description: `Hóa đơn ${id} của tenant "${currentInvoice.tenantName}" được chuyển sang ${newStatus}.`,
         severity: newStatus === 'CANCELLED' || newStatus === 'OVERDUE' ? 'medium' : 'low',
         status: 'success',
@@ -1026,6 +1147,12 @@ export default function App() {
     const currentInvoice = invoices.find((invoice) => invoice.id === id);
     if (!currentInvoice) return;
     const changes = buildAuditChanges(currentInvoice, updates);
+    
+    if (updates.status && updates.status !== currentInvoice.status) {
+      handleUpdateInvoiceStatus(id, updates.status, updates);
+      return;
+    }
+
     setInvoices((current) => current.map((invoice) => invoice.id === id ? {
       ...invoice,
       ...updates,
@@ -1368,16 +1495,27 @@ export default function App() {
     };
 
     setUpgradeRequests((current) => [request, ...current]);
-    void persistPackageUpgradeRequest(request).then((saved) => {
-      if (saved) return;
-      setUpgradeRequests((current) => current.filter((item) => item.id !== request.id));
-      setAlerts((current) => current.filter((alert) => alert.id !== `ALT-${request.id}`));
-      showToast(
-        'Chưa gửi được yêu cầu',
-        'error',
-        { description: 'Máy chủ chưa xác nhận yêu cầu nâng cấp. Vui lòng kiểm tra phiên đăng nhập và thử lại.' }
-      );
-    });
+    setTenants((prevTenants) => prevTenants.map((t) => {
+      if (t.id === tenant.id) {
+        return {
+          ...t,
+          pendingSubscriptionChange: {
+            requestId: request.id,
+            packageName: targetPackage.name,
+            packageId: targetPackage.id,
+            packageVersion: targetPackage.version || 1,
+            billingCycle,
+            price: pricing.price,
+            currency: pricing.currency,
+            effectiveAt: effectiveDate === 'immediate' ? now.toISOString().slice(0, 10) : (t.subscriptionRenewsAt || now.toISOString().slice(0, 10)),
+            requestedAt: now.toISOString()
+          }
+        };
+      }
+      return t;
+    }));
+
+    void persistPackageUpgradeRequest(request);
     setAlerts((current) => [{
       id: `ALT-${request.id}`,
       title: `Yêu cầu nâng cấp: ${tenant.name}`,
@@ -1508,6 +1646,10 @@ export default function App() {
     }
 
     setUpgradeRequests((current) => current.map((item) => item.id === requestId ? reviewedRequest : item));
+    void persistPackageUpgradeReview(reviewedRequest);
+    if (decision === 'REJECTED') {
+      setTenants((prevTenants) => prevTenants.map((t) => (t.id === tenant.id ? { ...t, pendingSubscriptionChange: undefined } : t)));
+    }
     recordAuditLog({
       eventCode: decision === 'APPROVED' ? 'PACKAGE.UPGRADE.APPROVED' : 'PACKAGE.UPGRADE.REJECTED',
       event: decision === 'APPROVED' ? 'Duyệt yêu cầu nâng cấp' : 'Từ chối yêu cầu nâng cấp',
@@ -1540,9 +1682,24 @@ export default function App() {
     const request = upgradeRequests.find((item) => item.id === requestId);
     if (!request || request.status !== 'PENDING') return;
 
+    const now = new Date().toISOString();
+    const updatedRequest: PackageUpgradeRequest = {
+      ...request,
+      status: 'REJECTED',
+      reviewNote: 'Tenant đã hủy yêu cầu.',
+      reviewedAt: now,
+      reviewedBy: 'Tenant Admin'
+    };
+
     setUpgradeRequests((current) =>
-      current.map((item) => (item.id === requestId ? { ...item, status: 'REJECTED', reviewNote: 'Tenant đã hủy yêu cầu.' } : item))
+      current.map((item) => (item.id === requestId ? updatedRequest : item))
     );
+    void persistPackageUpgradeReview(updatedRequest);
+
+    setTenants((prevTenants) =>
+      prevTenants.map((t) => (t.id === request.tenantId ? { ...t, pendingSubscriptionChange: undefined } : t))
+    );
+
     setAlerts((current) => current.filter((alert) => alert.id !== `ALT-${requestId}`));
     showToast('Đã hủy yêu cầu', 'info', { description: 'Yêu cầu nâng cấp gói đã được hủy bỏ.' });
   };
@@ -1695,6 +1852,15 @@ export default function App() {
         );
       case 'reports':
         return <SystemReports tenants={tenants} invoices={invoices} packages={packages} reportCurrency={systemSettings.general.currency} />;
+      case 'announcements':
+        return (
+          <SuperAdminAnnouncements
+            announcements={announcements}
+            onUpdateAnnouncements={setAnnouncements}
+            tenants={tenants}
+            onNotify={(msg, type) => showToast(msg, type || 'info')}
+          />
+        );
       case 'settings':
         return <SystemSettings />;
       case 'account-preferences':
@@ -1838,6 +2004,8 @@ export default function App() {
         onLanguageChange={setInterfaceLanguage}
         tickets={tickets}
         onTicketsChange={setTickets}
+        announcements={announcements}
+        onUpdateAnnouncements={setAnnouncements}
       />
     );
   }
@@ -1878,6 +2046,9 @@ export default function App() {
           setSidebarOpen={setSidebarOpen}
           alerts={alerts}
           onMarkAllAlertsAsRead={handleMarkAllAlertsAsRead}
+          onDeleteAlert={handleDeleteAlert}
+          onToggleArchiveAlert={handleToggleArchiveAlert}
+          onClearAllAlerts={handleClearAllAlerts}
           onAlertClick={(id) => {
             handleMarkAlertAsRead(id);
             setActiveTab('security');

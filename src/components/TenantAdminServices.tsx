@@ -105,6 +105,7 @@ interface ServiceFormState {
   branchQ1: boolean;
   branchQ3: boolean;
   notes: string;
+  addOns: string[];
 }
 
 const categoryMeta: Record<ServiceCategory, { label: string; color: string; badge: string; icon: typeof Scissors }> = {
@@ -157,7 +158,26 @@ const formatMoneyInput = (value: string | number): string => {
   return num.toLocaleString('vi-VN');
 };
 
-const emptyForm = (branch: string): ServiceFormState => ({ name: '', category: 'MANICURE', description: '', duration: '60', bufferTime: '10', requiredSkill: 'Nail Technician', taxRate: '8', price: '', memberPrice: '', cost: '', deposit: '0', commissionRate: '15', status: 'DRAFT', onlineBooking: false, branchQ1: branch === 'Q1' || branch === 'ALL', branchQ3: branch !== 'Q1', notes: '' });
+const emptyForm = (branch: string): ServiceFormState => ({
+  name: '',
+  category: 'MANICURE',
+  description: '',
+  duration: '60',
+  bufferTime: '10',
+  requiredSkill: 'Nail Technician',
+  taxRate: '8',
+  price: '',
+  memberPrice: '',
+  cost: '',
+  deposit: '0',
+  commissionRate: '15',
+  status: 'DRAFT',
+  onlineBooking: false,
+  branchQ1: branch === 'Q1' || branch === 'ALL',
+  branchQ3: branch !== 'Q1',
+  notes: '',
+  addOns: [],
+});
 
 interface ServiceDetailDrawerProps {
   service: SalonService;
@@ -407,12 +427,24 @@ function ServiceDetailDrawer({
               </div>
             </section>
 
-            {service.addOns.length > 0 && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Tag className="h-4 w-4 text-fuchsia-500" />
-                  <h3 className="text-caption font-black text-slate-900">Dịch vụ thêm gợi ý</h3>
+                  <h3 className="text-caption font-black text-slate-900">Dịch vụ thêm gợi ý ({service.addOns?.length || 0})</h3>
                 </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={onEdit}
+                    className="flex items-center gap-1 text-[11px] font-bold text-violet-600 hover:text-violet-700"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Chỉnh sửa
+                  </button>
+                )}
+              </div>
+              {service.addOns && service.addOns.length > 0 ? (
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {service.addOns.map((item) => (
                     <div key={item} className="flex items-start gap-2 rounded-xl bg-fuchsia-50 p-3 text-caption font-bold leading-4 text-fuchsia-700">
@@ -421,8 +453,12 @@ function ServiceDetailDrawer({
                     </div>
                   ))}
                 </div>
-              </section>
-            )}
+              ) : (
+                <p className="mt-2 text-caption text-slate-400">
+                  Chưa thiết lập dịch vụ thêm đi kèm cho dịch vụ này.
+                </p>
+              )}
+            </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between">
@@ -532,16 +568,19 @@ export default function TenantAdminServices({
   const [selectedService, setSelectedService] = useState<SalonService | null>(null);
   const [formMode, setFormMode] = useState<'CREATE' | 'EDIT' | null>(null);
   const [form, setForm] = useState<ServiceFormState>(() => emptyForm(selectedBranch));
+  const [newAddOnName, setNewAddOnName] = useState('');
+  const [newAddOnPrice, setNewAddOnPrice] = useState('');
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(services));
+      window.dispatchEvent(new CustomEvent('salonsys_services_updated', { detail: { tenantName, services } }));
     } catch {
       // Local storage is optional; the page remains usable when it is unavailable.
     }
-  }, [services, storageKey]);
+  }, [services, storageKey, tenantName]);
 
   useEffect(() => {
     if (!selectedService && !formMode) return;
@@ -585,7 +624,41 @@ export default function TenantAdminServices({
   const totalBookings = branchServices.reduce((sum, service) => sum + service.bookings, 0);
   const averageTicket = totalBookings ? Math.round(totalRevenue / totalBookings) : 0;
 
-  const openCreate = () => { if (!requireManage()) return; setForm(emptyForm(selectedBranch)); setFormError(''); setFormMode('CREATE'); };
+  const handleAddAddOn = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) e.preventDefault();
+    const name = newAddOnName.trim();
+    if (!name) return;
+    const priceNum = parseMoneyInput(newAddOnPrice);
+    const formattedItem = priceNum > 0 ? `${name} +${priceNum.toLocaleString('vi-VN')}đ` : name;
+    if (!form.addOns.includes(formattedItem)) {
+      setForm((prev) => ({ ...prev, addOns: [...prev.addOns, formattedItem] }));
+    }
+    setNewAddOnName('');
+    setNewAddOnPrice('');
+  };
+
+  const handleRemoveAddOn = (indexToRemove: number) => {
+    setForm((prev) => ({
+      ...prev,
+      addOns: prev.addOns.filter((_, idx) => idx !== indexToRemove),
+    }));
+  };
+
+  const handleAddPresetAddOn = (preset: string) => {
+    if (!form.addOns.includes(preset)) {
+      setForm((prev) => ({ ...prev, addOns: [...prev.addOns, preset] }));
+    }
+  };
+
+  const openCreate = () => {
+    if (!requireManage()) return;
+    setForm(emptyForm(selectedBranch));
+    setNewAddOnName('');
+    setNewAddOnPrice('');
+    setFormError('');
+    setFormMode('CREATE');
+  };
+
   const openEdit = (service: SalonService) => {
     if (!requireManage()) return;
     setForm({
@@ -605,8 +678,11 @@ export default function TenantAdminServices({
       onlineBooking: service.onlineBooking,
       branchQ1: service.branches.includes('Q1'),
       branchQ3: service.branches.includes('Q3'),
-      notes: service.notes
+      notes: service.notes,
+      addOns: service.addOns ? [...service.addOns] : [],
     });
+    setNewAddOnName('');
+    setNewAddOnPrice('');
     setFormError('');
     setFormMode('EDIT');
   };
@@ -634,7 +710,31 @@ export default function TenantAdminServices({
     const id = existing?.id || `SVC-${String(Math.max(...services.map((service) => Number(service.id.replace('SVC-', '')))) + 1).padStart(3, '0')}`;
     const branches = ([form.branchQ1 ? 'Q1' : null, form.branchQ3 ? 'Q3' : null].filter(Boolean)) as BranchCode[];
     const history = existing ? (price !== oldPrice ? [{ date: '20/07/2026', oldPrice, newPrice: price, reason: 'Điều chỉnh từ trang quản trị' }, ...existing.priceHistory] : existing.priceHistory) : [];
-    const payload: SalonService = { id, name: form.name.trim(), category: form.category, description: form.description.trim(), duration: Number(form.duration), bufferTime: Math.max(0, Number(form.bufferTime) || 0), requiredSkill: form.requiredSkill.trim() || 'Nail Technician', taxRate: Math.max(0, Number(form.taxRate) || 0), price, memberPrice, cost, deposit, commissionRate: Math.max(0, Number(form.commissionRate) || 0), status: form.status, onlineBooking: form.onlineBooking, branches, notes: form.notes.trim(), staffCount: existing?.staffCount || 0, bookings: existing?.bookings || 0, revenue: existing?.revenue || 0, rating: existing?.rating || 0, addOns: existing?.addOns || [], priceHistory: history };
+    const payload: SalonService = {
+      id,
+      name: form.name.trim(),
+      category: form.category,
+      description: form.description.trim(),
+      duration: Number(form.duration),
+      bufferTime: Math.max(0, Number(form.bufferTime) || 0),
+      requiredSkill: form.requiredSkill.trim() || 'Nail Technician',
+      taxRate: Math.max(0, Number(form.taxRate) || 0),
+      price,
+      memberPrice,
+      cost,
+      deposit,
+      commissionRate: Math.max(0, Number(form.commissionRate) || 0),
+      status: form.status,
+      onlineBooking: form.onlineBooking,
+      branches,
+      notes: form.notes.trim(),
+      staffCount: existing?.staffCount || 0,
+      bookings: existing?.bookings || 0,
+      revenue: existing?.revenue || 0,
+      rating: existing?.rating || 0,
+      addOns: form.addOns,
+      priceHistory: history,
+    };
     setServices((current) => formMode === 'EDIT' ? current.map((service) => service.id === id ? payload : service) : [payload, ...current]);
     setSelectedService(payload);
     setFormMode(null);
@@ -716,6 +816,18 @@ export default function TenantAdminServices({
                                   .map((b) => branchLabels[b])
                                   .join(', ')}
                               </span>
+                              {service.addOns && service.addOns.length > 0 && (
+                                <>
+                                  <span>·</span>
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded-md bg-fuchsia-50 px-1.5 py-0.5 text-[11px] font-bold text-fuchsia-700 ring-1 ring-fuchsia-200/60"
+                                    title={service.addOns.join(', ')}
+                                  >
+                                    <Tag className="h-2.5 w-2.5" />
+                                    +{service.addOns.length} dịch vụ thêm
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -884,6 +996,25 @@ export default function TenantAdminServices({
                     <p className="mt-3 line-clamp-2 text-caption leading-4 text-slate-500">
                       {service.description}
                     </p>
+
+                    {service.addOns && service.addOns.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1">
+                        {service.addOns.slice(0, 2).map((addon) => (
+                          <span
+                            key={addon}
+                            className="inline-flex items-center gap-1 rounded-md bg-fuchsia-50 px-2 py-0.5 text-[11px] font-bold text-fuchsia-700 ring-1 ring-fuchsia-200/50"
+                          >
+                            <Tag className="h-2.5 w-2.5" />
+                            {normalizeMoneyText(addon)}
+                          </span>
+                        ))}
+                        {service.addOns.length > 2 && (
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-600">
+                            +{service.addOns.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -961,7 +1092,469 @@ export default function TenantAdminServices({
         />
       )}
 
-      {formMode && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setFormMode(null)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitService} className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><h2 className="text-base font-black text-slate-900">{formMode === 'CREATE' ? 'Thêm dịch vụ mới' : `Chỉnh sửa ${selectedService?.id}`}</h2><p className="mt-1 text-caption text-slate-500">Thiết lập thông tin, giá, chi phí và kênh phân phối.</p></div><button type="button" onClick={() => setFormMode(null)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div><div className="space-y-5 p-5 sm:p-6">{formError && <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">{formError}</div>}<fieldset><legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><Sparkles className="h-3.5 w-3.5" /></span>Thông tin dịch vụ</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Tên dịch vụ *</span><input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className={inputClass} placeholder="Ví dụ: Nail Art Premium" /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Nhóm dịch vụ</span><BeautifulSelect value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as ServiceCategory }))} className={inputClass}>{Object.entries(categoryMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label></div><label className="mt-3 block"><span className="mb-1.5 block text-caption font-bold text-slate-600">Mô tả dịch vụ *</span><textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Mô tả quy trình và giá trị của dịch vụ..." /></label><div className="mt-3 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Kỹ năng bắt buộc</span><input value={form.requiredSkill} onChange={(event) => setForm((current) => ({ ...current, requiredSkill: event.target.value }))} className={inputClass} placeholder="Nail Technician · Gel Polish" /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Thời gian vệ sinh sau lượt</span><input type="number" min="0" step="5" value={form.bufferTime} onChange={(event) => setForm((current) => ({ ...current, bufferTime: event.target.value }))} className={inputClass} /></label></div></fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CircleDollarSign className="h-3.5 w-3.5" /></span>Giá & chi phí</legend><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Thời lượng (phút) *</span><input type="number" min="15" step="15" value={form.duration} onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Giá niêm yết *</span><input type="text" inputMode="numeric" value={form.price} onChange={(event) => setForm((current) => ({ ...current, price: formatMoneyInput(event.target.value) }))} className={inputClass} placeholder="0" /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Giá thành viên</span><input type="text" inputMode="numeric" value={form.memberPrice} onChange={(event) => setForm((current) => ({ ...current, memberPrice: formatMoneyInput(event.target.value) }))} className={inputClass} placeholder="0" /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Chi phí vật tư</span><input type="text" inputMode="numeric" value={form.cost} onChange={(event) => setForm((current) => ({ ...current, cost: formatMoneyInput(event.target.value) }))} className={inputClass} placeholder="0" /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Tiền đặt cọc</span><input type="text" inputMode="numeric" value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: formatMoneyInput(event.target.value) }))} className={inputClass} placeholder="0" /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Hoa hồng (%)</span><input type="number" min="0" max="100" value={form.commissionRate} onChange={(event) => setForm((current) => ({ ...current, commissionRate: event.target.value }))} className={inputClass} /></label><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Thuế suất VAT (%)</span><input type="number" min="0" max="100" value={form.taxRate} onChange={(event) => setForm((current) => ({ ...current, taxRate: event.target.value }))} className={inputClass} /></label></div>{parseMoneyInput(form.price) > 0 && <div className="mt-3 grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-3"><div><p className="text-caption text-slate-400">Lãi gộp dự kiến</p><p className="mt-1 text-caption font-black text-slate-800">{formatCurrency(Math.max(0, parseMoneyInput(form.price) - parseMoneyInput(form.cost)))}</p></div><div><p className="text-caption text-slate-400">Biên lợi nhuận</p><p className="mt-1 text-caption font-black text-emerald-600">{Math.round((parseMoneyInput(form.price) - parseMoneyInput(form.cost)) / parseMoneyInput(form.price) * 100)}%</p></div><div><p className="text-caption text-slate-400">Hoa hồng/lượt</p><p className="mt-1 text-caption font-black text-violet-600">{formatCurrency(Math.round(parseMoneyInput(form.price) * Number(form.commissionRate || 0) / 100))}</p></div></div>}</fieldset><fieldset className="border-t border-slate-100 pt-5"><legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Store className="h-3.5 w-3.5" /></span>Phân phối & trạng thái</legend><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-caption font-bold text-slate-600">Trạng thái</span><BeautifulSelect value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as ServiceStatus }))} className={inputClass}>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</BeautifulSelect></label><div><span className="mb-1.5 block text-caption font-bold text-slate-600">Đặt lịch trực tuyến</span><div className={`flex h-11 w-full items-center justify-between gap-2 rounded-xl border px-3 transition-all ${form.onlineBooking ? 'border-emerald-200 bg-emerald-50/60 shadow-sm' : 'border-slate-200 bg-slate-50'}`}><div className="flex items-center gap-2 min-w-0"><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors ${form.onlineBooking ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200/80 text-slate-400'}`}><Globe className="h-3.5 w-3.5" /></span><p className="truncate text-caption font-bold text-slate-800">{form.onlineBooking ? 'Cho phép đặt online' : 'Chỉ bán tại quầy'}</p></div><div className="flex items-center gap-2 shrink-0"><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-extrabold transition-colors ${form.onlineBooking ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}><span className={`h-1.5 w-1.5 rounded-full ${form.onlineBooking ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />{form.onlineBooking ? 'Đang bật' : 'Đang tắt'}</span><button type="button" role="switch" aria-checked={form.onlineBooking} onClick={() => setForm((current) => ({ ...current, onlineBooking: !current.onlineBooking }))} className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-1 ${form.onlineBooking ? 'bg-emerald-500' : 'bg-slate-300'}`}><span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${form.onlineBooking ? 'translate-x-4' : 'translate-x-0'}`} /></button></div></div></div></div><div className="mt-3 grid grid-cols-2 gap-3"><label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"><input type="checkbox" checked={form.branchQ3} onChange={(event) => setForm((current) => ({ ...current, branchQ3: event.target.checked }))} className="h-4 w-4 accent-violet-600" /><span className="text-caption font-bold text-slate-700">Chi nhánh Quận 3</span></label><label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"><input type="checkbox" checked={form.branchQ1} onChange={(event) => setForm((current) => ({ ...current, branchQ1: event.target.checked }))} className="h-4 w-4 accent-violet-600" /><span className="text-caption font-bold text-slate-700">Chi nhánh Quận 1</span></label></div><label className="mt-3 block"><span className="mb-1.5 block text-caption font-bold text-slate-600">Lưu ý vận hành</span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" placeholder="Điều kiện áp dụng, phụ thu, lưu ý khi tư vấn..." /></label></fieldset></div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setFormMode(null)} className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"><Sparkles className="h-4 w-4" />{formMode === 'CREATE' ? 'Tạo dịch vụ' : 'Lưu thay đổi'}</button></div></form></div>}
+      {formMode && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <button
+            type="button"
+            aria-label="Đóng biểu mẫu"
+            onClick={() => setFormMode(null)}
+            className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+          />
+          <form
+            onSubmit={submitService}
+            className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+          >
+            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6">
+              <div>
+                <h2 className="text-base font-black text-slate-900">
+                  {formMode === 'CREATE' ? 'Thêm dịch vụ mới' : `Chỉnh sửa ${selectedService?.id}`}
+                </h2>
+                <p className="mt-1 text-caption text-slate-500">
+                  Thiết lập thông tin, giá, dịch vụ thêm, chi phí và kênh phân phối.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFormMode(null)}
+                aria-label="Đóng"
+                className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-5 p-5 sm:p-6">
+              {formError && (
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">
+                  {formError}
+                </div>
+              )}
+
+              {/* Thông tin dịch vụ */}
+              <fieldset>
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </span>
+                  Thông tin dịch vụ
+                </legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Tên dịch vụ *</span>
+                    <input
+                      value={form.name}
+                      onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                      className={inputClass}
+                      placeholder="Ví dụ: Nail Art Premium"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Nhóm dịch vụ</span>
+                    <BeautifulSelect
+                      value={form.category}
+                      onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as ServiceCategory }))}
+                      className={inputClass}
+                    >
+                      {Object.entries(categoryMeta).map(([value, meta]) => (
+                        <option key={value} value={value}>{meta.label}</option>
+                      ))}
+                    </BeautifulSelect>
+                  </label>
+                </div>
+                <label className="mt-3 block">
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">Mô tả dịch vụ *</span>
+                  <textarea
+                    value={form.description}
+                    onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                    placeholder="Mô tả quy trình và giá trị của dịch vụ..."
+                  />
+                </label>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Kỹ năng bắt buộc</span>
+                    <input
+                      value={form.requiredSkill}
+                      onChange={(event) => setForm((current) => ({ ...current, requiredSkill: event.target.value }))}
+                      className={inputClass}
+                      placeholder="Nail Technician · Gel Polish"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Thời gian vệ sinh sau lượt</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5"
+                      value={form.bufferTime}
+                      onChange={(event) => setForm((current) => ({ ...current, bufferTime: event.target.value }))}
+                      className={inputClass}
+                    />
+                  </label>
+                </div>
+              </fieldset>
+
+              {/* Giá & chi phí */}
+              <fieldset className="border-t border-slate-100 pt-5">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                    <CircleDollarSign className="h-3.5 w-3.5" />
+                  </span>
+                  Giá & chi phí
+                </legend>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Thời lượng (phút) *</span>
+                    <input
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={form.duration}
+                      onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Giá niêm yết *</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={form.price}
+                      onChange={(event) => setForm((current) => ({ ...current, price: formatMoneyInput(event.target.value) }))}
+                      className={inputClass}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Giá thành viên</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={form.memberPrice}
+                      onChange={(event) => setForm((current) => ({ ...current, memberPrice: formatMoneyInput(event.target.value) }))}
+                      className={inputClass}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Chi phí vật tư</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={form.cost}
+                      onChange={(event) => setForm((current) => ({ ...current, cost: formatMoneyInput(event.target.value) }))}
+                      className={inputClass}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Tiền đặt cọc</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={form.deposit}
+                      onChange={(event) => setForm((current) => ({ ...current, deposit: formatMoneyInput(event.target.value) }))}
+                      className={inputClass}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Hoa hồng (%)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.commissionRate}
+                      onChange={(event) => setForm((current) => ({ ...current, commissionRate: event.target.value }))}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Thuế suất VAT (%)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.taxRate}
+                      onChange={(event) => setForm((current) => ({ ...current, taxRate: event.target.value }))}
+                      className={inputClass}
+                    />
+                  </label>
+                </div>
+                {parseMoneyInput(form.price) > 0 && (
+                  <div className="mt-3 grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-3">
+                    <div>
+                      <p className="text-caption text-slate-400">Lãi gộp dự kiến</p>
+                      <p className="mt-1 text-caption font-black text-slate-800">
+                        {formatCurrency(Math.max(0, parseMoneyInput(form.price) - parseMoneyInput(form.cost)))}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-caption text-slate-400">Biên lợi nhuận</p>
+                      <p className="mt-1 text-caption font-black text-emerald-600">
+                        {Math.round(((parseMoneyInput(form.price) - parseMoneyInput(form.cost)) / parseMoneyInput(form.price)) * 100)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-caption text-slate-400">Hoa hồng/lượt</p>
+                      <p className="mt-1 text-caption font-black text-violet-600">
+                        {formatCurrency(Math.round((parseMoneyInput(form.price) * Number(form.commissionRate || 0)) / 100))}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </fieldset>
+
+              {/* Dịch vụ thêm & Phụ phí (Add-ons) */}
+              <fieldset className="border-t border-slate-100 pt-5">
+                <legend className="mb-3 flex items-center justify-between text-caption font-black text-slate-800">
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600">
+                      <Tag className="h-3.5 w-3.5" />
+                    </span>
+                    Dịch vụ thêm (Add-ons) & Phụ phí
+                  </span>
+                  <span className="text-caption font-semibold text-slate-400">
+                    {form.addOns.length} dịch vụ thêm
+                  </span>
+                </legend>
+
+                <p className="mb-3 text-caption text-slate-500">
+                  Các gói bổ sung khi khách hàng làm dịch vụ (ví dụ: tháo gel cũ, gắn charm, vẽ nghệ thuật, ủ dưỡng).
+                </p>
+
+                {/* Danh sách add-ons đã thêm */}
+                {form.addOns.length > 0 ? (
+                  <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                    {form.addOns.map((item, idx) => (
+                      <div
+                        key={`${item}-${idx}`}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-fuchsia-200 bg-fuchsia-50/70 px-3 py-2 text-caption font-bold text-fuchsia-800"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <Plus className="h-3 w-3 shrink-0 text-fuchsia-600" />
+                          <span className="truncate">{normalizeMoneyText(item)}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAddOn(idx)}
+                          aria-label={`Xóa ${item}`}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-fuchsia-600 shadow-none transition-colors hover:bg-fuchsia-200/80"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mb-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-3 text-center text-caption text-slate-400">
+                    Chưa có dịch vụ thêm nào được liên kết với dịch vụ này.
+                  </div>
+                )}
+
+                {/* Nhập thêm dịch vụ thêm mới */}
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+                  <p className="text-caption font-bold text-slate-700">Thêm dịch vụ thêm mới</p>
+                  <div className="grid gap-2 sm:grid-cols-[1.5fr_1fr_auto]">
+                    <input
+                      value={newAddOnName}
+                      onChange={(e) => setNewAddOnName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddAddOn();
+                        }
+                      }}
+                      placeholder="Tên dịch vụ thêm (vd: Tháo gel cũ)"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                    />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={newAddOnPrice}
+                      onChange={(e) => setNewAddOnPrice(formatMoneyInput(e.target.value))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddAddOn();
+                        }
+                      }}
+                      placeholder="Phụ thu (vd: 80.000)"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddAddOn()}
+                      disabled={!newAddOnName.trim()}
+                      className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-fuchsia-700 bg-fuchsia-600 px-4 text-caption font-bold text-white shadow-sm transition-all hover:bg-fuchsia-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Thêm
+                    </button>
+                  </div>
+
+                  {/* Gợi ý mẫu nhanh */}
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Gợi ý mẫu phổ biến
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        'Tháo gel cũ +80.000đ',
+                        'Sơn mắt mèo +90.000đ',
+                        'Charm cao cấp +120.000đ',
+                        'Ủ paraffin +150.000đ',
+                        'French đầu móng +120.000đ',
+                        'Gia cố móng +120.000đ',
+                        'Tráng gương +110.000đ',
+                        'Massage chân 15 phút +100.000đ',
+                      ].map((preset) => {
+                        const isAdded = form.addOns.includes(preset);
+                        return (
+                          <button
+                            key={preset}
+                            type="button"
+                            disabled={isAdded}
+                            onClick={() => handleAddPresetAddOn(preset)}
+                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-caption font-medium transition-colors ${
+                              isAdded
+                                ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
+                                : 'cursor-pointer border border-fuchsia-200 bg-white text-fuchsia-700 shadow-none hover:bg-fuchsia-50'
+                            }`}
+                          >
+                            {isAdded ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                            {preset}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* Phân phối & trạng thái */}
+              <fieldset className="border-t border-slate-100 pt-5">
+                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <Store className="h-3.5 w-3.5" />
+                  </span>
+                  Phân phối & trạng thái
+                </legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Trạng thái</span>
+                    <BeautifulSelect
+                      value={form.status}
+                      onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as ServiceStatus }))}
+                      className={inputClass}
+                    >
+                      {Object.entries(statusMeta).map(([value, meta]) => (
+                        <option key={value} value={value}>{meta.label}</option>
+                      ))}
+                    </BeautifulSelect>
+                  </label>
+                  <div>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Đặt lịch trực tuyến</span>
+                    <div
+                      className={`flex h-11 w-full items-center justify-between gap-2 rounded-xl border px-3 transition-all ${
+                        form.onlineBooking
+                          ? 'border-emerald-200 bg-emerald-50/60 shadow-sm'
+                          : 'border-slate-200 bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                            form.onlineBooking ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200/80 text-slate-400'
+                          }`}
+                        >
+                          <Globe className="h-3.5 w-3.5" />
+                        </span>
+                        <p className="truncate text-caption font-bold text-slate-800">
+                          {form.onlineBooking ? 'Cho phép đặt online' : 'Chỉ bán tại quầy'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-extrabold transition-colors ${
+                            form.onlineBooking ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${form.onlineBooking ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}
+                          />
+                          {form.onlineBooking ? 'Đang bật' : 'Đang tắt'}
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={form.onlineBooking}
+                          onClick={() => setForm((current) => ({ ...current, onlineBooking: !current.onlineBooking }))}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-1 ${
+                            form.onlineBooking ? 'bg-emerald-500' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              form.onlineBooking ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <input
+                      type="checkbox"
+                      checked={form.branchQ3}
+                      onChange={(event) => setForm((current) => ({ ...current, branchQ3: event.target.checked }))}
+                      className="h-4 w-4 accent-violet-600"
+                    />
+                    <span className="text-caption font-bold text-slate-700">Chi nhánh Quận 3</span>
+                  </label>
+                  <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <input
+                      type="checkbox"
+                      checked={form.branchQ1}
+                      onChange={(event) => setForm((current) => ({ ...current, branchQ1: event.target.checked }))}
+                      className="h-4 w-4 accent-violet-600"
+                    />
+                    <span className="text-caption font-bold text-slate-700">Chi nhánh Quận 1</span>
+                  </label>
+                </div>
+                <label className="mt-3 block">
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">Lưu ý vận hành</span>
+                  <textarea
+                    value={form.notes}
+                    onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                    placeholder="Điều kiện áp dụng, phụ thu, lưu ý khi tư vấn..."
+                  />
+                </label>
+              </fieldset>
+            </div>
+
+            <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6">
+              <button
+                type="button"
+                onClick={() => setFormMode(null)}
+                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
+              >
+                <Sparkles className="h-4 w-4" />
+                {formMode === 'CREATE' ? 'Tạo dịch vụ' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

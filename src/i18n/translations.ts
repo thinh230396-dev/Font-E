@@ -91,6 +91,8 @@ export const EN_TRANSLATIONS: Record<string, string> = {
   'Thu & Chi': 'Income & expenses',
   'Vệ sinh & an toàn': 'Hygiene & safety',
   'Báo cáo': 'Reports',
+  'Bản tin hệ thống': 'System announcements',
+  'Bản tin & Thông báo': 'Announcements & Broadcasts',
   'Gói đăng ký': 'Subscription',
   'Trung tâm trợ giúp': 'Help & Support',
   'Cài đặt tiệm': 'Salon settings',

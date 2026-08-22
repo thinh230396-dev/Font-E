@@ -327,8 +327,19 @@ export default function TenantAdminNailGallery({
 
   const canManage = accessMode === 'full';
 
-  useEffect(() => { try { localStorage.setItem(designStorageKey, JSON.stringify(designs)); } catch { /* optional */ } }, [designStorageKey, designs]);
-  useEffect(() => { try { localStorage.setItem(colorStorageKey, JSON.stringify(colors)); } catch { /* optional */ } }, [colorStorageKey, colors]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(designStorageKey, JSON.stringify(designs));
+      window.dispatchEvent(new CustomEvent('salonsys_designs_updated', { detail: { tenantName, designs } }));
+    } catch { /* optional */ }
+  }, [designStorageKey, designs, tenantName]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(colorStorageKey, JSON.stringify(colors));
+      window.dispatchEvent(new CustomEvent('salonsys_colors_updated', { detail: { tenantName, colors } }));
+    } catch { /* optional */ }
+  }, [colorStorageKey, colors, tenantName]);
 
   useEffect(() => {
     if (selectedDesign || selectedColor || formMode) {

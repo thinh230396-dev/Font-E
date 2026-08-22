@@ -17,7 +17,10 @@ import {
   LockKeyhole,
   CheckCircle2,
   CalendarDays,
-  X
+  X,
+  Archive,
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 import { SystemAlert } from '../types';
 import { formatAlertFilterDate, formatAlertTimestamp, getAlertDateKey } from '../utils/alerts';
@@ -28,6 +31,9 @@ interface HeaderProps {
   alerts: SystemAlert[];
   onMarkAllAlertsAsRead: () => void;
   onAlertClick: (id: string) => void;
+  onDeleteAlert?: (id: string) => void;
+  onToggleArchiveAlert?: (id: string) => void;
+  onClearAllAlerts?: () => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onLogout: () => void;
@@ -43,6 +49,9 @@ export default function Header({
   alerts, 
   onMarkAllAlertsAsRead,
   onAlertClick,
+  onDeleteAlert,
+  onToggleArchiveAlert,
+  onClearAllAlerts,
   searchQuery,
   setSearchQuery,
   onLogout,
@@ -54,17 +63,21 @@ export default function Header({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
-  const [alertFilter, setAlertFilter] = useState<'ALL' | 'UNREAD'>('ALL');
+  const [alertFilter, setAlertFilter] = useState<'ALL' | 'UNREAD' | 'ARCHIVED'>('ALL');
   const [alertDate, setAlertDate] = useState('');
   const [visibleAlertCount, setVisibleAlertCount] = useState(6);
   const profileRef = useRef<HTMLDivElement>(null);
   const alertRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
 
-  const unreadAlerts = alerts.filter(a => !a.isRead);
+  const activeAlerts = alerts.filter(a => !a.isArchived);
+  const archivedAlerts = alerts.filter(a => Boolean(a.isArchived));
+  const unreadAlerts = activeAlerts.filter(a => !a.isRead);
+
+  const baseAlerts = alertFilter === 'ARCHIVED' ? archivedAlerts : activeAlerts;
   const dateFilteredAlerts = alertDate
-    ? alerts.filter((alert) => getAlertDateKey(alert.createdAt) === alertDate)
-    : alerts;
+    ? baseAlerts.filter((alert) => getAlertDateKey(alert.createdAt) === alertDate)
+    : baseAlerts;
   const dateFilteredUnreadAlerts = dateFilteredAlerts.filter((alert) => !alert.isRead);
   const filteredAlerts = alertFilter === 'UNREAD' ? dateFilteredUnreadAlerts : dateFilteredAlerts;
   const visibleAlerts = filteredAlerts.slice(0, visibleAlertCount);
@@ -204,42 +217,133 @@ export default function Header({
                 </div>
               </div>
               <div className="flex gap-1 border-b border-brand-outline/40 bg-brand-surface px-3 py-2">
-                <button type="button" onClick={() => { setAlertFilter('ALL'); setVisibleAlertCount(6); }} className={`min-h-8 flex-1 border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${alertFilter === 'ALL' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'}`}>{isEnglish ? 'All' : 'Tất cả'} <span className="ml-1 opacity-70">{dateFilteredAlerts.length}</span></button>
-                <button type="button" onClick={() => { setAlertFilter('UNREAD'); setVisibleAlertCount(6); }} className={`min-h-8 flex-1 border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${alertFilter === 'UNREAD' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'}`}>{isEnglish ? 'Unread' : 'Chưa đọc'} <span className="ml-1 opacity-70">{dateFilteredUnreadAlerts.length}</span></button>
+                <button
+                  type="button"
+                  onClick={() => { setAlertFilter('ALL'); setVisibleAlertCount(6); }}
+                  className={`min-h-8 flex-1 rounded-lg border-0 px-2 py-1.5 text-[10px] font-bold shadow-none transition cursor-pointer ${
+                    alertFilter === 'ALL'
+                      ? 'bg-brand-primary/10 text-brand-primary'
+                      : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'
+                  }`}
+                >
+                  {isEnglish ? 'All' : 'Tất cả'} <span className="ml-1 opacity-70">{dateFilteredAlerts.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAlertFilter('UNREAD'); setVisibleAlertCount(6); }}
+                  className={`min-h-8 flex-1 rounded-lg border-0 px-2 py-1.5 text-[10px] font-bold shadow-none transition cursor-pointer ${
+                    alertFilter === 'UNREAD'
+                      ? 'bg-brand-primary/10 text-brand-primary'
+                      : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'
+                  }`}
+                >
+                  {isEnglish ? 'Unread' : 'Chưa đọc'} <span className="ml-1 opacity-70">{dateFilteredUnreadAlerts.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAlertFilter('ARCHIVED'); setVisibleAlertCount(6); }}
+                  className={`min-h-8 flex-1 rounded-lg border-0 px-2 py-1.5 text-[10px] font-bold shadow-none transition cursor-pointer ${
+                    alertFilter === 'ARCHIVED'
+                      ? 'bg-brand-primary/10 text-brand-primary'
+                      : 'bg-transparent text-brand-text-muted hover:bg-brand-surface-high'
+                  }`}
+                >
+                  {isEnglish ? 'Archived' : 'Đã lưu trữ'} <span className="ml-1 opacity-70">{archivedAlerts.length}</span>
+                </button>
               </div>
+
               <div className="max-h-80 overflow-y-auto divide-y divide-brand-outline/30">
                 {filteredAlerts.length === 0 ? (
-                  <div className="px-6 py-10 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-brand-surface-high text-brand-text-muted"><Bell className="h-5 w-5" /></span><p className="mt-3 text-xs font-bold text-brand-text">{alertDate ? (isEnglish ? 'No notifications found' : 'Không tìm thấy thông báo') : alertFilter === 'UNREAD' ? (isEnglish ? 'No unread notifications' : 'Không có thông báo chưa đọc') : (isEnglish ? 'No notifications' : 'Chưa có thông báo')}</p><p className="mt-1 text-[10px] text-brand-text-muted">{alertDate ? (isEnglish ? `No matching notifications on ${formatAlertFilterDate(alertDate, 'en')}.` : `Không có thông báo phù hợp trong ngày ${formatAlertFilterDate(alertDate, 'vi')}.`) : alertFilter === 'UNREAD' ? (isEnglish ? 'All notifications have been read.' : 'Bạn đã đọc tất cả thông báo.') : (isEnglish ? 'New system events will appear here.' : 'Sự kiện mới của hệ thống sẽ xuất hiện tại đây.')}</p></div>
+                  <div className="px-6 py-10 text-center">
+                    <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-brand-surface-high text-brand-text-muted">
+                      {alertFilter === 'ARCHIVED' ? <Archive className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+                    </span>
+                    <p className="mt-3 text-xs font-bold text-brand-text">
+                      {alertDate
+                        ? (isEnglish ? 'No notifications found' : 'Không tìm thấy thông báo')
+                        : alertFilter === 'UNREAD'
+                        ? (isEnglish ? 'No unread notifications' : 'Không có thông báo chưa đọc')
+                        : alertFilter === 'ARCHIVED'
+                        ? (isEnglish ? 'No archived notifications' : 'Chưa có thông báo lưu trữ')
+                        : (isEnglish ? 'No notifications' : 'Chưa có thông báo')}
+                    </p>
+                    <p className="mt-1 text-[10px] text-brand-text-muted">
+                      {alertDate
+                        ? (isEnglish ? `No matching notifications on ${formatAlertFilterDate(alertDate, 'en')}.` : `Không có thông báo phù hợp trong ngày ${formatAlertFilterDate(alertDate, 'vi')}.`)
+                        : alertFilter === 'UNREAD'
+                        ? (isEnglish ? 'All notifications have been read.' : 'Bạn đã đọc tất cả thông báo.')
+                        : alertFilter === 'ARCHIVED'
+                        ? (isEnglish ? 'Archived notifications will be stored here.' : 'Các thông báo bạn lưu trữ sẽ được gom gọn tại đây.')
+                        : (isEnglish ? 'New system events will appear here.' : 'Sự kiện mới của hệ thống sẽ xuất hiện tại đây.')}
+                    </p>
+                  </div>
                 ) : (
                   visibleAlerts.map((alert) => (
-                    <button
-                      type="button"
-                      role="menuitem"
+                    <div
                       key={alert.id} 
-                      onClick={() => {
-                        onAlertClick(alert.id);
-                        setShowAlertMenu(false);
-                      }}
-                      className={`h-auto w-full rounded-none border-0 p-3.5 text-left shadow-none transition-colors cursor-pointer hover:bg-brand-surface-high/50 ${!alert.isRead ? 'bg-brand-primary/5' : 'bg-transparent'}`}
+                      className={`group relative flex items-start justify-between gap-2 p-3 text-left transition-colors hover:bg-brand-surface-high/50 ${
+                        !alert.isRead && !alert.isArchived ? 'bg-brand-primary/5' : 'bg-transparent'
+                      }`}
                     >
-                      <div className="flex gap-2.5 items-start">
-                        {getAlertIcon(alert.type)}
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-medium text-brand-text truncate ${!alert.isRead ? 'font-semibold' : ''}`}>
-                            {alert.title}
-                          </p>
-                          <p className="text-[10px] text-brand-text-muted mt-0.5 line-clamp-2">
-                            {alert.description}
-                          </p>
-                          <span className="text-[8px] text-brand-text-muted/60 mt-1 block">
-                            {formatAlertTimestamp(alert.createdAt, interfaceLanguage)}
-                          </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onAlertClick(alert.id);
+                          setShowAlertMenu(false);
+                        }}
+                        className="flex-1 min-w-0 border-0 bg-transparent p-0 text-left cursor-pointer"
+                      >
+                        <div className="flex gap-2.5 items-start">
+                          {getAlertIcon(alert.type)}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-medium text-brand-text truncate ${!alert.isRead ? 'font-semibold' : ''}`}>
+                              {alert.title}
+                            </p>
+                            <p className="text-[10px] text-brand-text-muted mt-0.5 line-clamp-2">
+                              {alert.description}
+                            </p>
+                            <span className="text-[8px] text-brand-text-muted/60 mt-1 block">
+                              {formatAlertTimestamp(alert.createdAt, interfaceLanguage)}
+                            </span>
+                          </div>
+                          {!alert.isRead && !alert.isArchived && (
+                            <span className="w-1.5 h-1.5 bg-brand-primary rounded-full shrink-0 mt-1.5" />
+                          )}
                         </div>
-                        {!alert.isRead && (
-                          <span className="w-1.5 h-1.5 bg-brand-primary rounded-full shrink-0 mt-1.5" />
+                      </button>
+
+                      {/* Action buttons on hover */}
+                      <div className="flex items-center gap-1 shrink-0 pt-0.5 opacity-80 group-hover:opacity-100 transition">
+                        {onToggleArchiveAlert && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleArchiveAlert(alert.id);
+                            }}
+                            title={alert.isArchived ? (isEnglish ? 'Unarchive' : 'Khôi phục') : (isEnglish ? 'Archive' : 'Lưu trữ để ẩn')}
+                            className="p-1 rounded-md text-brand-text-muted hover:text-brand-primary hover:bg-brand-surface-high transition cursor-pointer"
+                          >
+                            {alert.isArchived ? <RotateCcw className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+                          </button>
+                        )}
+                        {onDeleteAlert && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(isEnglish ? 'Are you sure you want to delete this notification?' : 'Bạn có chắc muốn xóa thông báo này khỏi danh sách?')) {
+                                onDeleteAlert(alert.id);
+                              }
+                            }}
+                            title={isEnglish ? 'Delete notification' : 'Xóa thông báo'}
+                            className="p-1 rounded-md text-brand-text-muted hover:text-brand-error hover:bg-brand-surface-high transition cursor-pointer"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
                         )}
                       </div>
-                    </button>
+                    </div>
                   ))
                 )}
               </div>

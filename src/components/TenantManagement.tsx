@@ -1151,23 +1151,6 @@ export default function TenantManagement({
             cell: (tenant) => {
               const adminLocked = isTenantAdminSuspended(tenant, tenantAdmins);
               return (
-<<<<<<< HEAD
-                <div className="flex min-w-[220px] items-center gap-3">
-                  {renderTenantAvatar(tenant)}
-                  <div className="flex min-w-0 flex-col">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="truncate font-bold text-brand-text">{tenant.name}</span>
-                      {adminLocked && (
-                        <span
-                          className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[10px] font-bold text-amber-700 dark:text-amber-300 shrink-0"
-                          title="Tài khoản Tenant Admin của tiệm này đang bị khóa tạm thời"
-                        >
-                          <Lock className="w-2.5 h-2.5 text-amber-500" /> Admin bị khóa
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-caption text-brand-text-muted">{tenant.id} · tạo ngày {tenant.createdAt}</span>
-=======
                 <div className="flex min-w-[150px] max-w-[210px] items-center gap-2.5">
                   {renderTenantAvatar(tenant, 'w-8 h-8 text-xs shrink-0')}
                   <div className="flex min-w-0 flex-1 flex-col justify-center">
@@ -1187,7 +1170,6 @@ export default function TenantManagement({
                     <span className="truncate text-xs text-brand-text-muted block">
                       {tenant.id}
                     </span>
->>>>>>> 086b7e1 (commit deeeeeee)
                   </div>
                 </div>
               );
@@ -1200,27 +1182,6 @@ export default function TenantManagement({
             cell: (tenant) => {
               const adminTenantCount = tenantAdminUsageByEmail[tenant.adminEmail.trim().toLowerCase()] || 0;
               const adminLocked = isTenantAdminSuspended(tenant, tenantAdmins);
-<<<<<<< HEAD
-              return (
-                <div className="flex min-w-[180px] flex-col">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`font-medium text-brand-text ${adminLocked ? 'line-through opacity-80' : ''}`}>{tenant.adminName}</span>
-                    {adminLocked && (
-                      <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.2 bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold text-[9px] border border-rose-500/25">
-                        <Lock className="w-2.5 h-2.5" /> Bị khóa
-                      </span>
-                    )}
-                  </div>
-                  <span className="break-all text-caption text-brand-text-muted">{tenant.adminEmail}</span>
-                  {adminLocked ? (
-                    <span className="mt-0.5 text-[10px] font-semibold text-rose-500 dark:text-rose-400 flex items-center gap-1">
-                      Quyền quản trị bị đình chỉ
-                    </span>
-                  ) : adminTenantCount > 1 ? (
-                    <span
-                      title="Tenant Admin này đang được gắn cho nhiều tenant, chưa đúng logic 1 Tenant Admin quản lý 1 tenant."
-                      className="mt-1 w-fit rounded-full border border-brand-tertiary/30 bg-brand-tertiary/10 px-2 py-0.5 text-caption font-bold text-brand-tertiary"
-=======
               const initials = tenant.adminName
                 ? tenant.adminName.trim().split(/\s+/).filter(Boolean).slice(-2).map(w => w[0]).join('').toUpperCase()
                 : 'AD';
@@ -1261,15 +1222,10 @@ export default function TenantManagement({
                     <span 
                       className="truncate text-xs text-brand-text-muted block max-w-[130px]" 
                       title={tenant.adminEmail}
->>>>>>> 086b7e1 (commit deeeeeee)
                     >
                       {tenant.adminEmail}
                     </span>
-<<<<<<< HEAD
-                  ) : null}
-=======
                   </div>
->>>>>>> 086b7e1 (commit deeeeeee)
                 </div>
               );
             }
@@ -1319,11 +1275,7 @@ export default function TenantManagement({
             key: 'actions',
             header: 'Hành động',
             actions: true,
-<<<<<<< HEAD
-            width: '180px',
-=======
             width: '135px',
->>>>>>> 086b7e1 (commit deeeeeee)
             cell: (tenant) => (
               <div className="flex items-center justify-center gap-1">
                 <Button

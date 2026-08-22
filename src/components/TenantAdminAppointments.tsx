@@ -191,23 +191,35 @@ const stationDirectory: Record<BranchCode, string[]> = {
   Q1: ['M-11', 'M-12', 'M-13', 'P-11', 'P-12', 'V-11', 'V-12']
 };
 
-const appointmentSeed: TenantAppointment[] = [
-  { id: 'APT-1040', customer: 'Đặng Hải Yến', phone: '0903 114 668', date: '2026-07-16', start: '08:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'COMPLETED', price: 380_000, deposit: 0, note: 'Da tay nhạy cảm, ưu tiên sản phẩm không mùi.', station: 'Bàn M-04', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '15/07/2026 · 18:42' },
-  { id: 'APT-1041', customer: 'Nguyễn Lan Anh', phone: '0988 226 510', date: '2026-07-16', start: '08:15', duration: 90, service: 'Pedicure spa chuyên sâu', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'RECEPTION', status: 'COMPLETED', price: 650_000, deposit: 200_000, note: 'Không dùng sản phẩm tẩy tế bào chết có bạc hà.', station: 'Ghế P-02', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '14/07/2026 · 10:20' },
-  { id: 'APT-1042', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: '2026-07-16', start: '10:00', duration: 120, service: 'Nail Art Premium', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'IN_SERVICE', price: 1_200_000, deposit: 500_000, note: 'Mẫu chrome bạc, khách đã gửi ảnh tham khảo qua Zalo.', station: 'Bàn VIP-01', reminderSent: true, createdBy: 'Website booking', createdAt: '13/07/2026 · 21:05' },
-  { id: 'APT-1043', customer: 'Trần Thu Hà', phone: '0908 337 912', date: '2026-07-16', start: '10:15', duration: 75, service: 'Combo manicure & sơn gel', staff: 'Minh Khang', branch: 'Q3', source: 'ZALO', status: 'CHECKED_IN', price: 480_000, deposit: 100_000, note: 'Giữ form móng oval ngắn, tông nude công sở.', station: 'Bàn M-02', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '15/07/2026 · 09:12' },
-  { id: 'APT-1044', customer: 'Lê Ngọc Mai', phone: '0936 221 557', date: '2026-07-16', start: '11:30', duration: 90, service: 'Pedicure spa chuyên sâu', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 650_000, deposit: 200_000, note: 'Khách lần đầu, cần tư vấn tình trạng móng trước khi làm.', station: 'Ghế P-03', reminderSent: true, createdBy: 'Website booking', firstVisit: true, createdAt: '15/07/2026 · 22:18' },
-  { id: 'APT-1045', customer: 'Phạm Hoài Nam', phone: '0977 660 341', date: '2026-07-16', start: '13:45', duration: 45, service: 'Tháo gel & dưỡng móng', staff: 'Quốc Bảo', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 220_000, deposit: 0, note: 'Gọi lại xác nhận trước 12:00.', station: 'Ghế P-01', reminderSent: false, createdBy: 'Owner', firstVisit: true, createdAt: '16/07/2026 · 08:04' },
-  { id: 'APT-1046', customer: 'Vũ Khánh Linh', phone: '0909 552 770', date: '2026-07-16', start: '15:00', duration: 150, service: 'Đắp gel nối móng', staff: 'Minh Khang', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_350_000, deposit: 500_000, note: 'Form almond dài vừa, phối french ombre.', station: 'Bàn VIP-02', reminderSent: true, createdBy: 'Website booking', createdAt: '15/07/2026 · 15:36' },
-  { id: 'APT-1047', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', date: '2026-07-16', start: '16:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'ZALO', status: 'PENDING', price: 380_000, deposit: 0, note: 'Khách dùng voucher sinh nhật.', station: 'Bàn M-04', reminderSent: false, createdBy: 'Lễ tân Mai', createdAt: '16/07/2026 · 09:31' },
-  { id: 'APT-1048', customer: 'Đỗ Tuấn Kiệt', phone: '0918 734 662', date: '2026-07-16', start: '16:30', duration: 45, service: 'Tháo gel & dưỡng móng', staff: 'Quốc Bảo', branch: 'Q3', source: 'RECEPTION', status: 'CONFIRMED', price: 220_000, deposit: 0, note: '', station: 'Ghế P-01', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt: '16/07/2026 · 10:02' },
-  { id: 'APT-1049', customer: 'Trương Bảo Ngọc', phone: '0902 778 219', date: '2026-07-16', start: '09:00', duration: 60, service: 'Dặm gel & sửa form', staff: 'Hà My', branch: 'Q1', source: 'PHONE', status: 'COMPLETED', price: 450_000, deposit: 200_000, note: 'Mã màu cũ đã lưu trong hồ sơ khách.', station: 'Bàn M-01', reminderSent: true, createdBy: 'Quản lý Q1', createdAt: '14/07/2026 · 13:16' },
-  { id: 'APT-1050', customer: 'Ngô Minh Châu', phone: '0966 124 700', date: '2026-07-16', start: '13:00', duration: 120, service: 'Nail Art Premium', staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'CONFIRMED', price: 1_200_000, deposit: 500_000, note: 'Khách mới, kiểm tra tiền sử dị ứng gel và keo.', station: 'Bàn VIP-01', reminderSent: true, createdBy: 'Website booking', firstVisit: true, createdAt: '15/07/2026 · 20:11' },
-  { id: 'APT-1051', customer: 'Mai Đức Anh', phone: '0901 533 008', date: '2026-07-16', start: '15:30', duration: 75, service: 'Combo manicure & sơn gel', staff: 'Gia Huy', branch: 'Q1', source: 'ZALO', status: 'PENDING', price: 480_000, deposit: 0, note: '', station: 'Bàn M-03', reminderSent: false, createdBy: 'Quản lý Q1', createdAt: '16/07/2026 · 07:55' },
-  { id: 'APT-1052', customer: 'Tạ Mỹ Duyên', phone: '0933 112 800', date: '2026-07-15', start: '14:00', duration: 150, service: 'Đắp gel nối móng', staff: 'Minh Khang', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 1_350_000, deposit: 500_000, note: '', station: 'Bàn VIP-02', reminderSent: true, createdBy: 'Website booking', createdAt: '13/07/2026 · 11:42' },
-  { id: 'APT-1053', customer: 'Huỳnh Phương Thảo', phone: '0905 811 229', date: '2026-07-17', start: '09:30', duration: 120, service: 'Nail Art Premium', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_200_000, deposit: 500_000, note: 'Khách cần hoàn tất trước 12:00.', station: 'Bàn VIP-01', reminderSent: true, createdBy: 'Website booking', createdAt: '15/07/2026 · 16:30' },
-  { id: 'APT-1054', customer: 'Phan Gia Hân', phone: '0974 360 118', date: '2026-07-17', start: '13:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 380_000, deposit: 0, note: '', station: 'Bàn M-04', reminderSent: false, createdBy: 'Owner', createdAt: '16/07/2026 · 10:18' }
-];
+export const generateAppointmentSeed = (): TenantAppointment[] => {
+  const now = new Date();
+  const currentDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const prevDateObj = new Date(now.getTime() - 86_400_000);
+  const prevDate = `${prevDateObj.getFullYear()}-${String(prevDateObj.getMonth() + 1).padStart(2, '0')}-${String(prevDateObj.getDate()).padStart(2, '0')}`;
+  const nextDateObj = new Date(now.getTime() + 86_400_000);
+  const nextDate = `${nextDateObj.getFullYear()}-${String(nextDateObj.getMonth() + 1).padStart(2, '0')}-${String(nextDateObj.getDate()).padStart(2, '0')}`;
+  const createdAt = new Date().toISOString();
+
+  return [
+    { id: 'APT-1040', customer: 'Đặng Hải Yến', phone: '0903 114 668', date: currentDate, start: '08:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'COMPLETED', price: 380_000, deposit: 0, note: 'Da tay nhạy cảm, ưu tiên sản phẩm không mùi.', station: 'M-04', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt },
+    { id: 'APT-1041', customer: 'Nguyễn Lan Anh', phone: '0988 226 510', date: currentDate, start: '08:15', duration: 90, service: 'Pedicure spa chuyên sâu', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'RECEPTION', status: 'COMPLETED', price: 650_000, deposit: 200_000, note: 'Không dùng sản phẩm tẩy tế bào chết có bạc hà.', station: 'P-02', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt },
+    { id: 'APT-1042', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: currentDate, start: '10:00', duration: 120, service: 'Nail Art Premium', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'IN_SERVICE', price: 1_200_000, deposit: 500_000, note: 'Mẫu chrome bạc, khách đã gửi ảnh tham khảo qua Zalo.', station: 'VIP-01', reminderSent: true, createdBy: 'Website booking', createdAt },
+    { id: 'APT-1043', customer: 'Trần Thu Hà', phone: '0908 337 912', date: currentDate, start: '10:15', duration: 75, service: 'Combo manicure & sơn gel', staff: 'Minh Châu', branch: 'Q3', source: 'ZALO', status: 'CHECKED_IN', price: 480_000, deposit: 100_000, note: 'Giữ form móng oval ngắn, tông nude công sở.', station: 'M-02', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt },
+    { id: 'APT-1044', customer: 'Lê Ngọc Mai', phone: '0936 221 557', date: currentDate, start: '11:30', duration: 90, service: 'Pedicure spa chuyên sâu', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 650_000, deposit: 200_000, note: 'Khách lần đầu, cần tư vấn tình trạng móng trước khi làm.', station: 'P-01', reminderSent: true, createdBy: 'Website booking', firstVisit: true, createdAt },
+    { id: 'APT-1045', customer: 'Phạm Hoài Nam', phone: '0977 660 341', date: currentDate, start: '13:45', duration: 45, service: 'Tháo gel & dưỡng móng', staff: 'Quốc Bảo', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 220_000, deposit: 0, note: 'Gọi lại xác nhận trước 12:00.', station: 'P-01', reminderSent: false, createdBy: 'Owner', firstVisit: true, createdAt },
+    { id: 'APT-1046', customer: 'Vũ Khánh Linh', phone: '0909 552 770', date: currentDate, start: '15:00', duration: 150, service: 'Đắp gel nối móng', staff: 'Minh Châu', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_350_000, deposit: 500_000, note: 'Form almond dài vừa, phối french ombre.', station: 'VIP-02', reminderSent: true, createdBy: 'Website booking', createdAt },
+    { id: 'APT-1047', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', date: currentDate, start: '16:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'ZALO', status: 'PENDING', price: 380_000, deposit: 0, note: 'Khách dùng voucher sinh nhật.', station: 'M-04', reminderSent: false, createdBy: 'Lễ tân Mai', createdAt },
+    { id: 'APT-1048', customer: 'Đỗ Tuấn Kiệt', phone: '0918 734 662', date: currentDate, start: '16:30', duration: 45, service: 'Tháo gel & dưỡng móng', staff: 'Quốc Bảo', branch: 'Q3', source: 'RECEPTION', status: 'CONFIRMED', price: 220_000, deposit: 0, note: '', station: 'P-01', reminderSent: true, createdBy: 'Lễ tân Mai', createdAt },
+    { id: 'APT-1049', customer: 'Trương Bảo Ngọc', phone: '0902 778 219', date: currentDate, start: '09:00', duration: 60, service: 'Dặm gel & sửa form', staff: 'Hà My', branch: 'Q1', source: 'PHONE', status: 'COMPLETED', price: 450_000, deposit: 200_000, note: 'Mã màu cũ đã lưu trong hồ sơ khách.', station: 'M-11', reminderSent: true, createdBy: 'Quản lý Q1', createdAt },
+    { id: 'APT-1050', customer: 'Ngô Minh Châu', phone: '0966 124 700', date: currentDate, start: '13:00', duration: 120, service: 'Nail Art Premium', staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'CONFIRMED', price: 1_200_000, deposit: 500_000, note: 'Khách mới, kiểm tra tiền sử dị ứng gel và keo.', station: 'V-11', reminderSent: true, createdBy: 'Website booking', firstVisit: true, createdAt },
+    { id: 'APT-1051', customer: 'Mai Đức Anh', phone: '0901 533 008', date: currentDate, start: '15:30', duration: 75, service: 'Combo manicure & sơn gel', staff: 'Gia Huy', branch: 'Q1', source: 'ZALO', status: 'PENDING', price: 480_000, deposit: 0, note: '', station: 'M-12', reminderSent: false, createdBy: 'Quản lý Q1', createdAt },
+    { id: 'APT-1052', customer: 'Tạ Mỹ Duyên', phone: '0933 112 800', date: prevDate, start: '14:00', duration: 150, service: 'Đắp gel nối móng', staff: 'Minh Châu', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 1_350_000, deposit: 500_000, note: '', station: 'VIP-02', reminderSent: true, createdBy: 'Website booking', createdAt },
+    { id: 'APT-1053', customer: 'Huỳnh Phương Thảo', phone: '0905 811 229', date: nextDate, start: '09:30', duration: 120, service: 'Nail Art Premium', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_200_000, deposit: 500_000, note: 'Khách cần hoàn tất trước 12:00.', station: 'VIP-01', reminderSent: true, createdBy: 'Website booking', createdAt },
+    { id: 'APT-1054', customer: 'Phan Gia Hân', phone: '0974 360 118', date: nextDate, start: '13:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 380_000, deposit: 0, note: '', station: 'M-04', reminderSent: false, createdBy: 'Owner', createdAt }
+  ];
+};
+
+export const appointmentSeed: TenantAppointment[] = generateAppointmentSeed();
 
 const nextStatus: Partial<Record<AppointmentStatus, AppointmentStatus>> = {
   PENDING: 'CONFIRMED',
@@ -306,6 +318,26 @@ const format24HourInput = (value: string) => {
   return digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits;
 };
 
+export const SALON_OPEN_MINUTES = 8 * 60; // 08:00 (480 min)
+export const SALON_CLOSE_MINUTES = 20 * 60 + 30; // 20:30 (1230 min)
+export const SALON_LAST_BOOKING_MINUTES = 20 * 60; // 20:00 (1200 min)
+
+export const formatMinutesFromStart = (totalMinutes: number) => {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
+export const getOperationalDefaultTime = () => {
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  if (currentMinutes >= SALON_OPEN_MINUTES && currentMinutes <= SALON_LAST_BOOKING_MINUTES) {
+    const rounded = Math.ceil(currentMinutes / 5) * 5;
+    return formatMinutesFromStart(Math.min(rounded, SALON_LAST_BOOKING_MINUTES));
+  }
+  return '08:00';
+};
+
 const minutesFromStart = (time: string) => {
   const [hour, minute] = time.split(':').map(Number);
   return hour * 60 + minute;
@@ -321,7 +353,7 @@ const emptyForm = (date: string, branch: string): AppointmentFormState => ({
   customer: '',
   phone: '',
   date,
-  start: '09:00',
+  start: getOperationalDefaultTime(),
   services: [services[0].name],
   staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn',
   branch: branch === 'Q1' ? 'Q1' : 'Q3',
@@ -349,12 +381,16 @@ export default function TenantAdminAppointments({
   const storageKey = `tenant-admin-appointments-v2:${tenantName}`;
   const todayDate = toIsoDate(new Date());
   const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
-    if (typeof window === 'undefined') return getTenantAdminInitialData(null, appointmentSeed);
+    if (typeof window === 'undefined') return generateAppointmentSeed();
     try {
       const stored = window.localStorage.getItem(storageKey);
-      return getTenantAdminInitialData(stored ? JSON.parse(stored) as TenantAppointment[] : null, appointmentSeed);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return getTenantAdminInitialData(null, generateAppointmentSeed());
     } catch {
-      return getTenantAdminInitialData(null, appointmentSeed);
+      return generateAppointmentSeed();
     }
   });
   const initialDate = getInitialScheduleDate(appointments, selectedBranch, todayDate);
@@ -377,6 +413,7 @@ export default function TenantAdminAppointments({
   const [formMode, setFormMode] = useState<'CREATE' | 'EDIT' | null>(null);
   const [form, setForm] = useState<AppointmentFormState>(() => emptyForm(initialDate, selectedBranch));
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancellationNote, setCancellationNote] = useState('');
@@ -388,8 +425,46 @@ export default function TenantAdminAppointments({
   const currentMinuteOfDay = now.getHours() * 60 + now.getMinutes();
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify(appointments));
-  }, [appointments, storageKey]);
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(appointments));
+      window.dispatchEvent(new CustomEvent('salonsys_appointments_updated', { detail: { tenantName, appointments } }));
+    } catch {
+      // Local storage optional
+    }
+  }, [appointments, storageKey, tenantName]);
+
+  useEffect(() => {
+    const handleAppointmentsUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tenantName?: string; appointments?: TenantAppointment[] }>;
+      if (!customEvent.detail?.tenantName || customEvent.detail.tenantName === tenantName) {
+        if (customEvent.detail?.appointments) {
+          setAppointments(customEvent.detail.appointments);
+        } else {
+          try {
+            const stored = window.localStorage.getItem(storageKey);
+            if (stored) setAppointments(JSON.parse(stored));
+          } catch {
+            // ignore
+          }
+        }
+      }
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === storageKey && e.newValue) {
+        try {
+          setAppointments(JSON.parse(e.newValue));
+        } catch {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener('salonsys_appointments_updated', handleAppointmentsUpdated);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('salonsys_appointments_updated', handleAppointmentsUpdated);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [storageKey, tenantName]);
 
   useEffect(() => {
     if (!bookingRequest) return;
@@ -689,6 +764,7 @@ export default function TenantAdminAppointments({
     if (!requireManageAccess()) return;
     setForm(emptyForm(selectedDate, selectedBranch));
     setFormError('');
+    setFieldErrors({});
     setFormMode('CREATE');
   };
 
@@ -714,6 +790,7 @@ export default function TenantAdminAppointments({
       note: appointment.note
     });
     setFormError('');
+    setFieldErrors({});
     setFormMode('EDIT');
   };
 
@@ -758,75 +835,139 @@ export default function TenantAdminAppointments({
   const submitAppointment = (event: FormEvent) => {
     event.preventDefault();
     if (!requireManageAccess()) return;
-    if (!form.customer.trim() || !form.phone.trim() || !form.date || !form.start || !form.services.length || !form.staff) {
-      setFormError('Vui lòng nhập đầy đủ khách hàng, số điện thoại, ít nhất một dịch vụ, nhân viên và thời gian.');
-      return;
+    const errors: Record<string, string> = {};
+
+    // 1. Customer
+    if (!form.customer.trim()) {
+      errors.customer = 'Vui lòng nhập tên khách hàng.';
+    } else if (form.customer.trim().length < 2) {
+      errors.customer = 'Tên khách hàng phải có tối thiểu 2 ký tự.';
     }
+
+    // 2. Phone
+    const cleanPhone = form.phone.replace(/[\s.-]/g, '');
     const phoneDigits = form.phone.replace(/\D/g, '');
-    if (!/^(?:\+84|0)[0-9\s.-]{8,12}$/.test(form.phone.trim()) || phoneDigits.length < 9) {
-      setFormError('Số điện thoại chưa đúng định dạng Việt Nam.');
-      return;
+    if (!form.phone.trim()) {
+      errors.phone = 'Vui lòng nhập số điện thoại khách hàng.';
+    } else if (!/^(?:0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(cleanPhone) && !/^(?:\+84|0)[0-9\s.-]{8,12}$/.test(form.phone.trim())) {
+      errors.phone = 'Số điện thoại chưa đúng định dạng di động Việt Nam (gồm 10 số, ví dụ 0903123456).';
     }
-    if (!isValid24HourTime(form.start)) {
-      setFormError('Giờ bắt đầu phải theo định dạng 24 giờ HH:mm, ví dụ 00:00 hoặc 14:30.');
-      return;
+
+    // 3. Services
+    if (!form.services.length) {
+      errors.services = 'Vui lòng chọn ít nhất một dịch vụ trong danh sách.';
     }
 
     const chosenServices = form.services
       .map((name) => services.find((service) => service.name === name))
       .filter((service): service is (typeof services)[number] => Boolean(service));
-    if (!chosenServices.length || chosenServices.length !== form.services.length) {
-      setFormError('Danh sách dịch vụ có mục không còn trong bảng giá. Vui lòng chọn lại dịch vụ.');
-      return;
+    if (form.services.length > 0 && (!chosenServices.length || chosenServices.length !== form.services.length)) {
+      errors.services = 'Danh sách dịch vụ có mục không còn trong bảng giá. Vui lòng chọn lại dịch vụ.';
     }
     const totalDuration = chosenServices.reduce((sum, service) => sum + service.duration, 0);
     const totalPrice = chosenServices.reduce((sum, service) => sum + service.price, 0);
     const existingId = formMode === 'EDIT' ? selectedAppointment?.id : undefined;
-    const startMinute = minutesFromStart(form.start);
-    const endMinute = startMinute + totalDuration;
-    if (startMinute < 8 * 60 || endMinute > 20 * 60) {
-      setFormError('Lịch hẹn phải nằm trong giờ hoạt động 08:00–20:00, bao gồm toàn bộ thời lượng dịch vụ.');
-      return;
+
+    // 4. Date
+    if (!form.date) {
+      errors.date = 'Vui lòng chọn ngày thực hiện lịch hẹn.';
     }
+
+    // 5. Start time
+    if (!form.start) {
+      errors.start = 'Vui lòng nhập giờ bắt đầu.';
+    } else if (!isValid24HourTime(form.start)) {
+      errors.start = 'Giờ bắt đầu phải theo định dạng 24 giờ HH:mm (ví dụ 08:30 hoặc 14:30).';
+    } else {
+      const startMinute = minutesFromStart(form.start);
+      const endMinute = startMinute + totalDuration;
+
+      // KIỂM TRA NGHIÊM NGẶT GIỜ MỞ CỬA CỦA SALON (08:00 – 20:30)
+      if (startMinute < SALON_OPEN_MINUTES) {
+        errors.start = `Salon chỉ mở cửa từ 08:00 sáng. Giờ bắt đầu ${form.start} nằm ngoài giờ hoạt động.`;
+      } else if (startMinute > SALON_LAST_BOOKING_MINUTES) {
+        errors.start = `Salon ngưng tiếp nhận khách sau 20:00 (đóng cửa lúc 20:30). Khung giờ ${form.start} quá trễ.`;
+      } else if (endMinute > SALON_CLOSE_MINUTES) {
+        errors.start = `Dịch vụ kéo dài ${totalDuration} phút sẽ kết thúc lúc ${getEndTime(form.start, totalDuration)} (sau giờ đóng cửa 20:30).`;
+      }
+    }
+
+    // 6. Staff
     const assignedStaff = staffDirectory.find((staff) => staff.name === form.staff && staff.branch === form.branch);
-    if (!assignedStaff) {
-      setFormError('Kỹ thuật viên không thuộc chi nhánh đã chọn.');
-      return;
+    if (!form.staff) {
+      errors.staff = 'Vui lòng phân công kỹ thuật viên phụ trách.';
+    } else if (!assignedStaff) {
+      errors.staff = 'Kỹ thuật viên không thuộc chi nhánh đã chọn.';
+    } else if (assignedStaff.shift && assignedStaff.shift.includes('–') && isValid24HourTime(form.start)) {
+      const [shiftStartStr, shiftEndStr] = assignedStaff.shift.split('–').map((s) => s.trim());
+      const shiftStartMin = minutesFromStart(shiftStartStr);
+      const shiftEndMin = minutesFromStart(shiftEndStr);
+      const startMinute = minutesFromStart(form.start);
+      const endMinute = startMinute + totalDuration;
+      if (startMinute < shiftStartMin) {
+        errors.staff = `Kỹ thuật viên ${assignedStaff.name} bắt đầu ca lúc ${shiftStartStr}. Không thể nhận lịch lúc ${form.start}.`;
+      } else if (endMinute > shiftEndMin) {
+        errors.staff = `Kỹ thuật viên ${assignedStaff.name} kết thúc ca lúc ${shiftEndStr}. Lịch kéo dài đến ${getEndTime(form.start, totalDuration)}.`;
+      }
     }
-    if (!stationDirectory[form.branch].includes(form.station)) {
-      setFormError('Ghế hoặc phòng không thuộc chi nhánh đã chọn.');
-      return;
+
+    // 7. Station
+    if (!form.station) {
+      errors.station = 'Vui lòng chọn ghế hoặc phòng phục vụ.';
+    } else if (!stationDirectory[form.branch]?.includes(form.station)) {
+      errors.station = 'Ghế hoặc phòng không thuộc chi nhánh đã chọn.';
     }
-    const duplicateCustomerAppointment = appointments.find((appointment) => (
-      appointment.id !== existingId
-      && appointment.date === form.date
-      && appointment.branch === form.branch
-      && appointment.phone.replace(/\D/g, '') === phoneDigits
-      && !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(appointment.status)
-    ));
-    if (duplicateCustomerAppointment) {
-      setFormError(`Số điện thoại này đã có lịch ${duplicateCustomerAppointment.id} lúc ${duplicateCustomerAppointment.start}. Vui lòng kiểm tra trước khi tạo lịch mới.`);
-      return;
+
+    // 8. Duplicate Phone in branch & date
+    if (!errors.phone && form.phone && form.date) {
+      const duplicateCustomerAppointment = appointments.find((appointment) => (
+        appointment.id !== existingId
+        && appointment.date === form.date
+        && appointment.branch === form.branch
+        && appointment.phone.replace(/\D/g, '') === phoneDigits
+        && !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(appointment.status)
+      ));
+      if (duplicateCustomerAppointment) {
+        errors.phone = `Số điện thoại này đã có lịch ${duplicateCustomerAppointment.id} lúc ${duplicateCustomerAppointment.start}.`;
+      }
     }
-    const conflictingAppointment = appointments.find((appointment) => {
-      if (appointment.id === existingId || appointment.date !== form.date || appointment.branch !== form.branch || ['CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
-      const existingStart = minutesFromStart(appointment.start);
-      const overlaps = startMinute < existingStart + appointment.duration && endMinute > existingStart;
-      return overlaps && (appointment.staff === form.staff || Boolean(form.station && appointment.station === form.station));
-    });
-    if (conflictingAppointment) {
-      setFormError(`${conflictingAppointment.staff === form.staff ? 'Kỹ thuật viên' : 'Bàn/ghế'} đang bận với lịch ${conflictingAppointment.id} từ ${conflictingAppointment.start} đến ${getEndTime(conflictingAppointment.start, conflictingAppointment.duration)}.`);
-      return;
+
+    // 9. Conflict
+    if (!errors.start && !errors.staff && isValid24HourTime(form.start) && form.date) {
+      const startMinute = minutesFromStart(form.start);
+      const endMinute = startMinute + totalDuration;
+      const conflictingAppointment = appointments.find((appointment) => {
+        if (appointment.id === existingId || appointment.date !== form.date || appointment.branch !== form.branch || ['CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
+        const existingStart = minutesFromStart(appointment.start);
+        const overlaps = startMinute < existingStart + appointment.duration && endMinute > existingStart;
+        return overlaps && (appointment.staff === form.staff || Boolean(form.station && appointment.station === form.station));
+      });
+      if (conflictingAppointment) {
+        if (conflictingAppointment.staff === form.staff) {
+          errors.staff = `Kỹ thuật viên ${conflictingAppointment.staff} đang bận lịch ${conflictingAppointment.id} (${conflictingAppointment.start}–${getEndTime(conflictingAppointment.start, conflictingAppointment.duration)}).`;
+        } else {
+          errors.station = `Vị trí ${form.station} đang dùng cho lịch ${conflictingAppointment.id} (${conflictingAppointment.start}–${getEndTime(conflictingAppointment.start, conflictingAppointment.duration)}).`;
+        }
+      }
     }
+
+    // 10. Deposit
     const depositValue = Number(form.deposit);
     if (!Number.isFinite(depositValue) || depositValue < 0) {
-      setFormError('Tiền đặt cọc không hợp lệ.');
+      errors.deposit = 'Tiền đặt cọc không hợp lệ.';
+    } else if (depositValue > totalPrice) {
+      errors.deposit = 'Tiền đặt cọc không được lớn hơn tổng giá dịch vụ dự kiến.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError(Object.values(errors)[0] || 'Vui lòng kiểm tra lại các thông tin chưa hợp lệ bên dưới.');
       return;
     }
-    if (depositValue > totalPrice) {
-      setFormError('Tiền đặt cọc không được lớn hơn tổng giá dịch vụ dự kiến.');
-      return;
-    }
+
+    setFieldErrors({});
+    setFormError('');
+
     const nextId = existingId || `APT-${Date.now().toString(36).toUpperCase()}`;
     const payload: TenantAppointment = {
       id: nextId,
@@ -1916,19 +2057,25 @@ export default function TenantAdminAppointments({
               <UserRound aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Thông tin khách hàng
             </legend>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Tên khách hàng" required>
+              <Field label="Tên khách hàng" required error={fieldErrors.customer}>
                 <input
                   type="text"
                   value={form.customer}
-                  onChange={(event) => setForm((current) => ({ ...current, customer: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, customer: event.target.value }));
+                    if (fieldErrors.customer) setFieldErrors((prev) => ({ ...prev, customer: '' }));
+                  }}
                   placeholder="Ví dụ: Nguyễn Minh Anh"
                 />
               </Field>
-              <Field label="Số điện thoại" required helper="Định dạng Việt Nam, ví dụ 0912 884 206.">
+              <Field label="Số điện thoại" required helper="Định dạng Việt Nam, ví dụ 0912 884 206." error={fieldErrors.phone}>
                 <input
                   type="tel"
                   value={form.phone}
-                  onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, phone: event.target.value }));
+                    if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: '' }));
+                  }}
                   placeholder="09xx xxx xxx"
                 />
               </Field>
@@ -1958,6 +2105,12 @@ export default function TenantAdminAppointments({
               </span>
             </div>
 
+            {fieldErrors.services && (
+              <p role="alert" className="mt-2 text-body font-medium text-[color:var(--color-brand-error)]">
+                {fieldErrors.services}
+              </p>
+            )}
+
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {services.map((service) => {
                 const isSelected = form.services.includes(service.name);
@@ -1977,6 +2130,7 @@ export default function TenantAdminAppointments({
                             : [...current.services, service.name]
                         }));
                         setFormError('');
+                        if (fieldErrors.services) setFieldErrors((prev) => ({ ...prev, services: '' }));
                       }}
                       className="h-4 w-4 shrink-0 accent-[var(--accent)]"
                     />
@@ -2057,10 +2211,13 @@ export default function TenantAdminAppointments({
                 </BeautifulSelect>
               </Field>
 
-              <Field label="Kỹ thuật viên phụ trách" required>
+              <Field label="Kỹ thuật viên phụ trách" required error={fieldErrors.staff}>
                 <BeautifulSelect
                   value={form.staff}
-                  onChange={(event) => setForm((current) => ({ ...current, staff: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, staff: event.target.value }));
+                    if (fieldErrors.staff) setFieldErrors((prev) => ({ ...prev, staff: '' }));
+                  }}
                   className="w-full"
                 >
                   {staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => (
@@ -2069,10 +2226,13 @@ export default function TenantAdminAppointments({
                 </BeautifulSelect>
               </Field>
 
-              <Field label="Ghế / phòng phục vụ" required>
+              <Field label="Ghế / phòng phục vụ" required error={fieldErrors.station}>
                 <BeautifulSelect
                   value={form.station}
-                  onChange={(event) => setForm((current) => ({ ...current, station: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, station: event.target.value }));
+                    if (fieldErrors.station) setFieldErrors((prev) => ({ ...prev, station: '' }));
+                  }}
                   className="w-full"
                 >
                   {stationDirectory[form.branch].map((station) => <option key={station} value={station}>{station}</option>)}
@@ -2101,15 +2261,18 @@ export default function TenantAdminAppointments({
               <Clock3 aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Thời gian &amp; trạng thái
             </legend>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Ngày" required>
+              <Field label="Ngày" required error={fieldErrors.date}>
                 <input
                   type="date"
                   value={form.date}
-                  onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, date: event.target.value }));
+                    if (fieldErrors.date) setFieldErrors((prev) => ({ ...prev, date: '' }));
+                  }}
                 />
               </Field>
 
-              <Field label="Giờ bắt đầu" required helper="Định dạng 24 giờ, ví dụ 00:00 hoặc 14:30.">
+              <Field label="Giờ bắt đầu" required helper="Giờ mở cửa: 08:00 – 20:30 (Định dạng HH:mm, ví dụ 08:30 hoặc 14:30)." error={fieldErrors.start}>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -2117,7 +2280,10 @@ export default function TenantAdminAppointments({
                   pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]"
                   placeholder="HH:mm"
                   value={form.start}
-                  onChange={(event) => setForm((current) => ({ ...current, start: format24HourInput(event.target.value) }))}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, start: format24HourInput(event.target.value) }));
+                    if (fieldErrors.start) setFieldErrors((prev) => ({ ...prev, start: '' }));
+                  }}
                 />
               </Field>
 
@@ -2144,14 +2310,17 @@ export default function TenantAdminAppointments({
               <CircleDollarSign aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Thanh toán &amp; ghi chú
             </legend>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Tiền đặt cọc" helper="Không được lớn hơn tổng giá dịch vụ dự kiến.">
+              <Field label="Tiền đặt cọc" helper="Không được lớn hơn tổng giá dịch vụ dự kiến." error={fieldErrors.deposit}>
                 <input
                   type="number"
                   min="0"
                   max={selectedServicePrice || undefined}
                   step="10000"
                   value={form.deposit}
-                  onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, deposit: event.target.value }));
+                    if (fieldErrors.deposit) setFieldErrors((prev) => ({ ...prev, deposit: '' }));
+                  }}
                 />
               </Field>
 

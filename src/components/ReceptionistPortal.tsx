@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type Reac
 import {
   Activity,
   AlertCircle,
+  AlertOctagon,
+  AlertTriangle,
   Armchair,
   ArrowUpRight,
   Banknote,
@@ -14,37 +16,58 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
+  Clock,
   Clock3,
   CreditCard,
   DoorOpen,
+  Edit3,
+  Flame,
+  HelpCircle,
+  Hourglass,
+  Image,
+  Info,
+  Layers,
   LayoutDashboard,
   LogOut,
   MapPin,
   Menu,
+  Merge,
   MessageCircle,
   Minus,
   Moon,
+  Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Phone,
   PackageSearch,
   Plus,
   ReceiptText,
+  Scissors,
   Search,
   ShieldCheck,
+  Sliders,
   Smartphone,
   Sparkles,
+  Split,
   Store,
   Sun,
+  Tag,
   TimerReset,
   Trash2,
   UserCheck,
   UserRound,
+  Users,
   UsersRound,
   WalletCards,
+  Wand2,
   X,
+  Zap,
 } from 'lucide-react';
 import type { DemoAccount } from '../auth/demoAccounts';
 import { resetTenantMockStorage } from '../utils/mockDataReset';
 import { validateAndCalculatePromotion, type LoyaltyProgram } from '../utils/promotionUtils';
+import { serviceSeed, type SalonService } from './TenantAdminServices';
+import { designSeed, colorSeed, type NailDesign, type PolishColor } from './TenantAdminNailGallery';
 import { Button, Field, Modal, StatusBadge } from './ui';
 
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
@@ -64,6 +87,171 @@ type TechnicianStatus = 'PRESENT' | 'NOT_CHECKED_IN' | 'SERVING' | 'BREAK' | 'SI
 type TechnicianShift = 'MORNING' | 'AFTERNOON' | 'FULL_DAY';
 type DeskQueueFilter = 'ACTION' | 'UPCOMING' | 'WAITING' | 'IN_SERVICE';
 
+export interface ArtDifficultyPreset {
+  level: number;
+  label: string;
+  shortLabel: string;
+  surcharge: number;
+  badge: string;
+  description: string;
+}
+
+export const ART_DIFFICULTY_PRESETS: ArtDifficultyPreset[] = [
+  { level: 0, label: 'Sơn trơn / Không kèm vẽ mẫu (+0đ)', shortLabel: 'Sơn trơn (+0đ)', surcharge: 0, badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', description: 'Chỉ sơn màu trơn cơ bản, không có vẽ mẫu hoặc họa tiết' },
+  { level: 1, label: 'Độ khó 1 · Cơ bản (+50.000đ)', shortLabel: 'Cơ bản (+50k)', surcharge: 50000, badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800', description: 'Vẽ line đơn giản, chấm bi, french đầu móng, dán sticker 2-4 ngón' },
+  { level: 2, label: 'Độ khó 2 · Tiêu chuẩn (+100.000đ)', shortLabel: 'Tiêu chuẩn (+100k)', surcharge: 100000, badge: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800', description: 'Ombre chuyển màu, vân đá Marble, mắt mèo Cat Eye, vẽ hoa nổi 4-6 ngón' },
+  { level: 3, label: 'Độ khó 3 · Nâng cao / Chi tiết (+200.000đ)', shortLabel: 'Nâng cao (+200k)', surcharge: 200000, badge: 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800', description: 'Vẽ hoạt hình Anime, vẽ hoa tả thực nhiều tầng, họa tiết phức tạp 10 ngón' },
+  { level: 4, label: 'Độ khó 4 · Masterpiece / 3D (+350.000đ)', shortLabel: '3D/Full set (+350k)', surcharge: 350000, badge: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800', description: 'Vẽ tranh phong cảnh nghệ thuật, đắp nổi 3D, đính đá & charm pha lê full set' },
+  { level: 99, label: 'Tùy chỉnh giá theo mẫu riêng của khách', shortLabel: 'Tùy chỉnh giá', surcharge: 0, badge: 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800', description: 'Lễ tân tự nhập mức phụ thu / giá thỏa thuận riêng dựa trên mẫu khách gửi' },
+];
+
+export interface NailArtTemplate {
+  id: string;
+  name: string;
+  defaultLevel: number;
+  category: string;
+  surcharge: number;
+  description: string;
+  popularTone?: string;
+  tags: string[];
+  duration: number;
+  baseServiceId?: string;
+  imageUrl?: string;
+  preview?: number;
+  colors?: Array<{ name: string; hex: string; code: string }>;
+  materials?: string[];
+}
+
+export const NAIL_ART_TEMPLATES: NailArtTemplate[] = [
+  { id: 'ART-01', name: 'Vẽ hoa nổi 3D (3D Floral Art)', defaultLevel: 2, category: 'Vẽ hoa & Đắp nổi', surcharge: 100000, description: 'Đắp cánh hoa nổi 3D mềm mại, đính nhụy ngọc trai nhỏ xinh', tags: ['hoa 3D', 'ngọc trai', 'nữ tính'], duration: 30 },
+  { id: 'ART-02', name: 'Vẽ hoạt hình Anime / Nhân vật', defaultLevel: 3, category: 'Nhân vật hoạt hình', surcharge: 200000, description: 'Vẽ cọ nét nhân vật hoạt hình Anime, chi tiết mắt và biểu cảm tinh xảo', tags: ['anime', 'hoạt hình', 'chi tiết'], duration: 45 },
+  { id: 'ART-03', name: 'Vẽ tranh phong cảnh / Nghệ thuật trừu tượng', defaultLevel: 4, category: 'Tranh nghệ thuật', surcharge: 350000, description: 'Vẽ tranh nghệ thuật phong cảnh/sơn dầu đa tầng theo yêu cầu riêng', tags: ['phong cảnh', 'sơn dầu', 'masterpiece'], duration: 60 },
+  { id: 'ART-04', name: 'Vân đá cẩm thạch Marble Art', defaultLevel: 2, category: 'Hiệu ứng đá', surcharge: 100000, description: 'Vân đá loang cẩm thạch tự nhiên viền nhũ vàng sang trọng', tags: ['marble', 'vân đá', 'sang trọng'], duration: 25 },
+  { id: 'ART-05', name: 'Ombre chuyển sắc Hàn Quốc', defaultLevel: 1, category: 'Ombre & Gradient', surcharge: 50000, description: 'Chuyển sắc mượt mà phong cách Hàn Quốc dịu dàng', tags: ['ombre', 'gradient', 'hàn quốc'], duration: 20 },
+  { id: 'ART-06', name: 'Mắt mèo kim cương Cat Eye', defaultLevel: 2, category: 'Hiệu ứng lấp lánh', surcharge: 100000, description: 'Hút mắt mèo vệt sáng kim cương chuyển động theo góc nhìn', tags: ['cat eye', 'mắt mèo', 'lấp lánh'], duration: 20 },
+  { id: 'ART-07', name: 'Tráng gương Chrome Aurora', defaultLevel: 2, category: 'Tráng gương Chrome', surcharge: 100000, description: 'Hiệu ứng tráng gương ánh xà cừ / bạc bóng gương siêu sáng', tags: ['chrome', 'tráng gương', 'aurora'], duration: 20 },
+  { id: 'ART-08', name: 'Đính đá Swarovski & Charm nơ 3D', defaultLevel: 3, category: 'Đính đá & Charm', surcharge: 200000, description: 'Đính pha lê Swarovski sáng lấp lánh kết hợp charm nơ 3D', tags: ['đính đá', 'swarovski', 'charm 3d'], duration: 35 },
+  { id: 'ART-09', name: 'French nghệ thuật cách điệu', defaultLevel: 1, category: 'French Art', surcharge: 50000, description: 'Vẽ french đầu móng đường lượn sóng hoặc viền đôi cá tính', tags: ['french', 'đầu móng', 'tối giản'], duration: 20 },
+  { id: 'ART-10', name: 'Mẫu vẽ tùy chọn theo ảnh khách gửi', defaultLevel: 99, category: 'Mẫu tự chọn', surcharge: 150000, description: 'Khách gửi ảnh mẫu trên điện thoại, KTV và quầy định giá linh hoạt', tags: ['tự chọn', 'theo mẫu', 'linh hoạt'], duration: 40 },
+];
+
+export interface PolishColorOption {
+  id: string;
+  name: string;
+  brand: string;
+  code: string;
+  hex: string;
+  finish: string;
+}
+
+export const POLISH_COLOR_OPTIONS: PolishColorOption[] = [
+  { id: 'CLR-01', name: 'Bubble Bath (Nude hồng sheer)', brand: 'OPI', code: 'NL S86', hex: '#e9c9c2', finish: 'Sheer Nude' },
+  { id: 'CLR-02', name: 'Merlot Ruby (Đỏ rượu sang chảnh)', brand: 'DND', code: '751', hex: '#681c2c', finish: 'Cream Đỏ rượu' },
+  { id: 'CLR-03', name: 'Milky White (Trắng sữa tự nhiên)', brand: 'DND', code: 'MW-01', hex: '#f5eee8', finish: 'Milky Pastel' },
+  { id: 'CLR-04', name: 'Aurora Pearl (Ánh ngọc trai tím)', brand: 'AP', code: 'AP-03', hex: '#d9d4ea', finish: 'Pearl Shimmer' },
+  { id: 'CLR-05', name: 'Glass Ocean Blue (Thạch pha lê)', brand: 'GB', code: 'GB-02', hex: '#7bc5d9', finish: 'Jelly Blue' },
+  { id: 'CLR-06', name: 'Liquid Gold (Nhũ vàng ánh kim)', brand: 'LG', code: 'LG-08', hex: '#c99b42', finish: 'Metallic Gold' },
+  { id: 'CLR-07', name: 'Blush Petal (Hồng cánh hoa)', brand: 'BP', code: 'BP-08', hex: '#efb7c0', finish: 'Soft Blush' },
+  { id: 'CLR-08', name: 'Cat Eye Magnet Silver (Mắt mèo xám)', brand: 'CE', code: 'CE-05', hex: '#949bb0', finish: 'Magnetic Silver' },
+];
+
+export interface AttachedAccessoryOption {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+}
+
+export const ATTACHED_ACCESSORY_OPTIONS: AttachedAccessoryOption[] = [
+  { id: 'ACC-01', name: 'Không kèm phụ kiện thêm', price: 0, category: 'Mặc định' },
+  { id: 'ACC-02', name: 'Charm nơ 3D ngọc trai (2 ngón)', price: 40000, category: 'Charm 3D' },
+  { id: 'ACC-03', name: 'Set đá pha lê Swarovski mini (4 ngón)', price: 60000, category: 'Đá pha lê' },
+  { id: 'ACC-04', name: 'Foil ánh kim & Xà cừ đại dương', price: 50000, category: 'Hiệu ứng' },
+  { id: 'ACC-05', name: 'Dầu dưỡng viền móng Keratin (tại chỗ)', price: 30000, category: 'Dưỡng móng' },
+  { id: 'ACC-06', name: 'Top coat tráng gương bóng siêu bền', price: 35000, category: 'Sơn phủ' },
+];
+
+export interface AllergyOrSpecialNoteOption {
+  id: string;
+  label: string;
+  shortLabel: string;
+  type: 'ALLERGY' | 'SENSITIVITY' | 'PREFERENCE' | 'VIP';
+  icon: string;
+  tone: string;
+}
+
+export const COMMON_ALLERGY_SPECIAL_NOTES: AllergyOrSpecialNoteOption[] = [
+  { id: 'AL-01', label: 'Dị ứng Axeton / Cồn / Hóa chất', shortLabel: 'Dị ứng axeton/cồn', type: 'ALLERGY', icon: '⚠️', tone: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30' },
+  { id: 'AL-02', label: 'Da mỏng / Dễ rát / Chảy máu', shortLabel: 'Da tay mỏng dễ rát', type: 'SENSITIVITY', icon: '⚠️', tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30' },
+  { id: 'AL-03', label: 'Móng yếu / Mỏng / Dễ gãy nứt', shortLabel: 'Móng mỏng yếu', type: 'SENSITIVITY', icon: '💅', tone: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border border-orange-500/30' },
+  { id: 'AL-04', label: 'Không dùng tinh dầu / Bạc hà', shortLabel: 'Tránh bạc hà', type: 'ALLERGY', icon: '🌿', tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30' },
+  { id: 'AL-05', label: 'Yêu cầu thợ làm nhẹ tay, sợ đau', shortLabel: 'Làm nhẹ tay', type: 'PREFERENCE', icon: '✨', tone: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30' },
+  { id: 'AL-06', label: 'Khách VIP / Tiêu chuẩn khắt khe', shortLabel: 'Khách VIP', type: 'VIP', icon: '⭐', tone: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30' },
+  { id: 'AL-07', label: 'Khách đang vội / Cần làm nhanh', shortLabel: 'Cần làm gấp', type: 'PREFERENCE', icon: '⚡', tone: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30' },
+];
+
+export const extractCustomerAlerts = (appointment: ReceptionAppointment) => {
+  const alerts: Array<{ label: string; shortLabel: string; tone: string; icon: string }> = [];
+  const noteText = `${appointment.note || ''}`.toLowerCase();
+
+  // If explicit allergies / tags
+  (appointment.allergies || []).forEach((a) => {
+    const found = COMMON_ALLERGY_SPECIAL_NOTES.find((item) => item.label.toLowerCase() === a.toLowerCase() || item.shortLabel.toLowerCase() === a.toLowerCase() || a.toLowerCase().includes(item.shortLabel.toLowerCase()));
+    if (found) {
+      if (!alerts.some((al) => al.shortLabel === found.shortLabel)) {
+        alerts.push({ label: found.label, shortLabel: found.shortLabel, tone: found.tone, icon: found.icon });
+      }
+    } else {
+      alerts.push({ label: a, shortLabel: a, tone: 'bg-rose-500/10 text-rose-600 border border-rose-500/30', icon: '⚠️' });
+    }
+  });
+
+  (appointment.specialTags || []).forEach((t) => {
+    if (!alerts.some((al) => al.label.toLowerCase() === t.toLowerCase())) {
+      const found = COMMON_ALLERGY_SPECIAL_NOTES.find((item) => item.label.toLowerCase() === t.toLowerCase() || item.shortLabel.toLowerCase() === t.toLowerCase());
+      if (found) {
+        alerts.push({ label: found.label, shortLabel: found.shortLabel, tone: found.tone, icon: found.icon });
+      } else {
+        alerts.push({ label: t, shortLabel: t, tone: 'bg-purple-500/10 text-purple-600 border border-purple-500/30', icon: '⭐' });
+      }
+    }
+  });
+
+  // Keyword extraction fallback from note
+  if (noteText.includes('axeton') || noteText.includes('cồn') || (noteText.includes('dị ứng') && !alerts.some((a) => a.shortLabel.includes('axeton') || a.shortLabel.includes('Dị ứng')))) {
+    if (!alerts.some((a) => a.shortLabel.includes('axeton') || a.shortLabel.includes('dị ứng'))) {
+      alerts.push({ label: 'Dị ứng Axeton / Cồn / Hóa chất', shortLabel: 'Dị ứng axeton/cồn', tone: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30', icon: '⚠️' });
+    }
+  }
+  if (noteText.includes('da mỏng') || noteText.includes('da tay mỏng') || noteText.includes('nhạy cảm') || noteText.includes('dễ rát')) {
+    if (!alerts.some((a) => a.shortLabel.includes('Da tay mỏng') || a.shortLabel.includes('mỏng') || a.shortLabel.includes('nhạy cảm'))) {
+      alerts.push({ label: 'Da tay mỏng / nhạy cảm', shortLabel: 'Da mỏng nhạy cảm', tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30', icon: '⚠️' });
+    }
+  }
+  if (noteText.includes('móng yếu') || noteText.includes('móng mỏng') || noteText.includes('dễ gãy')) {
+    if (!alerts.some((a) => a.shortLabel.includes('mỏng') || a.shortLabel.includes('Móng'))) {
+      alerts.push({ label: 'Móng yếu / mỏng', shortLabel: 'Móng mỏng yếu', tone: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border border-orange-500/30', icon: '💅' });
+    }
+  }
+  if (noteText.includes('bạc hà') || noteText.includes('tinh dầu')) {
+    if (!alerts.some((a) => a.shortLabel.includes('bạc hà'))) {
+      alerts.push({ label: 'Không dùng tinh dầu / Bạc hà', shortLabel: 'Tránh bạc hà', tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30', icon: '🌿' });
+    }
+  }
+  if (noteText.includes('nhẹ tay') || noteText.includes('sợ đau')) {
+    if (!alerts.some((a) => a.shortLabel.includes('nhẹ tay'))) {
+      alerts.push({ label: 'Yêu cầu làm nhẹ tay', shortLabel: 'Làm nhẹ tay', tone: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30', icon: '✨' });
+    }
+  }
+  if (noteText.includes('vip') || noteText.includes('thành viên') || noteText.includes('khó tính')) {
+    if (!alerts.some((a) => a.shortLabel.includes('VIP'))) {
+      alerts.push({ label: 'Khách VIP / Tiêu chuẩn khắt khe', shortLabel: 'Khách VIP', tone: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30', icon: '⭐' });
+    }
+  }
+
+  return alerts;
+};
+
 interface InvoiceLineDraft {
   id: string;
   type: InvoiceLineType;
@@ -71,6 +259,23 @@ interface InvoiceLineDraft {
   quantity: number;
   unitPrice: number;
   staff: string;
+  basePrice?: number;
+  fromCustomerName?: string;
+  fromAppointmentId?: string;
+  // Accompanied Art / Drawing / Design & Difficulty
+  designId?: string;
+  designName?: string;
+  designLevel?: number;
+  difficultyLabel?: string;
+  designSurcharge?: number;
+  customArtNote?: string;
+  // Accompanied Product / Polish Color / Material
+  attachedColorId?: string;
+  attachedColorName?: string;
+  attachedColorHex?: string;
+  attachedProductId?: string;
+  attachedProductName?: string;
+  attachedProductPrice?: number;
 }
 
 interface CatalogItem {
@@ -79,6 +284,13 @@ interface CatalogItem {
   category: string;
   duration?: number;
   stock?: number;
+}
+
+export interface SplitPaymentEntry {
+  id: string;
+  method: PaymentMethod;
+  amount: number;
+  reference?: string;
 }
 
 interface ReceptionAppointment {
@@ -98,6 +310,11 @@ interface ReceptionAppointment {
   price: number;
   deposit: number;
   note: string;
+  allergies?: string[];
+  specialTags?: string[];
+  serviceStartedAt?: string;
+  serviceExtendedMinutes?: number;
+  mergedWithAppointmentIds?: string[];
   station?: string;
   reminderSent?: boolean;
   createdBy?: string;
@@ -108,6 +325,7 @@ interface ReceptionAppointment {
 interface ReceptionPayment {
   id: string;
   appointmentId?: string;
+  mergedAppointmentIds?: string[];
   customer: string;
   phone: string;
   branch: BranchCode;
@@ -122,9 +340,23 @@ interface ReceptionPayment {
   status: 'PAID' | 'PARTIAL' | 'PENDING' | 'REFUNDED' | 'FAILED';
   method?: PaymentMethod;
   reference?: string;
+  splitPayments?: Array<{ method: PaymentMethod; amount: number; reference?: string }>;
   cashier: string;
   source: string;
-  items: Array<{ name: string; quantity: number; amount: number; staff: string }>;
+  items: Array<{
+    name: string;
+    quantity: number;
+    amount: number;
+    staff: string;
+    basePrice?: number;
+    designName?: string;
+    designLevel?: number;
+    difficultyLabel?: string;
+    designSurcharge?: number;
+    attachedColorName?: string;
+    attachedProductName?: string;
+    customArtNote?: string;
+  }>;
   note?: string;
   audit: string[];
 }
@@ -171,6 +403,11 @@ interface AppointmentEditForm {
   duration: string;
   price: string;
   note: string;
+  allergies?: string[];
+  specialTags?: string[];
+  designName?: string;
+  designLevel?: number;
+  designSurcharge?: number;
 }
 
 interface ReceptionistPortalProps {
@@ -180,27 +417,109 @@ interface ReceptionistPortalProps {
   onLogout: () => void;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+export const SALON_OPEN_MINUTES = 8 * 60; // 08:00 (480 min)
+export const SALON_CLOSE_MINUTES = 20 * 60 + 30; // 20:30 (1230 min)
+export const SALON_LAST_BOOKING_MINUTES = 20 * 60; // 20:00 (1200 min)
+
+export const formatMinutes = (totalMinutes: number) => {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
+export const getOperationalDefaultTime = () => {
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  if (currentMinutes >= SALON_OPEN_MINUTES && currentMinutes <= SALON_LAST_BOOKING_MINUTES) {
+    const rounded = Math.ceil(currentMinutes / 5) * 5;
+    return formatMinutes(Math.min(rounded, SALON_LAST_BOOKING_MINUTES));
+  }
+  return '08:00';
+};
+
+const today = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+const nowTime = () => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+};
 const money = (value: number) => `${new Intl.NumberFormat('vi-VN').format(value)}đ`;
 const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
+export const getServiceTimerStatus = (appointment: ReceptionAppointment, nowTimeString?: string) => {
+  if (appointment.status !== 'IN_SERVICE') return null;
+
+  const currentNow = nowTimeString || nowTime();
+  const [nowH, nowM] = currentNow.split(':').map(Number);
+  const nowMinutes = (nowH * 60) + nowM;
+
+  let startMinutes = 0;
+  if (appointment.serviceStartedAt) {
+    try {
+      const d = new Date(appointment.serviceStartedAt);
+      if (!isNaN(d.getTime())) {
+        startMinutes = d.getHours() * 60 + d.getMinutes();
+      } else {
+        const [h, m] = appointment.start.split(':').map(Number);
+        startMinutes = h * 60 + m;
+      }
+    } catch {
+      const [h, m] = appointment.start.split(':').map(Number);
+      startMinutes = h * 60 + m;
+    }
+  } else {
+    const [h, m] = appointment.start.split(':').map(Number);
+    startMinutes = h * 60 + m;
+  }
+
+  let elapsedMinutes = nowMinutes - startMinutes;
+  if (elapsedMinutes < 0) elapsedMinutes = Math.max(10, 60 - Math.abs(elapsedMinutes)); // Wrap-around safeguard
+  if (elapsedMinutes > 300) elapsedMinutes = Math.min(elapsedMinutes, (appointment.duration || 60) + 25);
+
+  const duration = (appointment.duration || 60) + (appointment.serviceExtendedMinutes || 0);
+  const isOverrun = elapsedMinutes > duration;
+  const overrunMinutes = Math.max(0, elapsedMinutes - duration);
+  const remainingMinutes = Math.max(0, duration - elapsedMinutes);
+  const percent = Math.min(100, Math.max(0, Math.round((elapsedMinutes / duration) * 100)));
+
+  return {
+    elapsedMinutes,
+    duration,
+    isOverrun,
+    overrunMinutes,
+    remainingMinutes,
+    percent,
+  };
+};
+
 const seedAppointments = (): ReceptionAppointment[] => {
-  const currentDate = today();
-  const previousDate = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const nextDate = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const now = new Date();
+  const currentDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const prevDateObj = new Date(now.getTime() - 86_400_000);
+  const previousDate = `${prevDateObj.getFullYear()}-${String(prevDateObj.getMonth() + 1).padStart(2, '0')}-${String(prevDateObj.getDate()).padStart(2, '0')}`;
+  const nextDateObj = new Date(now.getTime() + 86_400_000);
+  const nextDate = `${nextDateObj.getFullYear()}-${String(nextDateObj.getMonth() + 1).padStart(2, '0')}-${String(nextDateObj.getDate()).padStart(2, '0')}`;
   const createdAt = new Date().toISOString();
 
+  // Create an active in-service appointment with an overrun service time for demonstration
+  const hourNow = now.getHours();
+  const minNow = now.getMinutes();
+  const serviceOverrunStartH = Math.max(8, hourNow - 1);
+  const serviceOverrunStart = `${String(serviceOverrunStartH).padStart(2, '0')}:${String(Math.max(0, minNow - 25)).padStart(2, '0')}`;
+  const serviceStartedOverrun = new Date(now.getTime() - 85 * 60000).toISOString();
+
   return [
-    { id: 'APT-2101', customerId: 'CUS-1842', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: currentDate, start: '08:15', duration: 90, service: 'Gel Manicure + Nail Art cơ bản', services: ['Gel Manicure', 'Nail Art cơ bản'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 850000, deposit: 300000, note: 'Khách VIP, đã dùng ưu đãi thành viên 50.000đ.', station: 'M-01', reminderSent: true, createdBy: 'Website', createdAt },
-    { id: 'APT-2102', customerId: 'CUS-1796', customer: 'Trần Thu Hà', phone: '0908 337 912', date: currentDate, start: '09:30', duration: 75, service: 'Pedicure Spa + Sơn gel Hàn Quốc', services: ['Pedicure Spa', 'Sơn gel Hàn Quốc'], staff: 'Minh Châu', branch: 'Q3', source: 'PHONE', status: 'CHECKED_IN', price: 1170000, deposit: 200000, note: 'Không dùng tinh dầu bạc hà.', station: 'P-02', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
-    { id: 'APT-2103', customer: 'Lê Phương Anh', phone: '0901 486 320', date: currentDate, start: '10:30', duration: 120, service: 'Nail Art Premium', services: ['Nail Art Premium'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ZALO', status: 'IN_SERVICE', price: 980000, deposit: 0, note: 'Mẫu chrome bạc, khách đã gửi ảnh tham khảo.', station: 'M-04', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
+    { id: 'APT-2101', customerId: 'CUS-1842', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: currentDate, start: '08:15', duration: 90, service: 'Gel Manicure + Nail Art cơ bản', services: ['Gel Manicure', 'Nail Art cơ bản'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 850000, deposit: 300000, note: 'Khách VIP, đã dùng ưu đãi thành viên 50.000đ.', allergies: ['Khách VIP'], station: 'M-01', reminderSent: true, createdBy: 'Website', createdAt },
+    { id: 'APT-2102', customerId: 'CUS-1796', customer: 'Trần Thu Hà', phone: '0908 337 912', date: currentDate, start: '09:30', duration: 75, service: 'Pedicure Spa + Sơn gel Hàn Quốc', services: ['Pedicure Spa', 'Sơn gel Hàn Quốc'], staff: 'Minh Châu', branch: 'Q3', source: 'PHONE', status: 'CHECKED_IN', price: 1170000, deposit: 200000, note: 'Không dùng tinh dầu bạc hà. Đi cùng bạn Mai Đức Anh.', allergies: ['Không dùng tinh dầu / Bạc hà'], station: 'P-02', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
+    { id: 'APT-2103', customer: 'Lê Phương Anh', phone: '0901 486 320', date: currentDate, start: serviceOverrunStart, duration: 60, service: 'Nail Art Premium', services: ['Nail Art Premium'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ZALO', status: 'IN_SERVICE', price: 980000, deposit: 0, note: 'Mẫu chrome bạc, khách đã gửi ảnh tham khảo. Dị ứng axeton nhẹ.', allergies: ['Dị ứng Axeton / Cồn / Hóa chất'], serviceStartedAt: serviceStartedOverrun, station: 'M-04', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
     { id: 'APT-2104', customer: 'Mai Đức Anh', phone: '0939 772 618', date: currentDate, start: '11:45', duration: 60, service: 'Combo Manicure', services: ['Combo Manicure'], staff: 'Quốc Bảo', branch: 'Q3', source: 'RECEPTION', status: 'PENDING', price: 620000, deposit: 0, note: 'Khách vãng lai, cần xác nhận dịch vụ trước khi làm.', createdBy: 'Lê Hoàng Nam', firstVisit: true, createdAt },
-    { id: 'APT-2105', customer: 'Phạm Hoài Nam', phone: '0977 660 341', date: currentDate, start: '13:00', duration: 40, service: 'Tháo gel & phục hồi móng', services: ['Tháo gel & phục hồi móng'], staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'CONFIRMED', price: 280000, deposit: 0, note: 'Da tay nhạy cảm, dùng sản phẩm không mùi.', station: 'M-03', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
-    { id: 'APT-2106', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', date: currentDate, start: '14:00', duration: 90, service: 'Nối móng Tips + Đính đá nghệ thuật', services: ['Nối móng Tips', 'Đính đá nghệ thuật'], staff: 'Minh Châu', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1000000, deposit: 300000, note: 'Chuẩn bị mẫu đính đá tone champagne.', station: 'VIP-02', reminderSent: true, createdBy: 'Website', createdAt },
+    { id: 'APT-2105', customer: 'Phạm Hoài Nam', phone: '0977 660 341', date: currentDate, start: '13:00', duration: 40, service: 'Tháo gel & phục hồi móng', services: ['Tháo gel & phục hồi móng'], staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'CONFIRMED', price: 280000, deposit: 0, note: 'Da tay nhạy cảm, dùng sản phẩm không mùi.', allergies: ['Da mỏng / Dễ rát / Chảy máu', 'Yêu cầu thợ làm nhẹ tay, sợ đau'], station: 'M-03', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
+    { id: 'APT-2106', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', date: currentDate, start: '14:00', duration: 90, service: 'Nối móng Tips + Đính đá nghệ thuật', services: ['Nối móng Tips', 'Đính đá nghệ thuật'], staff: 'Minh Châu', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1000000, deposit: 300000, note: 'Chuẩn bị mẫu đính đá tone champagne. Móng mỏng yếu.', allergies: ['Móng yếu / Mỏng / Dễ gãy nứt'], station: 'VIP-02', reminderSent: true, createdBy: 'Website', createdAt },
     { id: 'APT-2107', customer: 'Đỗ Tuấn Kiệt', phone: '0918 734 662', date: currentDate, start: '15:30', duration: 30, service: 'Waxing tay', services: ['Waxing tay'], staff: 'Quốc Bảo', branch: 'Q3', source: 'RECEPTION', status: 'CANCELLED', price: 320000, deposit: 0, note: 'Khách đổi sang ngày mai.', createdBy: 'Lê Hoàng Nam', createdAt },
     { id: 'APT-2108', customer: 'Tạ Mỹ Duyên', phone: '0933 112 800', date: currentDate, start: '16:15', duration: 90, service: 'Đắp bột', services: ['Đắp bột'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ZALO', status: 'NO_SHOW', price: 850000, deposit: 0, note: 'Đã gọi 2 lần chưa nghe máy.', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
-    { id: 'APT-2111', customerId: 'CUS-2050', customer: 'Đinh Gia Hân', phone: '0902 826 114', date: currentDate, start: '09:00', duration: 120, service: 'Combo VIP', services: ['Combo VIP'], staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'CONFIRMED', price: 1650000, deposit: 500000, note: 'Chuẩn bị phòng VIP.', station: 'V-11', reminderSent: true, createdBy: 'Website', createdAt },
+    { id: 'APT-2111', customerId: 'CUS-2050', customer: 'Đinh Gia Hân', phone: '0902 826 114', date: currentDate, start: '09:00', duration: 120, service: 'Combo VIP', services: ['Combo VIP'], staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'CONFIRMED', price: 1650000, deposit: 500000, note: 'Chuẩn bị phòng VIP.', allergies: ['Khách VIP'], station: 'V-11', reminderSent: true, createdBy: 'Website', createdAt },
     { id: 'APT-2112', customer: 'Vũ Ngọc Linh', phone: '0934 128 906', date: currentDate, start: '10:45', duration: 60, service: 'Sơn gel Hàn Quốc', services: ['Sơn gel Hàn Quốc'], staff: 'Thuỳ Dương', branch: 'Q1', source: 'PHONE', status: 'CHECKED_IN', price: 620000, deposit: 0, note: 'Khách muốn màu đỏ rượu.', createdBy: 'Lê Hoàng Nam', createdAt },
     { id: 'APT-2113', customer: 'Ngô Minh Châu', phone: '0966 124 700', date: currentDate, start: '14:30', duration: 120, service: 'Nail Art Premium', services: ['Nail Art Premium'], staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'PENDING', price: 980000, deposit: 200000, note: 'Khách mới, cần tư vấn tình trạng móng.', firstVisit: true, createdBy: 'Website', createdAt },
     { id: 'APT-2098', customer: 'Hoàng Bảo Ngọc', phone: '0907 211 842', date: previousDate, start: '17:00', duration: 75, service: 'Combo Manicure', services: ['Combo Manicure'], staff: 'Minh Châu', branch: 'Q3', source: 'RECEPTION', status: 'COMPLETED', price: 620000, deposit: 0, note: 'Đã hoàn tất hôm qua.', station: 'M-02', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
@@ -246,7 +565,7 @@ const methodMeta: Record<PaymentMethod, { label: string; icon: typeof Banknote }
   ZALOPAY: { label: 'ZaloPay', icon: Smartphone },
 };
 
-const serviceCatalog: CatalogItem[] = [
+const defaultServiceCatalog: CatalogItem[] = [
   { name: 'Gel Manicure', price: 450000, category: 'Sơn móng', duration: 60 },
   { name: 'Pedicure Spa', price: 550000, category: 'Chăm sóc móng', duration: 75 },
   { name: 'Sơn gel Hàn Quốc', price: 620000, category: 'Sơn móng', duration: 60 },
@@ -316,14 +635,14 @@ const normalizeTechnicians = (items: ReceptionTechnician[]) => items.map((techni
   };
 });
 
-const navItems: Array<{ id: ReceptionPage; label: string; description: string; icon: typeof LayoutDashboard }> = [
-  { id: 'desk', label: 'Bàn lễ tân', description: 'Điều phối hôm nay', icon: LayoutDashboard },
-  { id: 'appointments', label: 'Lịch hẹn', description: 'Đặt và chỉnh lịch', icon: CalendarDays },
-  { id: 'customers', label: 'Khách hàng', description: 'Hồ sơ và lịch sử', icon: UsersRound },
-  { id: 'products', label: 'Sản phẩm', description: 'Tồn kho và cảnh báo', icon: PackageSearch },
-  { id: 'stations', label: 'Ghế & phòng', description: 'Tình trạng phục vụ', icon: Armchair },
-  { id: 'technicians', label: 'Kỹ thuật viên', description: 'Nhân sự trong ngày', icon: UserCheck },
-  { id: 'payments', label: 'Thanh toán', description: 'Thu tiền và hóa đơn', icon: ReceiptText },
+const navItems: Array<{ id: ReceptionPage; label: string; icon: typeof LayoutDashboard }> = [
+  { id: 'desk', label: 'Bàn lễ tân', icon: LayoutDashboard },
+  { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays },
+  { id: 'customers', label: 'Khách hàng', icon: UsersRound },
+  { id: 'products', label: 'Sản phẩm quầy', icon: PackageSearch },
+  { id: 'stations', label: 'Ghế & phòng', icon: Armchair },
+  { id: 'technicians', label: 'Kỹ thuật viên', icon: UserCheck },
+  { id: 'payments', label: 'Thanh toán & POS', icon: ReceiptText },
 ];
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -360,8 +679,219 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const paymentStorageKey = `tenant-admin-payments-v1:${tenantName}`;
   const technicianStorageKey = `receptionist-technicians-v1:${tenantName}`;
   const shiftStorageKey = `receptionist-shift-v1:${account.email}`;
+  const servicesStorageKey = `tenant-admin-services-v2:${tenantName}`;
+  const designsStorageKey = `tenant-admin-nail-designs-v1:${tenantName}`;
+  const colorsStorageKey = `tenant-admin-nail-colors-v1:${tenantName}`;
+
+  // Đọc đồng bộ dữ liệu dịch vụ, mẫu vẽ, màu sơn từ Tenant Admin
+  const [servicesData, setServicesData] = useState<SalonService[]>(() => {
+    const v2 = readStorage<SalonService[] | null>(servicesStorageKey, null);
+    if (v2 && Array.isArray(v2) && v2.length > 0) return v2;
+    const v1 = readStorage<SalonService[] | null>(`tenant-admin-services-v1:${tenantName}`, null);
+    if (v1 && Array.isArray(v1) && v1.length > 0) return v1;
+    return serviceSeed;
+  });
+
+  const [designsData, setDesignsData] = useState<NailDesign[]>(() => {
+    const saved = readStorage<NailDesign[] | null>(designsStorageKey, null);
+    if (saved && Array.isArray(saved) && saved.length > 0) return saved;
+    return designSeed;
+  });
+
+  const [colorsData, setColorsData] = useState<PolishColor[]>(() => {
+    const saved = readStorage<PolishColor[] | null>(colorsStorageKey, null);
+    if (saved && Array.isArray(saved) && saved.length > 0) return saved;
+    return colorSeed;
+  });
+
+  // Lắng nghe thay đổi dữ liệu từ Tenant Admin theo thời gian thực
+  useEffect(() => {
+    const handleServicesUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tenantName?: string; services?: SalonService[] }>;
+      if (!customEvent.detail?.tenantName || customEvent.detail.tenantName === tenantName) {
+        if (customEvent.detail?.services) {
+          setServicesData(customEvent.detail.services);
+        } else {
+          setServicesData(readStorage(servicesStorageKey, serviceSeed));
+        }
+      }
+    };
+
+    const handleDesignsUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tenantName?: string; designs?: NailDesign[] }>;
+      if (!customEvent.detail?.tenantName || customEvent.detail.tenantName === tenantName) {
+        if (customEvent.detail?.designs) {
+          setDesignsData(customEvent.detail.designs);
+        } else {
+          setDesignsData(readStorage(designsStorageKey, designSeed));
+        }
+      }
+    };
+
+    const handleColorsUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tenantName?: string; colors?: PolishColor[] }>;
+      if (!customEvent.detail?.tenantName || customEvent.detail.tenantName === tenantName) {
+        if (customEvent.detail?.colors) {
+          setColorsData(customEvent.detail.colors);
+        } else {
+          setColorsData(readStorage(colorsStorageKey, colorSeed));
+        }
+      }
+    };
+
+    const handleAppointmentsUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tenantName?: string; appointments?: ReceptionAppointment[] }>;
+      if (!customEvent.detail?.tenantName || customEvent.detail.tenantName === tenantName) {
+        if (customEvent.detail?.appointments) {
+          setAppointments(customEvent.detail.appointments);
+        } else {
+          setAppointments(readStorage(appointmentStorageKey, seedAppointments()));
+        }
+      }
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === servicesStorageKey) {
+        setServicesData(readStorage(servicesStorageKey, serviceSeed));
+      }
+      if (e.key === designsStorageKey) {
+        setDesignsData(readStorage(designsStorageKey, designSeed));
+      }
+      if (e.key === colorsStorageKey) {
+        setColorsData(readStorage(colorsStorageKey, colorSeed));
+      }
+      if (e.key === appointmentStorageKey && e.newValue) {
+        try {
+          setAppointments(JSON.parse(e.newValue));
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener('salonsys_services_updated', handleServicesUpdated);
+    window.addEventListener('salonsys_designs_updated', handleDesignsUpdated);
+    window.addEventListener('salonsys_colors_updated', handleColorsUpdated);
+    window.addEventListener('salonsys_appointments_updated', handleAppointmentsUpdated);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('salonsys_services_updated', handleServicesUpdated);
+      window.removeEventListener('salonsys_designs_updated', handleDesignsUpdated);
+      window.removeEventListener('salonsys_colors_updated', handleColorsUpdated);
+      window.removeEventListener('salonsys_appointments_updated', handleAppointmentsUpdated);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [servicesStorageKey, designsStorageKey, colorsStorageKey, appointmentStorageKey, tenantName]);
+
+  // Catalog dịch vụ đồng bộ từ Tenant Admin theo chi nhánh hiện tại
+  const serviceCatalog: CatalogItem[] = useMemo(() => {
+    const available = servicesData.filter((s) => {
+      if (s.status === 'HIDDEN') return false;
+      if (s.branches && s.branches.length > 0 && !s.branches.includes(branchCode)) return false;
+      return true;
+    });
+    if (available.length === 0) return defaultServiceCatalog;
+    return available.map((s) => {
+      let catName: string = s.category;
+      if (s.category === 'MANICURE') catName = 'Sơn móng & Manicure';
+      else if (s.category === 'PEDICURE') catName = 'Chăm sóc móng & Pedicure';
+      else if (s.category === 'GEL') catName = 'Sơn & Đắp Gel';
+      else if (s.category === 'ACRYLIC') catName = 'Đắp bột & Nối móng';
+      else if (s.category === 'NAIL_ART') catName = 'Vẽ nghệ thuật & Art';
+      else if (s.category === 'SPA') catName = 'Spa & Chăm sóc móng';
+      else if (s.category === 'COMBO') catName = 'Combo trọn gói';
+
+      return {
+        id: s.id,
+        name: s.name,
+        price: s.price, // FIXED BASE PRICE từ Tenant Admin
+        category: catName,
+        duration: s.duration,
+        addOns: s.addOns,
+        description: s.description,
+        requiredSkill: s.requiredSkill,
+      };
+    });
+  }, [servicesData, branchCode]);
+
+  // Catalog mẫu vẽ nail art đồng bộ từ Tenant Admin Gallery
+  const nailArtTemplates: NailArtTemplate[] = useMemo(() => {
+    const available = designsData.filter((d) => {
+      if (d.status === 'HIDDEN') return false;
+      if (d.branches && d.branches.length > 0 && !d.branches.includes(branchCode)) return false;
+      return true;
+    });
+    if (available.length === 0) return NAIL_ART_TEMPLATES;
+    return available.map((d) => ({
+      id: d.id,
+      name: d.name,
+      defaultLevel: d.level || 2,
+      category: d.collection || 'Bộ sưu tập',
+      surcharge: d.surcharge || 0,
+      description: d.notes || `Phong cách: ${d.styles?.join(', ') || 'Đặc biệt'} · Phụ liệu: ${d.materials?.join(', ') || 'Gel nghệ thuật'}`,
+      tags: d.styles || [],
+      duration: d.duration || 30,
+      baseServiceId: d.baseServiceId,
+      imageUrl: d.imageUrl,
+      preview: d.preview,
+      colors: d.colors,
+      materials: d.materials,
+    }));
+  }, [designsData, branchCode]);
+
+  // Catalog màu sơn đồng bộ từ Tenant Admin Gallery
+  const polishColorOptions: PolishColorOption[] = useMemo(() => {
+    const available = colorsData.filter((c) => {
+      if (c.status === 'OUT') return false;
+      if (c.branches && c.branches.length > 0 && !c.branches.includes(branchCode)) return false;
+      return true;
+    });
+    if (available.length === 0) return POLISH_COLOR_OPTIONS;
+    return available.map((c) => ({
+      id: c.id,
+      name: `${c.name} (${c.finish})`,
+      brand: c.brand,
+      code: c.code,
+      hex: c.hex,
+      finish: c.finish,
+    }));
+  }, [colorsData, branchCode]);
+
   const [page, setPage] = useState<ReceptionPage>('desk');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('receptionist_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem('receptionist_sidebar_collapsed', String(next));
+      } catch {
+        // Preference optional
+      }
+      return next;
+    });
+  };
+
+  // Keyboard shortcut Ctrl+B or Cmd+B to toggle sidebar collapse
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleSidebarCollapsed();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Menu mobile đóng được bằng Escape như mọi lớp phủ khác.
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -375,22 +905,57 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [payments, setPayments] = useState<ReceptionPayment[]>(() => readStorage(paymentStorageKey, seedPayments()));
   const [technicians, setTechnicians] = useState<ReceptionTechnician[]>(() => normalizeTechnicians(readStorage(technicianStorageKey, technicianSeed)));
   const [shift, setShift] = useState<ShiftState>(() => readStorage(shiftStorageKey, { status: 'OPEN', openedAt: new Date().toISOString(), openingCash: 1000000 }));
+  const [clockTick, setClockTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockTick(Date.now()), 10000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const [walkInOpen, setWalkInOpen] = useState(false);
+  const [quickWalkInOpen, setQuickWalkInOpen] = useState(false);
+  const [quickWalkInForm, setQuickWalkInForm] = useState({
+    customer: '',
+    phone: '',
+    service: 'Gel Manicure',
+    staff: '',
+    station: '',
+    duration: '60',
+    price: '450000',
+    allergies: [] as string[],
+    note: '',
+    quickAction: 'START_NOW' as 'START_NOW' | 'CHECK_IN_QUEUE',
+  });
+
   const [paymentAppointment, setPaymentAppointment] = useState<ReceptionAppointment | null>(null);
+  const [mergedAppointmentIds, setMergedAppointmentIds] = useState<string[]>([]);
+  const [showMergeSelector, setShowMergeSelector] = useState(false);
+  const [splitPaymentMode, setSplitPaymentMode] = useState(false);
+  const [splitPaymentsList, setSplitPaymentsList] = useState<SplitPaymentEntry[]>([
+    { id: 'SP-1', method: 'CASH', amount: 0, reference: '' },
+  ]);
+  const [splitEquallyCount, setSplitEquallyCount] = useState(2);
+  const [showSplitCalc, setShowSplitCalc] = useState(false);
+
+  const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<ReceptionAppointment | null>(null);
   const [deletingAppointment, setDeletingAppointment] = useState<ReceptionAppointment | null>(null);
   const [shiftModal, setShiftModal] = useState<'OPEN' | 'CLOSE' | null>(null);
   const [toast, setToast] = useState('');
   const loyaltyStorageKey = `tenant-admin-loyalty-v1:${tenantName}`;
+  const invoiceDraftsStorageKey = `receptionist-invoice-drafts-v1:${tenantName}:${branchCode}`;
   const [loyaltyPrograms, setLoyaltyPrograms] = useState<LoyaltyProgram[]>(() => readStorage(loyaltyStorageKey, []));
   const [selectedPromoId, setSelectedPromoId] = useState<string>('');
   const [promoFeedback, setPromoFeedback] = useState<{ isError: boolean; text: string } | null>(null);
 
+  const [invoiceDrafts, setInvoiceDrafts] = useState<Record<string, { lines: InvoiceLineDraft[]; form: { method: PaymentMethod; discount: string; tip: string; reference: string; note: string }; promoId?: string; mergedIds?: string[]; splitPayments?: SplitPaymentEntry[] }>>(() => readStorage(invoiceDraftsStorageKey, {}));
+
   const [formError, setFormError] = useState('');
-  const [walkIn, setWalkIn] = useState({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: nowTime(), duration: '60', price: '450000', note: '' });
+  const [walkInErrors, setWalkInErrors] = useState<Record<string, string>>({});
+  const [appointmentEditErrors, setAppointmentEditErrors] = useState<Record<string, string>>({});
+  const [walkIn, setWalkIn] = useState({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [] as string[], specialTags: [] as string[], designName: '', designLevel: 0, designSurcharge: 0 });
   const [paymentForm, setPaymentForm] = useState({ method: 'CASH' as PaymentMethod, discount: '0', tip: '0', reference: '', note: '' });
   const [invoiceLines, setInvoiceLines] = useState<InvoiceLineDraft[]>([]);
-  const [invoiceCatalogTab, setInvoiceCatalogTab] = useState<InvoiceLineType>('SERVICE');
+  const [invoiceCatalogTab, setInvoiceCatalogTab] = useState<'SERVICE' | 'ART' | 'PRODUCT'>('SERVICE');
   const [invoiceCatalogQuery, setInvoiceCatalogQuery] = useState('');
   const [invoiceCategory, setInvoiceCategory] = useState('Tất cả');
   const [cashAmount, setCashAmount] = useState('1000000');
@@ -402,7 +967,37 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [deskQueueFilter, setDeskQueueFilter] = useState<DeskQueueFilter>('ACTION');
   const [editingTechnician, setEditingTechnician] = useState<ReceptionTechnician | null>(null);
   const [technicianEditForm, setTechnicianEditForm] = useState<TechnicianEditForm>({ status: 'PRESENT', shift: 'FULL_DAY', checkIn: '', checkOut: '', leaveNote: '' });
-  const [appointmentEditForm, setAppointmentEditForm] = useState<AppointmentEditForm>({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: nowTime(), duration: '60', price: '450000', note: '' });
+  const [appointmentEditForm, setAppointmentEditForm] = useState<AppointmentEditForm>({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [] as string[], specialTags: [] as string[], designName: '', designLevel: 0, designSurcharge: 0 });
+
+  // Modal tùy chỉnh mẫu vẽ & sản phẩm đi kèm cho 1 dòng dịch vụ
+  const [customizingLine, setCustomizingLine] = useState<InvoiceLineDraft | null>(null);
+  const [customizerForm, setCustomizerForm] = useState<{
+    basePrice: string;
+    designName: string;
+    designLevel: number;
+    difficultyLabel: string;
+    designSurcharge: string;
+    attachedColorCode: string;
+    attachedColorName: string;
+    attachedColorHex: string;
+    attachedProductName: string;
+    attachedProductPrice: number;
+    staff: string;
+    customArtNote: string;
+  }>({
+    basePrice: '0',
+    designName: '',
+    designLevel: 0,
+    difficultyLabel: '',
+    designSurcharge: '0',
+    attachedColorCode: '',
+    attachedColorName: '',
+    attachedColorHex: '',
+    attachedProductName: '',
+    attachedProductPrice: 0,
+    staff: 'Chưa phân công',
+    customArtNote: '',
+  });
 
   useEffect(() => {
     if (selectedPromoId && paymentAppointment) {
@@ -423,6 +1018,35 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       }
     }
   }, [invoiceLines]);
+  useEffect(() => {
+    if (!paymentAppointment) return;
+    if (!invoiceLines.length) return;
+    setInvoiceDrafts((current) => {
+      const updated = {
+        ...current,
+        [paymentAppointment.id]: {
+          lines: invoiceLines,
+          form: paymentForm,
+          promoId: selectedPromoId,
+        },
+      };
+      try {
+        localStorage.setItem(invoiceDraftsStorageKey, JSON.stringify(updated));
+      } catch {
+        // quota ignore
+      }
+      return updated;
+    });
+  }, [paymentAppointment, invoiceLines, paymentForm, selectedPromoId, invoiceDraftsStorageKey]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(appointmentStorageKey, JSON.stringify(appointments));
+      window.dispatchEvent(new CustomEvent('salonsys_appointments_updated', { detail: { tenantName, appointments } }));
+    } catch {
+      // Local storage optional
+    }
+  }, [appointmentStorageKey, appointments, tenantName]);
+  useEffect(() => localStorage.setItem(invoiceDraftsStorageKey, JSON.stringify(invoiceDrafts)), [invoiceDraftsStorageKey, invoiceDrafts]);
   useEffect(() => localStorage.setItem(paymentStorageKey, JSON.stringify(payments)), [paymentStorageKey, payments]);
   useEffect(() => localStorage.setItem(technicianStorageKey, JSON.stringify(technicians)), [technicianStorageKey, technicians]);
   useEffect(() => {
@@ -510,10 +1134,16 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       .map((appointment) => ({ id: `pending-${appointment.id}`, tone: 'violet', title: `Lịch ${appointment.start} chờ xác nhận`, detail: `${appointment.customer} · ${appointment.phone}` })),
   ].slice(0, 5);
   const activeCatalog = invoiceCatalogTab === 'SERVICE' ? serviceCatalog : productCatalog;
-  const invoiceCategories = ['Tất cả', ...Array.from(new Set(activeCatalog.map((item) => item.category)))];
+  const invoiceCategories = invoiceCatalogTab === 'ART'
+    ? ['Tất cả', ...Array.from(new Set(nailArtTemplates.map((item) => item.category)))]
+    : ['Tất cả', ...Array.from(new Set(activeCatalog.map((item) => item.category)))];
   const filteredCatalog = activeCatalog.filter((item) => (
     (invoiceCategory === 'Tất cả' || item.category === invoiceCategory)
     && item.name.toLowerCase().includes(invoiceCatalogQuery.trim().toLowerCase())
+  ));
+  const filteredArtTemplates = nailArtTemplates.filter((item) => (
+    (invoiceCategory === 'Tất cả' || item.category === invoiceCategory)
+    && `${item.name} ${item.description} ${item.tags.join(' ')}`.toLowerCase().includes(invoiceCatalogQuery.trim().toLowerCase())
   ));
 
   const requireOpenShift = () => {
@@ -525,7 +1155,11 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const canTechnicianDoService = (technician: ReceptionTechnician, serviceName: string) => {
     const normalizedService = serviceName.trim().toLowerCase();
     if (!normalizedService) return true;
-    return technician.skills.some((skill) => skill.toLowerCase() === normalizedService);
+    if (technician.skills.some((skill) => skill.toLowerCase() === normalizedService || normalizedService.includes(skill.toLowerCase()) || skill.toLowerCase().includes(normalizedService))) return true;
+    if (technician.specialty && (technician.specialty.toLowerCase().includes(normalizedService) || normalizedService.includes(technician.specialty.toLowerCase()))) return true;
+    const foundService = servicesData.find(s => s.name.toLowerCase() === normalizedService);
+    if (foundService?.requiredSkill && technician.skills.some(sk => sk.toLowerCase().includes(foundService.requiredSkill.toLowerCase()))) return true;
+    return true;
   };
 
   useEffect(() => {
@@ -549,47 +1183,123 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     return hour * 60 + minute;
   };
 
-  const validateAppointmentDraft = (draft: AppointmentEditForm, editingId?: string) => {
+  const validateAppointmentDraft = (draft: AppointmentEditForm, editingId?: string): Record<string, string> => {
+    const errors: Record<string, string> = {};
     const phoneDigits = draft.phone.replace(/\D/g, '');
+    const cleanPhone = draft.phone.replace(/[\s.-]/g, '');
     const duration = Number(draft.duration);
     const price = Number(draft.price);
-    if (draft.customer.trim().length < 2) return 'Vui lòng nhập tên khách hàng tối thiểu 2 ký tự.';
-    if (!/^(?:\+84|0)[0-9\s.-]{8,12}$/.test(draft.phone.trim()) || phoneDigits.length < 9) return 'Số điện thoại chưa đúng định dạng.';
-    if (!draft.service.trim()) return 'Vui lòng chọn dịch vụ trước khi tiếp nhận khách.';
-    if (!draft.staff || draft.staff === 'Chưa phân công') return 'Vui lòng phân công kỹ thuật viên trước khi tạo hoặc bắt đầu dịch vụ.';
+
+    // 1. Kiểm tra thông tin khách hàng
+    if (!draft.customer.trim()) {
+      errors.customer = 'Vui lòng nhập tên khách hàng.';
+    } else if (draft.customer.trim().length < 2) {
+      errors.customer = 'Vui lòng nhập tên khách hàng tối thiểu 2 ký tự.';
+    }
+
+    if (!draft.phone.trim()) {
+      errors.phone = 'Vui lòng nhập số điện thoại khách hàng.';
+    } else if (!/^(?:0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(cleanPhone) && !/^(?:\+84|0)[0-9\s.-]{8,12}$/.test(draft.phone.trim())) {
+      errors.phone = 'Số điện thoại chưa đúng định dạng di động Việt Nam (gồm 10 số, ví dụ 0903123456).';
+    } else {
+      const duplicatedPhone = branchTodayAppointments.find((appointment) => (
+        appointment.id !== editingId
+        && appointment.phone.replace(/\D/g, '') === phoneDigits
+        && !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(appointment.status)
+      ));
+      if (duplicatedPhone) {
+        errors.phone = `Khách hàng ${duplicatedPhone.customer} (${draft.phone}) đang có lịch ${duplicatedPhone.start} (${duplicatedPhone.service}).`;
+      }
+    }
+
+    // 2. Kiểm tra dịch vụ
+    if (!draft.service.trim()) {
+      errors.service = 'Vui lòng chọn dịch vụ trước khi tiếp nhận khách.';
+    }
+
+    // 3. Phân công kỹ thuật viên
     const technician = branchTechnicians.find((item) => item.name === draft.staff);
-    if (!technician) return 'Kỹ thuật viên không thuộc chi nhánh hiện tại.';
-    if (['NOT_CHECKED_IN', 'SICK_REPORTED', 'ON_LEAVE'].includes(technician.status)) return `${technician.name} hiện ${technicianStatusMeta[technician.status].label.toLowerCase()}, chưa thể nhận khách.`;
-    if (!canTechnicianDoService(technician, draft.service)) return `${technician.name} không có khả năng làm dịch vụ ${draft.service}. Vui lòng chọn kỹ thuật viên khác.`;
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.start)) return 'Vui lòng chọn giờ bắt đầu hợp lệ.';
-    if (!Number.isFinite(duration) || duration <= 0) return 'Thời lượng dịch vụ phải lớn hơn 0 phút.';
-    if (!Number.isFinite(price) || price <= 0) return 'Giá dự kiến phải lớn hơn 0đ.';
-    if (draft.station && !stationCatalog[branchCode].includes(draft.station)) return 'Ghế hoặc phòng không thuộc chi nhánh hiện tại.';
+    if (!draft.staff || draft.staff === 'Chưa phân công') {
+      errors.staff = 'Vui lòng phân công kỹ thuật viên trước khi tạo hoặc bắt đầu dịch vụ.';
+    } else if (!technician) {
+      errors.staff = 'Kỹ thuật viên không thuộc chi nhánh hiện tại.';
+    } else if (['NOT_CHECKED_IN', 'SICK_REPORTED', 'ON_LEAVE', 'BREAK'].includes(technician.status)) {
+      errors.staff = `${technician.name} hiện ${technicianStatusMeta[technician.status]?.label.toLowerCase() || 'vắng mặt'}, chưa thể nhận khách.`;
+    } else if (!canTechnicianDoService(technician, draft.service)) {
+      errors.staff = `${technician.name} không có khả năng làm dịch vụ ${draft.service}. Vui lòng chọn kỹ thuật viên khác.`;
+    }
 
-    const duplicatedPhone = branchTodayAppointments.find((appointment) => (
-      appointment.id !== editingId
-      && appointment.phone.replace(/\D/g, '') === phoneDigits
-      && !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(appointment.status)
-    ));
-    if (duplicatedPhone) return `${duplicatedPhone.customer} đang có lịch hôm nay. Vui lòng kiểm tra trước khi tạo đơn mới.`;
+    // 4. Kiểm tra định dạng thời gian
+    if (!draft.start || !/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.start)) {
+      errors.start = 'Vui lòng chọn giờ bắt đầu hợp lệ (định dạng HH:mm).';
+    } else {
+      const startMinutes = minutesOf(draft.start);
+      const endMinutes = startMinutes + (Number.isFinite(duration) && duration > 0 ? duration : 60);
 
-    const startMinutes = minutesOf(draft.start);
-    const endMinutes = startMinutes + duration;
-    const conflictingAppointment = branchTodayAppointments.find((appointment) => {
-      if (appointment.id === editingId || appointment.staff !== draft.staff || ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
-      const appointmentStart = minutesOf(appointment.start);
-      const appointmentEnd = appointmentStart + appointment.duration;
-      return startMinutes < appointmentEnd && endMinutes > appointmentStart;
-    });
-    if (conflictingAppointment) return `${draft.staff} đang có lịch ${conflictingAppointment.start} với ${conflictingAppointment.customer}. Vui lòng đổi giờ hoặc đổi kỹ thuật viên.`;
-    const conflictingStation = draft.station ? branchTodayAppointments.find((appointment) => {
-      if (appointment.id === editingId || appointment.station !== draft.station || ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
-      const appointmentStart = minutesOf(appointment.start);
-      const appointmentEnd = appointmentStart + appointment.duration;
-      return startMinutes < appointmentEnd && endMinutes > appointmentStart;
-    }) : undefined;
-    if (conflictingStation) return `${draft.station} đang được dùng lúc ${conflictingStation.start} bởi ${conflictingStation.customer}. Vui lòng chọn ghế khác.`;
-    return '';
+      // 5. KIỂM TRA NGHIÊM NGẶT GIỜ MỞ CỬA CỦA SALON (08:00 – 20:30)
+      if (startMinutes < SALON_OPEN_MINUTES) {
+        errors.start = `Salon chỉ mở cửa từ 08:00. Khung giờ ${draft.start} nằm ngoài giờ hoạt động.`;
+      } else if (startMinutes > SALON_LAST_BOOKING_MINUTES) {
+        errors.start = `Salon ngưng nhận khách mới sau 20:00 (đóng cửa lúc 20:30). Khung giờ ${draft.start} quá trễ.`;
+      } else if (endMinutes > SALON_CLOSE_MINUTES) {
+        errors.start = `Dịch vụ kéo dài ${duration} phút sẽ kết thúc lúc ${formatMinutes(endMinutes)} (sau giờ đóng cửa 20:30).`;
+      } else if (technician) {
+        // 6. KIỂM TRA KHỚP CA LÀM VIỆC CỦA KỸ THUẬT VIÊN
+        if (technician.shift === 'MORNING' && endMinutes > 16 * 60) {
+          errors.staff = `${technician.name} làm ca sáng (08:00–16:00). Dịch vụ kéo dài đến ${formatMinutes(endMinutes)}.`;
+        } else if (technician.shift === 'AFTERNOON' && startMinutes < 12 * 60) {
+          errors.staff = `${technician.name} làm ca chiều (12:00–20:30). Không thể nhận lịch lúc ${draft.start}.`;
+        } else if (technician.checkIn && startMinutes < minutesOf(technician.checkIn)) {
+          errors.staff = `${technician.name} hôm nay check-in lúc ${technician.checkIn}, chưa sẵn sàng lúc ${draft.start}.`;
+        } else if (technician.checkOut && endMinutes > minutesOf(technician.checkOut)) {
+          errors.staff = `${technician.name} hôm nay kết thúc ca lúc ${technician.checkOut}, không kịp hoàn thành.`;
+        }
+      }
+
+      // Xung đột lịch Kỹ thuật viên
+      if (!errors.staff && draft.staff && draft.staff !== 'Chưa phân công') {
+        const conflictingAppointment = branchTodayAppointments.find((appointment) => {
+          if (appointment.id === editingId || appointment.staff !== draft.staff || ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
+          const appointmentStart = minutesOf(appointment.start);
+          const appointmentEnd = appointmentStart + appointment.duration;
+          return startMinutes < appointmentEnd && endMinutes > appointmentStart;
+        });
+        if (conflictingAppointment) {
+          const conflictEnd = formatMinutes(minutesOf(conflictingAppointment.start) + conflictingAppointment.duration);
+          errors.staff = `${draft.staff} đang bận phục vụ ${conflictingAppointment.customer} từ ${conflictingAppointment.start} đến ${conflictEnd}.`;
+        }
+      }
+
+      // Xung đột Ghế / Bàn
+      if (draft.station) {
+        const conflictingStation = branchTodayAppointments.find((appointment) => {
+          if (appointment.id === editingId || appointment.station !== draft.station || ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(appointment.status)) return false;
+          const appointmentStart = minutesOf(appointment.start);
+          const appointmentEnd = appointmentStart + appointment.duration;
+          return startMinutes < appointmentEnd && endMinutes > appointmentStart;
+        });
+        if (conflictingStation) {
+          const stationEnd = formatMinutes(minutesOf(conflictingStation.start) + conflictingStation.duration);
+          errors.station = `${draft.station} đang được dùng từ ${conflictingStation.start} đến ${stationEnd} bởi ${conflictingStation.customer}.`;
+        }
+      }
+    }
+
+    if (!Number.isFinite(duration) || duration <= 0) {
+      errors.duration = 'Thời lượng dịch vụ phải lớn hơn 0 phút.';
+    } else if (duration > 240) {
+      errors.duration = 'Thời lượng dịch vụ tối đa là 240 phút (4 giờ).';
+    }
+
+    if (!Number.isFinite(price) || price <= 0) {
+      errors.price = 'Giá dự kiến phải lớn hơn 0đ.';
+    }
+
+    if (draft.station && !stationCatalog[branchCode].includes(draft.station)) {
+      errors.station = 'Ghế hoặc phòng không thuộc chi nhánh hiện tại.';
+    }
+
+    return errors;
   };
 
   const loadMockReceptionData = () => {
@@ -738,8 +1448,13 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     event.preventDefault();
     setFormError('');
     if (!requireOpenShift()) return;
-    const validationError = validateAppointmentDraft(walkIn);
-    if (validationError) return setFormError(validationError);
+    const errors = validateAppointmentDraft(walkIn);
+    if (Object.keys(errors).length > 0) {
+      setWalkInErrors(errors);
+      setFormError(Object.values(errors)[0] || 'Vui lòng kiểm tra lại các thông tin chưa hợp lệ.');
+      return;
+    }
+    setWalkInErrors({});
     const appointment: ReceptionAppointment = {
       id: makeId('APT'), customer: walkIn.customer.trim(), phone: walkIn.phone.trim(), date: today(), start: walkIn.start,
       duration: Number(walkIn.duration), service: walkIn.service, staff: walkIn.staff, branch: branchCode,
@@ -748,7 +1463,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     };
     setAppointments((current) => [appointment, ...current]);
     setWalkInOpen(false);
-    setWalkIn({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: nowTime(), duration: '60', price: '450000', note: '' });
+    setWalkIn({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', designName: '', designLevel: 0, designSurcharge: 0 });
     setToast(`Đã tiếp nhận khách vãng lai ${appointment.customer}.`);
   };
 
@@ -770,6 +1485,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       return;
     }
     setEditingAppointment(appointment);
+    setAppointmentEditErrors({});
     setAppointmentEditForm({
       customer: appointment.customer,
       phone: appointment.phone,
@@ -788,8 +1504,13 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     event.preventDefault();
     if (!editingAppointment) return;
     setFormError('');
-    const validationError = validateAppointmentDraft(appointmentEditForm, editingAppointment.id);
-    if (validationError) return setFormError(validationError);
+    const errors = validateAppointmentDraft(appointmentEditForm, editingAppointment.id);
+    if (Object.keys(errors).length > 0) {
+      setAppointmentEditErrors(errors);
+      setFormError(Object.values(errors)[0] || 'Vui lòng kiểm tra lại các thông tin chưa hợp lệ.');
+      return;
+    }
+    setAppointmentEditErrors({});
     setAppointments((current) => current.map((appointment) => appointment.id === editingAppointment.id ? {
       ...appointment,
       customer: appointmentEditForm.customer.trim(),
@@ -847,8 +1568,8 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
 
   const openPayment = (appointment: ReceptionAppointment) => {
     if (!requireOpenShift()) return;
-    if (appointment.status !== 'IN_SERVICE') {
-      setToast('Chỉ có thể thanh toán sau khi khách đã bắt đầu dịch vụ.');
+    if (!['CHECKED_IN', 'IN_SERVICE'].includes(appointment.status)) {
+      setToast('Chỉ có thể tạo hóa đơn thanh toán cho khách đã check-in hoặc đang làm dịch vụ.');
       return;
     }
     if (completedIds.has(appointment.id)) {
@@ -859,23 +1580,152 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setLoyaltyPrograms(loadedPromos);
     setSelectedPromoId('');
     setPromoFeedback(null);
+    setShowPaymentConfirm(false);
+    setCustomizingLine(null);
 
     setPaymentAppointment(appointment);
-    const selectedServices = appointment.services?.length ? appointment.services : [appointment.service];
-    const splitPrice = Math.floor(appointment.price / selectedServices.length);
-    setInvoiceLines(selectedServices.map((name, index) => ({
-      id: `${makeId('LINE')}-${index}`,
-      type: 'SERVICE',
-      name,
-      quantity: 1,
-      unitPrice: index === selectedServices.length - 1 ? appointment.price - splitPrice * index : splitPrice,
-      staff: appointment.staff,
-    })));
-    setPaymentForm({ method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
+    const existingDraft = invoiceDrafts[appointment.id];
+    if (existingDraft && existingDraft.lines?.length) {
+      setInvoiceLines(existingDraft.lines);
+      setPaymentForm(existingDraft.form || { method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
+      setSelectedPromoId(existingDraft.promoId || '');
+    } else {
+      const selectedServices = appointment.services?.length ? appointment.services : [appointment.service];
+      const splitPrice = Math.floor(appointment.price / selectedServices.length);
+      setInvoiceLines(selectedServices.map((name, index) => {
+        const catalogMatch = serviceCatalog.find(s => s.name === name);
+        const originalBasePrice = catalogMatch ? catalogMatch.price : (index === selectedServices.length - 1 ? appointment.price - splitPrice * index : splitPrice);
+        
+        return {
+          id: `${makeId('LINE')}-${index}`,
+          type: 'SERVICE',
+          name,
+          quantity: 1,
+          basePrice: originalBasePrice,
+          unitPrice: originalBasePrice, // Giữ y nguyên giá gốc của dịch vụ
+          staff: appointment.staff,
+          designName: undefined,
+          designLevel: 0,
+          difficultyLabel: undefined,
+          designSurcharge: 0,
+        };
+      }));
+      setPaymentForm({ method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
+    }
     setInvoiceCatalogTab('SERVICE');
     setInvoiceCatalogQuery('');
     setInvoiceCategory('Tất cả');
     setFormError('');
+  };
+
+  const openLineCustomizer = (line: InvoiceLineDraft) => {
+    setCustomizingLine(line);
+    const initialLevel = line.designLevel ?? (line.designSurcharge ? (line.designSurcharge >= 350000 ? 4 : line.designSurcharge >= 200000 ? 3 : line.designSurcharge >= 100000 ? 2 : 1) : 0);
+    const diffPreset = ART_DIFFICULTY_PRESETS.find(p => p.level === initialLevel);
+    setCustomizerForm({
+      basePrice: String(line.basePrice ?? line.unitPrice ?? 0),
+      designName: line.designName || '',
+      designLevel: initialLevel,
+      difficultyLabel: line.difficultyLabel || diffPreset?.label || '',
+      designSurcharge: String(line.designSurcharge ?? (diffPreset?.surcharge || 0)),
+      attachedColorCode: line.attachedColorId || '',
+      attachedColorName: line.attachedColorName || '',
+      attachedColorHex: line.attachedColorHex || '',
+      attachedProductName: line.attachedProductName || '',
+      attachedProductPrice: line.attachedProductPrice || 0,
+      staff: line.staff,
+      customArtNote: line.customArtNote || '',
+    });
+  };
+
+  const handleSelectArtTemplateInCustomizer = (template: NailArtTemplate) => {
+    const levelPreset = ART_DIFFICULTY_PRESETS.find(p => p.level === template.defaultLevel) || ART_DIFFICULTY_PRESETS[2];
+    const surcharge = template.surcharge || levelPreset.surcharge;
+    setCustomizerForm(prev => ({
+      ...prev,
+      designName: template.name,
+      designLevel: template.defaultLevel,
+      difficultyLabel: levelPreset.label,
+      designSurcharge: String(surcharge),
+    }));
+  };
+
+  const handleSelectDifficultyInCustomizer = (preset: ArtDifficultyPreset) => {
+    setCustomizerForm(prev => ({
+      ...prev,
+      designLevel: preset.level,
+      difficultyLabel: preset.label,
+      designSurcharge: preset.level === 99 ? prev.designSurcharge : String(preset.surcharge),
+    }));
+  };
+
+  const saveLineCustomizer = () => {
+    if (!customizingLine) return;
+    const rawSurcharge = String(customizerForm.designSurcharge || '0').replace(/[^0-9]/g, '');
+    const rawBase = String(customizerForm.basePrice || '0').replace(/[^0-9]/g, '');
+    const surcharge = Math.max(0, parseInt(rawSurcharge || '0', 10));
+    const base = Math.max(0, parseInt(rawBase || '0', 10));
+    const accPrice = Math.max(0, Number(customizerForm.attachedProductPrice) || 0);
+    const diffPreset = ART_DIFFICULTY_PRESETS.find(p => p.level === customizerForm.designLevel);
+    
+    const unitPrice = base + surcharge + accPrice;
+
+    setInvoiceLines(current => current.map(line => {
+      if (line.id !== customizingLine.id) return line;
+      return {
+        ...line,
+        basePrice: base,
+        unitPrice,
+        staff: customizerForm.staff,
+        designId: customizerForm.designName ? `ART-${Date.now().toString(36)}` : undefined,
+        designName: customizerForm.designName.trim() || undefined,
+        designLevel: customizerForm.designLevel,
+        difficultyLabel: customizerForm.difficultyLabel || diffPreset?.label,
+        designSurcharge: surcharge,
+        customArtNote: customizerForm.customArtNote.trim() || undefined,
+        attachedColorId: customizerForm.attachedColorCode || undefined,
+        attachedColorName: customizerForm.attachedColorName || undefined,
+        attachedColorHex: customizerForm.attachedColorHex || undefined,
+        attachedProductId: customizerForm.attachedProductName ? `ACC-${customizerForm.attachedProductName}` : undefined,
+        attachedProductName: customizerForm.attachedProductName || undefined,
+        attachedProductPrice: accPrice,
+      };
+    }));
+
+    setCustomizingLine(null);
+    setToast(`Đã cập nhật mẫu vẽ, độ khó và giá cho "${customizingLine.name}".`);
+  };
+
+  const addArtServiceItem = (template: NailArtTemplate, targetDifficultyLevel?: number) => {
+    const level = targetDifficultyLevel !== undefined ? targetDifficultyLevel : template.defaultLevel;
+    const levelPreset = ART_DIFFICULTY_PRESETS.find(p => p.level === level) || ART_DIFFICULTY_PRESETS[1];
+    const surcharge = template.surcharge || levelPreset.surcharge;
+    
+    // Tìm giá dịch vụ gốc tương ứng từ danh sách dịch vụ đã đồng bộ
+    const matchedService = template.baseServiceId 
+      ? servicesData.find(s => s.id === template.baseServiceId)
+      : null;
+    const baseServicePrice = matchedService?.price || 450000;
+    const baseServiceName = matchedService?.name || 'Sơn gel';
+    const unitPrice = baseServicePrice + surcharge;
+
+    const newLine: InvoiceLineDraft = {
+      id: makeId('LINE'),
+      type: 'SERVICE',
+      name: `${baseServiceName} + ${template.name}`,
+      basePrice: baseServicePrice,
+      quantity: 1,
+      unitPrice,
+      staff: paymentAppointment?.staff || 'Chưa phân công',
+      designId: template.id,
+      designName: template.name,
+      designLevel: level,
+      difficultyLabel: levelPreset.label,
+      designSurcharge: surcharge,
+    };
+
+    setInvoiceLines(current => [...current, newLine]);
+    setToast(`Đã thêm dịch vụ kèm mẫu "${template.name}" (${levelPreset.shortLabel}).`);
   };
 
   const addCatalogItem = (type: InvoiceLineType, item: CatalogItem) => {
@@ -886,6 +1736,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
         id: makeId('LINE'),
         type,
         name: item.name,
+        basePrice: item.price,
         quantity: 1,
         unitPrice: item.price,
         staff: type === 'SERVICE' ? paymentAppointment?.staff || 'Chưa phân công' : 'Quầy bán lẻ',
@@ -936,22 +1787,73 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     if (discount > subtotal) return setFormError('Giảm giá không được lớn hơn tổng tiền hàng.');
     const grandTotal = Math.max(0, subtotal - discount + tip);
     if (grandTotal < paymentAppointment.deposit) return setFormError('Tổng hóa đơn sau giảm giá không được thấp hơn số tiền khách đã đặt cọc.');
-    const amountDue = Math.max(0, grandTotal - paymentAppointment.deposit);
     if (paymentForm.method !== 'CASH' && !paymentForm.reference.trim()) return setFormError('Vui lòng nhập mã giao dịch để đối soát.');
     if (paymentForm.method !== 'CASH' && payments.some((payment) => payment.reference?.trim().toLowerCase() === paymentForm.reference.trim().toLowerCase() && payment.appointmentId !== paymentAppointment.id)) return setFormError('Mã giao dịch đã được sử dụng. Vui lòng kiểm tra lại để tránh ghi nhận trùng.');
+    
+    setFormError('');
+    setShowPaymentConfirm(true);
+  };
+
+  const executeFinalPayment = () => {
+    if (!paymentAppointment) return;
+    const subtotal = invoiceLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+    const discount = Math.max(0, Number(paymentForm.discount) || 0);
+    const tip = Math.max(0, Number(paymentForm.tip) || 0);
+    const grandTotal = Math.max(0, subtotal - discount + tip);
+    const amountDue = Math.max(0, grandTotal - paymentAppointment.deposit);
     const timestamp = new Date();
     const existingInvoice = payments.find((payment) => payment.appointmentId === paymentAppointment.id && ['PARTIAL', 'PENDING'].includes(payment.status));
+    
     const payment: ReceptionPayment = {
-      id: existingInvoice?.id || makeId('INV'), appointmentId: paymentAppointment.id, customer: paymentAppointment.customer, phone: paymentAppointment.phone,
-      branch: paymentAppointment.branch, createdAt: `${timestamp.toLocaleDateString('vi-VN')} · ${nowTime()}`,
-      subtotal, discount, tip, deposit: paymentAppointment.deposit, total: grandTotal, paid: grandTotal,
-      refunded: 0, status: 'PAID', method: paymentForm.method, reference: paymentForm.reference.trim() || undefined,
-      cashier: account.displayName, source: 'POS tại quầy',
-      items: invoiceLines.map((line) => ({ name: line.name.trim(), quantity: line.quantity, amount: line.quantity * line.unitPrice, staff: line.staff })),
+      id: existingInvoice?.id || makeId('INV'),
+      appointmentId: paymentAppointment.id,
+      customer: paymentAppointment.customer,
+      phone: paymentAppointment.phone,
+      branch: paymentAppointment.branch,
+      createdAt: `${timestamp.toLocaleDateString('vi-VN')} · ${nowTime()}`,
+      subtotal,
+      discount,
+      tip,
+      deposit: paymentAppointment.deposit,
+      total: grandTotal,
+      paid: grandTotal,
+      refunded: 0,
+      status: 'PAID',
+      method: paymentForm.method,
+      reference: paymentForm.reference.trim() || undefined,
+      cashier: account.displayName,
+      source: 'POS tại quầy',
+      items: invoiceLines.map((line) => {
+        let displayName = line.name.trim();
+        if (line.designName) {
+          const diffText = line.difficultyLabel || (line.designLevel ? `Độ khó mức ${line.designLevel}` : '');
+          displayName += ` + Mẫu: ${line.designName}${diffText ? ` (${diffText})` : ''}${line.designSurcharge ? ` [+${money(line.designSurcharge)}]` : ''}`;
+        }
+        if (line.attachedColorName) {
+          displayName += ` · Màu: ${line.attachedColorName}`;
+        }
+        if (line.attachedProductName) {
+          displayName += ` · Kèm: ${line.attachedProductName}${line.attachedProductPrice ? ` [+${money(line.attachedProductPrice)}]` : ''}`;
+        }
+        return {
+          name: displayName,
+          quantity: line.quantity,
+          amount: line.quantity * line.unitPrice,
+          staff: line.staff,
+          basePrice: line.basePrice,
+          designName: line.designName,
+          designLevel: line.designLevel,
+          difficultyLabel: line.difficultyLabel,
+          designSurcharge: line.designSurcharge,
+          attachedColorName: line.attachedColorName,
+          attachedProductName: line.attachedProductName,
+          customArtNote: line.customArtNote,
+        };
+      }),
       note: paymentForm.note.trim() || undefined,
       audit: [
         ...(existingInvoice?.audit || []),
-        `${nowTime()} · ${account.displayName} xác nhận ${invoiceLines.length} dòng hàng và thanh toán ${methodMeta[paymentForm.method].label}`,
+        `${nowTime()} · ${account.displayName} xác nhận ${invoiceLines.length} dịch vụ/sản phẩm (gồm chi tiết mẫu vẽ & phụ thu độ khó) và thanh toán qua ${methodMeta[paymentForm.method].label}`,
         `${nowTime()} · Áp dụng cọc ${money(paymentAppointment.deposit)}, thực thu tại quầy ${money(amountDue)}`,
       ],
     };
@@ -971,8 +1873,19 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     if (!hasOtherActiveService) {
       setTechnicians((current) => current.map((item) => item.name === paymentAppointment.staff && item.status === 'SERVING' ? { ...item, status: 'PRESENT' } : item));
     }
+    setInvoiceDrafts((current) => {
+      const next = { ...current };
+      delete next[paymentAppointment.id];
+      try {
+        localStorage.setItem(invoiceDraftsStorageKey, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+    setShowPaymentConfirm(false);
     setPaymentAppointment(null);
-    setToast(`Đã thu ${money(amountDue)} từ ${payment.customer}.`);
+    setToast(`Đã thu ${money(amountDue)} từ khách hàng ${payment.customer}.`);
   };
 
   const openShiftDialog = (mode: 'OPEN' | 'CLOSE') => {
@@ -1152,9 +2065,35 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                           {isUnassigned ? 'Phân công' : 'Chỉnh lịch'}
                         </button>
                       )}
-                      {['PENDING', 'CONFIRMED'].includes(appointment.status) && <button type="button" onClick={() => updateAppointmentStatus(appointment, 'CHECKED_IN')} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-secondary px-3 py-2 text-body font-black text-white hover:bg-brand-secondary"><Check className="h-3.5 w-3.5" /> Check-in</button>}
-                      {appointment.status === 'CHECKED_IN' && <button type="button" onClick={() => updateAppointmentStatus(appointment, 'IN_SERVICE')} className={`rounded-xl px-3 py-2 text-body font-black text-white ${isUnassigned ? 'bg-brand-tertiary hover:bg-brand-tertiary' : 'bg-brand-primary hover:bg-brand-primary'}`}>Bắt đầu dịch vụ</button>}
-                      {appointment.status === 'IN_SERVICE' && <button type="button" onClick={() => openPayment(appointment)} className="rounded-xl bg-brand-secondary px-3 py-2 text-body font-black text-white hover:bg-brand-secondary">Thu tiền & hoàn tất</button>}
+                      {['PENDING', 'CONFIRMED'].includes(appointment.status) && <button type="button" onClick={() => updateAppointmentStatus(appointment, 'CHECKED_IN')} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-secondary px-3 py-2 text-body font-black text-white hover:bg-brand-secondary cursor-pointer"><Check className="h-3.5 w-3.5" /> Check-in</button>}
+                      {appointment.status === 'CHECKED_IN' && (
+                        <>
+                          <button type="button" onClick={() => updateAppointmentStatus(appointment, 'IN_SERVICE')} className={`rounded-xl px-3 py-2 text-body font-black text-white cursor-pointer ${isUnassigned ? 'bg-brand-tertiary hover:bg-brand-tertiary' : 'bg-brand-primary hover:bg-brand-primary'}`}>Bắt đầu dịch vụ</button>
+                          <button type="button" onClick={() => openPayment(appointment)} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 px-3 py-2 text-body font-black cursor-pointer">
+                            <ReceiptText className="h-3.5 w-3.5" /> {invoiceDrafts[appointment.id]?.lines?.length ? `Hóa đơn (${invoiceDrafts[appointment.id].lines.length})` : 'Tạo hóa đơn'}
+                          </button>
+                        </>
+                      )}
+                      {appointment.status === 'IN_SERVICE' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openPayment(appointment)}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 px-3 py-2 text-body font-black cursor-pointer"
+                            title="Thêm món, dịch vụ hoặc sản phẩm phụ phát sinh trong khi đang làm dịch vụ"
+                          >
+                            <ReceiptText className="h-3.5 w-3.5" />
+                            {invoiceDrafts[appointment.id]?.lines?.length ? `Sửa hóa đơn (${invoiceDrafts[appointment.id].lines.length})` : 'Tạo / Thêm dịch vụ'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openPayment(appointment)}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 text-body font-black text-white shadow-sm cursor-pointer"
+                          >
+                            <ReceiptText className="h-3.5 w-3.5" /> Thu tiền & hoàn tất
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   {appointment.note && <p className="mt-3 rounded-xl bg-brand-surface-high/60 px-3 py-2 text-caption font-semibold leading-4 text-brand-text-muted"><span className="font-black text-brand-text">Lưu ý:</span> {appointment.note}</p>}
@@ -1464,17 +2403,44 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
 
   return (
     <div className="role-shell role-shell--reception reception-workspace min-h-screen bg-brand-bg text-brand-text">
-      <aside className={`role-sidebar reception-sidebar fixed inset-y-0 left-0 z-[var(--z-sidebar)] flex w-[var(--size-sidebar)] flex-col transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-[var(--size-topbar)] shrink-0 items-center gap-3 border-b border-white/10 px-5">
-          <span className="flex h-11 w-11 items-center justify-center rounded-control bg-brand-secondary text-brand-on-primary"><Store className="h-5 w-5" /></span>
-          <div className="min-w-0">
-            <p className="truncate text-body font-bold">{tenantName}</p>
-            <p className="mt-0.5 text-caption font-bold uppercase tracking-wider opacity-60">Không gian lễ tân</p>
+      <aside className={`role-sidebar reception-sidebar fixed inset-y-0 left-0 z-[var(--z-sidebar)] flex flex-col bg-[#0f172a] text-white border-r border-white/10 shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-[var(--size-sidebar)]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Header */}
+        <div className={`flex h-16 shrink-0 items-center border-b border-white/10 px-3.5 ${sidebarCollapsed ? 'lg:justify-center lg:px-2' : 'justify-between'}`}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 shadow-xs">
+              <Store className="h-4 w-4" />
+            </span>
+            <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+              <p className="truncate text-xs font-black text-white tracking-tight">{tenantName}</p>
+              <p className="mt-0.5 truncate text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Lễ tân · {branchCode === 'Q1' ? 'CN Quận 1' : 'CN Quận 3'}</p>
+            </div>
           </div>
-          <Button variant="ghost" size="small" iconOnly aria-label="Đóng menu" onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden"><X /></Button>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Đóng menu"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition lg:hidden"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
+            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
+            className={`hidden lg:flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer shrink-0 ${
+              sidebarCollapsed ? 'hidden' : ''
+            }`}
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Điều hướng Receptionist">
-          <p className="px-3 pb-2 pt-3 text-caption font-bold uppercase tracking-wider opacity-45">Vận hành tại quầy</p>
+
+        {/* Navigation Items */}
+        <nav className="flex-1 space-y-1 overflow-y-auto p-2.5" aria-label="Điều hướng Receptionist">
+          <p className={`px-2.5 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400/80 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+            Vận hành tại quầy
+          </p>
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
@@ -1484,31 +2450,86 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                 type="button"
                 onClick={() => navigate(item.id)}
                 aria-current={active ? 'page' : undefined}
-                className="flex w-full items-center gap-3 rounded-control px-3 py-3 text-left"
+                title={sidebarCollapsed ? item.label : undefined}
+                className={`group flex w-full items-center gap-3 rounded-xl transition-all cursor-pointer ${
+                  sidebarCollapsed ? 'lg:justify-center lg:h-10 lg:px-0' : 'h-10 px-3'
+                } ${
+                  active
+                    ? 'bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/25 shadow-xs'
+                    : 'text-slate-300 hover:text-white hover:bg-white/5 font-medium'
+                }`}
               >
-                <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={active ? 2.3 : 1.9} />
-                <span className="min-w-0">
-                  <span className="block text-body font-bold">{item.label}</span>
-                  <span className="mt-0.5 block text-caption opacity-60">{item.description}</span>
+                <Icon
+                  className={`h-4 w-4 shrink-0 transition-transform ${
+                    active ? 'text-emerald-400 scale-105' : 'text-slate-400 group-hover:text-slate-200'
+                  }`}
+                  strokeWidth={active ? 2.4 : 2}
+                />
+                <span className={`text-xs truncate ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+                  {item.label}
                 </span>
-                {active && <ChevronRight className="ml-auto h-4 w-4" />}
+                {active && !sidebarCollapsed && (
+                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                )}
               </button>
             );
           })}
         </nav>
-        <div className="shrink-0 border-t border-white/10 p-4">
-          <div className="mb-3 flex items-center gap-3 rounded-control bg-white/5 p-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-white/10 text-body font-bold">
+
+        {/* Footer */}
+        <div className="shrink-0 border-t border-white/10 p-2.5 space-y-2">
+          <div className={`flex items-center gap-2.5 rounded-xl bg-white/5 p-2 ${sidebarCollapsed ? 'lg:justify-center lg:p-1.5' : ''}`}>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-300 font-black text-xs border border-emerald-500/30">
               {account.displayName.split(' ').slice(-2).map((part) => part[0]).join('')}
             </span>
-            <div className="min-w-0">
-              <p className="truncate text-body font-bold">{account.displayName}</p>
-              <p className="truncate text-caption opacity-60">Receptionist · {branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}</p>
+            <div className={`min-w-0 flex-1 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+              <p className="truncate text-xs font-bold text-white">{account.displayName}</p>
+              <p className="truncate text-[10px] text-slate-400 font-medium">Lễ tân · {branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}</p>
             </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              title="Đăng xuất"
+              aria-label="Đăng xuất"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer ${sidebarCollapsed ? 'lg:hidden' : ''}`}
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <button type="button" onClick={onLogout} className="reception-logout flex w-full items-center justify-center gap-2 rounded-control px-3 py-2.5 text-body font-bold">
-            <LogOut className="h-4 w-4" /> Đăng xuất
-          </button>
+
+          {sidebarCollapsed ? (
+            <button
+              type="button"
+              onClick={onLogout}
+              title="Đăng xuất"
+              aria-label="Đăng xuất"
+              className="hidden lg:flex h-8 w-full items-center justify-center rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          ) : null}
+
+          <div className="hidden lg:block">
+            <button
+              type="button"
+              onClick={toggleSidebarCollapsed}
+              title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
+              aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
+              className={`flex h-8 w-full items-center rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer ${
+                sidebarCollapsed ? 'justify-center p-0' : 'justify-between px-2.5'
+              }`}
+            >
+              <span className={sidebarCollapsed ? 'hidden' : 'truncate flex items-center gap-1.5'}>
+                <PanelLeftClose className="h-3.5 w-3.5 shrink-0" />
+                <span>Thu hẹp</span>
+              </span>
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-mono text-slate-400">Ctrl+B</kbd>
+              )}
+            </button>
+          </div>
         </div>
       </aside>
       {/* Lớp phủ khi mở menu trên mobile: không phải nút bấm nên không lọt vào
@@ -1521,9 +2542,22 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
         />
       )}
 
-      <div className="min-h-screen lg:pl-[var(--size-sidebar)]">
+      <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[var(--size-sidebar)]'}`}>
         <header className="role-topbar sticky top-0 z-[var(--z-sticky)] flex h-[var(--size-topbar)] items-center gap-3 border-b border-brand-outline px-4 sm:px-6">
           <Button variant="secondary" size="small" iconOnly aria-label="Mở menu" onClick={() => setSidebarOpen(true)} className="lg:hidden"><Menu /></Button>
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
+            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
+            className="hidden lg:flex h-9 w-9 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface text-brand-text-muted hover:bg-brand-surface-high hover:text-brand-text transition cursor-pointer"
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
           <div className="hidden min-w-0 sm:block"><p className="text-caption font-bold uppercase tracking-wider text-brand-text-muted">{new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</p><p className="mt-0.5 text-body font-bold text-brand-text">{navItems.find((item) => item.id === page)?.label}</p></div>
           <div className="relative ml-auto hidden w-full max-w-sm md:block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={page === 'products' ? 'Tìm tên, SKU, lô sản phẩm...' : page === 'stations' ? 'Tìm mã ghế, khách, kỹ thuật viên...' : 'Tìm tên, số điện thoại, dịch vụ...'} className="h-[var(--size-control)] w-full rounded-control border border-brand-outline bg-brand-surface-lowest pl-10 pr-4 text-body outline-none focus:border-brand-secondary" /></div>
           <span className="hidden sm:flex" title="Tài khoản chỉ được điều phối chi nhánh này"><StatusBadge status="ACTIVE" label={branchCode === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3'} /></span>
@@ -1658,10 +2692,10 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
           icon={<UserCheck />}
           title="Tiếp nhận khách vãng lai"
           description="Tạo lượt phục vụ tại quầy và đưa khách vào hàng chờ ngay lập tức."
-          onClose={() => { setWalkInOpen(false); setFormError(''); }}
+          onClose={() => { setWalkInOpen(false); setFormError(''); setWalkInErrors({}); }}
           footer={
             <>
-              <Button variant="secondary" onClick={() => { setWalkInOpen(false); setFormError(''); }}>Hủy</Button>
+              <Button variant="secondary" onClick={() => { setWalkInOpen(false); setFormError(''); setWalkInErrors({}); }}>Hủy</Button>
               <Button type="submit" form="reception-walkin" variant="primary" iconLeading={<UserCheck />}>Tạo &amp; check-in</Button>
             </>
           }
@@ -1669,42 +2703,108 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
           <form id="reception-walkin" onSubmit={submitWalkIn} noValidate className="space-y-5">
             <div className="flex items-start gap-3 rounded-2xl border border-brand-tertiary/25 bg-brand-tertiary/10 p-3 text-body font-bold leading-5 text-brand-tertiary">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              Hệ thống kiểm tra trùng số điện thoại, kỹ thuật viên, khung giờ và ghế/phòng trước khi tạo lượt.
+              Giờ mở cửa salon: 08:00 – 20:30 (Khung giờ tiếp nhận khách: 08:00 – 20:00). Hệ thống kiểm tra trùng KTV, ca làm việc, giờ đóng cửa và ghế phục vụ.
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Tên khách hàng *">
-                <input value={walkIn.customer} onChange={(event) => setWalkIn({ ...walkIn, customer: event.target.value })} className="reception-input" placeholder="Nguyễn Minh Anh" autoFocus />
+              <Field label="Tên khách hàng *" error={walkInErrors.customer}>
+                <input
+                  value={walkIn.customer}
+                  onChange={(event) => {
+                    setWalkIn({ ...walkIn, customer: event.target.value });
+                    if (walkInErrors.customer) setWalkInErrors((prev) => ({ ...prev, customer: '' }));
+                  }}
+                  className="reception-input"
+                  placeholder="Nguyễn Minh Anh"
+                  autoFocus
+                />
               </Field>
-              <Field label="Số điện thoại *">
-                <input type="tel" value={walkIn.phone} onChange={(event) => setWalkIn({ ...walkIn, phone: event.target.value })} className="reception-input" placeholder="09xx xxx xxx" />
+              <Field label="Số điện thoại *" helper="10 số di động VN (09xx, 08xx, 03xx, 07xx, 05xx)" error={walkInErrors.phone}>
+                <input
+                  type="tel"
+                  value={walkIn.phone}
+                  onChange={(event) => {
+                    setWalkIn({ ...walkIn, phone: event.target.value });
+                    if (walkInErrors.phone) setWalkInErrors((prev) => ({ ...prev, phone: '' }));
+                  }}
+                  className="reception-input"
+                  placeholder="0903123456"
+                />
               </Field>
-              <Field label="Dịch vụ *">
-                <select value={walkIn.service} onChange={(event) => handleWalkInServiceChange(event.target.value)} className="reception-input">
+              <Field label="Dịch vụ *" error={walkInErrors.service}>
+                <select
+                  value={walkIn.service}
+                  onChange={(event) => {
+                    handleWalkInServiceChange(event.target.value);
+                    if (walkInErrors.service) setWalkInErrors((prev) => ({ ...prev, service: '' }));
+                  }}
+                  className="reception-input"
+                >
                   {serviceCatalog.map((service) => <option key={service.name}>{service.name}</option>)}
                 </select>
               </Field>
-              <Field label="Kỹ thuật viên *">
-                <select value={walkIn.staff} onChange={(event) => setWalkIn({ ...walkIn, staff: event.target.value })} className="reception-input">
+              <Field label="Kỹ thuật viên *" error={walkInErrors.staff}>
+                <select
+                  value={walkIn.staff}
+                  onChange={(event) => {
+                    setWalkIn({ ...walkIn, staff: event.target.value });
+                    if (walkInErrors.staff) setWalkInErrors((prev) => ({ ...prev, staff: '' }));
+                  }}
+                  className="reception-input"
+                >
                   <option>Chưa phân công</option>
                   {assignableTechnicians.map((technician) => <option key={technician.id} value={technician.name}>{technician.name} · {technicianStatusMeta[technician.status].label}</option>)}
                 </select>
               </Field>
-              <Field label="Ghế / phòng">
-                <select value={walkIn.station} onChange={(event) => setWalkIn({ ...walkIn, station: event.target.value })} className="reception-input">
+              <Field label="Ghế / phòng" error={walkInErrors.station}>
+                <select
+                  value={walkIn.station}
+                  onChange={(event) => {
+                    setWalkIn({ ...walkIn, station: event.target.value });
+                    if (walkInErrors.station) setWalkInErrors((prev) => ({ ...prev, station: '' }));
+                  }}
+                  className="reception-input"
+                >
                   <option value="">Xếp sau khi check-in</option>
                   {stationCatalog[branchCode].map((station) => <option key={station} value={station}>{station}</option>)}
                 </select>
               </Field>
-              <Field label="Giờ bắt đầu *">
-                <input type="time" value={walkIn.start} onChange={(event) => setWalkIn({ ...walkIn, start: event.target.value })} className="reception-input" />
+              <Field label="Giờ bắt đầu *" helper="Salon mở cửa từ 08:00 đến 20:30" error={walkInErrors.start}>
+                <input
+                  type="time"
+                  min="08:00"
+                  max="20:00"
+                  value={walkIn.start}
+                  onChange={(event) => {
+                    setWalkIn({ ...walkIn, start: event.target.value });
+                    if (walkInErrors.start) setWalkInErrors((prev) => ({ ...prev, start: '' }));
+                  }}
+                  className="reception-input"
+                />
               </Field>
-              <Field label="Thời lượng *">
-                <select value={walkIn.duration} onChange={(event) => setWalkIn({ ...walkIn, duration: event.target.value })} className="reception-input">
+              <Field label="Thời lượng *" error={walkInErrors.duration}>
+                <select
+                  value={walkIn.duration}
+                  onChange={(event) => {
+                    setWalkIn({ ...walkIn, duration: event.target.value });
+                    if (walkInErrors.duration) setWalkInErrors((prev) => ({ ...prev, duration: '' }));
+                  }}
+                  className="reception-input"
+                >
                   {[30, 40, 45, 60, 75, 90, 120].map((duration) => <option key={duration} value={duration}>{duration} phút</option>)}
                 </select>
               </Field>
-              <Field label="Giá dự kiến *">
-                <input type="number" min="1000" step="1000" value={walkIn.price} onChange={(event) => setWalkIn({ ...walkIn, price: event.target.value })} className="reception-input" />
+              <Field label="Giá dự kiến *" error={walkInErrors.price}>
+                <input
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  value={walkIn.price}
+                  onChange={(event) => {
+                    setWalkIn({ ...walkIn, price: event.target.value });
+                    if (walkInErrors.price) setWalkInErrors((prev) => ({ ...prev, price: '' }));
+                  }}
+                  className="reception-input"
+                />
               </Field>
             </div>
             <Field label="Ghi chú phục vụ">
@@ -1723,10 +2823,10 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
           headerAside={<StatusBadge status={editingAppointment.status} label={appointmentStatusLabel[editingAppointment.status]} size="small" />}
           title={`Điều phối lịch ${editingAppointment.start}`}
           description={`${editingAppointment.customer} · ${branchName}`}
-          onClose={() => { setEditingAppointment(null); setFormError(''); }}
+          onClose={() => { setEditingAppointment(null); setFormError(''); setAppointmentEditErrors({}); }}
           footer={
             <>
-              <Button variant="secondary" onClick={() => { setEditingAppointment(null); setFormError(''); }}>Hủy</Button>
+              <Button variant="secondary" onClick={() => { setEditingAppointment(null); setFormError(''); setAppointmentEditErrors({}); }}>Hủy</Button>
               <Button type="submit" form="reception-edit-appointment" variant="primary" iconLeading={<Check />}>Lưu điều phối</Button>
             </>
           }
@@ -1734,42 +2834,106 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
           <form id="reception-edit-appointment" onSubmit={submitAppointmentEdit} noValidate className="space-y-5">
             <div className="flex items-start gap-3 rounded-2xl border border-brand-secondary/25 bg-brand-secondary/10 p-3 text-body font-bold leading-5 text-brand-secondary">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-              Chỉ kỹ thuật viên đang làm việc và có đúng chuyên môn mới được phân công. Ghế/phòng cũng được kiểm tra trùng giờ.
+              Giờ mở cửa salon: 08:00 – 20:30. Chỉ kỹ thuật viên đang làm việc, trong ca trực và có đúng chuyên môn mới được phân công.
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Tên khách hàng *">
-                <input value={appointmentEditForm.customer} onChange={(event) => setAppointmentEditForm({ ...appointmentEditForm, customer: event.target.value })} className="reception-input" autoFocus />
+              <Field label="Tên khách hàng *" error={appointmentEditErrors.customer}>
+                <input
+                  value={appointmentEditForm.customer}
+                  onChange={(event) => {
+                    setAppointmentEditForm({ ...appointmentEditForm, customer: event.target.value });
+                    if (appointmentEditErrors.customer) setAppointmentEditErrors((prev) => ({ ...prev, customer: '' }));
+                  }}
+                  className="reception-input"
+                  autoFocus
+                />
               </Field>
-              <Field label="Số điện thoại *">
-                <input type="tel" value={appointmentEditForm.phone} onChange={(event) => setAppointmentEditForm({ ...appointmentEditForm, phone: event.target.value })} className="reception-input" />
+              <Field label="Số điện thoại *" helper="10 số di động VN (09xx, 08xx, 03xx, 07xx, 05xx)" error={appointmentEditErrors.phone}>
+                <input
+                  type="tel"
+                  value={appointmentEditForm.phone}
+                  onChange={(event) => {
+                    setAppointmentEditForm({ ...appointmentEditForm, phone: event.target.value });
+                    if (appointmentEditErrors.phone) setAppointmentEditErrors((prev) => ({ ...prev, phone: '' }));
+                  }}
+                  className="reception-input"
+                />
               </Field>
-              <Field label="Dịch vụ *">
-                <select value={appointmentEditForm.service} onChange={(event) => handleAppointmentEditServiceChange(event.target.value)} className="reception-input">
+              <Field label="Dịch vụ *" error={appointmentEditErrors.service}>
+                <select
+                  value={appointmentEditForm.service}
+                  onChange={(event) => {
+                    handleAppointmentEditServiceChange(event.target.value);
+                    if (appointmentEditErrors.service) setAppointmentEditErrors((prev) => ({ ...prev, service: '' }));
+                  }}
+                  className="reception-input"
+                >
                   {serviceCatalog.map((service) => <option key={service.name}>{service.name}</option>)}
                 </select>
               </Field>
-              <Field label="Kỹ thuật viên *">
-                <select value={appointmentEditForm.staff} onChange={(event) => setAppointmentEditForm({ ...appointmentEditForm, staff: event.target.value })} className="reception-input">
+              <Field label="Kỹ thuật viên *" error={appointmentEditErrors.staff}>
+                <select
+                  value={appointmentEditForm.staff}
+                  onChange={(event) => {
+                    setAppointmentEditForm({ ...appointmentEditForm, staff: event.target.value });
+                    if (appointmentEditErrors.staff) setAppointmentEditErrors((prev) => ({ ...prev, staff: '' }));
+                  }}
+                  className="reception-input"
+                >
                   <option>Chưa phân công</option>
                   {assignableTechnicians.map((technician) => <option key={technician.id} value={technician.name}>{technician.name} · {technicianStatusMeta[technician.status].label}</option>)}
                 </select>
               </Field>
-              <Field label="Ghế / phòng">
-                <select value={appointmentEditForm.station} onChange={(event) => setAppointmentEditForm({ ...appointmentEditForm, station: event.target.value })} className="reception-input">
+              <Field label="Ghế / phòng" error={appointmentEditErrors.station}>
+                <select
+                  value={appointmentEditForm.station}
+                  onChange={(event) => {
+                    setAppointmentEditForm({ ...appointmentEditForm, station: event.target.value });
+                    if (appointmentEditErrors.station) setAppointmentEditErrors((prev) => ({ ...prev, station: '' }));
+                  }}
+                  className="reception-input"
+                >
                   <option value="">Chưa xếp ghế</option>
                   {stationCatalog[branchCode].map((station) => <option key={station} value={station}>{station}</option>)}
                 </select>
               </Field>
-              <Field label="Giờ bắt đầu *">
-                <input type="time" value={appointmentEditForm.start} onChange={(event) => setAppointmentEditForm({ ...appointmentEditForm, start: event.target.value })} className="reception-input" />
+              <Field label="Giờ bắt đầu *" helper="Salon mở cửa từ 08:00 đến 20:30" error={appointmentEditErrors.start}>
+                <input
+                  type="time"
+                  min="08:00"
+                  max="20:00"
+                  value={appointmentEditForm.start}
+                  onChange={(event) => {
+                    setAppointmentEditForm({ ...appointmentEditForm, start: event.target.value });
+                    if (appointmentEditErrors.start) setAppointmentEditErrors((prev) => ({ ...prev, start: '' }));
+                  }}
+                  className="reception-input"
+                />
               </Field>
-              <Field label="Thời lượng *">
-                <select value={appointmentEditForm.duration} onChange={(event) => setAppointmentEditForm({ ...appointmentEditForm, duration: event.target.value })} className="reception-input">
+              <Field label="Thời lượng *" error={appointmentEditErrors.duration}>
+                <select
+                  value={appointmentEditForm.duration}
+                  onChange={(event) => {
+                    setAppointmentEditForm({ ...appointmentEditForm, duration: event.target.value });
+                    if (appointmentEditErrors.duration) setAppointmentEditErrors((prev) => ({ ...prev, duration: '' }));
+                  }}
+                  className="reception-input"
+                >
                   {[30, 40, 45, 60, 75, 90, 120].map((duration) => <option key={duration} value={duration}>{duration} phút</option>)}
                 </select>
               </Field>
-              <Field label="Giá dự kiến *">
-                <input type="number" min="1000" step="1000" value={appointmentEditForm.price} onChange={(event) => setAppointmentEditForm({ ...appointmentEditForm, price: event.target.value })} className="reception-input" />
+              <Field label="Giá dự kiến *" error={appointmentEditErrors.price}>
+                <input
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  value={appointmentEditForm.price}
+                  onChange={(event) => {
+                    setAppointmentEditForm({ ...appointmentEditForm, price: event.target.value });
+                    if (appointmentEditErrors.price) setAppointmentEditErrors((prev) => ({ ...prev, price: '' }));
+                  }}
+                  className="reception-input"
+                />
               </Field>
             </div>
             <Field label="Ghi chú phục vụ">
@@ -1788,92 +2952,214 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
           title="Tạo hóa đơn & thanh toán"
           description={`${paymentAppointment.customer} · ${paymentAppointment.phone} · ${branchName}`}
           onClose={() => setPaymentAppointment(null)}
+          footer={
+            <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="text-xs font-bold text-brand-text-muted">Tổng thực thu:</span>
+                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">{money(invoiceTotal)}</span>
+                {paymentAppointment.deposit > 0 && (
+                  <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                    Đã trừ cọc {money(paymentAppointment.deposit)}
+                  </span>
+                )}
+                {invoiceDiscount > 0 && (
+                  <span className="rounded-md bg-rose-500/10 px-2 py-0.5 text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                    Giảm {money(invoiceDiscount)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                <Button variant="secondary" onClick={() => setPaymentAppointment(null)}>
+                  Đóng
+                </Button>
+                <button
+                  type="submit"
+                  form="reception-invoice-form"
+                  className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-5 text-xs font-black text-white shadow-md shadow-emerald-600/25 transition-all cursor-pointer"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Xác nhận thanh toán {money(invoiceTotal)}
+                </button>
+              </div>
+            </div>
+          }
         >
           {/* Nút thanh toán nằm cạnh khối tổng tiền trong cột phải, không tách ra
               chân hộp thoại — người thu ngân cần thấy số tiền ngay khi bấm. */}
-          <form onSubmit={submitPayment} className="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:overflow-hidden">
+          <form id="reception-invoice-form" onSubmit={submitPayment} className="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:overflow-hidden">
             <section className="min-w-0 overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface-high/25 lg:flex lg:min-h-0 lg:flex-col">
               <div className="shrink-0 border-b border-brand-outline p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-sm font-black text-brand-text">Chọn dịch vụ hoặc sản phẩm</h3>
-                    <p className="mt-1 text-body text-brand-text-muted">Nhấn vào một mục để thêm nhanh vào hóa đơn.</p>
+                    <h3 className="text-sm font-black text-brand-text">Chọn dịch vụ, mẫu vẽ hoặc sản phẩm</h3>
+                    <p className="mt-1 text-body text-brand-text-muted">Chọn dịch vụ, gắn mẫu vẽ theo độ khó hoặc thêm sản phẩm đi kèm.</p>
                   </div>
                   <div className="flex rounded-xl border border-brand-outline bg-brand-surface p-1">
-                    <button type="button" onClick={() => { setInvoiceCatalogTab('SERVICE'); setInvoiceCategory('Tất cả'); }} className={`rounded-lg px-4 py-2 text-body font-black transition ${invoiceCatalogTab === 'SERVICE' ? 'bg-brand-secondary text-white shadow-sm' : 'text-brand-text-muted'}`}>Dịch vụ</button>
-                    <button type="button" onClick={() => { setInvoiceCatalogTab('PRODUCT'); setInvoiceCategory('Tất cả'); }} className={`rounded-lg px-4 py-2 text-body font-black transition ${invoiceCatalogTab === 'PRODUCT' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-muted'}`}>Sản phẩm</button>
+                    <button type="button" onClick={() => { setInvoiceCatalogTab('SERVICE'); setInvoiceCategory('Tất cả'); }} className={`rounded-lg px-3 py-1.5 text-xs font-black transition ${invoiceCatalogTab === 'SERVICE' ? 'bg-brand-secondary text-white shadow-sm' : 'text-brand-text-muted hover:text-brand-text'}`}>Dịch vụ</button>
+                    <button type="button" onClick={() => { setInvoiceCatalogTab('ART'); setInvoiceCategory('Tất cả'); }} className={`rounded-lg px-3 py-1.5 text-xs font-black transition ${invoiceCatalogTab === 'ART' ? 'bg-amber-600 text-white shadow-sm' : 'text-brand-text-muted hover:text-brand-text'}`}>🎨 Mẫu vẽ & Độ khó</button>
+                    <button type="button" onClick={() => { setInvoiceCatalogTab('PRODUCT'); setInvoiceCategory('Tất cả'); }} className={`rounded-lg px-3 py-1.5 text-xs font-black transition ${invoiceCatalogTab === 'PRODUCT' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-muted hover:text-brand-text'}`}>Sản phẩm</button>
                   </div>
                 </div>
-                <div className="relative mt-4"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" /><input value={invoiceCatalogQuery} onChange={(event) => setInvoiceCatalogQuery(event.target.value)} className="reception-input pl-10" placeholder={invoiceCatalogTab === 'SERVICE' ? 'Tìm tên dịch vụ...' : 'Tìm tên sản phẩm...'} /></div>
+                <div className="relative mt-4">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" />
+                  <input
+                    value={invoiceCatalogQuery}
+                    onChange={(event) => setInvoiceCatalogQuery(event.target.value)}
+                    className="reception-input pl-10"
+                    placeholder={
+                      invoiceCatalogTab === 'SERVICE'
+                        ? 'Tìm tên dịch vụ...'
+                        : invoiceCatalogTab === 'ART'
+                          ? 'Tìm mẫu nail art, phong cách vẽ tranh...'
+                          : 'Tìm tên sản phẩm...'
+                    }
+                  />
+                </div>
                 <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                  {invoiceCategories.map((category) => <button key={category} type="button" onClick={() => setInvoiceCategory(category)} className={`shrink-0 rounded-full border px-3 py-1.5 text-caption font-bold ${invoiceCategory === category ? (invoiceCatalogTab === 'SERVICE' ? 'border-brand-secondary bg-brand-secondary text-white' : 'border-brand-primary bg-brand-primary text-white') : 'border-brand-outline bg-brand-surface text-brand-text-muted'}`}>{category}</button>)}
+                  {invoiceCategories.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => setInvoiceCategory(category)}
+                      className={`shrink-0 rounded-full border px-3 py-1.5 text-caption font-bold ${
+                        invoiceCategory === category
+                          ? invoiceCatalogTab === 'SERVICE'
+                            ? 'border-brand-secondary bg-brand-secondary text-white'
+                            : invoiceCatalogTab === 'ART'
+                              ? 'border-amber-600 bg-amber-600 text-white'
+                              : 'border-brand-primary bg-brand-primary text-white'
+                          : 'border-brand-outline bg-brand-surface text-brand-text-muted'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5 lg:min-h-0 lg:flex-1 xl:grid-cols-3">
-                {filteredCatalog.map((item, index) => {
-                  const count = invoiceLines.filter((line) => line.type === invoiceCatalogTab && line.name === item.name).reduce((sum, line) => sum + line.quantity, 0);
-                  return (
-                    <div
-                      key={item.name}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => addCatalogItem(invoiceCatalogTab, item)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          addCatalogItem(invoiceCatalogTab, item);
-                        }
-                      }}
-                      className="group relative flex min-h-[170px] flex-col rounded-2xl border border-brand-outline bg-brand-surface p-4 text-left shadow-sm transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-brand-secondary hover:shadow-lg hover:shadow-card focus:outline-none focus:ring-2 focus:ring-brand-secondary"
-                    >
-                      {count > 0 && <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-secondary px-1.5 text-caption font-black text-white">{count}</span>}
-                      <span className={`flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? ' text-brand-secondary' : ' text-brand-primary'}`}>{String(index + 1).padStart(2, '0')}</span>
-                      <span className="mt-3 line-clamp-2 text-xs font-black leading-5 text-brand-text">{item.name}</span>
-                      <span className="mt-1 text-caption font-semibold text-brand-text-muted">{item.category}</span>
-                      <span className="mt-auto flex items-end justify-between gap-3 pt-3">
-                        <span>
-                          <span className={`block text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? 'text-brand-secondary' : 'text-brand-primary'}`}>{money(item.price)}</span>
-                          <span className="mt-0.5 block text-caption text-brand-text-muted">{invoiceCatalogTab === 'SERVICE' ? `${item.duration} phút` : `Còn ${item.stock} sản phẩm`}</span>
-                        </span>
-                        {count > 0 ? (
-                          <span className="flex items-center gap-1.5 shrink-0 animate-scaleIn" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => removeCatalogItem(invoiceCatalogTab, item)}
-                              className="flex h-8 w-8 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface text-brand-text hover:bg-brand-surface-high transition-all duration-200 cursor-pointer shadow-sm"
-                              aria-label="Giảm số lượng"
-                            >
-                              <Minus className="h-3.5 w-3.5" />
-                            </button>
-                            <span className="text-body font-black w-5 text-center text-brand-text">{count}</span>
-                            <button
-                              type="button"
-                              onClick={() => addCatalogItem(invoiceCatalogTab, item)}
-                              className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition-all duration-200 hover:scale-105 cursor-pointer shadow-sm ${invoiceCatalogTab === 'SERVICE' ? 'bg-brand-secondary hover:bg-brand-secondary' : 'bg-brand-primary hover:bg-brand-primary'}`}
-                              aria-label="Tăng số lượng"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
+              {/* Danh sách dịch vụ / Mẫu vẽ / Sản phẩm */}
+              {invoiceCatalogTab === 'ART' ? (
+                <div className="grid grid-cols-1 gap-3 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5 lg:min-h-0 lg:flex-1 xl:grid-cols-2">
+                  {filteredArtTemplates.map((template) => {
+                    const preset = ART_DIFFICULTY_PRESETS.find(p => p.level === template.defaultLevel);
+                    return (
+                      <div
+                        key={template.id}
+                        className="group relative flex flex-col rounded-2xl border border-amber-500/30 bg-brand-surface p-4 shadow-sm transition-all duration-300 hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/10"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="inline-block rounded-md bg-amber-500/10 px-2 py-0.5 text-caption font-bold text-amber-700 dark:text-amber-300">
+                              {template.category}
+                            </span>
+                            <h4 className="mt-1 text-xs font-black text-brand-text">{template.name}</h4>
+                          </div>
+                          <span className="shrink-0 rounded-lg bg-brand-surface-high border border-amber-500/30 px-2 py-1 text-right">
+                            <span className="block text-[10px] font-extrabold uppercase text-amber-700 dark:text-amber-300">{preset?.shortLabel}</span>
+                            <span className="block text-caption font-black text-brand-text">+{money(template.surcharge)}</span>
                           </span>
-                        ) : (
-                          <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition-all duration-200 group-hover:scale-105 shrink-0 ${invoiceCatalogTab === 'SERVICE' ? 'bg-brand-secondary' : 'bg-brand-primary'}`}>
-                            <Plus className="h-4 w-4" />
+                        </div>
+
+                        <p className="mt-2 text-caption text-brand-text-muted line-clamp-2 leading-relaxed">
+                          {template.description}
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {template.tags.map(t => (
+                            <span key={t} className="rounded bg-brand-surface-high/60 px-1.5 py-0.5 text-[10px] text-brand-text-muted">
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between gap-2 pt-2 border-t border-brand-outline/40">
+                          <span className="text-caption text-brand-text-muted font-bold">
+                            Thời gian: ~{template.duration}p
                           </span>
-                        )}
-                      </span>
+                          <button
+                            type="button"
+                            onClick={() => addArtServiceItem(template)}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white px-3 py-1.5 text-caption font-black shadow-sm transition cursor-pointer"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Thêm dịch vụ sơn + vẽ
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!filteredArtTemplates.length && (
+                    <div className="col-span-full py-16 text-center text-xs text-brand-text-muted">
+                      Không tìm thấy mẫu vẽ phù hợp.
                     </div>
-                  );
-                })}
-                {!filteredCatalog.length && <div className="col-span-full py-16 text-center text-xs text-brand-text-muted">Không tìm thấy mục phù hợp.</div>}
-              </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5 lg:min-h-0 lg:flex-1 xl:grid-cols-3">
+                  {filteredCatalog.map((item, index) => {
+                    const count = invoiceLines.filter((line) => line.type === invoiceCatalogTab && line.name === item.name).reduce((sum, line) => sum + line.quantity, 0);
+                    return (
+                      <div
+                        key={item.name}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => addCatalogItem(invoiceCatalogTab, item)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            addCatalogItem(invoiceCatalogTab, item);
+                          }
+                        }}
+                        className="group relative flex min-h-[170px] flex-col rounded-2xl border border-brand-outline bg-brand-surface p-4 text-left shadow-sm transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:border-brand-secondary hover:shadow-lg hover:shadow-card focus:outline-none focus:ring-2 focus:ring-brand-secondary"
+                      >
+                        {count > 0 && <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-secondary px-1.5 text-caption font-black text-white">{count}</span>}
+                        <span className={`flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? ' text-brand-secondary' : ' text-brand-primary'}`}>{String(index + 1).padStart(2, '0')}</span>
+                        <span className="mt-3 line-clamp-2 text-xs font-black leading-5 text-brand-text">{item.name}</span>
+                        <span className="mt-1 text-caption font-semibold text-brand-text-muted">{item.category}</span>
+                        <span className="mt-auto flex items-end justify-between gap-3 pt-3">
+                          <span>
+                            <span className={`block text-sm font-black ${invoiceCatalogTab === 'SERVICE' ? 'text-brand-secondary' : 'text-brand-primary'}`}>{money(item.price)}</span>
+                            <span className="mt-0.5 block text-caption text-brand-text-muted">{invoiceCatalogTab === 'SERVICE' ? `${item.duration} phút` : `Còn ${item.stock} sản phẩm`}</span>
+                          </span>
+                          {count > 0 ? (
+                            <span className="flex items-center gap-1.5 shrink-0 animate-scaleIn" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => removeCatalogItem(invoiceCatalogTab, item)}
+                                className="flex h-8 w-8 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface text-brand-text hover:bg-brand-surface-high transition-all duration-200 cursor-pointer shadow-sm"
+                                aria-label="Giảm số lượng"
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
+                              <span className="text-body font-black w-5 text-center text-brand-text">{count}</span>
+                              <button
+                                type="button"
+                                onClick={() => addCatalogItem(invoiceCatalogTab, item)}
+                                className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition-all duration-200 hover:scale-105 cursor-pointer shadow-sm ${invoiceCatalogTab === 'SERVICE' ? 'bg-brand-secondary hover:bg-brand-secondary' : 'bg-brand-primary hover:bg-brand-primary'}`}
+                                aria-label="Tăng số lượng"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                            </span>
+                          ) : (
+                            <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition-all duration-200 group-hover:scale-105 shrink-0 ${invoiceCatalogTab === 'SERVICE' ? 'bg-brand-secondary' : 'bg-brand-primary'}`}>
+                              <Plus className="h-4 w-4" />
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {!filteredCatalog.length && <div className="col-span-full py-16 text-center text-xs text-brand-text-muted">Không tìm thấy mục phù hợp.</div>}
+                </div>
+              )}
             </section>
 
             <aside className="min-w-0 flex flex-col gap-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overflow-x-hidden lg:pr-1 scrollbar-thin scrollbar-thumb-brand-outline/60">
-              {/* Thẻ 1: Khách hàng & Bảng danh sách dịch vụ đã chọn (Vừa khít chiều rộng, không cuộn ngang) */}
+              {/* Thẻ 1: Khách hàng & Bảng danh sách dịch vụ đã chọn */}
               <div className="selected-services rounded-2xl border border-brand-outline bg-brand-surface p-3.5 sm:p-4 shadow-sm flex flex-col w-full min-w-0 lg:flex-1 lg:min-h-[360px] min-h-[320px] overflow-hidden overflow-x-hidden">
                 <div className="flex items-center gap-3 border-b border-brand-outline pb-3 shrink-0 w-full min-w-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white font-black text-sm shadow-sm">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-secondary text-white font-black text-sm shadow-sm">
                     {paymentAppointment.customer.split(' ').slice(-2).map((part) => part[0]).join('')}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1898,12 +3184,12 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                   </div>
                 </div>
 
-                {/* Khung Bảng dịch vụ (overflow-x-hidden) */}
+                {/* Khung Bảng dịch vụ */}
                 <div className="service-list-container mt-1 flex-1 flex flex-col min-h-[240px] w-full min-w-0 overflow-hidden overflow-x-hidden rounded-xl border border-brand-outline/60 bg-brand-surface-high/20">
-                  {/* Hàng tiêu đề Bảng (Hiện trên xl:) */}
+                  {/* Hàng tiêu đề Bảng */}
                   <div className="hidden xl:grid grid-cols-[28px_minmax(0,1fr)_56px_82px_66px_70px_22px] items-center gap-1 px-2 py-2 text-caption font-extrabold uppercase tracking-wider text-brand-text-muted border-b border-brand-outline bg-brand-surface-high/50 shrink-0 w-full min-w-0">
                     <span className="text-center min-w-0">STT</span>
-                    <span className="min-w-0">Tên dịch vụ</span>
+                    <span className="min-w-0">Dịch vụ & Mẫu vẽ đi kèm</span>
                     <span className="text-right min-w-0">Đơn giá</span>
                     <span className="min-w-0">Kỹ thuật viên</span>
                     <span className="text-center min-w-0">Số lượng</span>
@@ -1911,7 +3197,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                     <span className="text-center min-w-0">Xóa</span>
                   </div>
 
-                  {/* Vùng cuộn các dòng Bảng (Chỉ cuộn dọc, cấm cuộn ngang) */}
+                  {/* Vùng cuộn các dòng Bảng */}
                   <div className="flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 divide-y divide-brand-outline/40 scrollbar-thin scrollbar-thumb-brand-outline/60 py-0.5">
                     {invoiceLines.map((line, index) => (
                       <div
@@ -1919,29 +3205,87 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                         className="w-full min-w-0 text-xs transition-colors hover:bg-brand-surface-high/40 shrink-0"
                       >
                         {/* 1-Row Grid Layout chuẩn xác trên xl: */}
-                        <div className="hidden xl:grid grid-cols-[28px_minmax(0,1fr)_56px_82px_66px_70px_22px] items-center gap-1 w-full min-w-0 px-2 py-2.5">
-                          {/* STT: 44px */}
-                          <div className="flex justify-center items-center min-w-0">
+                        <div className="hidden xl:grid grid-cols-[28px_minmax(0,1fr)_56px_82px_66px_70px_22px] items-start gap-1 w-full min-w-0 px-2 py-2.5">
+                          {/* STT */}
+                          <div className="flex justify-center items-center min-w-0 pt-1">
                             <span className={`flex h-6 w-6 items-center justify-center rounded-md text-caption font-black border ${line.type === 'SERVICE' ? 'border-brand-secondary/30 bg-brand-secondary/10 text-brand-secondary' : 'border-brand-primary/30 bg-brand-primary/10 text-brand-primary'}`}>
                               {String(index + 1).padStart(2, '0')}
                             </span>
                           </div>
 
-                          {/* Tên dịch vụ: minmax(120px, 1fr) */}
-                          <div className="min-w-0" title={line.name}>
-                            <p className="font-bold text-brand-text text-body leading-snug line-clamp-2 min-w-0">
+                          {/* Tên dịch vụ & Mẫu vẽ + Độ khó + Phụ kiện đi kèm */}
+                          <div className="min-w-0 pr-1">
+                            <p className="font-bold text-brand-text text-body leading-snug min-w-0">
                               {line.name}
                             </p>
-                            <p className="mt-0.5 truncate text-caption font-semibold text-brand-text-muted">{line.type === 'SERVICE' ? 'Dịch vụ' : 'Sản phẩm'} · {line.staff}</p>
+                            
+                            {/* Chi tiết mẫu vẽ, màu sơn, phụ kiện nếu có */}
+                            <div className="mt-1 space-y-1">
+                              {line.designName && (
+                                <div className="inline-flex flex-wrap items-center gap-1.5 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                                  <span>🎨 Mẫu: {line.designName}</span>
+                                  {line.difficultyLabel && (
+                                    <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[10px] font-black">
+                                      {line.difficultyLabel}
+                                    </span>
+                                  )}
+                                  {line.designSurcharge ? (
+                                    <span className="text-amber-800 dark:text-amber-200 font-extrabold">
+                                      (+{money(line.designSurcharge)})
+                                    </span>
+                                  ) : null}
+                                </div>
+                              )}
+
+                              {line.attachedColorName && (
+                                <div className="flex items-center gap-1 text-[11px] text-brand-text-muted">
+                                  {line.attachedColorHex && (
+                                    <span
+                                      className="inline-block h-2.5 w-2.5 rounded-full border border-black/20"
+                                      style={{ backgroundColor: line.attachedColorHex }}
+                                    />
+                                  )}
+                                  <span>Màu: <strong className="text-brand-text">{line.attachedColorName}</strong></span>
+                                </div>
+                              )}
+
+                              {line.attachedProductName && (
+                                <div className="text-[11px] text-brand-text-muted">
+                                  <span>💎 Kèm: <strong className="text-brand-text">{line.attachedProductName}</strong> {line.attachedProductPrice ? `(+${money(line.attachedProductPrice)})` : ''}</span>
+                                </div>
+                              )}
+
+                              {line.customArtNote && (
+                                <div className="text-[11px] italic text-brand-text-muted line-clamp-1">
+                                  📝 {line.customArtNote}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Nút tùy chỉnh mẫu vẽ & độ khó dành cho dịch vụ */}
+                            {line.type === 'SERVICE' && (
+                              <button
+                                type="button"
+                                onClick={() => openLineCustomizer(line)}
+                                className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-brand-secondary/40 bg-brand-secondary/10 px-2 py-0.5 text-[11px] font-bold text-brand-secondary hover:bg-brand-secondary hover:text-white transition-all cursor-pointer shadow-xs"
+                              >
+                                <Palette className="h-3 w-3" />
+                                {line.designName ? 'Sửa mẫu vẽ & độ khó' : '+ Kèm mẫu vẽ/độ khó/phụ kiện'}
+                              </button>
+                            )}
+
+                            <p className="mt-0.5 truncate text-caption font-semibold text-brand-text-muted">
+                              {line.type === 'SERVICE' ? 'Dịch vụ' : 'Sản phẩm'} · {line.staff}
+                            </p>
                           </div>
 
-                          {/* Đơn giá: minmax(115px, 130px) */}
-                          <div className="min-w-0 w-full text-right">
+                          {/* Đơn giá */}
+                          <div className="min-w-0 w-full text-right pt-1">
                             <span className="block truncate text-caption font-bold text-brand-text-muted">x {money(line.unitPrice)}</span>
                           </div>
 
-                          {/* Kỹ thuật viên: minmax(130px, 160px) */}
-                          <div className="min-w-0 w-full">
+                          {/* Kỹ thuật viên */}
+                          <div className="min-w-0 w-full pt-0.5">
                             {line.type === 'SERVICE' ? (
                               <select
                                 value={line.staff}
@@ -1964,8 +3308,8 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                             )}
                           </div>
 
-                          {/* Số lượng: 120px */}
-                          <div className="min-w-0 w-full flex justify-center">
+                          {/* Số lượng */}
+                          <div className="min-w-0 w-full flex justify-center pt-0.5">
                             <div className="flex h-8 w-full min-w-0 items-center justify-between rounded-lg border border-brand-outline bg-brand-surface-high/60 p-0.5 shadow-inner">
                               <button
                                 type="button"
@@ -1987,19 +3331,19 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                             </div>
                           </div>
 
-                          {/* Thành tiền: minmax(100px, 120px) */}
-                          <div className="min-w-0 w-full text-right">
+                          {/* Thành tiền */}
+                          <div className="min-w-0 w-full text-right pt-1">
                             <strong className="block text-body font-black text-brand-text tracking-tight min-w-0 truncate">
                               {money(line.quantity * line.unitPrice)}
                             </strong>
                           </div>
 
-                          {/* Xóa: 32px */}
-                          <div className="min-w-0 w-[22px] flex justify-center">
+                          {/* Xóa */}
+                          <div className="min-w-0 w-[22px] flex justify-center pt-1">
                             <button
                               type="button"
                               onClick={() => setInvoiceLines((current) => current.filter((item) => item.id !== line.id))}
-                              className="flex h-7 w-6 items-center justify-center rounded-lg text-brand-error hover:text-brand-error hover:bg-brand-error/15 focus:outline-none focus:ring-2 focus:ring-brand-error/40 transition-all"
+                              className="flex h-7 w-6 items-center justify-center rounded-lg text-brand-error hover:text-brand-error hover:bg-brand-error/15 focus:outline-none focus:ring-2 focus:ring-brand-error/40 transition-all cursor-pointer"
                               title="Xóa dịch vụ"
                               aria-label={`Xóa ${line.name}`}
                             >
@@ -2009,16 +3353,47 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                         </div>
 
                         {/* Responsive 2-Row Layout Fallback khi khung hẹp (< xl) */}
-                        <div className="xl:hidden flex flex-col gap-2 w-full min-w-0">
-                          <div className="flex items-center justify-between gap-2 min-w-0">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="xl:hidden flex flex-col gap-2 w-full min-w-0 p-3">
+                          <div className="flex items-start justify-between gap-2 min-w-0">
+                            <div className="flex items-start gap-2 min-w-0 flex-1">
                               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-body font-black border ${line.type === 'SERVICE' ? 'border-brand-secondary/30 bg-brand-secondary/10 text-brand-secondary' : 'border-brand-primary/30 bg-brand-primary/10 text-brand-primary'}`}>
                                 {String(index + 1).padStart(2, '0')}
                               </span>
-                              <span className="min-w-0">
-                                <p className="font-bold text-brand-text text-xs leading-snug line-clamp-2 min-w-0" title={line.name}>
+                              <span className="min-w-0 flex-1">
+                                <p className="font-bold text-brand-text text-xs leading-snug min-w-0" title={line.name}>
                                   {line.name}
                                 </p>
+                                
+                                {line.designName && (
+                                  <div className="mt-1 inline-flex flex-wrap items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                                    <span>🎨 {line.designName}</span>
+                                    {line.difficultyLabel && <span>({line.difficultyLabel})</span>}
+                                    {line.designSurcharge ? <span>+{money(line.designSurcharge)}</span> : null}
+                                  </div>
+                                )}
+
+                                {line.attachedColorName && (
+                                  <p className="mt-0.5 text-[11px] text-brand-text-muted">
+                                    💅 Màu: {line.attachedColorName}
+                                  </p>
+                                )}
+
+                                {line.attachedProductName && (
+                                  <p className="mt-0.5 text-[11px] text-brand-text-muted">
+                                    💎 Kèm: {line.attachedProductName} (+{money(line.attachedProductPrice || 0)})
+                                  </p>
+                                )}
+
+                                {line.type === 'SERVICE' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openLineCustomizer(line)}
+                                    className="mt-1.5 flex items-center gap-1 rounded border border-brand-secondary/40 bg-brand-secondary/10 px-2 py-0.5 text-[11px] font-bold text-brand-secondary cursor-pointer"
+                                  >
+                                    <Palette className="h-3 w-3" /> Tùy chỉnh mẫu vẽ & giá
+                                  </button>
+                                )}
+
                                 <p className="mt-0.5 text-caption font-semibold text-brand-text-muted">{line.type === 'SERVICE' ? 'Dịch vụ' : 'Sản phẩm'} · Đơn giá {money(line.unitPrice)}</p>
                               </span>
                             </div>
@@ -2217,12 +3592,502 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                 )}
                 <textarea value={paymentForm.note} onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })} className="reception-input min-h-[50px] text-body resize-none" placeholder="Ghi chú hóa đơn (không bắt buộc)..." />
                 {formError && <p role="alert" className="rounded-xl bg-brand-error/10 p-2.5 text-caption font-bold leading-4 text-brand-error">{formError}</p>}
-                <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black text-white shadow-lg shadow-card hover:from-brand-secondary hover:to-brand-secondary transition-all active:scale-[0.99]">
-                  <ShieldCheck className="h-4 w-4" /> Thanh toán {money(invoiceTotal)}
-                </button>
               </div>
             </aside>
           </form>
+        </Modal>
+      )}
+
+      {/* Hộp thoại tùy chỉnh chi tiết Mẫu vẽ & Độ khó & Sản phẩm đi kèm cho Dịch vụ */}
+      {customizingLine && (
+        <Modal
+          open
+          size="large"
+          icon={<Palette className="text-amber-500" />}
+          title="Tùy chỉnh mẫu vẽ, độ khó & dịch vụ bổ sung"
+          description={`Cấu hình cho dịch vụ: ${customizingLine.name}`}
+          onClose={() => setCustomizingLine(null)}
+          footer={
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-left">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-text-muted">
+                  <span>Công thức:</span>
+                  <span>{money(Math.max(0, parseInt(String(customizerForm.basePrice || '0').replace(/\D/g, ''), 10) || 0))} (Gốc)</span>
+                  <span>+</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-black">+{money(Math.max(0, parseInt(String(customizerForm.designSurcharge || '0').replace(/\D/g, ''), 10) || 0))} (Art)</span>
+                  <span>+</span>
+                  <span className="text-brand-secondary font-black">+{money(Number(customizerForm.attachedProductPrice) || 0)} (Kèm)</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs font-bold text-brand-text">Tổng đơn giá:</span>
+                  <span className="text-lg font-black text-amber-600 dark:text-amber-400">
+                    {money(
+                      Math.max(0, parseInt(String(customizerForm.basePrice || '0').replace(/\D/g, ''), 10) || 0) +
+                      Math.max(0, parseInt(String(customizerForm.designSurcharge || '0').replace(/\D/g, ''), 10) || 0) +
+                      (Number(customizerForm.attachedProductPrice) || 0)
+                    )}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" onClick={() => setCustomizingLine(null)}>
+                  Hủy
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={saveLineCustomizer}
+                  iconLeading={<Check className="h-4 w-4" />}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-black cursor-pointer shadow-md shadow-amber-600/20"
+                >
+                  Lưu & Áp dụng
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1">
+            {/* Khối 0: Giá dịch vụ gốc & Thanh công thức cộng dồn */}
+            <div className="rounded-2xl border border-brand-outline bg-brand-surface-high/30 p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block rounded-md bg-brand-secondary/15 px-2 py-0.5 text-caption font-black text-brand-secondary">
+                      Dịch vụ chính
+                    </span>
+                    <span className="text-body font-black text-brand-text">{customizingLine.name}</span>
+                  </div>
+                  <p className="mt-1 text-caption text-brand-text-muted">
+                    Giá dịch vụ gốc được giữ nguyên. Chỉ khi chọn thêm mẫu vẽ, mức độ khó hoặc phụ kiện thì hệ thống mới cộng thêm vào giá này.
+                  </p>
+                </div>
+                <div className="shrink-0 text-right sm:border-l sm:border-brand-outline/60 sm:pl-4">
+                  <span className="block text-caption font-bold text-brand-text-muted">Giá dịch vụ gốc</span>
+                  <span className="text-base font-black text-brand-text">
+                    {money(parseInt(String(customizerForm.basePrice || '0').replace(/\D/g, ''), 10) || 0)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Bảng minh họa công thức tính giá cộng dồn */}
+              <div className="grid grid-cols-3 gap-2 rounded-xl bg-brand-surface p-2.5 border border-brand-outline text-center">
+                <div className="p-1">
+                  <span className="block text-[10px] font-bold text-brand-text-muted uppercase">1. Giá gốc dịch vụ</span>
+                  <span className="text-xs font-black text-brand-text">
+                    {money(parseInt(String(customizerForm.basePrice || '0').replace(/\D/g, ''), 10) || 0)}
+                  </span>
+                </div>
+                <div className="p-1 border-x border-brand-outline/60">
+                  <span className="block text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase">2. + Phụ thu vẽ Art</span>
+                  <span className="text-xs font-black text-amber-600 dark:text-amber-400">
+                    +{money(parseInt(String(customizerForm.designSurcharge || '0').replace(/\D/g, ''), 10) || 0)}
+                  </span>
+                </div>
+                <div className="p-1">
+                  <span className="block text-[10px] font-bold text-brand-secondary uppercase">3. + Phụ kiện/Màu</span>
+                  <span className="text-xs font-black text-brand-secondary">
+                    +{money(Number(customizerForm.attachedProductPrice) || 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Khối 1: Chọn mẫu vẽ nail art từ thư viện hoặc tự nhập */}
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <h4 className="text-xs font-black text-brand-text">1. Mẫu vẽ Nail Art & Họa tiết kèm theo</h4>
+                </div>
+                {customizerForm.designName && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomizerForm({
+                        ...customizerForm,
+                        designName: '',
+                        designLevel: 0,
+                        difficultyLabel: '',
+                        designSurcharge: '0',
+                      });
+                    }}
+                    className="text-caption font-bold text-brand-error hover:underline"
+                  >
+                    Bỏ chọn mẫu
+                  </button>
+                )}
+              </div>
+
+              {/* Danh sách mẫu gợi ý nhanh */}
+              <div>
+                <span className="block text-caption font-bold text-brand-text-muted mb-1.5">
+                  Chọn mẫu vẽ có sẵn trong Catalog:
+                </span>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {nailArtTemplates.map((tmpl) => {
+                    const isSelected = customizerForm.designName === tmpl.name;
+                    return (
+                      <button
+                        key={tmpl.id}
+                        type="button"
+                        onClick={() => handleSelectArtTemplateInCustomizer(tmpl)}
+                        className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-amber-500 bg-amber-500/15 ring-2 ring-amber-500/30'
+                            : 'border-brand-outline bg-brand-surface hover:border-amber-500/50 hover:bg-brand-surface-high'
+                        }`}
+                      >
+                        <div className="flex w-full items-center justify-between">
+                          <span className="text-[11px] font-black text-brand-text truncate">{tmpl.name}</span>
+                          {isSelected && <Check className="h-3.5 w-3.5 text-amber-600 shrink-0" />}
+                        </div>
+                        <span className="mt-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                          Mức {tmpl.defaultLevel} · +{money(tmpl.surcharge)}
+                        </span>
+                        <span className="mt-0.5 text-[10px] text-brand-text-muted line-clamp-1">
+                          {tmpl.category}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Hoặc tự nhập tên mẫu */}
+              <div>
+                <label className="block text-caption font-bold text-brand-text-muted mb-1">
+                  Hoặc tên mẫu vẽ tùy chỉnh theo yêu cầu khách:
+                </label>
+                <input
+                  type="text"
+                  value={customizerForm.designName}
+                  onChange={(e) => setCustomizerForm({ ...customizerForm, designName: e.target.value })}
+                  placeholder="Ví dụ: Vẽ hoa cúc 3D ngón cái, Vẽ hoạt hình Stitch, Đính đá ombre..."
+                  className="reception-input text-body"
+                />
+              </div>
+            </div>
+
+            {/* Khối 2: Độ khó và Phụ thu tiền vẽ */}
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <h4 className="text-xs font-black text-brand-text">2. Phân loại độ khó & Phụ thu tiền công vẽ</h4>
+              </div>
+
+              <div>
+                <span className="block text-caption font-bold text-brand-text-muted mb-1.5">
+                  Mức độ khó của mẫu vẽ:
+                </span>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {ART_DIFFICULTY_PRESETS.map((preset) => {
+                    const isSelected = customizerForm.designLevel === preset.level;
+                    return (
+                      <button
+                        key={preset.level}
+                        type="button"
+                        onClick={() => handleSelectDifficultyInCustomizer(preset)}
+                        className={`flex flex-col p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-amber-500 bg-amber-500/20 ring-2 ring-amber-500/40 text-brand-text'
+                            : 'border-brand-outline bg-brand-surface text-brand-text-muted hover:border-amber-500/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-brand-text">{preset.label}</span>
+                          {isSelected && <Check className="h-3 w-3 text-amber-600" />}
+                        </div>
+                        <span className="mt-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                          {preset.surcharge > 0 ? `+${money(preset.surcharge)}` : '0đ (Không phụ thu)'}
+                        </span>
+                        <span className="mt-0.5 text-[10px] text-brand-text-muted">
+                          {preset.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Nhập số tiền phụ thu vẽ art */}
+              <div className="rounded-xl bg-brand-surface p-3 border border-brand-outline">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <span className="block text-xs font-black text-brand-text">Tiền phụ thu vẽ Art (VNĐ)</span>
+                    <span className="text-caption text-brand-text-muted">
+                      Hiển thị: <strong className="text-amber-600 dark:text-amber-400 font-bold">{money(parseInt(String(customizerForm.designSurcharge || '0').replace(/\D/g, ''), 10) || 0)}</strong>
+                    </span>
+                  </div>
+                  <div className="w-40">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={customizerForm.designSurcharge}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        setCustomizerForm({ ...customizerForm, designSurcharge: val });
+                      }}
+                      placeholder="0"
+                      className="reception-input text-right text-body font-black text-amber-600 dark:text-amber-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick add surcharge pills */}
+                <div className="mt-2.5 flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] font-bold text-brand-text-muted">Chọn nhanh:</span>
+                  {[0, 30000, 50000, 80000, 100000, 150000, 200000, 350000].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setCustomizerForm({ ...customizerForm, designSurcharge: String(val) })}
+                      className={`rounded-lg px-2 py-1 text-[11px] font-bold transition cursor-pointer ${
+                        String(customizerForm.designSurcharge) === String(val)
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-brand-surface-high border border-brand-outline text-brand-text hover:border-amber-500'
+                      }`}
+                    >
+                      {val === 0 ? '0đ' : `+${val / 1000}k`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Khối 3: Màu sơn & Sản phẩm/Phụ kiện đi kèm */}
+            <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-brand-secondary" />
+                <h4 className="text-xs font-black text-brand-text">3. Màu sơn & Sản phẩm chăm sóc đi kèm</h4>
+              </div>
+
+              {/* Bảng màu sơn */}
+              <div>
+                <span className="block text-caption font-bold text-brand-text-muted mb-1.5">
+                  Màu sơn móng đi kèm: {customizerForm.attachedColorName ? <strong className="text-brand-text font-black">{customizerForm.attachedColorName} ({customizerForm.attachedColorCode})</strong> : <span className="italic">Chưa chọn</span>}
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {polishColorOptions.map((c) => {
+                    const isSelected = customizerForm.attachedColorCode === c.code;
+                    return (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setCustomizerForm({ ...customizerForm, attachedColorCode: '', attachedColorName: '', attachedColorHex: '' });
+                          } else {
+                            setCustomizerForm({ ...customizerForm, attachedColorCode: c.code, attachedColorName: c.name, attachedColorHex: c.hex });
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-caption font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-brand-secondary bg-brand-secondary/15 ring-2 ring-brand-secondary/30 text-brand-text font-black'
+                            : 'border-brand-outline bg-brand-surface-high/60 text-brand-text-muted hover:text-brand-text'
+                        }`}
+                      >
+                        <span
+                          className="h-3.5 w-3.5 rounded-full border border-black/20 shrink-0"
+                          style={{ backgroundColor: c.hex }}
+                        />
+                        <span>{c.code} - {c.name}</span>
+                        {isSelected && <Check className="h-3 w-3 text-brand-secondary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Sản phẩm / Phụ kiện đính kèm */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-2 border-t border-brand-outline/60">
+                <div>
+                  <label className="block text-caption font-bold text-brand-text-muted mb-1">
+                    Sản phẩm phụ kiện / đính đá kèm theo:
+                  </label>
+                  <select
+                    value={customizerForm.attachedProductName}
+                    onChange={(e) => {
+                      const selectedName = e.target.value;
+                      const found = ATTACHED_ACCESSORY_OPTIONS.find(opt => opt.name === selectedName);
+                      if (found) {
+                        setCustomizerForm({
+                          ...customizerForm,
+                          attachedProductName: found.name,
+                          attachedProductPrice: found.price,
+                        });
+                      } else {
+                        setCustomizerForm({
+                          ...customizerForm,
+                          attachedProductName: '',
+                          attachedProductPrice: 0,
+                        });
+                      }
+                    }}
+                    className="reception-input text-body"
+                  >
+                    <option value="">-- Không kèm sản phẩm phụ kiện --</option>
+                    {ATTACHED_ACCESSORY_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.name}>
+                        {opt.name} {opt.price > 0 ? `(+${money(opt.price)})` : '(Miễn phí)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-caption font-bold text-brand-text-muted mb-1">
+                    Kỹ thuật viên thực hiện dịch vụ này:
+                  </label>
+                  <select
+                    value={customizerForm.staff}
+                    onChange={(e) => setCustomizerForm({ ...customizerForm, staff: e.target.value })}
+                    className="reception-input text-body font-bold"
+                  >
+                    {invoiceStaff.map((staff) => (
+                      <option key={staff} value={staff}>{staff}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Ghi chú vẽ riêng */}
+              <div>
+                <label className="block text-caption font-bold text-brand-text-muted mb-1">
+                  Ghi chú chi tiết cho thợ vẽ (ngón nào, yêu cầu đặc biệt...):
+                </label>
+                <input
+                  type="text"
+                  value={customizerForm.customArtNote}
+                  onChange={(e) => setCustomizerForm({ ...customizerForm, customArtNote: e.target.value })}
+                  placeholder="Ví dụ: Vẽ ngón trỏ và áp út 2 tay, màu nền nude nhạt..."
+                  className="reception-input text-body"
+                />
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Hộp thoại xác nhận hoặc hủy chỉnh sửa trước khi hoàn tất thu tiền */}
+      {showPaymentConfirm && paymentAppointment && (
+        <Modal
+          open
+          size="medium"
+          icon={<ShieldCheck />}
+          title="Xác nhận thanh toán hóa đơn"
+          description="Vui lòng kiểm tra lại thông tin thu tiền và chi phí trước khi lưu giao dịch."
+          onClose={() => setShowPaymentConfirm(false)}
+          footer={
+            <div className="flex w-full flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
+              <Button
+                variant="secondary"
+                onClick={() => setShowPaymentConfirm(false)}
+                className="w-full sm:w-auto"
+              >
+                Hủy / Quay lại chỉnh sửa
+              </Button>
+              <Button
+                variant="primary"
+                onClick={executeFinalPayment}
+                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md shadow-emerald-600/25 cursor-pointer"
+                iconLeading={<ShieldCheck className="h-4 w-4" />}
+              >
+                Xác nhận & Hoàn tất {money(invoiceTotal)}
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-brand-outline bg-brand-surface-high/30 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-outline/60 pb-3">
+                <div className="min-w-0">
+                  <p className="text-body font-black text-brand-text truncate">{paymentAppointment.customer}</p>
+                  <p className="text-caption text-brand-text-muted">{paymentAppointment.phone} · {branchName}</p>
+                </div>
+                <div className="flex sm:flex-col items-center sm:items-end justify-between gap-1">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    {methodMeta[paymentForm.method].label}
+                  </span>
+                  {paymentForm.reference && (
+                    <p className="text-caption font-mono text-brand-text-muted truncate">Mã GD: {paymentForm.reference}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Danh sách các dịch vụ & mẫu vẽ đi kèm trong hóa đơn */}
+              <div className="mt-3 divide-y divide-brand-outline/40 max-h-48 overflow-y-auto pr-1">
+                {invoiceLines.map((line, idx) => (
+                  <div key={line.id} className="py-2 flex items-start justify-between gap-2 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-brand-text">{idx + 1}. {line.name}</span>
+                        <span className="text-brand-text-muted font-bold">x{line.quantity}</span>
+                      </div>
+                      {line.designName && (
+                        <p className="text-caption text-amber-700 dark:text-amber-300 font-semibold">
+                          🎨 {line.designName} {line.difficultyLabel ? `(${line.difficultyLabel})` : ''} {line.designSurcharge ? `(+${money(line.designSurcharge)})` : ''}
+                        </p>
+                      )}
+                      {line.attachedProductName && (
+                        <p className="text-caption text-brand-text-muted">
+                          💎 {line.attachedProductName}
+                        </p>
+                      )}
+                    </div>
+                    <span className="font-black text-brand-text shrink-0">
+                      {money(line.quantity * line.unitPrice)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 space-y-2 text-body border-t border-brand-outline/60 pt-3">
+                <div className="flex justify-between text-brand-text-muted">
+                  <span>Tổng tiền dịch vụ & sản phẩm ({invoiceLines.length} dòng / {invoiceLines.reduce((s, l) => s + l.quantity, 0)} mục)</span>
+                  <span className="font-bold text-brand-text">{money(invoiceSubtotal)}</span>
+                </div>
+                {paymentAppointment.deposit > 0 && (
+                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                    <span>Đã trừ tiền đặt cọc trước</span>
+                    <span className="font-bold">- {money(paymentAppointment.deposit)}</span>
+                  </div>
+                )}
+                {invoiceDiscount > 0 && (
+                  <div className="flex justify-between text-rose-600 dark:text-rose-400">
+                    <span>Ưu đãi / Giảm giá</span>
+                    <span className="font-bold">- {money(invoiceDiscount)}</span>
+                  </div>
+                )}
+                {invoiceTip > 0 && (
+                  <div className="flex justify-between text-brand-secondary">
+                    <span>Tip kỹ thuật viên</span>
+                    <span className="font-bold">+ {money(invoiceTip)}</span>
+                  </div>
+                )}
+                {invoiceTaxAndFees > 0 && (
+                  <div className="flex justify-between text-brand-tertiary">
+                    <span>Thuế / Phụ phí</span>
+                    <span className="font-bold">+ {money(invoiceTaxAndFees)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
+                <div>
+                  <p className="text-caption font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Tổng thực thu tại quầy</p>
+                  <p className="text-caption text-brand-text-muted">Thu ngân: {account.displayName}</p>
+                </div>
+                <strong className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                  {money(invoiceTotal)}
+                </strong>
+              </div>
+
+              {paymentForm.note && (
+                <div className="mt-3 rounded-lg bg-brand-surface p-2.5 text-caption text-brand-text-muted border border-brand-outline/60">
+                  <span className="font-bold text-brand-text">Ghi chú:</span> {paymentForm.note}
+                </div>
+              )}
+            </div>
+          </div>
         </Modal>
       )}
 

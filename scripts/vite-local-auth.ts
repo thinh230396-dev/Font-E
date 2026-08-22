@@ -49,6 +49,30 @@ const LOCAL_ACCOUNTS: LocalAccount[] = [
 const SESSION_COOKIE = 'salonsys_session';
 const sessions = new Map<string, { account: LocalAccount; expiresAt: number }>();
 
+interface LocalUpgradeRequest {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  requestedByName: string;
+  requestedByEmail: string;
+  currentPackageId?: string;
+  currentPackageName: string;
+  requestedPackageId: string;
+  requestedPackageName: string;
+  billingCycle: 'monthly' | 'yearly';
+  effectiveDate: 'immediate' | 'next_cycle';
+  quotedAmount: number;
+  currency: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewNote?: string;
+  invoiceId?: string;
+}
+
+const LOCAL_PACKAGE_UPGRADE_REQUESTS: LocalUpgradeRequest[] = [];
+
 const publicAccount = ({ password: _password, username: _username, ...account }: LocalAccount) => account;
 
 const sendJson = (response: ServerResponse, status: number, payload: unknown, headers: Record<string, string> = {}) => {
@@ -111,8 +135,72 @@ export const localAuthPlugin = (): Plugin => ({
 
     server.middlewares.use(async (request, response, next) => {
       const url = new URL(request.url || '/', 'http://localhost');
-      if (!url.pathname.startsWith('/api/auth/')) {
+      if (!url.pathname.startsWith('/api/')) {
         next();
+        return;
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/package-upgrade-requests') {
+        sendJson(response, 200, { requests: LOCAL_PACKAGE_UPGRADE_REQUESTS });
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/package-upgrade-requests') {
+        const body = await readJsonBody(request) as Partial<LocalUpgradeRequest>;
+        if (!body.id || !body.tenantId || !body.requestedPackageName) {
+          sendJson(response, 400, { error: 'Thiếu thông tin yêu cầu nâng cấp gói.' });
+          return;
+        }
+        const newReq: LocalUpgradeRequest = {
+          id: body.id,
+          tenantId: body.tenantId,
+          tenantName: body.tenantName || 'Salon',
+          requestedByName: body.requestedByName || 'Admin',
+          requestedByEmail: body.requestedByEmail || '',
+          currentPackageId: body.currentPackageId,
+          currentPackageName: body.currentPackageName || 'Basic',
+          requestedPackageId: body.requestedPackageId || '',
+          requestedPackageName: body.requestedPackageName,
+          billingCycle: body.billingCycle || 'monthly',
+          effectiveDate: body.effectiveDate || 'immediate',
+          quotedAmount: body.quotedAmount || 0,
+          currency: body.currency || 'VND',
+          status: 'PENDING',
+          requestedAt: body.requestedAt || new Date().toISOString()
+        };
+        const index = LOCAL_PACKAGE_UPGRADE_REQUESTS.findIndex((req) => req.id === newReq.id);
+        if (index >= 0) {
+          LOCAL_PACKAGE_UPGRADE_REQUESTS[index] = newReq;
+        } else {
+          LOCAL_PACKAGE_UPGRADE_REQUESTS.unshift(newReq);
+        }
+        sendJson(response, 200, { ok: true, request: newReq });
+        return;
+      }
+
+      if (request.method === 'PATCH' && url.pathname.startsWith('/api/package-upgrade-requests/')) {
+        const reqId = decodeURIComponent(url.pathname.slice('/api/package-upgrade-requests/'.length));
+        const body = await readJsonBody(request) as Partial<LocalUpgradeRequest>;
+        const index = LOCAL_PACKAGE_UPGRADE_REQUESTS.findIndex((req) => req.id === reqId);
+        if (index >= 0) {
+          LOCAL_PACKAGE_UPGRADE_REQUESTS[index] = {
+            ...LOCAL_PACKAGE_UPGRADE_REQUESTS[index],
+            ...body
+          };
+          sendJson(response, 200, { ok: true, request: LOCAL_PACKAGE_UPGRADE_REQUESTS[index] });
+        } else {
+          sendJson(response, 200, { ok: true });
+        }
+        return;
+      }
+
+      if (request.method === 'DELETE' && url.pathname.startsWith('/api/package-upgrade-requests/')) {
+        const reqId = decodeURIComponent(url.pathname.slice('/api/package-upgrade-requests/'.length));
+        const index = LOCAL_PACKAGE_UPGRADE_REQUESTS.findIndex((req) => req.id === reqId);
+        if (index >= 0) {
+          LOCAL_PACKAGE_UPGRADE_REQUESTS.splice(index, 1);
+        }
+        sendJson(response, 200, { ok: true });
         return;
       }
 

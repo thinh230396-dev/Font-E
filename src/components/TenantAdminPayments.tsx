@@ -2,10 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from './ui';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
-  AlertCircle, ArrowDownRight, ArrowUpRight, Banknote, Check, ChevronRight,
-  CircleDollarSign, Clock3, CreditCard, Download, FileText, Landmark, LockKeyhole,
-  Minus, MoreHorizontal, Palette, Pencil, Plus, ReceiptText, RefreshCcw, RotateCcw, Search, ShieldCheck, Smartphone,
-  Sparkles, UserRound, WalletCards, X
+  AlertCircle, ArrowDownLeft, ArrowDownRight, ArrowUpRight, Banknote, Boxes, Check, ChevronRight,
+  CircleDollarSign, Clock3, Coffee, CreditCard, Download, FileSpreadsheet, FileText, Landmark, LockKeyhole,
+  Minus, MoreHorizontal, Palette, Pencil, Plus, Printer, Receipt, ReceiptText, RefreshCcw, RotateCcw, Search, ShieldCheck, Smartphone,
+  Sparkles, Trash2, Truck, UserRound, WalletCards, Wrench, X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
 import { formatMoney as money, normalizeMoneyText } from '../utils/money';
@@ -25,6 +25,144 @@ type PaymentMethod = 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
 type BranchCode = 'Q1' | 'Q3';
 type ServiceCategory = 'ALL' | 'NAIL_ART' | 'MANICURE' | 'PEDICURE' | 'GEL' | 'ACRYLIC' | 'SPA';
 type PaymentDatePreset = 'ALL' | 'TODAY' | '7D' | '30D' | 'CUSTOM';
+
+export type ExpenseCategory =
+  | 'OWNER_WITHDRAW'   // Chủ tiệm rút tiền / lấy tiền tiệm
+  | 'SUPPLIES'         // Mua vật tư / dụng cụ / đá nước gấp
+  | 'MEALS_DAILY'      // Tiền cơm trưa / Nước uống / Sinh hoạt ca
+  | 'SALARY_ADVANCE'   // Tạm ứng lương KTV / Nhân viên
+  | 'MAINTENANCE'      // Sửa chữa máy móc / Ghế nail / Bảo trì
+  | 'LOGISTICS'        // Phí giao hàng / Ship đồ nghề
+  | 'OTHER';           // Chi phí vận hành khác
+
+export interface ExpenseRecord {
+  id: string;
+  date: string;
+  time: string;
+  createdAt: string;
+  category: ExpenseCategory;
+  categoryLabel: string;
+  amount: number;
+  branch: BranchCode;
+  method: PaymentMethod;
+  recipient: string;
+  reason: string;
+  creator: string;
+  reference?: string;
+  note?: string;
+  audit: string[];
+}
+
+export const expenseCategoryMeta: Record<ExpenseCategory, { label: string; badge: string; dot: string; icon: typeof WalletCards; placeholder: string; defaultRecipient: string }> = {
+  OWNER_WITHDRAW: {
+    label: 'Chủ rút tiền / Tiền tiệm',
+    badge: 'bg-purple-50 text-purple-700 ring-purple-200',
+    dot: 'bg-purple-500',
+    icon: WalletCards,
+    placeholder: 'Ví dụ: Chủ ghé tiệm lấy 500k tiền mặt chi tiêu',
+    defaultRecipient: 'Chủ salon (Anh/Chị Chủ)'
+  },
+  SUPPLIES: {
+    label: 'Mua vật tư / hóa chất gấp',
+    badge: 'bg-amber-50 text-amber-700 ring-amber-200',
+    dot: 'bg-amber-500',
+    icon: Boxes,
+    placeholder: 'Ví dụ: Mua 4 chai cồn 90 độ, bông gòn, nước tẩy móng gấp',
+    defaultRecipient: 'Cửa hàng phụ liệu móng'
+  },
+  MEALS_DAILY: {
+    label: 'Cơm trưa / Ăn uống / Sinh hoạt ca',
+    badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    dot: 'bg-emerald-500',
+    icon: Coffee,
+    placeholder: 'Ví dụ: Tiền cơm trưa ca trực, nước suối, trà sữa thưởng thợ',
+    defaultRecipient: 'Đội ngũ thợ ca trực'
+  },
+  SALARY_ADVANCE: {
+    label: 'Tạm ứng lương nhân viên',
+    badge: 'bg-blue-50 text-blue-700 ring-blue-200',
+    dot: 'bg-blue-500',
+    icon: UserRound,
+    placeholder: 'Ví dụ: KTV Thảo Nguyễn xin tạm ứng lương đợt 1',
+    defaultRecipient: 'Thảo Nguyễn'
+  },
+  MAINTENANCE: {
+    label: 'Sửa chữa / Bảo trì thiết bị',
+    badge: 'bg-orange-50 text-orange-700 ring-orange-200',
+    dot: 'bg-orange-500',
+    icon: Wrench,
+    placeholder: 'Ví dụ: Thay bóng đèn khu sảnh, sửa máy mài số 3',
+    defaultRecipient: 'Thợ sửa chữa bảo trì'
+  },
+  LOGISTICS: {
+    label: 'Phí ship hàng / Vận chuyển',
+    badge: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
+    dot: 'bg-cyan-500',
+    icon: Truck,
+    placeholder: 'Ví dụ: Tiền ship GrabExpress giao set sơn gel về tiệm',
+    defaultRecipient: 'Tài xế GrabExpress'
+  },
+  OTHER: {
+    label: 'Chi phí vận hành khác',
+    badge: 'bg-slate-100 text-slate-700 ring-slate-200',
+    dot: 'bg-slate-500',
+    icon: FileText,
+    placeholder: 'Ví dụ: Chi phí khác phát sinh tại quầy thu ngân',
+    defaultRecipient: 'Bên nhận tiền'
+  }
+};
+
+const initialExpenseSeed: ExpenseRecord[] = [
+  {
+    id: 'EXP-1042',
+    date: '19/07/2026',
+    time: '11:30',
+    createdAt: '19/07/2026 · 11:30',
+    category: 'OWNER_WITHDRAW',
+    categoryLabel: 'Chủ rút tiền / Tiền tiệm',
+    amount: 500000,
+    branch: 'Q3',
+    method: 'CASH',
+    recipient: 'Chủ salon (Anh Hoàng)',
+    reason: 'Chủ ghé tiệm lấy 500k tiền mặt',
+    creator: 'Lê Hoàng Nam (Thu ngân)',
+    reference: 'PC-260719-01',
+    note: 'Chủ rút tiền mặt trực tiếp từ két quầy thu ngân.',
+    audit: ['11:30 · Lê Hoàng Nam lập phiếu chi 500.000đ tiền mặt cho Chủ salon (Anh Hoàng) — lý do: Chủ ghé tiệm lấy 500k']
+  },
+  {
+    id: 'EXP-1041',
+    date: '19/07/2026',
+    time: '09:15',
+    createdAt: '19/07/2026 · 09:15',
+    category: 'SUPPLIES',
+    categoryLabel: 'Mua vật tư / hóa chất gấp',
+    amount: 180000,
+    branch: 'Q3',
+    method: 'CASH',
+    recipient: 'Tiệm phụ liệu móng Thanh Nga',
+    reason: 'Mua gấp 4 chai cồn 90 độ và 2 bịch bông gòn y tế',
+    creator: 'Lê Hoàng Nam (Thu ngân)',
+    reference: 'PC-260719-02',
+    audit: ['09:15 · Lê Hoàng Nam lập phiếu chi tiền mặt mua vật tư gấp 180.000đ']
+  },
+  {
+    id: 'EXP-1039',
+    date: '18/07/2026',
+    time: '17:00',
+    createdAt: '18/07/2026 · 17:00',
+    category: 'SALARY_ADVANCE',
+    categoryLabel: 'Tạm ứng lương nhân viên',
+    amount: 1000000,
+    branch: 'Q1',
+    method: 'BANK',
+    recipient: 'KTV Thảo Nguyễn',
+    reason: 'KTV Thảo Nguyễn tạm ứng lương đợt 1 tháng 7/2026',
+    creator: 'Quản lý Thu Hà',
+    reference: 'MB-ADV-9921',
+    audit: ['18/07 · 17:00 · Quản lý Thu Hà chuyển khoản tạm ứng 1.000.000đ cho KTV Thảo Nguyễn']
+  }
+];
 
 interface PaymentItem {
   name: string;
@@ -170,7 +308,32 @@ const clampTaxRate = (value: number) => Math.min(TAX_RATE_MAX, Math.max(TAX_RATE
 export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, branchLocked = false, tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify }: TenantAdminPaymentsProps) {
   const storageKey = `tenant-admin-payments-v1:${tenantName}`;
   const loyaltyStorageKey = `tenant-admin-loyalty-v1:${tenantName}`;
+  const expenseStorageKey = `tenant-admin-expenses-v1:${tenantName}`;
   const [records, setRecords] = useState<PaymentRecord[]>(() => { if (typeof window === 'undefined') return getTenantAdminInitialData(null, seed); try { const stored = localStorage.getItem(storageKey); return getTenantAdminInitialData(stored ? JSON.parse(stored) as PaymentRecord[] : null, seed); } catch { return getTenantAdminInitialData(null, seed); } });
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>(() => {
+    if (typeof window === 'undefined') return initialExpenseSeed;
+    try {
+      const stored = localStorage.getItem(expenseStorageKey);
+      return stored ? JSON.parse(stored) as ExpenseRecord[] : initialExpenseSeed;
+    } catch {
+      return initialExpenseSeed;
+    }
+  });
+  const [activeLedgerTab, setActiveLedgerTab] = useState<'INCOMES' | 'EXPENSES'>('INCOMES');
+  const [expenseFilterCategory, setExpenseFilterCategory] = useState<'ALL' | ExpenseCategory>('ALL');
+  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseRecord | null>(null);
+  const [expenseForm, setExpenseForm] = useState({
+    category: 'OWNER_WITHDRAW' as ExpenseCategory,
+    amount: '500000',
+    branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
+    method: 'CASH' as PaymentMethod,
+    recipient: 'Chủ salon (Anh/Chị Chủ)',
+    reason: 'Chủ ghé tiệm lấy 500k tiền mặt',
+    reference: '',
+    note: ''
+  });
+
   const [loyaltyPrograms, setLoyaltyPrograms] = useState<LoyaltyProgram[]>(() => {
     if (typeof window === 'undefined') return defaultLoyaltyPrograms;
     try {
@@ -292,7 +455,8 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   }, [tenantName, colorStorageKey]);
 
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(records)); }, [records, storageKey]);
-  useEffect(() => { if (!selected && !createOpen && !catalogCreateOpen && !captureOpen && !refundOpen && !adjustOpen && !shiftModalOpen) return; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelected(null); setCreateOpen(false); setCatalogCreateOpen(false); setCaptureOpen(false); setRefundOpen(false); setAdjustOpen(false); setShiftModalOpen(false); } }; addEventListener('keydown', close); return () => { document.body.style.overflow = previous; removeEventListener('keydown', close); }; }, [adjustOpen, captureOpen, catalogCreateOpen, createOpen, refundOpen, selected, shiftModalOpen]);
+  useEffect(() => { localStorage.setItem(expenseStorageKey, JSON.stringify(expenses)); }, [expenses, expenseStorageKey]);
+  useEffect(() => { if (!selected && !selectedExpense && !expenseOpen && !createOpen && !catalogCreateOpen && !captureOpen && !refundOpen && !adjustOpen && !shiftModalOpen) return; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelected(null); setSelectedExpense(null); setExpenseOpen(false); setCreateOpen(false); setCatalogCreateOpen(false); setCaptureOpen(false); setRefundOpen(false); setAdjustOpen(false); setShiftModalOpen(false); } }; addEventListener('keydown', close); return () => { document.body.style.overflow = previous; removeEventListener('keydown', close); }; }, [adjustOpen, captureOpen, catalogCreateOpen, createOpen, expenseOpen, refundOpen, selected, selectedExpense, shiftModalOpen]);
   useEffect(() => {
     if (!selected) return;
     const audit = selected.audit.map(normalizeMoneyText);
@@ -309,6 +473,134 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const outstanding = periodScoped.reduce((sum, record) => sum + Math.max(0, record.total - record.paid), 0);
   const refunded = periodScoped.reduce((sum, record) => sum + record.refunded, 0);
   const netRevenue = collected - refunded;
+
+  // Expense scoped data & KPIs
+  const scopedExpenses = useMemo(() => expenses.filter((item) => selectedBranch === 'ALL' || item.branch === selectedBranch), [expenses, selectedBranch]);
+  const periodScopedExpenses = useMemo(() => {
+    return scopedExpenses.filter((item) => {
+      if (datePreset === 'ALL') return true;
+      const [day, month, year] = item.date.split('/').map(Number);
+      if (!day || !month || !year) return true;
+      const itemDate = new Date(year, month - 1, day);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (datePreset === 'TODAY') return itemDate.getTime() === today.getTime();
+      if (datePreset === '7D') {
+        const past = new Date(today);
+        past.setDate(past.getDate() - 7);
+        return itemDate >= past && itemDate <= today;
+      }
+      if (datePreset === '30D') {
+        const past = new Date(today);
+        past.setDate(past.getDate() - 30);
+        return itemDate >= past && itemDate <= today;
+      }
+      if (datePreset === 'CUSTOM') {
+        if (dateFrom && itemDate < new Date(dateFrom)) return false;
+        if (dateTo && itemDate > new Date(dateTo)) return false;
+        return true;
+      }
+      return true;
+    });
+  }, [dateFrom, datePreset, dateTo, scopedExpenses]);
+
+  const filteredExpenses = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return periodScopedExpenses
+      .filter((item) => expenseFilterCategory === 'ALL' || item.category === expenseFilterCategory)
+      .filter((item) => methodFilter === 'ALL' || item.method === methodFilter)
+      .filter((item) => !query || `${item.id} ${item.recipient} ${item.reason} ${item.categoryLabel} ${item.reference || ''} ${item.creator}`.toLowerCase().includes(query));
+  }, [expenseFilterCategory, methodFilter, periodScopedExpenses, searchQuery]);
+
+  const totalPeriodExpense = periodScopedExpenses.reduce((sum, item) => sum + item.amount, 0);
+  const totalCashExpense = scopedExpenses.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.amount, 0);
+  const ownerWithdrawalTotal = periodScopedExpenses.filter((item) => item.category === 'OWNER_WITHDRAW').reduce((sum, item) => sum + item.amount, 0);
+
+  const openCreateExpense = (presetCategory?: ExpenseCategory) => {
+    if (!requireManage()) return;
+    const cat = presetCategory || 'OWNER_WITHDRAW';
+    const meta = expenseCategoryMeta[cat];
+    setExpenseForm({
+      category: cat,
+      amount: cat === 'OWNER_WITHDRAW' ? '500000' : '200000',
+      branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
+      method: 'CASH',
+      recipient: meta.defaultRecipient,
+      reason: meta.placeholder.replace('Ví dụ: ', ''),
+      reference: `PC-${Date.now().toString().slice(-6)}`,
+      note: ''
+    });
+    setFormError('');
+    setExpenseOpen(true);
+  };
+
+  const handleExpenseCategorySelect = (category: ExpenseCategory) => {
+    const meta = expenseCategoryMeta[category];
+    setExpenseForm((prev) => ({
+      ...prev,
+      category,
+      recipient: prev.recipient && prev.recipient !== expenseCategoryMeta[prev.category].defaultRecipient ? prev.recipient : meta.defaultRecipient,
+      reason: meta.placeholder.replace('Ví dụ: ', ''),
+      amount: category === 'OWNER_WITHDRAW' ? '500000' : prev.amount
+    }));
+  };
+
+  const submitExpense = (e: FormEvent) => {
+    e.preventDefault();
+    const amt = Number(expenseForm.amount);
+    if (!amt || amt <= 0) {
+      setFormError('Vui lòng nhập số tiền chi hợp lệ (lớn hơn 0đ).');
+      return;
+    }
+    if (!expenseForm.recipient.trim()) {
+      setFormError('Vui lòng nhập người nhận tiền / đối tác.');
+      return;
+    }
+    if (!expenseForm.reason.trim()) {
+      setFormError('Vui lòng nhập nội dung hoặc lý do chi tiền.');
+      return;
+    }
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('vi-VN');
+    const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const createdAt = `${dateStr} · ${timeStr}`;
+    const nextNumber = Math.max(...expenses.map((item) => Number(item.id.replace(/\D/g, '')) || 0), 1040) + 1;
+    const catMeta = expenseCategoryMeta[expenseForm.category];
+
+    const newExpense: ExpenseRecord = {
+      id: `EXP-${nextNumber}`,
+      date: dateStr,
+      time: timeStr,
+      createdAt,
+      category: expenseForm.category,
+      categoryLabel: catMeta.label,
+      amount: amt,
+      branch: expenseForm.branch,
+      method: expenseForm.method,
+      recipient: expenseForm.recipient.trim(),
+      reason: expenseForm.reason.trim(),
+      creator: roleLabel,
+      reference: expenseForm.reference.trim() || `PC-${Date.now().toString().slice(-6)}`,
+      note: expenseForm.note.trim() || undefined,
+      audit: [
+        `${createdAt} · ${roleLabel} lập phiếu chi ${money(amt)} (${expenseForm.method === 'CASH' ? 'Tiền mặt' : 'Điện tử'}) cho ${expenseForm.recipient.trim()} — lý do: ${expenseForm.reason.trim()}`
+      ]
+    };
+
+    setExpenses((current) => [newExpense, ...current]);
+    setExpenseOpen(false);
+    setSelectedExpense(newExpense);
+    setActiveLedgerTab('EXPENSES');
+    onNotify?.(`Đã tạo phiếu chi ${newExpense.id} số tiền ${money(amt)} (${catMeta.label}).`);
+  };
+
+  const deleteExpense = (expense: ExpenseRecord) => {
+    if (!requireManage()) return;
+    setExpenses((current) => current.filter((item) => item.id !== expense.id));
+    if (selectedExpense?.id === expense.id) setSelectedExpense(null);
+    onNotify?.(`Đã xóa phiếu chi ${expense.id}.`);
+  };
 
   const availableInvoiceServices = salonServices.filter((service) => {
     if (service.status === 'HIDDEN') return false;
@@ -818,17 +1110,64 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     <PageHeader
         title="Thanh toán & đối soát"
         actions={(
-          <div className="flex flex-wrap gap-2"><button type="button" onClick={exportReport} className="flex h-11 items-center gap-2 border border-slate-200 bg-white px-4 font-semibold text-slate-600 shadow-sm"><Download className="h-4 w-4" />Xuất đối soát</button><button type="button" onClick={openCreate} disabled={!canManage} className="flex h-11 items-center gap-2 border border-violet-700 bg-violet-600 px-4 font-semibold text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Tạo hóa đơn</button><button type="button" onClick={() => openCapture()} disabled={!canManage} className="flex h-11 items-center gap-2 border border-emerald-700 bg-emerald-600 px-4 font-semibold text-white shadow-lg shadow-emerald-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><CircleDollarSign className="h-4 w-4" />Ghi nhận thanh toán</button></div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={exportReport} className="flex h-11 items-center gap-2 border border-slate-200 bg-white px-4 font-semibold text-slate-600 shadow-sm hover:bg-slate-50">
+              <Download className="h-4 w-4" />Xuất đối soát
+            </button>
+            <button
+              type="button"
+              onClick={() => openCreateExpense('OWNER_WITHDRAW')}
+              disabled={!canManage}
+              className="flex h-11 items-center gap-2 border border-rose-700 bg-rose-600 px-4 font-semibold text-white shadow-lg shadow-rose-200 hover:bg-rose-700 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+            >
+              <Minus className="h-4 w-4" />Lập phiếu chi / Rút tiền
+            </button>
+            <button type="button" onClick={() => openCapture()} disabled={!canManage} className="flex h-11 items-center gap-2 border border-emerald-700 bg-emerald-600 px-4 font-semibold text-white shadow-lg shadow-emerald-200 hover:bg-emerald-700 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none">
+              <CircleDollarSign className="h-4 w-4" />Ghi nhận thanh toán
+            </button>
+          </div>
         )}
       />
 
+    <section className="tenant-admin-payment-kpis grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-caption font-bold text-slate-500">Doanh thu thuần</p>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><ArrowUpRight className="h-4.5 w-4.5" /></span>
+        </div>
+        <p className="ta-money ta-money-kpi mt-3">{money(netRevenue)}</p>
+        <p className="mt-2 text-caption font-semibold text-slate-400">{periodScoped.length} hóa đơn trong kỳ</p>
+      </article>
 
-    <section className="tenant-admin-payment-kpis grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">{[
-      { label: 'Doanh thu thuần', value: money(netRevenue), detail: `${periodScoped.length} hóa đơn trong kỳ`, icon: ArrowUpRight, tone: 'bg-emerald-50 text-emerald-600' },
-      { label: 'Đã thu', value: money(collected), detail: `${periodScoped.filter((item) => item.paid > 0).length} hóa đơn có phát sinh`, icon: CircleDollarSign, tone: 'bg-violet-50 text-violet-600' },
-      { label: 'Còn phải thu', value: money(outstanding), detail: `${periodScoped.filter((item) => item.paid < item.total).length} hóa đơn cần xử lý`, icon: Clock3, tone: 'bg-amber-50 text-amber-600' },
-      { label: 'Đã hoàn tiền', value: money(refunded), detail: `${periodScoped.filter((item) => item.refunded > 0).length} giao dịch trong kỳ`, icon: ArrowDownRight, tone: 'bg-rose-50 text-rose-600' }
-    ].map(({ label, value, detail, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between gap-3"><p className="text-caption font-bold text-slate-500">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4.5 w-4.5" /></span></div><p className="ta-money ta-money-kpi mt-3">{value}</p><p className="mt-2 text-caption font-semibold text-slate-400">{detail}</p></article>)}</section>
+      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-caption font-bold text-slate-500">Đã thu vào</p>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><CircleDollarSign className="h-4.5 w-4.5" /></span>
+        </div>
+        <p className="ta-money ta-money-kpi mt-3">{money(collected)}</p>
+        <p className="mt-2 text-caption font-semibold text-slate-400">{periodScoped.filter((item) => item.paid > 0).length} hóa đơn có phát sinh thu</p>
+      </article>
+
+      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-caption font-bold text-slate-500">Tổng phiếu chi & Rút két</p>
+          </div>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600"><ArrowDownLeft className="h-4.5 w-4.5" /></span>
+        </div>
+        <p className="ta-money ta-money-kpi mt-3 text-rose-600">-{money(totalPeriodExpense)}</p>
+        <p className="mt-2 text-caption font-semibold text-slate-400">{periodScopedExpenses.length} khoản chi · Chủ rút {money(ownerWithdrawalTotal)}</p>
+      </article>
+
+      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-caption font-bold text-slate-500">Còn phải thu (Công nợ)</p>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Clock3 className="h-4.5 w-4.5" /></span>
+        </div>
+        <p className="ta-money ta-money-kpi mt-3">{money(outstanding)}</p>
+        <p className="mt-2 text-caption font-semibold text-slate-400">{periodScoped.filter((item) => item.paid < item.total).length} hóa đơn cần thu tiếp</p>
+      </article>
+    </section>
 
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.035)]">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
@@ -851,23 +1190,361 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
           <label className="block"><span className="mb-1 block text-caption font-bold text-slate-500">Đến ngày</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-bold text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 sm:w-36" /></label>
         </div>}
         <div className="flex items-center gap-2 xl:ml-auto">
-          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-caption font-bold text-slate-500"><strong className="text-slate-800">{periodScoped.length}</strong> hóa đơn trong kỳ</span>
+          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-caption font-bold text-slate-500"><strong className="text-slate-800">{periodScoped.length}</strong> hóa đơn · <strong className="text-rose-600">{periodScopedExpenses.length}</strong> phiếu chi</span>
           {datePreset !== 'ALL' && <button type="button" onClick={() => { setDatePreset('ALL'); setDateFrom(''); setDateTo(''); }} className="h-8 border-0 bg-transparent px-2 text-caption font-bold text-violet-600 shadow-none">Xóa lọc</button>}
         </div>
       </div>
     </section>
 
-    {/* Bảng hóa đơn cần tối thiểu 930px. Bố cục cũ tách 2 cột ngay từ 1280px và
-        cắt 280px cho cột phải, nhưng ở bề ngang đó sidebar điều hướng đã ăn mất
-        ~340px nên bảng chỉ còn ~642px — gần một phần ba bảng nằm ngoài màn hình.
-        Vì vậy bảng ăn trọn bề ngang, hai thẻ ca/việc cần xử lý xuống thành dải
-        ngang bên dưới. */}
-    <section className="tenant-admin-payment-ledger space-y-4"><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between"><div className="relative w-full xl:w-72"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm hóa đơn, khách, mã giao dịch..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-caption font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />{searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}</div><div className="flex flex-wrap gap-2"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect><BeautifulSelect value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as 'ALL' | PaymentMethod)} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">Mọi phương thức</option>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></div></div><div className="flex gap-2 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 py-3">{(['ALL', 'PAID', 'PARTIAL', 'PENDING', 'REFUNDED', 'FAILED'] as const).map((value) => <button key={value} type="button" onClick={() => setTab(value)} className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${tab === value ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'}`}>{value === 'ALL' ? 'Tất cả giao dịch' : statusMeta[value].label}<span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">{value === 'ALL' ? periodScoped.length : periodScoped.filter((item) => item.status === value).length}</span></button>)}</div>
-      <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[930px] text-left"><thead><tr className="border-b border-slate-100 text-caption font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Hóa đơn</th><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Tổng tiền</th><th className="px-4 py-3">Đã thu / còn lại</th><th className="px-4 py-3">Phương thức</th><th className="px-5 py-3 text-right">Trạng thái</th></tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((record) => <tr key={record.id} onClick={() => setSelected(record)} className="cursor-pointer text-caption text-slate-600 hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{record.id}</p><p className="mt-1 text-caption text-slate-400">{record.createdAt}</p></td><td className="px-4 py-4"><p className="font-black text-slate-800">{record.customer}</p><p className="mt-1 text-caption text-slate-400">{record.phone} · {record.branch}</p></td><td className="px-4 py-4 font-black text-slate-900">{money(record.total)}{record.refunded > 0 && <p className="mt-1 text-caption font-bold text-rose-500">Đã hoàn {money(record.refunded)}</p>}</td><td className="px-4 py-4"><p className="font-black text-emerald-700">{money(record.paid)}</p><p className="mt-1 text-caption text-slate-400">Còn {money(Math.max(0, record.total - record.paid))}</p></td><td className="px-4 py-4"><MethodCell record={record} /></td><td className="px-5 py-4 text-right"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}><span className={`h-1.5 w-1.5 rounded-full ${statusMeta[record.status].dot}`} />{statusMeta[record.status].label}</span></td></tr>)}</tbody></table></div>
-      <div className="divide-y divide-slate-100 md:hidden">{filtered.map((record) => <button key={record.id} type="button" onClick={() => setSelected(record)} className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none"><span className="flex items-start justify-between gap-3"><span><span className="text-caption font-black text-slate-900">{record.id}</span><span className="mt-1 block text-caption text-slate-400">{record.customer} · {record.branch}</span></span><span className="text-body font-black text-slate-900">{money(record.total)}</span></span><span className="mt-3 flex items-center justify-between"><MethodBadge method={record.method} /><span className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}>{statusMeta[record.status].label}</span></span></button>)}</div>{!filtered.length && <div className="py-16 text-center"><ReceiptText className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-caption font-black text-slate-600">Không có giao dịch phù hợp</p></div>}<div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3"><p className="text-caption text-slate-400">Hiển thị <strong className="text-slate-600">{filtered.length}</strong> giao dịch</p><p className="text-caption font-semibold text-slate-400">Tổng theo bộ lọc: {money(filtered.reduce((sum, item) => sum + item.total, 0))}</p></div></div>
-      {/* Dải ngang: nằm dọc thì hai thẻ này cao gấp đôi mức cần thiết, nên khi
-          xuống dưới bảng chúng được xếp lại cho thấp — thẻ ca dồn số liệu và nút
-          đóng ca về một hàng, việc cần xử lý đổi 3 dòng dọc thành 3 ô ngang. */}
+    {/* Bảng sổ quỹ & đối soát */}
+    <section className="tenant-admin-payment-ledger space-y-4">
+      {/* Tab chuyển đổi giữa Hóa đơn thu tiền và Phiếu chi / Rút tiền két */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveLedgerTab('INCOMES')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-caption font-black transition-all ${
+              activeLedgerTab === 'INCOMES'
+                ? 'bg-violet-600 text-white shadow-md shadow-violet-200'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Receipt className="h-4 w-4" />
+            Hóa đơn thu tiền & Công nợ
+            <span className={`rounded-full px-2 py-0.5 text-caption font-bold ${
+              activeLedgerTab === 'INCOMES' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {periodScoped.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveLedgerTab('EXPENSES')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-caption font-black transition-all ${
+              activeLedgerTab === 'EXPENSES'
+                ? 'bg-rose-600 text-white shadow-md shadow-rose-200'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <WalletCards className="h-4 w-4" />
+            Hóa đơn chi & Rút tiền két
+            <span className={`rounded-full px-2 py-0.5 text-caption font-bold ${
+              activeLedgerTab === 'EXPENSES' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'
+            }`}>
+              {periodScopedExpenses.length}
+            </span>
+          </button>
+        </div>
+
+        {activeLedgerTab === 'EXPENSES' && (
+          <button
+            type="button"
+            onClick={() => openCreateExpense()}
+            disabled={!canManage}
+            className="flex items-center gap-1.5 rounded-xl border border-rose-600 bg-rose-50 px-3 py-1.5 text-caption font-black text-rose-700 hover:bg-rose-100"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Tạo phiếu chi mới
+          </button>
+        )}
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative w-full xl:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+              placeholder={activeLedgerTab === 'INCOMES' ? 'Tìm hóa đơn, khách, mã giao dịch...' : 'Tìm phiếu chi, người nhận, lý do, mã...'}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-caption font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+            />
+            {searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold">
+              <option value="ALL">Tất cả chi nhánh</option>
+              <option value="Q3">Chi nhánh Quận 3</option>
+              <option value="Q1">Chi nhánh Quận 1</option>
+            </BeautifulSelect>
+
+            <BeautifulSelect value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as 'ALL' | PaymentMethod)} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold">
+              <option value="ALL">Mọi phương thức</option>
+              {Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
+            </BeautifulSelect>
+          </div>
+        </div>
+
+        {activeLedgerTab === 'INCOMES' ? (
+          <>
+            <div className="flex gap-2 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+              {(['ALL', 'PAID', 'PARTIAL', 'PENDING', 'REFUNDED', 'FAILED'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTab(value)}
+                  className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${tab === value ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                >
+                  {value === 'ALL' ? 'Tất cả giao dịch' : statusMeta[value].label}
+                  <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">
+                    {value === 'ALL' ? periodScoped.length : periodScoped.filter((item) => item.status === value).length}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[930px] text-left">
+                <thead>
+                  <tr className="border-b border-slate-100 text-caption font-black uppercase tracking-wide text-slate-400">
+                    <th className="px-5 py-3">Hóa đơn</th>
+                    <th className="px-4 py-3">Khách hàng</th>
+                    <th className="px-4 py-3">Tổng tiền</th>
+                    <th className="px-4 py-3">Đã thu / còn lại</th>
+                    <th className="px-4 py-3">Phương thức</th>
+                    <th className="px-5 py-3 text-right">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.map((record) => (
+                    <tr key={record.id} onClick={() => setSelected(record)} className="cursor-pointer text-caption text-slate-600 hover:bg-slate-50">
+                      <td className="px-5 py-4">
+                        <p className="font-black text-slate-900">{record.id}</p>
+                        <p className="mt-1 text-caption text-slate-400">{record.createdAt}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <p className="font-black text-slate-800">{record.customer}</p>
+                        <p className="mt-1 text-caption text-slate-400">{record.phone} · {record.branch}</p>
+                      </td>
+                      <td className="px-4 py-4 font-black text-slate-900">
+                        {money(record.total)}
+                        {record.refunded > 0 && <p className="mt-1 text-caption font-bold text-rose-500">Đã hoàn {money(record.refunded)}</p>}
+                      </td>
+                      <td className="px-4 py-4">
+                        <p className="font-black text-emerald-700">{money(record.paid)}</p>
+                        <p className="mt-1 text-caption text-slate-400">Còn {money(Math.max(0, record.total - record.paid))}</p>
+                      </td>
+                      <td className="px-4 py-4"><MethodCell record={record} /></td>
+                      <td className="px-5 py-4 text-right">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${statusMeta[record.status].dot}`} />{statusMeta[record.status].label}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="divide-y divide-slate-100 md:hidden">
+              {filtered.map((record) => (
+                <button key={record.id} type="button" onClick={() => setSelected(record)} className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none">
+                  <span className="flex items-start justify-between gap-3">
+                    <span>
+                      <span className="text-caption font-black text-slate-900">{record.id}</span>
+                      <span className="mt-1 block text-caption text-slate-400">{record.customer} · {record.branch}</span>
+                    </span>
+                    <span className="text-body font-black text-slate-900">{money(record.total)}</span>
+                  </span>
+                  <span className="mt-3 flex items-center justify-between">
+                    <MethodBadge method={record.method} />
+                    <span className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}>{statusMeta[record.status].label}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {!filtered.length && (
+              <div className="py-16 text-center">
+                <ReceiptText className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-3 text-caption font-black text-slate-600">Không có giao dịch phù hợp</p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+              <p className="text-caption text-slate-400">Hiển thị <strong className="text-slate-600">{filtered.length}</strong> giao dịch</p>
+              <p className="text-caption font-semibold text-slate-400">Tổng theo bộ lọc: {money(filtered.reduce((sum, item) => sum + item.total, 0))}</p>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Expense Categories Filter Bar */}
+            <div className="flex gap-2 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setExpenseFilterCategory('ALL')}
+                className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${expenseFilterCategory === 'ALL' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'}`}
+              >
+                Tất cả phiếu chi
+                <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">{periodScopedExpenses.length}</span>
+              </button>
+              {Object.entries(expenseCategoryMeta).map(([catKey, meta]) => {
+                const count = periodScopedExpenses.filter((item) => item.category === catKey).length;
+                return (
+                  <button
+                    key={catKey}
+                    type="button"
+                    onClick={() => setExpenseFilterCategory(catKey as ExpenseCategory)}
+                    className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${expenseFilterCategory === catKey ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                  >
+                    {meta.label}
+                    <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Expense Table Desktop */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[930px] text-left">
+                <thead>
+                  <tr className="border-b border-slate-100 text-caption font-black uppercase tracking-wide text-slate-400">
+                    <th className="px-5 py-3">Mã phiếu chi</th>
+                    <th className="px-4 py-3">Phân loại & Mục đích</th>
+                    <th className="px-4 py-3">Người nhận / Đối tác</th>
+                    <th className="px-4 py-3">Số tiền chi</th>
+                    <th className="px-4 py-3">Phương thức</th>
+                    <th className="px-4 py-3">Người lập phiếu</th>
+                    <th className="px-5 py-3 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredExpenses.map((exp) => {
+                    const cat = expenseCategoryMeta[exp.category];
+                    const Icon = cat.icon;
+                    return (
+                      <tr
+                        key={exp.id}
+                        onClick={() => setSelectedExpense(exp)}
+                        className="cursor-pointer text-caption text-slate-600 hover:bg-slate-50"
+                      >
+                        <td className="px-5 py-4">
+                          <p className="font-black text-slate-900">{exp.id}</p>
+                          <p className="mt-1 text-caption text-slate-400">{exp.createdAt}</p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${cat.badge}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${cat.dot}`} />
+                              {cat.label}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-1 text-caption font-medium text-slate-800" title={exp.reason}>
+                            {exp.reason}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <p className="font-black text-slate-800">{exp.recipient}</p>
+                          <p className="mt-1 text-caption text-slate-400">Chi nhánh {exp.branch === 'Q3' ? 'Quận 3' : 'Quận 1'}</p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <p className="font-black text-rose-600">-{money(exp.amount)}</p>
+                          <p className="mt-1 text-caption text-slate-400">
+                            {exp.method === 'CASH' ? 'Trừ tiền két quầy' : 'Ngân hàng / Ví'}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <MethodBadge method={exp.method} />
+                        </td>
+                        <td className="px-4 py-4">
+                          <p className="font-bold text-slate-700">{exp.creator}</p>
+                          {exp.reference && <p className="mt-1 text-caption font-mono text-slate-400">{exp.reference}</p>}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNotify?.(`Đang xuất/in phiếu chi ${exp.id} cho ${exp.recipient} (${money(exp.amount)}).`);
+                              }}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white p-0 text-slate-500 shadow-none hover:bg-slate-100 hover:text-slate-800"
+                              title="In phiếu chi"
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                            </button>
+                            {canManage && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteExpense(exp);
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white p-0 text-rose-600 shadow-none hover:bg-rose-50"
+                                title="Xóa phiếu chi"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Expense Mobile list */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {filteredExpenses.map((exp) => {
+                const cat = expenseCategoryMeta[exp.category];
+                return (
+                  <button
+                    key={exp.id}
+                    type="button"
+                    onClick={() => setSelectedExpense(exp)}
+                    className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-caption font-black text-slate-900">{exp.id}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${cat.badge}`}>
+                            {cat.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-caption font-bold text-slate-800">{exp.recipient}</p>
+                        <p className="mt-0.5 text-caption text-slate-500">{exp.reason}</p>
+                      </div>
+                      <span className="text-body font-black text-rose-600">-{money(exp.amount)}</span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-caption text-slate-400">
+                      <span>{exp.createdAt}</span>
+                      <MethodBadge method={exp.method} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {!filteredExpenses.length && (
+              <div className="py-16 text-center">
+                <WalletCards className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-3 text-caption font-black text-slate-600">Chưa có phiếu chi nào trong khoảng thời gian này</p>
+                <button
+                  type="button"
+                  onClick={() => openCreateExpense()}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-rose-600 bg-rose-50 px-3 py-1.5 text-caption font-bold text-rose-700"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Lập phiếu chi đầu tiên
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+              <p className="text-caption text-slate-400">Hiển thị <strong className="text-slate-600">{filteredExpenses.length}</strong> phiếu chi</p>
+              <p className="text-caption font-semibold text-rose-600">Tổng tiền chi: -{money(filteredExpenses.reduce((sum, item) => sum + item.amount, 0))}</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Dải thông tin ca trực & Kiểm đếm két tiền */}
       <aside className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl bg-gradient-to-br from-[#171328] to-[#2b2050] p-4 text-white shadow-lg sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -883,16 +1560,18 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
             </div>
             <div className="grid shrink-0 grid-cols-2 gap-2">
               <div className="rounded-xl bg-white/7 px-3 py-2">
-                <p className="text-caption text-slate-400">Tiền mặt</p>
-                <p className="mt-0.5 text-body font-black">
-                  {money(scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0))}
+                <p className="text-caption text-slate-400">Tiền mặt trong két</p>
+                <p className="mt-0.5 text-body font-black text-emerald-300">
+                  {money(2000000 + scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0) - totalCashExpense)}
                 </p>
+                <p className="text-[10px] text-slate-400">Đã trừ chi két -{money(totalCashExpense)}</p>
               </div>
               <div className="rounded-xl bg-white/7 px-3 py-2">
-                <p className="text-caption text-slate-400">Điện tử</p>
-                <p className="mt-0.5 text-body font-black">
+                <p className="text-caption text-slate-400">Thu điện tử</p>
+                <p className="mt-0.5 text-body font-black text-violet-300">
                   {money(scoped.filter((item) => item.method && item.method !== 'CASH').reduce((sum, item) => sum + item.paid, 0))}
                 </p>
+                <p className="text-[10px] text-slate-400">CK / Ví điện tử</p>
               </div>
             </div>
           </div>
@@ -900,35 +1579,44 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
             type="button"
             onClick={() => {
               if (!requireManage()) return;
-              const expected = 2000000 + scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0);
+              const expected = 2000000 + scoped.filter((item) => item.method === 'CASH').reduce((sum, item) => sum + item.paid, 0) - totalCashExpense;
               setActualCashInput(String(expected));
               setShiftModalOpen(true);
             }}
             className="mt-3 flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/8 text-caption font-black text-white shadow-none hover:bg-white/15"
           >
             <LockKeyhole className="h-3.5 w-3.5" />
-            Kiểm đếm & đóng ca
+            Kiểm đếm két & Đóng ca
           </button>
         </div>
+
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-caption font-black text-slate-800">Việc cần xử lý</p>
-              <p className="mt-1 text-caption text-slate-400">Ưu tiên theo rủi ro tài chính</p>
+              <p className="text-caption font-black text-slate-800">Kiểm soát dòng tiền & Cảnh báo</p>
+              <p className="mt-1 text-caption text-slate-400">Theo dõi đối soát trong kỳ</p>
             </div>
             <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {[
-              { label: 'Hóa đơn còn công nợ', value: scoped.filter((item) => item.paid < item.total).length, tone: 'text-amber-600 bg-amber-50' },
-              { label: 'Giao dịch lỗi cần kiểm tra', value: scoped.filter((item) => item.status === 'FAILED').length, tone: 'text-rose-600 bg-rose-50' },
-              { label: 'Hoàn tiền chờ đối soát', value: scoped.filter((item) => item.refunded > 0).length, tone: 'text-violet-600 bg-violet-50' }
-            ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 sm:flex-col sm:items-start sm:gap-1.5">
-                <span className={`flex h-6 min-w-6 items-center justify-center rounded-lg px-1.5 text-caption font-black ${item.tone} sm:order-first`}>{item.value}</span>
-                <span className="text-caption font-bold leading-4 text-slate-600">{item.label}</span>
-              </div>
-            ))}
+            <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 sm:flex-col sm:items-start sm:gap-1.5">
+              <span className="flex h-6 min-w-6 items-center justify-center rounded-lg bg-purple-50 px-1.5 text-caption font-black text-purple-700 sm:order-first">
+                {scopedExpenses.filter((e) => e.category === 'OWNER_WITHDRAW').length}
+              </span>
+              <span className="text-caption font-bold leading-4 text-slate-600">Lần chủ rút tiền két</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 sm:flex-col sm:items-start sm:gap-1.5">
+              <span className="flex h-6 min-w-6 items-center justify-center rounded-lg bg-amber-50 px-1.5 text-caption font-black text-amber-600 sm:order-first">
+                {scoped.filter((item) => item.paid < item.total).length}
+              </span>
+              <span className="text-caption font-bold leading-4 text-slate-600">Hóa đơn còn công nợ</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 sm:flex-col sm:items-start sm:gap-1.5">
+              <span className="flex h-6 min-w-6 items-center justify-center rounded-lg bg-rose-50 px-1.5 text-caption font-black text-rose-600 sm:order-first">
+                {scoped.filter((item) => item.refunded > 0).length}
+              </span>
+              <span className="text-caption font-bold leading-4 text-slate-600">Giao dịch đã hoàn tiền</span>
+            </div>
           </div>
         </div>
       </aside>
@@ -1492,6 +2180,354 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
             <div className="ml-auto flex gap-2"><button type="button" onClick={() => setCatalogCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"><ReceiptText className="h-4 w-4" />Tạo hóa đơn</button></div>
           </footer>
         </form>
+      </div>
+    )}
+
+    {/* MODAL: Lập phiếu chi / Hóa đơn chi tiền */}
+    {expenseOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6">
+        <button
+          type="button"
+          aria-label="Đóng biểu mẫu lập phiếu chi"
+          onClick={() => setExpenseOpen(false)}
+          className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+        />
+        <form
+          onSubmit={submitExpense}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-expense-title"
+          className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+        >
+          <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 rounded-full bg-rose-500" />
+                <p className="text-caption font-black uppercase tracking-wide text-rose-600">Sổ quỹ chi tiền & Rút két</p>
+              </div>
+              <h2 id="create-expense-title" className="mt-1 text-xl font-black text-slate-950">
+                Lập phiếu chi / Hóa đơn chi
+              </h2>
+              <p className="mt-1 text-caption text-slate-500">
+                Ghi nhận các khoản chi phát sinh tại tiệm hoặc chủ tiệm lấy tiền mặt.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpenseOpen(false)}
+              aria-label="Đóng"
+              className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm hover:bg-slate-100"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </header>
+
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
+            {formError && (
+              <div className="flex gap-2 rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {formError}
+              </div>
+            )}
+
+            {/* Phân loại khoản chi */}
+            <div>
+              <label className="mb-2 block text-caption font-black text-slate-800">
+                Mục đích / Loại phiếu chi *
+              </label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {(Object.entries(expenseCategoryMeta) as [ExpenseCategory, typeof expenseCategoryMeta[ExpenseCategory]][]).map(([catKey, meta]) => {
+                  const Icon = meta.icon;
+                  const isSelected = expenseForm.category === catKey;
+                  return (
+                    <button
+                      key={catKey}
+                      type="button"
+                      onClick={() => handleExpenseCategorySelect(catKey)}
+                      className={`flex flex-col items-start gap-1 rounded-2xl border p-3 text-left transition-all shadow-none ${
+                        isSelected
+                          ? 'border-rose-600 bg-rose-50/70 text-rose-900 ring-2 ring-rose-500/20'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+                          isSelected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </span>
+                        {isSelected && <Check className="h-4 w-4 text-rose-600" />}
+                      </div>
+                      <span className="mt-1 text-caption font-black leading-tight">{meta.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Số tiền chi & Tiền mặt / Ngân hàng */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 flex items-center justify-between text-caption font-bold text-slate-700">
+                  <span>Số tiền chi (VNĐ) *</span>
+                  <span className="text-caption font-black text-rose-600">
+                    {Number(expenseForm.amount) > 0 ? money(Number(expenseForm.amount)) : ''}
+                  </span>
+                </span>
+                <input
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  value={expenseForm.amount}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  placeholder="500000"
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-lg font-black text-slate-900 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {['200000', '500000', '1000000', '2000000', '5000000'].map((quickAmt) => (
+                    <button
+                      key={quickAmt}
+                      type="button"
+                      onClick={() => setExpenseForm((prev) => ({ ...prev, amount: quickAmt }))}
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-caption font-bold text-slate-600 shadow-none hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      {money(Number(quickAmt))}
+                    </button>
+                  ))}
+                </div>
+              </label>
+
+              <label>
+                <span className="mb-1.5 block text-caption font-bold text-slate-700">Nguồn tiền chi *</span>
+                <BeautifulSelect
+                  value={expenseForm.method}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, method: e.target.value as PaymentMethod }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-bold"
+                >
+                  <option value="CASH">Tiền mặt tại két quầy thu ngân</option>
+                  <option value="BANK">Chuyển khoản ngân hàng</option>
+                  <option value="MOMO">Ví MoMo</option>
+                  <option value="ZALOPAY">ZaloPay</option>
+                  <option value="CARD">Quẹt thẻ ngân hàng</option>
+                </BeautifulSelect>
+              </label>
+
+              <label>
+                <span className="mb-1.5 block text-caption font-bold text-slate-700">Chi nhánh phát sinh *</span>
+                <BeautifulSelect
+                  value={expenseForm.branch}
+                  disabled={branchLocked}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, branch: e.target.value as BranchCode }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-bold"
+                >
+                  <option value="Q3">Chi nhánh Quận 3</option>
+                  <option value="Q1">Chi nhánh Quận 1</option>
+                </BeautifulSelect>
+              </label>
+
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-caption font-bold text-slate-700">Người nhận tiền / Bên thụ hưởng *</span>
+                <input
+                  value={expenseForm.recipient}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, recipient: e.target.value }))}
+                  placeholder="Ví dụ: Chủ salon (Anh Hoàng), KTV Lan Anh, GrabExpress..."
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-bold text-slate-800 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                />
+              </label>
+
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-caption font-bold text-slate-700">Lý do / Nội dung chi tiền *</span>
+                <input
+                  value={expenseForm.reason}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, reason: e.target.value }))}
+                  placeholder="Ví dụ: Chủ ghé tiệm lấy 500k chi tiêu cá nhân"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-medium text-slate-800 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                />
+              </label>
+
+              <label>
+                <span className="mb-1.5 block text-caption font-bold text-slate-700">Mã chứng từ / Phiếu chi</span>
+                <input
+                  value={expenseForm.reference}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, reference: e.target.value }))}
+                  placeholder="PC-..."
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-mono text-slate-700 outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                />
+              </label>
+
+              <label>
+                <span className="mb-1.5 block text-caption font-bold text-slate-700">Người lập phiếu</span>
+                <input
+                  value={roleLabel}
+                  disabled
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-caption font-bold text-slate-500"
+                />
+              </label>
+
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-caption font-bold text-slate-700">Ghi chú bổ sung</span>
+                <textarea
+                  value={expenseForm.note}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, note: e.target.value }))}
+                  placeholder="Ghi chú chi tiết thêm nếu có..."
+                  className="min-h-16 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-caption outline-none focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                />
+              </label>
+            </div>
+          </div>
+
+          <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">
+            <p className="hidden text-caption font-semibold text-slate-400 sm:block">
+              {expenseForm.method === 'CASH'
+                ? 'Khoản tiền này sẽ tự động trừ vào số dư tiền mặt trong két ca trực.'
+                : 'Phiếu chi được lưu vào nhật ký đối soát ngân hàng.'}
+            </p>
+            <div className="ml-auto flex gap-2">
+              <button
+                type="button"
+                onClick={() => setExpenseOpen(false)}
+                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm hover:bg-slate-100"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 border border-rose-700 bg-rose-600 px-5 text-caption font-black text-white shadow-lg shadow-rose-200 hover:bg-rose-700"
+              >
+                <Check className="h-4 w-4" />
+                Xác nhận tạo phiếu chi
+              </button>
+            </div>
+          </footer>
+        </form>
+      </div>
+    )}
+
+    {/* MODAL: Chi tiết phiếu chi / Hóa đơn chi */}
+    {selectedExpense && (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6">
+        <button
+          type="button"
+          aria-label="Đóng chi tiết phiếu chi"
+          onClick={() => setSelectedExpense(null)}
+          className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+        />
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="expense-detail-title"
+          className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+        >
+          <header className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-caption font-black uppercase tracking-wide text-rose-600">{selectedExpense.id}</span>
+                <span className={`rounded-full px-2.5 py-0.5 text-caption font-bold ring-1 ${expenseCategoryMeta[selectedExpense.category].badge}`}>
+                  {selectedExpense.categoryLabel}
+                </span>
+              </div>
+              <h2 id="expense-detail-title" className="mt-2 text-xl font-black text-slate-950">
+                Chi tiết phiếu chi tiền
+              </h2>
+              <p className="mt-1 text-caption text-slate-400">
+                {selectedExpense.createdAt} · Chi nhánh {selectedExpense.branch === 'Q3' ? 'Quận 3' : 'Quận 1'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedExpense(null)}
+              aria-label="Đóng"
+              className="flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm hover:bg-slate-100"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </header>
+
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
+            <div className="rounded-2xl bg-gradient-to-br from-[#2a131a] to-[#451824] p-5 text-white">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-caption font-black uppercase tracking-[0.15em] text-rose-300">Tổng tiền đã chi</p>
+                  <p className="mt-2 text-3xl font-black tracking-tight text-rose-400">-{money(selectedExpense.amount)}</p>
+                  <p className="mt-2 text-caption text-slate-300">
+                    Nguồn chi: {selectedExpense.method === 'CASH' ? 'Tiền mặt tại két quầy' : methodMeta[selectedExpense.method].label}
+                  </p>
+                </div>
+                <WalletCards className="h-8 w-8 text-rose-300" />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-caption font-bold text-slate-400">Người nhận tiền / Bên thụ hưởng</p>
+                <p className="mt-1 text-base font-black text-slate-900">{selectedExpense.recipient}</p>
+                <p className="mt-2 text-caption text-slate-500">Mã chứng từ: <span className="font-mono font-bold text-slate-700">{selectedExpense.reference || 'N/A'}</span></p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-caption font-bold text-slate-400">Người lập phiếu & Phê duyệt</p>
+                <p className="mt-1 text-base font-black text-slate-900">{selectedExpense.creator}</p>
+                <p className="mt-2 text-caption text-slate-500">Thời gian: {selectedExpense.createdAt}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-caption font-black text-slate-800">Nội dung & Lý do chi tiền</p>
+              <p className="mt-2 text-caption leading-relaxed font-medium text-slate-700">
+                {selectedExpense.reason}
+              </p>
+              {selectedExpense.note && (
+                <div className="mt-3 rounded-xl bg-slate-50 p-3 text-caption text-slate-600">
+                  <span className="font-bold text-slate-800">Ghi chú: </span>
+                  {selectedExpense.note}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-caption font-black text-slate-800">Nhật ký kiểm soát sổ quỹ</p>
+              <div className="mt-3 space-y-3">
+                {selectedExpense.audit.map((item, index) => (
+                  <div key={`${item}-${index}`} className="flex gap-3">
+                    <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${index === 0 ? 'bg-rose-500' : 'bg-slate-300'}`} />
+                    <p className="text-caption leading-4 text-slate-500">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <footer className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">
+            {canManage ? (
+              <button
+                type="button"
+                onClick={() => deleteExpense(selectedExpense)}
+                className="flex items-center gap-1.5 border border-rose-200 bg-white px-3.5 py-2 text-caption font-bold text-rose-700 shadow-sm hover:bg-rose-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Xóa phiếu chi
+              </button>
+            ) : <div />}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => onNotify?.(`Đang in phiếu chi ${selectedExpense.id} số tiền ${money(selectedExpense.amount)}.`)}
+                className="flex items-center gap-1.5 border border-slate-200 bg-white px-4 py-2 text-caption font-bold text-slate-700 shadow-sm hover:bg-slate-100"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                In phiếu chi
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedExpense(null)}
+                className="border border-slate-200 bg-white px-4 py-2 text-caption font-bold text-slate-600 shadow-sm hover:bg-slate-100"
+              >
+                Đóng
+              </button>
+            </div>
+          </footer>
+        </section>
       </div>
     )}
   </div>;

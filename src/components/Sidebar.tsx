@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BarChart3,
   ChevronLeft,
@@ -7,7 +7,10 @@ import {
   Gem,
   HelpCircle,
   LayoutDashboard,
+  Megaphone,
   Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   Receipt,
   Settings,
   ShieldCheck,
@@ -58,6 +61,18 @@ export default function Sidebar({
     });
   };
 
+  // Keyboard shortcut Ctrl+B or Cmd+B to toggle sidebar collapse
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleCollapse();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const navigationGroups = [
     {
       label: 'Điều hành',
@@ -85,6 +100,7 @@ export default function Sidebar({
     {
       label: 'Quản trị',
       items: [
+        { id: 'announcements', label: 'Bản tin & Thông báo', icon: Megaphone },
         { id: 'settings', label: 'Cấu hình hệ thống', icon: Settings },
         {
           id: 'security',
@@ -125,10 +141,10 @@ export default function Sidebar({
           ${isCollapsed ? 'is-collapsed w-[280px] lg:w-[88px]' : 'w-[280px]'}
         `}
       >
-        <div className="sa-sidebar-brand">
+        <div className="sa-sidebar-brand relative flex items-center justify-between">
           <button
             type="button"
-            className="sa-brand-button"
+            className="sa-brand-button min-w-0 flex-1"
             onClick={() => {
               setActiveTab('overview');
               setIsOpen(false);
@@ -140,6 +156,23 @@ export default function Sidebar({
               <strong>{systemName}</strong>
               <small>Superadmin Console</small>
             </span>
+          </button>
+
+          {/* Quick header collapse button on desktop */}
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            title={isCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
+            aria-label={isCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
+            className={`hidden lg:flex items-center justify-center h-8 w-8 rounded-lg text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high transition-colors cursor-pointer shrink-0 ${
+              isCollapsed ? 'mx-auto' : 'mr-1'
+            }`}
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
           </button>
         </div>
 
@@ -198,10 +231,17 @@ export default function Sidebar({
             type="button"
             onClick={toggleCollapse}
             className={`sa-collapse-button ${isCollapsed ? 'lg:justify-center' : ''}`}
-            aria-label={isCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
+            aria-label={isCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
+            title={isCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
           >
-            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            <span className={isCollapsed ? 'lg:hidden' : ''}>{isCollapsed ? 'Mở rộng' : 'Thu gọn menu'}</span>
+            {isCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+            <span className={isCollapsed ? 'lg:hidden' : ''}>
+              {isCollapsed ? 'Mở rộng' : 'Thu hẹp menu (Ctrl+B)'}
+            </span>
           </button>
         </div>
       </aside>

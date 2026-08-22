@@ -121,7 +121,24 @@ export interface Tenant {
     requestedAt: string;
   };
   customActivities?: { date: string; user: string; type: string; description: string }[];
-  customInvoices?: { id: string; period: string; amount: number; status: string; dueDate: string; type?: string; packageName?: string; duration?: string; createdAt?: string; paymentMethod?: string; transactionCode?: string; notes?: string }[];
+  customInvoices?: {
+    id: string;
+    invoiceCode?: string;
+    period: string;
+    amount: number;
+    status: string;
+    dueDate: string;
+    type?: string;
+    packageName?: string;
+    duration?: string;
+    createdAt?: string;
+    paymentMethod?: string;
+    transactionCode?: string;
+    notes?: string;
+    paymentProofUrl?: string;
+    paymentProofNote?: string;
+    paymentProofSubmittedAt?: string;
+  }[];
   branches?: Branch[];
   tenantAdminId?: string;
   adminCreationMode?: 'existing' | 'new';
@@ -226,7 +243,46 @@ export interface SystemAlert {
   type: 'error' | 'warning' | 'info';
   createdAt: string;
   isRead: boolean;
+  isArchived?: boolean;
   targetTenantId?: string;
+}
+
+export type AnnouncementCategory =
+  | 'MAINTENANCE'      // Bảo trì hệ thống
+  | 'POLICY_UPDATE'    // Cập nhật chính sách & giá
+  | 'FEATURE_RELEASE'  // Tính năng mới
+  | 'OPERATING_TIPS'   // Mẹo vận hành Salon
+  | 'BILLING'          // Hóa đơn & thanh toán
+  | 'GENERAL';         // Thông báo chung
+
+export type AnnouncementPriority = 'URGENT' | 'HIGH' | 'NORMAL' | 'LOW';
+export type AnnouncementAudience = 'ALL_TENANTS' | 'SPECIFIC_PACKAGE' | 'SPECIFIC_TENANTS';
+
+export interface SystemAnnouncement {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  category: AnnouncementCategory;
+  priority: AnnouncementPriority;
+  targetAudience: AnnouncementAudience;
+  targetPackageNames?: SubscriptionPackageName[];
+  targetTenantIds?: string[];
+  bannerEnabled?: boolean;
+  pinned?: boolean;
+  publishedAt: string;
+  expiresAt?: string;
+  status: 'PUBLISHED' | 'DRAFT' | 'ARCHIVED';
+  authorName: string;
+  authorRole: string;
+  actionLabel?: string;
+  actionUrl?: string;
+  readByTenantIds?: string[];
+  dismissedBannerTenantIds?: string[];
+  archivedByTenantIds?: string[];
+  deletedByTenantIds?: string[];
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Invoice {

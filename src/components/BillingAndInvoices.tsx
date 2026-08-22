@@ -6,6 +6,7 @@ import {
   BellRing,
   Building2,
   CalendarClock,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,

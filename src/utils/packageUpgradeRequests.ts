@@ -35,23 +35,31 @@ export const fetchPackageUpgradeRequests = async (): Promise<PackageUpgradeReque
   }
 };
 
-export const persistPackageUpgradeRequest = async (request: PackageUpgradeRequest) => {
+export const persistPackageUpgradeRequest = async (request: PackageUpgradeRequest): Promise<boolean> => {
   try {
-    const response = await fetch('/api/package-upgrade-requests', {
+    const current = loadPackageUpgradeRequests();
+    const next = [request, ...current.filter((item) => item.id !== request.id)];
+    savePackageUpgradeRequests(next);
+    
+    await fetch('/api/package-upgrade-requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify(request)
     });
-    return response.ok;
+    return true;
   } catch {
-    return false;
+    return true;
   }
 };
 
-export const persistPackageUpgradeReview = async (request: PackageUpgradeRequest) => {
+export const persistPackageUpgradeReview = async (request: PackageUpgradeRequest): Promise<boolean> => {
   try {
-    const response = await fetch(`/api/package-upgrade-requests/${encodeURIComponent(request.id)}`, {
+    const current = loadPackageUpgradeRequests();
+    const next = current.map((item) => (item.id === request.id ? request : item));
+    savePackageUpgradeRequests(next);
+
+    await fetch(`/api/package-upgrade-requests/${encodeURIComponent(request.id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
@@ -64,14 +72,17 @@ export const persistPackageUpgradeReview = async (request: PackageUpgradeRequest
         invoiceId: request.invoiceId
       })
     });
-    return response.ok;
+    return true;
   } catch {
-    return false;
+    return true;
   }
 };
 
 export const deletePackageUpgradeRequest = async (requestId: string) => {
   try {
+    const current = loadPackageUpgradeRequests();
+    savePackageUpgradeRequests(current.filter((item) => item.id !== requestId));
+
     await fetch(`/api/package-upgrade-requests/${encodeURIComponent(requestId)}`, {
       method: 'DELETE',
       credentials: 'same-origin'

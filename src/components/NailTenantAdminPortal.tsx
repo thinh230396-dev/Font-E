@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, lazy, Suspense, useLayoutEffect, useMemo, useState } from 'react';
+import { FormEvent, Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -13,6 +13,7 @@ import {
   CalendarDays,
   CalendarClock,
   Check,
+  CheckCircle,
   ChevronDown,
   CircleDollarSign,
   Clock3,
@@ -56,7 +57,7 @@ import {
   WalletCards,
   X
 } from 'lucide-react';
-import type { Branch, Invoice, PackageUpgradeRequest, SubscriptionPackage, Tenant, Ticket } from '../types';
+import type { Branch, Invoice, PackageUpgradeRequest, SubscriptionPackage, SystemAnnouncement, Tenant, Ticket } from '../types';
 import { BRANCH_MODEL_OPTIONS, generateBranchCode, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches, validateBranchDraft } from '../utils/branches';
 import {
   formatSubscriptionLimit,
@@ -71,6 +72,16 @@ import {
   isTenantPackageUpgradeCandidate, isUnlimitedTenantLimit, type TenantPageAccess
 } from '../utils/tenantAdminEntitlements';
 import { setTenantAdminDataMode } from '../utils/mockDataReset';
+import {
+  dismissBannerForTenant,
+  filterAnnouncementsForTenant,
+  getAnnouncementsForTenant,
+  isAnnouncementReadByTenant,
+  isBannerDismissedByTenant,
+  loadSystemAnnouncements,
+  markAllAnnouncementsRead,
+  markAnnouncementRead
+} from '../utils/systemAnnouncements';
 import type { DemoAccount } from '../auth/demoAccounts';
 import BeautifulSelect from './BeautifulSelect';
 import { formatCompactMoney, formatMoney as formatPlanMoney } from '../utils/money';
@@ -95,6 +106,7 @@ const TenantAdminFinance = lazy(() => import('./TenantAdminFinanceCompact'));
 const TenantAdminSanitation = lazy(() => import('./TenantAdminSanitation'));
 const TenantAdminReports = lazy(() => import('./TenantAdminReports'));
 const TenantAdminSubscription = lazy(() => import('./TenantAdminSubscription'));
+const TenantAdminAnnouncements = lazy(() => import('./TenantAdminAnnouncements'));
 const TenantAdminHelpAndSupport = lazy(() => import('./TenantAdminHelpAndSupport'));
 const TenantAdminSettings = lazy(() => import('./TenantAdminSettings'));
 
@@ -126,6 +138,8 @@ interface NailTenantAdminPortalProps {
   onLanguageChange?: (language: InterfaceLanguage) => void;
   tickets?: Ticket[];
   onTicketsChange?: (tickets: Ticket[]) => void;
+  announcements?: SystemAnnouncement[];
+  onUpdateAnnouncements?: (announcements: SystemAnnouncement[] | ((prev: SystemAnnouncement[]) => SystemAnnouncement[])) => void;
 }
 
 interface NavItem {
@@ -168,6 +182,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'Quản trị',
     items: [
+      { id: 'announcements', label: 'Bản tin hệ thống', icon: Megaphone },
       { id: 'online', label: 'Đặt lịch online', icon: Globe2 },
       { id: 'finance', label: 'Thu & Chi', icon: WalletCards },
       { id: 'sanitation', label: 'Vệ sinh & an toàn', icon: ShieldCheck, badge: '4' },
@@ -1012,7 +1027,27 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
     </div>
   );
 }
-export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, upgradeRequests, onRequestUpgrade, onUpdateTenant, onLogout, themeMode = 'light', onThemeChange, interfaceLanguage = 'vi', onLanguageChange, tickets = [], onTicketsChange = () => {} }: NailTenantAdminPortalProps) {
+export default function NailTenantAdminPortal({
+  account,
+  tenant,
+  subscriptionPackage,
+  availablePackages,
+  invoices,
+  upgradeRequests,
+  onRequestUpgrade,
+  onCancelUpgradeRequest,
+  onSubmitInvoicePaymentProof,
+  onUpdateTenant,
+  onLogout,
+  themeMode = 'light',
+  onThemeChange,
+  interfaceLanguage = 'vi',
+  onLanguageChange,
+  tickets = [],
+  onTicketsChange = () => {},
+  announcements,
+  onUpdateAnnouncements
+}: NailTenantAdminPortalProps) {
   const t = useT();
   const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
   const demoStorageKey = `tenant-admin-demo-mode:${tenantName}`;
@@ -1024,7 +1059,24 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [dataModeReady, setDataModeReady] = useState(false);
   const [demoRevision, setDemoRevision] = useState(0);
   const pendingUpgradeRequest = tenant
-    ? upgradeRequests.find((request) => request.tenantId === tenant.id && request.status === 'PENDING')
+    ? (upgradeRequests.find((request) => (request.tenantId === tenant.id || request.tenantName === tenantName) && request.status === 'PENDING')
+      || (tenant.pendingSubscriptionChange ? {
+          id: tenant.pendingSubscriptionChange.requestId || `UPG-${tenant.id}-PENDING`,
+          tenantId: tenant.id,
+          tenantName: tenantName,
+          requestedByName: account.displayName,
+          requestedByEmail: account.email,
+          currentPackageId: subscriptionPackage?.id,
+          currentPackageName: tenant.packageName,
+          requestedPackageId: tenant.pendingSubscriptionChange.packageId || '',
+          requestedPackageName: tenant.pendingSubscriptionChange.packageName,
+          billingCycle: tenant.pendingSubscriptionChange.billingCycle || 'monthly',
+          effectiveDate: (tenant.effectiveDate || 'immediate') as 'immediate' | 'next_cycle',
+          quotedAmount: tenant.pendingSubscriptionChange.price || 0,
+          currency: tenant.pendingSubscriptionChange.currency || 'VND',
+          status: 'PENDING' as const,
+          requestedAt: tenant.pendingSubscriptionChange.requestedAt || new Date().toISOString()
+        } : undefined))
     : undefined;
   useLayoutEffect(() => {
     setTenantAdminDataMode(demoMode || !tenant ? 'demo' : 'live');
@@ -1071,6 +1123,82 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [toast, setToast] = useState('');
   const [lockedPage, setLockedPage] = useState<NailPageId | null>(null);
+
+  const allAnnouncements = useMemo(
+    () => announcements || loadSystemAnnouncements(),
+    [announcements]
+  );
+  const currentTenantId = tenant?.id || 'TENANT-DEFAULT';
+  const tenantAnnouncements = useMemo(
+    () => getAnnouncementsForTenant(allAnnouncements, {
+      id: currentTenantId,
+      name: tenantName,
+      packageName: currentPackage.name,
+      ...tenant
+    }),
+    [allAnnouncements, currentTenantId, tenantName, currentPackage.name, tenant]
+  );
+
+  const unreadAnnouncements = useMemo(
+    () => tenantAnnouncements.filter((a) => !isAnnouncementReadByTenant(a, currentTenantId)),
+    [tenantAnnouncements, currentTenantId]
+  );
+  const unreadAnnouncementsCount = unreadAnnouncements.length;
+  
+  const emergencyBannerAnnouncement = useMemo(() => {
+    return tenantAnnouncements.find((a) => a.bannerEnabled && !isBannerDismissedByTenant(a.id, currentTenantId));
+  }, [tenantAnnouncements, currentTenantId]);
+
+  const [notificationTab, setNotificationTab] = useState<'announcements' | 'tasks'>('announcements');
+  const [dismissedTaskKeys, setDismissedTaskKeys] = useState<string[]>(() => {
+    try {
+      const raw = window.localStorage.getItem(`dismissed_tasks_${currentTenantId}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const operationalTasks = useMemo(() => {
+    const defaultTasks = [
+      { id: 'TASK_1', title: '4 lịch mới đang chờ xác nhận', detail: 'Lịch sớm nhất lúc 11:30', tone: 'bg-amber-500' },
+      { id: 'TASK_2', title: '18 mặt hàng dưới định mức', detail: '6 mặt hàng cần nhập gấp', tone: 'bg-rose-500' },
+      { id: 'TASK_3', title: 'Ghế P-04 đang chờ duyệt bảo trì', detail: `Chi phí dự kiến ${formatPlanMoney(850_000)}`, tone: 'bg-violet-500' },
+      { id: 'TASK_4', title: 'Checklist mở ca còn thiếu 2 mục', detail: 'Chi nhánh Quận 3', tone: 'bg-blue-500' }
+    ];
+    return defaultTasks.filter((task) => !dismissedTaskKeys.includes(task.id));
+  }, [dismissedTaskKeys]);
+
+  const handleDismissTask = (taskId: string) => {
+    const updated = [...dismissedTaskKeys, taskId];
+    setDismissedTaskKeys(updated);
+    try {
+      window.localStorage.setItem(`dismissed_tasks_${currentTenantId}`, JSON.stringify(updated));
+    } catch {}
+    setToast('Đã đánh dấu hoàn thành tác vụ');
+  };
+
+  const handleClearAllTasks = () => {
+    const allTaskIds = ['TASK_1', 'TASK_2', 'TASK_3', 'TASK_4'];
+    setDismissedTaskKeys(allTaskIds);
+    try {
+      window.localStorage.setItem(`dismissed_tasks_${currentTenantId}`, JSON.stringify(allTaskIds));
+    } catch {}
+    setToast('Đã dọn dẹp tất cả việc cần xử lý');
+  };
+
+  const handleUpdateAnnouncements = (updaterOrList: SystemAnnouncement[] | ((prev: SystemAnnouncement[]) => SystemAnnouncement[])) => {
+    if (onUpdateAnnouncements) {
+      onUpdateAnnouncements(updaterOrList);
+    }
+  };
+
+  const handleDismissEmergencyBanner = (announcementId: string) => {
+    const updated = dismissBannerForTenant(announcementId, currentTenantId, allAnnouncements);
+    handleUpdateAnnouncements(updated);
+    setToast('Đã đóng thanh thông báo khẩn');
+  };
+
   const [staffUsage, setStaffUsage] = useState(tenant?.staffCount ?? nailModuleConfigs.staff.rows.length);
   const [rowsByPage, setRowsByPage] = useState<Partial<Record<NailPageId, NailRow[]>>>(() => {
     const initialRows = Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [
@@ -1185,6 +1313,18 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       return next;
     });
   };
+
+  // Keyboard shortcut Ctrl+B or Cmd+B to toggle sidebar collapse
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleSidebarCollapsed();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const navigate = (page: NailPageId) => {
     if (resolvePageAccess(page) === 'locked') {
@@ -1671,10 +1811,23 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       {pendingBranchChange && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><section className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="bg-gradient-to-br from-[#19152f] to-[#35245e] p-6 text-white"><p className="text-caption font-black uppercase tracking-[0.16em] text-violet-300">Bước xác nhận cuối</p><h2 className="mt-2 text-xl font-black">{pendingBranchChange.isEditing ? 'Xác nhận cập nhật chi nhánh' : 'Xác nhận thêm chi nhánh'}</h2><p className="mt-2 text-xs leading-5 text-slate-300">Dữ liệu sau khi xác nhận sẽ được đồng bộ cho cả Tenant Admin và Super Admin.</p></div><div className="space-y-4 p-6"><div className="rounded-2xl border border-violet-100 bg-violet-50 p-4"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-violet-700">{pendingBranchChange.branch.code}</span><span className="rounded-full bg-white px-2 py-1 text-caption font-bold text-violet-700">{getBranchModelLabel(pendingBranchChange.branch.model)}</span>{pendingBranchChange.branch.isPrimary && <span className="rounded-full bg-slate-900 px-2 py-1 text-caption font-bold text-white">Chi nhánh chính</span>}</div><p className="mt-2 text-base font-black text-slate-900">{pendingBranchChange.branch.name}</p><p className="mt-1 text-xs text-slate-500">{pendingBranchChange.branch.address}</p></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-caption font-bold text-slate-400">Quản lý</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.branch.managerName}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-caption font-bold text-slate-400">Trạng thái</p><p className="mt-1 text-xs font-black text-slate-700">{getBranchStatusLabel(pendingBranchChange.branch.status)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-caption font-bold text-slate-400">Nguồn lực</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.branch.staffUsed} nhân sự · {pendingBranchChange.branch.stationCount} vị trí</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-caption font-bold text-slate-400">Hạn mức sau lưu</p><p className="mt-1 text-xs font-black text-slate-700">{pendingBranchChange.updatedBranches.length} / {isUnlimitedTenantLimit(branchLimit, 'branches') ? 'Không giới hạn' : branchLimit + ' chi nhánh'}</p></div></div></div><div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => { setPendingBranchChange(null); setCreateOpen(true); }} className="h-11 border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Quay lại chỉnh sửa</button><button type="button" onClick={confirmTenantBranchChange} className="h-11 border border-violet-700 bg-violet-600 px-5 text-xs font-black text-white shadow-lg shadow-violet-200">{pendingBranchChange.isEditing ? 'Xác nhận cập nhật' : 'Xác nhận thêm chi nhánh'}</button></div></section></div>}
 
       <aside className={`role-sidebar fixed inset-y-0 left-0 z-50 flex w-[272px] flex-col bg-[#111625] text-white shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-[272px]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className={`flex h-[68px] shrink-0 items-center gap-3 border-b border-white/8 px-5 ${sidebarCollapsed ? 'lg:justify-center lg:px-3' : ''}`}>
-          <div className="tenant-brand-mark relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600 text-white shadow-lg shadow-pink-200/60"><Sparkles className="h-5 w-5" /><span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-white/80" /></div>
-          <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}><p className="truncate text-sm font-black tracking-tight">{tenantName}</p><p className="mt-0.5 truncate text-caption font-semibold uppercase tracking-[0.18em] text-slate-400">Nail · Beauty · Care</p></div>
+        <div className={`flex h-[68px] shrink-0 items-center gap-3 border-b border-white/8 px-4 ${sidebarCollapsed ? 'lg:justify-center lg:px-2' : 'justify-between'}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="tenant-brand-mark relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600 text-white shadow-lg shadow-pink-200/60"><Sparkles className="h-5 w-5" /><span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-white/80" /></div>
+            <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}><p className="truncate text-sm font-black tracking-tight">{tenantName}</p><p className="mt-0.5 truncate text-caption font-semibold uppercase tracking-[0.18em] text-slate-400">Nail · Beauty · Care</p></div>
+          </div>
           <button type="button" onClick={() => setSidebarOpen(false)} aria-label="Đóng menu" className="ml-auto flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none lg:hidden"><X className="h-4 w-4" /></button>
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
+            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
+            className={`hidden lg:flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer shrink-0 ${
+              sidebarCollapsed ? 'hidden' : ''
+            }`}
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-4">
@@ -1689,7 +1842,9 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                   ? branchRows.length + '/' + (isUnlimitedTenantLimit(branchLimit, 'branches') ? '∞' : branchLimit)
                   : id === 'staff'
                     ? staffUsage + '/' + (isUnlimitedTenantLimit(staffLimit, 'staff') ? '∞' : staffLimit)
-                    : badge;
+                    : id === 'announcements' && unreadAnnouncementsCount > 0
+                      ? String(unreadAnnouncementsCount)
+                      : badge;
                 return (
                   <button key={id} type="button" onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} aria-disabled={locked} title={(sidebarCollapsed ? t(label) : '') + (locked ? (sidebarCollapsed ? ' · ' : '') + 'Chưa có trong gói ' + currentPackage.name : '') || undefined} className={'flex h-10 w-full items-center gap-3 border-0 px-3 text-left text-caption font-bold shadow-none ' + (sidebarCollapsed ? 'lg:justify-center lg:px-0 ' : '') + (active ? 'bg-violet-500/18 text-violet-200 ring-1 ring-violet-400/20' : locked ? 'bg-transparent text-slate-600 hover:bg-white/5 hover:text-slate-300' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white')}>
                     <Icon className={'h-4 w-4 ' + (active ? 'text-violet-400' : locked ? 'text-slate-600' : '')} />
@@ -1719,15 +1874,222 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
       <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[272px]'}`}>
         <header className="role-topbar sticky top-0 z-40 flex h-[68px] items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] sm:px-6 lg:px-8">
           <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm lg:hidden"><Menu className="h-5 w-5" /></button>
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
+            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
+            className="hidden lg:flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-600 shadow-sm hover:bg-slate-50 transition cursor-pointer"
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
           <div className="relative max-w-md flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={`Tìm trong ${formatModuleLabel(activePage).toLocaleLowerCase('vi')}...`} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-caption font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></div>
           <div className="hidden sm:block"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label={t('Chọn phạm vi chi nhánh')} className="h-10 w-52 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">{t('Tất cả chi nhánh')}</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
           <div className="ml-auto flex items-center gap-2">
-            <div className="relative"><button type="button" onClick={() => { setShowNotifications((value) => !value); setShowProfile(false); }} aria-label="Thông báo" className="relative flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm"><Bell className="h-4 w-4" /><span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-caption font-black text-white">6</span></button>{showNotifications && <div className="absolute right-0 mt-2 w-[min(350px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="border-b border-slate-100 px-4 py-3"><p className="text-caption font-black text-slate-800">Thông báo {tenantName}</p><p className="mt-1 text-caption text-slate-400">6 việc cần bạn xem</p></div><div className="divide-y divide-slate-100">{[
-              { title: '4 lịch mới đang chờ xác nhận', detail: 'Lịch sớm nhất lúc 11:30', tone: 'bg-amber-500' },
-              { title: '18 mặt hàng dưới định mức', detail: '6 mặt hàng cần nhập gấp', tone: 'bg-rose-500' },
-              { title: 'Ghế P-04 đang chờ duyệt bảo trì', detail: `Chi phí dự kiến ${formatPlanMoney(850_000)}`, tone: 'bg-violet-500' },
-              { title: 'Checklist mở ca còn thiếu 2 mục', detail: 'Chi nhánh Quận 3', tone: 'bg-blue-500' }
-            ].map((item) => <div key={item.title} className="flex gap-3 px-4 py-3"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.tone}`} /><div><p className="text-caption font-bold text-slate-700">{item.title}</p><p className="mt-1 text-caption text-slate-400">{item.detail}</p></div></div>)}</div></div>}</div>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { setShowNotifications((value) => !value); setShowProfile(false); }}
+                aria-label="Thông báo"
+                className="relative flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm rounded-xl cursor-pointer hover:bg-slate-50"
+              >
+                <Bell className="h-4 w-4" />
+                {unreadAnnouncementsCount + 4 > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
+                    {unreadAnnouncementsCount + 4}
+                  </span>
+                )}
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl z-50">
+                  <div className="border-b border-slate-100 px-4 py-3 bg-slate-50/70">
+                    <div className="flex items-center justify-between">
+                      <p className="text-caption font-black text-slate-800">Trung tâm thông báo</p>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {unreadAnnouncementsCount} tin mới
+                      </span>
+                    </div>
+                    <div className="mt-2.5 flex rounded-lg bg-slate-200/80 p-0.5 text-[11px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setNotificationTab('announcements')}
+                        className={`flex-1 py-1 rounded-md transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          notificationTab === 'announcements'
+                            ? 'bg-white text-slate-800 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <span>Bản tin hệ thống</span>
+                        {unreadAnnouncementsCount > 0 && (
+                          <span className="bg-rose-500 text-white rounded-full px-1.5 py-0.2 text-[9px] font-bold">
+                            {unreadAnnouncementsCount}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNotificationTab('tasks')}
+                        className={`flex-1 py-1 rounded-md transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          notificationTab === 'tasks'
+                            ? 'bg-white text-slate-800 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <span>Việc cần xử lý</span>
+                        <span className="bg-slate-400 text-white rounded-full px-1.5 py-0.2 text-[9px] font-bold">4</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {notificationTab === 'announcements' ? (
+                    <div>
+                      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/50">
+                        <span className="text-[11px] font-bold text-slate-500">
+                          {tenantAnnouncements.length} thông báo hiện hành
+                        </span>
+                        {unreadAnnouncementsCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = markAllAnnouncementsRead(currentTenantId, allAnnouncements);
+                              handleUpdateAnnouncements(updated);
+                              setToast('Đã đánh dấu tất cả đã đọc');
+                            }}
+                            className="text-[10px] font-bold text-violet-600 hover:text-violet-800 cursor-pointer"
+                          >
+                            Đọc tất cả ({unreadAnnouncementsCount})
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                        {tenantAnnouncements.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-slate-400">
+                            Hiện không có thông báo nào từ Superadmin.
+                          </div>
+                        ) : (
+                          tenantAnnouncements.slice(0, 6).map((ann) => {
+                            const isRead = isAnnouncementReadByTenant(ann, currentTenantId);
+                            return (
+                              <div
+                                key={ann.id}
+                                className={`w-full flex items-start justify-between gap-2 px-3.5 py-2.5 hover:bg-slate-50 transition ${
+                                  !isRead ? 'bg-violet-50/40' : ''
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = markAnnouncementRead(ann.id, currentTenantId, allAnnouncements);
+                                    handleUpdateAnnouncements(updated);
+                                    setShowNotifications(false);
+                                    navigate('announcements');
+                                  }}
+                                  className="min-w-0 flex-1 text-left flex items-start gap-2.5 cursor-pointer"
+                                >
+                                  <span
+                                    className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                                      ann.priority === 'URGENT'
+                                        ? 'bg-rose-500'
+                                        : ann.priority === 'HIGH'
+                                        ? 'bg-amber-500'
+                                        : 'bg-violet-500'
+                                    }`}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`text-xs truncate ${!isRead ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-bold'}`}>
+                                      {ann.title}
+                                    </p>
+                                    <p className="mt-0.5 text-[11px] text-slate-400 line-clamp-1">{ann.summary}</p>
+                                    <span className="mt-0.5 inline-block text-[10px] text-slate-400">
+                                      {new Date(ann.publishedAt).toLocaleDateString('vi-VN')} · {ann.authorName}
+                                    </span>
+                                  </div>
+                                </button>
+                                {!isRead && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const updated = markAnnouncementRead(ann.id, currentTenantId, allAnnouncements);
+                                      handleUpdateAnnouncements(updated);
+                                      setToast('Đã đánh dấu đã đọc');
+                                    }}
+                                    title="Đánh dấu đã đọc"
+                                    className="shrink-0 p-1 text-[10px] font-bold text-violet-600 hover:text-violet-800 hover:bg-violet-100 rounded transition cursor-pointer"
+                                  >
+                                    Đã đọc
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                      <div className="p-2 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNotifications(false);
+                            navigate('announcements');
+                          }}
+                          className="text-xs font-bold text-violet-600 hover:text-violet-700 hover:underline cursor-pointer"
+                        >
+                          Xem tất cả bản tin ({tenantAnnouncements.length}) →
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/50">
+                        <span className="text-[11px] font-bold text-slate-500">
+                          {operationalTasks.length} việc cần xử lý
+                        </span>
+                        {operationalTasks.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllTasks}
+                            className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                          >
+                            Dọn tất cả
+                          </button>
+                        )}
+                      </div>
+                      <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                        {operationalTasks.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-slate-400">
+                            Không có công việc nào cần xử lý. Rất gọn gàng!
+                          </div>
+                        ) : (
+                          operationalTasks.map((item) => (
+                            <div key={item.id} className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition">
+                              <div className="flex items-start gap-3 min-w-0 flex-1">
+                                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.tone}`} />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-caption font-bold text-slate-700">{item.title}</p>
+                                  <p className="mt-0.5 text-caption text-slate-400">{item.detail}</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDismissTask(item.id)}
+                                title="Đánh dấu đã hoàn thành / Ẩn việc này"
+                                className="shrink-0 p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="relative"><button type="button" onClick={() => { setShowProfile((value) => !value); setShowNotifications(false); }} className="flex h-11 items-center gap-2 border-0 bg-transparent px-1.5 text-left shadow-none"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pink-400 to-rose-500 text-caption font-black text-white shadow-sm shadow-pink-100">{accountInitials}</span><span className="hidden md:block"><span className="block text-caption font-black text-slate-800">{account.displayName}</span><span className="mt-0.5 block text-caption font-semibold text-slate-400">{t('Owner · Tenant Admin')}</span></span><ChevronDown className="hidden h-3.5 w-3.5 text-slate-400 md:block" /></button>{showProfile && <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"><div className="border-b border-slate-100 px-3 py-3"><p className="text-caption font-black text-slate-800">{account.displayName}</p><p className="mt-1 text-caption text-slate-500">{account.email}</p><p className="mt-2 rounded-lg bg-violet-50 px-2 py-1.5 text-caption font-bold text-violet-700">{tenantName} · {t('Quản trị theo gói')} {currentPackage.name}</p></div>{/* Tuỳ chỉnh giao diện — đặt ngay trong menu tài khoản vì đây là thao
                     tác đổi qua đổi lại trong ngày (sáng/tối theo ánh sáng phòng),
                     không đáng phải rời trang. */}
@@ -1771,6 +2133,48 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
         </header>
 
         <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" data-page={activePage} data-compact-access={['stations', 'pos', 'customers', 'loyalty', 'staff', 'services', 'inventory'].includes(activePage) ? 'true' : undefined} tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+          {emergencyBannerAnnouncement && (
+            <div className={`mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border p-4 shadow-sm transition-all ${
+              emergencyBannerAnnouncement.priority === 'URGENT'
+                ? 'border-rose-300 bg-rose-50/90 text-rose-950 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-200'
+                : 'border-amber-300 bg-amber-50/90 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-200'
+            }`}>
+              <div className="flex items-start gap-3 min-w-0">
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold shadow-xs ${
+                  emergencyBannerAnnouncement.priority === 'URGENT' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white'
+                }`}>
+                  <Megaphone className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/80 dark:bg-black/40 border border-current/20 shadow-xs">
+                      {emergencyBannerAnnouncement.priority === 'URGENT' ? 'Phát sóng khẩn cấp từ Superadmin' : 'Thông báo hệ thống'}
+                    </span>
+                    <span className="text-xs font-black truncate">{emergencyBannerAnnouncement.title}</span>
+                  </div>
+                  <p className="mt-1 text-xs opacity-90 line-clamp-2 leading-relaxed">{emergencyBannerAnnouncement.summary}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <Button
+                  size="small"
+                  variant="primary"
+                  onClick={() => {
+                    navigate('announcements');
+                  }}
+                >
+                  Xem chi tiết
+                </Button>
+                <Button
+                  size="small"
+                  variant="ghost"
+                  onClick={() => handleDismissEmergencyBanner(emergencyBannerAnnouncement.id)}
+                >
+                  Đã hiểu & Ẩn
+                </Button>
+              </div>
+            </div>
+          )}
           {/* Trạng thái nguồn dữ liệu: một dải gọn, rộng theo nội dung để không
               cạnh tranh với tiêu đề trang. Hành động phá hủy đứng sau và nhẹ hơn. */}
           {activePage !== 'overview' && demoMode && <section role="status" className="tenant-demo-strip mb-4 flex w-full flex-col gap-2 rounded-control border sm:w-fit sm:flex-row sm:items-center">
@@ -1996,6 +2400,17 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 onNotify={setToast}
               />
             </Suspense>
+          ) : activePage === 'announcements' ? (
+            <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-caption font-bold text-slate-400">Đang tải bản tin hệ thống...</div>}>
+              <TenantAdminAnnouncements
+                tenantName={tenantName}
+                tenant={tenant}
+                announcements={tenantAnnouncements}
+                onUpdateAnnouncements={handleUpdateAnnouncements}
+                onNavigatePage={navigate}
+                onNotify={setToast}
+              />
+            </Suspense>
           ) : activePage === 'support' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-caption font-bold text-slate-400">Đang tải trung tâm trợ giúp...</div>}>
               <TenantAdminHelpAndSupport
@@ -2061,7 +2476,26 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
           </div>
           <div className="p-6 sm:p-7">
             <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl bg-slate-50 p-4"><p className="text-caption font-bold uppercase text-slate-400">Gói đang dùng</p><p className="mt-2 text-caption font-black text-slate-800">{currentPackage.name}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-caption font-bold uppercase text-slate-400">Quyền yêu cầu</p><p className="mt-2 text-caption font-black text-slate-800">{lockedCapabilityLabel}</p></div><div className="rounded-2xl bg-violet-50 p-4"><p className="text-caption font-bold uppercase text-violet-400">Gói phù hợp</p><p className="mt-2 text-caption font-black text-violet-800">{suggestedPackage?.name || 'Liên hệ tư vấn'}</p></div></div>
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => { setLockedPage(null); navigate('subscription'); }} className="h-11 border border-slate-200 bg-white px-4 text-caption font-black text-slate-600 shadow-sm">Xem quyền gói</button><button type="button" onClick={() => { setToast(suggestedPackage ? 'Đã gửi yêu cầu nâng cấp lên gói ' + suggestedPackage.name + '.' : 'Đã gửi yêu cầu tư vấn gói phù hợp.'); setLockedPage(null); }} className="h-11 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200">{suggestedPackage ? 'Yêu cầu nâng lên ' + suggestedPackage.name : 'Liên hệ tư vấn'}</button></div>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => { setLockedPage(null); navigate('subscription'); }} className="h-11 border border-slate-200 bg-white px-4 text-caption font-black text-slate-600 shadow-sm">
+                Xem quyền gói
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (suggestedPackage) {
+                    onRequestUpgrade?.(suggestedPackage, tenant?.billingCycle || 'monthly', 'immediate');
+                    setToast(`Đã gửi yêu cầu nâng cấp lên gói ${suggestedPackage.name}. Super Admin sẽ phê duyệt và gửi hóa đơn.`);
+                  } else {
+                    setToast('Đã gửi yêu cầu tư vấn gói phù hợp.');
+                  }
+                  setLockedPage(null);
+                }}
+                className="h-11 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
+              >
+                {suggestedPackage ? `Yêu cầu nâng lên ${suggestedPackage.name}` : 'Liên hệ tư vấn'}
+              </button>
+            </div>
           </div>
         </section>
       </div>}
