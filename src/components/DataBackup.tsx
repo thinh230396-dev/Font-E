@@ -1,24 +1,32 @@
 import BeautifulSelect from './BeautifulSelect';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
+  AlertCircle,
   AlertTriangle,
   Archive,
+  ArrowRight,
   CalendarClock,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Clock3,
   Cloud,
   Copy,
   Database,
   Download,
+  ExternalLink,
+  Eye,
   FileCheck2,
   FileJson,
   Filter,
+  Flame,
   Gauge,
   Globe2,
   HardDrive,
   History,
+  Info,
   KeyRound,
   Layers3,
   LockKeyhole,
@@ -29,8 +37,11 @@ import {
   Search,
   Server,
   Settings2,
+  ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Trash2,
+  Workflow,
   X,
   XCircle
 } from 'lucide-react';
@@ -54,56 +65,56 @@ type SnapshotStatusFilter = 'ALL' | BackupSnapshot['status'];
 type SnapshotTypeFilter = 'ALL' | BackupSnapshot['type'];
 type IntegrityFilter = 'ALL' | BackupSnapshot['integrityStatus'];
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 7;
 const BACKUPS_KEY = 'backups_v2';
 const BACKUP_POLICY_KEY = 'backup_policy_v2';
 const RESTORE_JOBS_KEY = 'restore_jobs_v2';
 
 const STATUS_CONFIG: Record<BackupSnapshot['status'], { label: string; className: string; icon: ReactNode }> = {
-  SUCCESS: { label: 'Thành công', className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  FAILED: { label: 'Thất bại', className: 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400', icon: <XCircle className="h-3.5 w-3.5" /> },
-  IN_PROGRESS: { label: 'Đang chạy', className: 'border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400', icon: <RefreshCw className="h-3.5 w-3.5 animate-spin" /> }
+  SUCCESS: { label: 'Thành công', className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', icon: <CheckCircle2 className="h-3 w-3" /> },
+  FAILED: { label: 'Thất bại', className: 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400', icon: <XCircle className="h-3 w-3" /> },
+  IN_PROGRESS: { label: 'Đang sao lưu...', className: 'border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400', icon: <RefreshCw className="h-3 w-3 animate-spin" /> }
 };
 
-const INTEGRITY_CONFIG: Record<BackupSnapshot['integrityStatus'], { label: string; className: string }> = {
-  VERIFIED: { label: 'Đã xác minh', className: 'text-emerald-600 dark:text-emerald-400' },
-  PENDING: { label: 'Chờ xác minh', className: 'text-amber-600 dark:text-amber-400' },
-  FAILED: { label: 'Không hợp lệ', className: 'text-red-600 dark:text-red-400' }
+const INTEGRITY_CONFIG: Record<BackupSnapshot['integrityStatus'], { label: string; badgeClass: string; icon: ReactNode }> = {
+  VERIFIED: { label: 'Đã xác minh SHA-256', badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', icon: <FileCheck2 className="h-3 w-3" /> },
+  PENDING: { label: 'Chờ xác minh', badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', icon: <Clock className="h-3 w-3" /> },
+  FAILED: { label: 'Lỗi checksum', badgeClass: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20', icon: <AlertCircle className="h-3 w-3" /> }
 };
 
-const TYPE_LABELS: Record<BackupSnapshot['type'], string> = {
-  AUTO: 'Tự động',
-  MANUAL: 'Thủ công',
-  PRE_RESTORE: 'Trước phục hồi'
+const TYPE_CONFIG: Record<BackupSnapshot['type'], { label: string; badgeClass: string }> = {
+  AUTO: { label: 'Tự động (Lịch)', badgeClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+  MANUAL: { label: 'Thủ công (Admin)', badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
+  PRE_RESTORE: { label: 'Trước phục hồi', badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' }
 };
 
-const SCOPE_LABELS: Record<BackupSnapshot['scope'], string> = {
-  FULL: 'Toàn hệ thống',
-  DATABASE: 'Cơ sở dữ liệu',
-  CONFIGURATION: 'Cấu hình'
+const SCOPE_CONFIG: Record<BackupSnapshot['scope'], { label: string; desc: string }> = {
+  FULL: { label: 'Toàn hệ thống', desc: 'CSDL + Tệp tải lên + Cấu hình + Audit Log' },
+  DATABASE: { label: 'Cơ sở dữ liệu', desc: 'Bảng CSDL PostgreSQL, Khách hàng, Hóa đơn' },
+  CONFIGURATION: { label: 'Cấu hình hệ thống', desc: 'Thiết lập tham số, phân quyền & bảo mật' }
 };
 
 const RETENTION_LABELS: Record<BackupSnapshot['retentionClass'], string> = {
-  DAILY: 'Hằng ngày',
-  WEEKLY: 'Hằng tuần',
-  MONTHLY: 'Hằng tháng',
-  MANUAL: 'Thủ công'
+  DAILY: 'Bản ngày (Daily)',
+  WEEKLY: 'Bản tuần (Weekly)',
+  MONTHLY: 'Bản tháng (Monthly)',
+  MANUAL: 'Lưu thủ công (90 ngày)'
 };
 
-const RESTORE_STATUS_CONFIG: Record<RestoreJob['status'], { label: string; className: string }> = {
-  QUEUED: { label: 'Đang chờ', className: 'border-brand-outline bg-brand-surface-high text-brand-text-muted' },
-  VALIDATING: { label: 'Đang kiểm tra', className: 'border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400' },
-  RESTORING: { label: 'Đang phục hồi', className: 'border-violet-500/25 bg-violet-500/10 text-violet-600 dark:text-violet-400' },
-  VERIFYING: { label: 'Đang xác minh', className: 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400' },
-  SUCCESS: { label: 'Thành công', className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
-  FAILED: { label: 'Thất bại', className: 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400' },
-  CANCELLED: { label: 'Đã hủy', className: 'border-brand-outline bg-brand-surface-high text-brand-text-muted' }
+const RESTORE_STATUS_CONFIG: Record<RestoreJob['status'], { label: string; className: string; icon: ReactNode }> = {
+  QUEUED: { label: 'Đang xếp hàng', className: 'border-brand-outline bg-brand-surface-high text-brand-text-muted', icon: <Clock className="h-3 w-3" /> },
+  VALIDATING: { label: 'Đang kiểm tra CSDL', className: 'border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400', icon: <RefreshCw className="h-3 w-3 animate-spin" /> },
+  RESTORING: { label: 'Đang nạp dữ liệu...', className: 'border-violet-500/25 bg-violet-500/10 text-violet-600 dark:text-violet-400', icon: <RefreshCw className="h-3 w-3 animate-spin" /> },
+  VERIFYING: { label: 'Đang xác minh toàn vẹn', className: 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400', icon: <RefreshCw className="h-3 w-3 animate-spin" /> },
+  SUCCESS: { label: 'Hoàn tất thành công', className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', icon: <CheckCircle2 className="h-3 w-3" /> },
+  FAILED: { label: 'Phục hồi thất bại', className: 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400', icon: <XCircle className="h-3 w-3" /> },
+  CANCELLED: { label: 'Đã hủy', className: 'border-brand-outline bg-brand-surface-high text-brand-text-muted', icon: <X className="h-3 w-3" /> }
 };
 
 const FREQUENCY_LABELS: Record<BackupPolicy['frequency'], string> = {
-  EVERY_6_HOURS: 'Mỗi 6 giờ',
-  DAILY: 'Hằng ngày',
-  WEEKLY: 'Hằng tuần'
+  EVERY_6_HOURS: 'Mỗi 6 giờ (4 lần/ngày)',
+  DAILY: 'Hằng ngày (1 lần/ngày)',
+  WEEKLY: 'Hằng tuần (1 lần/tuần)'
 };
 
 const WEEKDAY_LABELS: Record<BackupPolicy['weekday'], string> = {
@@ -168,35 +179,6 @@ const createId = (prefix: string) => `${prefix}-${new Date().toISOString().repla
 
 const generateChecksum = () => `sha256:${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
 
-function Badge({ className, children }: { className: string; children: ReactNode }) {
-  return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-bold ${className}`}>{children}</span>;
-}
-
-function MetricCard({ icon, label, value, detail, tone = 'primary' }: {
-  icon: ReactNode;
-  label: string;
-  value: string | number;
-  detail: string;
-  tone?: 'primary' | 'success' | 'warning' | 'danger';
-}) {
-  const tones = {
-    primary: 'bg-brand-primary/10 text-brand-primary',
-    success: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    warning: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    danger: 'bg-red-500/10 text-red-600 dark:text-red-400'
-  };
-  return (
-    <div className="rounded-xl border border-brand-outline/40 bg-brand-surface p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${tones[tone]}`}>{icon}</div>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">{label}</span>
-      </div>
-      <p className="mt-3 text-2xl font-extrabold tracking-tight text-brand-text">{value}</p>
-      <p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">{detail}</p>
-    </div>
-  );
-}
-
 export default function DataBackup({ showConfirm }: DataBackupProps) {
   const showToast = useToast();
   const [activeTab, setActiveTab] = useState<PageTab>('overview');
@@ -222,6 +204,7 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
   const [restorePreSnapshot, setRestorePreSnapshot] = useState(true);
   const [restoreNote, setRestoreNote] = useState('');
   const [restoreConfirmation, setRestoreConfirmation] = useState('');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => saveLocalStorageData(BACKUPS_KEY, backups), [backups]);
   useEffect(() => saveLocalStorageData(BACKUP_POLICY_KEY, policy), [policy]);
@@ -240,38 +223,39 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
   const latestBackupAgeHours = latestSuccessful
     ? Math.max(0, (Date.now() - new Date(latestSuccessful.completedAt || latestSuccessful.createdAt).getTime()) / 3600000)
     : Number.POSITIVE_INFINITY;
+
   const readinessChecks = [
     {
       label: 'Lịch sao lưu tự động',
-      detail: policy.enabled ? `${FREQUENCY_LABELS[policy.frequency]} · lần tới ${nextRun ? formatDateTime(nextRun.toISOString()) : '—'}` : 'Đang tạm dừng',
+      detail: policy.enabled ? `${FREQUENCY_LABELS[policy.frequency]} · kế tiếp ${nextRun ? formatDateTime(nextRun.toISOString()) : '—'}` : 'Đang tạm dừng',
       passed: policy.enabled,
       action: () => setActiveTab('policy'),
-      actionLabel: 'Mở chính sách'
+      actionLabel: 'Cấu hình lịch'
     },
     {
-      label: `Điểm khôi phục trong RPO ${rpoTargetHours} giờ`,
-      detail: latestSuccessful ? `${latestSuccessful.id} · ${formatRelativeTime(latestSuccessful.completedAt || latestSuccessful.createdAt)}` : 'Chưa có bản sao lưu thành công',
+      label: `Điểm khôi phục trong RPO (${rpoTargetHours}h)`,
+      detail: latestSuccessful ? `${latestSuccessful.id} · ${formatRelativeTime(latestSuccessful.completedAt || latestSuccessful.createdAt)}` : 'Chưa có bản sao lưu hoàn tất',
       passed: latestBackupAgeHours <= rpoTargetHours,
       action: () => setActiveTab('snapshots'),
       actionLabel: 'Xem snapshot'
     },
     {
-      label: 'Xác minh tính toàn vẹn',
-      detail: successfulBackups.length ? `${verifiedRate}% snapshot thành công đã xác minh checksum` : 'Chưa có dữ liệu để xác minh',
+      label: 'Xác minh toàn vẹn Checksum',
+      detail: successfulBackups.length ? `${verifiedRate}% snapshot đã kiểm tra SHA-256` : 'Chưa có dữ liệu',
       passed: successfulBackups.length > 0 && verifiedRate === 100,
       action: () => { setIntegrityFilter('PENDING'); setActiveTab('snapshots'); },
-      actionLabel: 'Kiểm tra'
+      actionLabel: 'Kiểm tra ngay'
     },
     {
-      label: 'Bản sao dự phòng liên vùng',
-      detail: policy.crossRegionReplication ? `${policy.primaryRegion} → ${policy.replicaRegion}` : 'Chưa bật sao chép sang vùng dự phòng',
+      label: 'Nhân bản đa vùng (Cross-Region)',
+      detail: policy.crossRegionReplication ? `${policy.primaryRegion} → ${policy.replicaRegion}` : 'Chưa kích hoạt sao chép vùng dự phòng',
       passed: policy.crossRegionReplication,
       action: () => setActiveTab('policy'),
-      actionLabel: 'Cấu hình'
+      actionLabel: 'Thiết lập vùng'
     }
   ];
   const readinessScore = Math.round(readinessChecks.filter((check) => check.passed).length / readinessChecks.length * 100);
-  const readinessLabel = readinessScore === 100 ? 'Sẵn sàng phục hồi' : readinessScore >= 75 ? 'Cần theo dõi' : 'Cần xử lý';
+  const readinessLabel = readinessScore === 100 ? 'Hệ thống an toàn & sẵn sàng phục hồi' : readinessScore >= 75 ? 'Khá an toàn · Cần lưu ý một số mục' : 'Nguy cơ · Cần hoàn thiện sao lưu';
 
   const filteredBackups = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -292,6 +276,13 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
   useEffect(() => setPage(1), [integrityFilter, searchQuery, statusFilter, typeFilter]);
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
 
+  const copyText = (text: string, keyName: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(keyName);
+    showToast(`Đã sao chép: ${text.slice(0, 20)}...`);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
   const triggerManualBackup = (event: FormEvent) => {
     event.preventDefault();
     if (!manualNote.trim() || runningBackupId) return;
@@ -299,33 +290,33 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
     const now = new Date();
     const filename = `salonsys_${manualScope.toLowerCase()}_${now.toISOString().replace(/[-:]/g, '').slice(0, 13)}.zst`;
     const components: BackupSnapshot['components'] = [
-      { key: 'DATABASE', label: 'Cơ sở dữ liệu PostgreSQL', status: manualScope === 'CONFIGURATION' ? 'SKIPPED' : 'INCLUDED', size: manualScope === 'CONFIGURATION' ? '0 B' : '319.4 MB', records: manualScope === 'CONFIGURATION' ? undefined : 1848750 },
-      { key: 'OBJECT_STORAGE', label: 'Tệp tenant & tài sản', status: manualScope === 'FULL' ? 'INCLUDED' : 'SKIPPED', size: manualScope === 'FULL' ? '128.4 MB' : '0 B', records: manualScope === 'FULL' ? 12908 : undefined },
-      { key: 'SYSTEM_SETTINGS', label: 'Cấu hình hệ thống', status: manualScope === 'DATABASE' ? 'SKIPPED' : 'INCLUDED', size: manualScope === 'DATABASE' ? '0 B' : '1.8 MB', records: manualScope === 'DATABASE' ? undefined : 48 },
-      { key: 'AUDIT_LOGS', label: 'Nhật ký kiểm toán', status: manualScope === 'FULL' ? 'INCLUDED' : 'SKIPPED', size: manualScope === 'FULL' ? '34.5 MB' : '0 B', records: manualScope === 'FULL' ? 289110 : undefined }
+      { key: 'DATABASE', label: 'Cơ sở dữ liệu PostgreSQL đa tenant', status: manualScope === 'CONFIGURATION' ? 'SKIPPED' : 'INCLUDED', size: manualScope === 'CONFIGURATION' ? '0 B' : '319.4 MB', records: manualScope === 'CONFIGURATION' ? undefined : 1848750 },
+      { key: 'OBJECT_STORAGE', label: 'Tệp hình ảnh & chứng từ tenant', status: manualScope === 'FULL' ? 'INCLUDED' : 'SKIPPED', size: manualScope === 'FULL' ? '128.4 MB' : '0 B', records: manualScope === 'FULL' ? 12908 : undefined },
+      { key: 'SYSTEM_SETTINGS', label: 'Cấu hình hệ thống & gói cước', status: manualScope === 'DATABASE' ? 'SKIPPED' : 'INCLUDED', size: manualScope === 'DATABASE' ? '0 B' : '1.8 MB', records: manualScope === 'DATABASE' ? undefined : 48 },
+      { key: 'AUDIT_LOGS', label: 'Nhật ký bảo mật & kiểm toán', status: manualScope === 'FULL' ? 'INCLUDED' : 'SKIPPED', size: manualScope === 'FULL' ? '34.5 MB' : '0 B', records: manualScope === 'FULL' ? 289110 : undefined }
     ];
     const newSnapshot: BackupSnapshot = {
-      id, filename, size: 'Đang tính', sizeBytes: 0, createdAt: now.toISOString(), status: 'IN_PROGRESS', type: 'MANUAL', scope: manualScope,
+      id, filename, size: 'Đang xử lý...', sizeBytes: 0, createdAt: now.toISOString(), status: 'IN_PROGRESS', type: 'MANUAL', scope: manualScope,
       storageProvider: 'GOOGLE_CLOUD_STORAGE', bucket: 'salonsys-prod-backups', region: policy.primaryRegion,
       replicaRegion: manualReplicate ? policy.replicaRegion : undefined, encryption: 'AES-256-GCM', kmsKeyId: policy.kmsKeyId,
-      checksum: 'Đang tạo', integrityStatus: 'PENDING', initiatedBy: 'superadmin@salonsys.vn', retentionClass: 'MANUAL',
+      checksum: 'Đang tính toán...', integrityStatus: 'PENDING', initiatedBy: 'superadmin@salonsys.vn', retentionClass: 'MANUAL',
       expiresAt: new Date(Date.now() + 90 * 86400000).toISOString(), immutableUntil: new Date(Date.now() + policy.immutableDays * 86400000).toISOString(),
       note: manualNote.trim(), components
     };
     setBackups((current) => [newSnapshot, ...current]);
     setRunningBackupId(id);
-    setBackupProgress(8);
+    setBackupProgress(12);
     setShowBackupModal(false);
     setActiveTab('snapshots');
     recordAuditLog({
       eventCode: 'DATA.BACKUP.STARTED', event: 'Khởi chạy sao lưu thủ công',
-      description: `Superadmin bắt đầu snapshot ${id} với phạm vi ${SCOPE_LABELS[manualScope]}.`, severity: 'medium', status: 'success', category: 'DATA',
+      description: `Superadmin bắt đầu snapshot ${id} với phạm vi ${SCOPE_CONFIG[manualScope].label}.`, severity: 'medium', status: 'success', category: 'DATA',
       resource: `Snapshot ${id}`, resourceId: id, method: 'CLIENT /backups', metadata: { scope: manualScope, crossRegionReplication: manualReplicate, reason: manualNote.trim() }
     });
 
-    let progress = 8;
+    let progress = 12;
     const interval = window.setInterval(() => {
-      progress = Math.min(100, progress + 13);
+      progress = Math.min(100, progress + 14);
       setBackupProgress(progress);
       if (progress >= 100) {
         window.clearInterval(interval);
@@ -335,14 +326,15 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
           ...snapshot, status: 'SUCCESS', completedAt, sizeBytes: estimatedBytes,
           size: manualScope === 'FULL' ? '483.8 MB' : manualScope === 'DATABASE' ? '319.4 MB' : '1.8 MB',
           checksum: generateChecksum(), integrityStatus: policy.automaticVerification ? 'VERIFIED' : 'PENDING',
-          verifiedAt: policy.automaticVerification ? completedAt : undefined, durationSeconds: 96
+          verifiedAt: policy.automaticVerification ? completedAt : undefined, durationSeconds: 84
         } : snapshot));
         setRunningBackupId(null);
         setBackupProgress(0);
         setManualNote('');
+        showToast(`Tạo thành công bản sao lưu ${id} (${manualScope === 'FULL' ? '483.8 MB' : '319.4 MB'})`);
         recordAuditLog({
           eventCode: 'DATA.BACKUP.COMPLETED', event: 'Hoàn tất sao lưu thủ công',
-          description: `Snapshot ${id} đã hoàn tất và được lưu tại ${policy.primaryRegion}.`, severity: 'low', status: 'success', category: 'DATA',
+          description: `Snapshot ${id} đã hoàn tất và được lưu an toàn tại ${policy.primaryRegion}.`, severity: 'low', status: 'success', category: 'DATA',
           resource: `Snapshot ${id}`, resourceId: id, method: `CLIENT /backups/${id}`, metadata: { integrityVerified: policy.automaticVerification }
         });
       }
@@ -352,15 +344,17 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
   const verifySnapshot = (snapshot: BackupSnapshot) => {
     if (snapshot.status !== 'SUCCESS' || snapshot.integrityStatus === 'PENDING') return;
     setBackups((current) => current.map((item) => item.id === snapshot.id ? { ...item, integrityStatus: 'PENDING' } : item));
+    showToast(`Đang xác minh checksum SHA-256 cho ${snapshot.id}...`);
     window.setTimeout(() => {
       const verifiedAt = new Date().toISOString();
       setBackups((current) => current.map((item) => item.id === snapshot.id ? { ...item, integrityStatus: 'VERIFIED', verifiedAt } : item));
+      showToast(`Đã xác minh tính toàn vẹn: ${snapshot.id} hợp lệ 100%.`);
       recordAuditLog({
         eventCode: 'DATA.BACKUP.VERIFIED', event: 'Xác minh tính toàn vẹn snapshot',
-        description: `Checksum và manifest của ${snapshot.id} đã được xác minh.`, severity: 'low', status: 'success', category: 'DATA',
+        description: `Checksum và manifest của ${snapshot.id} đã được xác minh thành công.`, severity: 'low', status: 'success', category: 'DATA',
         resource: `Snapshot ${snapshot.id}`, resourceId: snapshot.id, method: `CLIENT /backups/${snapshot.id}/verify`
       });
-    }, 900);
+    }, 850);
   };
 
   const downloadManifest = (snapshot: BackupSnapshot) => {
@@ -376,6 +370,7 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
     anchor.download = `${snapshot.id}-manifest.json`;
     anchor.click();
     URL.revokeObjectURL(url);
+    showToast(`Đã tải xuống manifest của ${snapshot.id}`);
     recordAuditLog({
       eventCode: 'DATA.BACKUP.MANIFEST.DOWNLOADED', event: 'Tải manifest sao lưu',
       description: `Superadmin tải manifest của ${snapshot.id}.`, severity: 'medium', status: 'success', category: 'DATA',
@@ -384,13 +379,17 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
   };
 
   const deleteSnapshot = (snapshot: BackupSnapshot) => {
-    if (isImmutable(snapshot)) return;
-    showConfirm('Xóa snapshot khỏi kho lưu trữ', `Xóa vĩnh viễn ${snapshot.id}? Manifest và bản sao liên vùng của snapshot cũng sẽ bị xóa. Thao tác này không thể hoàn tác.`, () => {
+    if (isImmutable(snapshot)) {
+      showToast(`Không thể xóa: Bản sao lưu đang được khóa bất biến WORM chống ghi đè.`);
+      return;
+    }
+    showConfirm('Xác nhận xóa bản sao lưu', `Bạn có chắc chắn muốn xóa vĩnh viễn ${snapshot.id}? Tất cả dữ liệu và bản sao liên vùng của snapshot này sẽ bị hủy bỏ.`, () => {
       setBackups((current) => current.filter((item) => item.id !== snapshot.id));
       if (selectedSnapshotId === snapshot.id) setSelectedSnapshotId(null);
+      showToast(`Đã xóa snapshot ${snapshot.id}`);
       recordAuditLog({
         eventCode: 'DATA.BACKUP.DELETED', event: 'Xóa snapshot sao lưu',
-        description: `Superadmin xóa snapshot ${snapshot.id} không còn trong thời gian khóa bất biến.`, severity: 'high', status: 'success', category: 'DATA',
+        description: `Superadmin xóa snapshot ${snapshot.id}.`, severity: 'high', status: 'success', category: 'DATA',
         resource: `Snapshot ${snapshot.id}`, resourceId: snapshot.id, method: `CLIENT /backups/${snapshot.id}`
       });
     });
@@ -413,7 +412,7 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
       const now = new Date().toISOString();
       const job: RestoreJob = {
         id: createId('RST'), snapshotId: restoreSnapshot.id, snapshotFilename: restoreSnapshot.filename, target: restoreTarget,
-        status: 'VALIDATING', requestedAt: now, startedAt: now, requestedBy: 'superadmin@salonsys.vn', progress: 10,
+        status: 'VALIDATING', requestedAt: now, startedAt: now, requestedBy: 'superadmin@salonsys.vn', progress: 15,
         maintenanceMode: restoreTarget === 'PRODUCTION' ? restoreMaintenance : false,
         preRestoreSnapshot: restoreTarget === 'PRODUCTION' ? restorePreSnapshot : false,
         validationPassed: false, note: restoreNote.trim()
@@ -421,6 +420,7 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
       setRestoreJobs((current) => [job, ...current]);
       setRestoreSnapshotId(null);
       setActiveTab('restores');
+      showToast(`Đang khởi tạo tiến trình phục hồi ${job.id}...`);
       recordAuditLog({
         eventCode: 'DATA.RESTORE.REQUESTED', event: 'Yêu cầu phục hồi dữ liệu',
         description: `Superadmin yêu cầu phục hồi ${restoreSnapshot.id} vào ${restoreTarget === 'PRODUCTION' ? 'Production' : 'DR Sandbox'}.`,
@@ -428,24 +428,25 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
         method: 'CLIENT /restore-jobs', metadata: { snapshotId: restoreSnapshot.id, target: restoreTarget, maintenanceMode: job.maintenanceMode, preRestoreSnapshot: job.preRestoreSnapshot }
       });
 
-      window.setTimeout(() => setRestoreJobs((current) => current.map((item) => item.id === job.id ? { ...item, status: 'RESTORING', validationPassed: true, progress: 42 } : item)), 500);
-      window.setTimeout(() => setRestoreJobs((current) => current.map((item) => item.id === job.id ? { ...item, status: 'VERIFYING', progress: 82 } : item)), 1050);
+      window.setTimeout(() => setRestoreJobs((current) => current.map((item) => item.id === job.id ? { ...item, status: 'RESTORING', validationPassed: true, progress: 48 } : item)), 600);
+      window.setTimeout(() => setRestoreJobs((current) => current.map((item) => item.id === job.id ? { ...item, status: 'VERIFYING', progress: 85 } : item)), 1200);
       window.setTimeout(() => {
         const completedAt = new Date().toISOString();
         setRestoreJobs((current) => current.map((item) => item.id === job.id ? { ...item, status: 'SUCCESS', progress: 100, completedAt } : item));
+        showToast(`Phục hồi ${job.id} vào ${restoreTarget === 'PRODUCTION' ? 'Production' : 'DR Sandbox'} thành công 100%!`);
         recordAuditLog({
           eventCode: 'DATA.RESTORE.COMPLETED', event: 'Hoàn tất phục hồi dữ liệu',
           description: `Restore job ${job.id} đã hoàn tất trong môi trường ${restoreTarget}.`, severity: 'medium', status: 'success', category: 'DATA',
           resource: `Restore job ${job.id}`, resourceId: job.id, method: `CLIENT /restore-jobs/${job.id}`
         });
-      }, 1650);
+      }, 1800);
     };
 
     showConfirm(
-      restoreTarget === 'PRODUCTION' ? 'Xác nhận phục hồi Production' : 'Xác nhận diễn tập phục hồi',
+      restoreTarget === 'PRODUCTION' ? '⚠️ XÁC NHẬN PHỤC HỒI PRODUCTION' : 'Xác nhận diễn tập khôi phục Sandbox',
       restoreTarget === 'PRODUCTION'
-        ? `Dữ liệu Production sẽ được thay thế bằng ${restoreSnapshot.id}. Hệ thống sẽ bật bảo trì và tạo snapshot trước phục hồi theo lựa chọn của bạn.`
-        : `Khởi tạo môi trường DR Sandbox từ ${restoreSnapshot.id}? Dữ liệu Production không bị thay đổi.`,
+        ? `CẢNH BÁO: Dữ liệu hiện tại trên Production sẽ được thay thế bằng bản snapshot ${restoreSnapshot.id}. Hệ thống sẽ kích hoạt bảo trì tạm thời.`
+        : `Môi trường DR Sandbox độc lập sẽ được khởi tạo từ bản sao lưu ${restoreSnapshot.id}. Dữ liệu các tiệm đang chạy không bị ảnh hưởng.`,
       execute
     );
   };
@@ -461,215 +462,1347 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
     setDraftPolicy(nextPolicy);
     recordAuditLog({
       eventCode: 'DATA.BACKUP.POLICY.UPDATED', event: 'Cập nhật chính sách sao lưu',
-      description: `Superadmin cập nhật ${changes.length} trường trong chính sách backup.`, severity: 'high', status: 'success', category: 'DATA',
+      description: `Superadmin cập nhật ${changes.length} thiết lập trong chính sách backup.`, severity: 'high', status: 'success', category: 'DATA',
       resource: 'Chính sách sao lưu hệ thống', resourceId: 'BACKUP-POLICY', method: 'CLIENT /backup-policy', changes
     });
-    showToast('Đã cập nhật chính sách sao lưu và ghi nhận vào nhật ký kiểm toán.');
+    showToast('Đã lưu thành công chính sách sao lưu và cập nhật lịch tự động.');
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary"><Database className="h-5 w-5" /></div>
-          <div><h1 className="text-xl font-extrabold tracking-tight text-brand-text sm:text-2xl">Sao lưu & phục hồi dữ liệu</h1><p className="mt-1 max-w-3xl text-xs leading-relaxed text-brand-text-muted">Bảo vệ cơ sở dữ liệu, tệp tenant, cấu hình và nhật ký bằng các điểm khôi phục có mã hóa. Đây là khu vực phục hồi hệ thống khi có sự cố, không phải chức năng xuất báo cáo Excel/CSV.</p></div>
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 sm:p-6 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-primary/10 text-brand-primary border border-brand-primary/20 shadow-inner">
+            <Database className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-brand-text">Sao lưu & Phục hồi dữ liệu</h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Bảo vệ tự động 24/7
+              </span>
+            </div>
+            <p className="mt-1 text-xs sm:text-sm text-brand-text-muted leading-relaxed max-w-3xl">
+              Quản lý các điểm khôi phục (Snapshots), bảo vệ CSDL đa chi nhánh, thiết lập lịch tự động và diễn tập phục hồi sự cố không làm gián đoạn dịch vụ.
+            </p>
+          </div>
         </div>
-        <button onClick={() => setShowBackupModal(true)} disabled={Boolean(runningBackupId)} className="inline-flex items-center justify-center gap-2 whitespace-nowrap bg-brand-primary px-4 py-2 text-xs font-bold text-white"><Play className="h-4 w-4" /><span>{runningBackupId ? `Đang sao lưu ${backupProgress}%` : 'Tạo bản sao lưu'}</span></button>
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+          <button
+            onClick={() => {
+              if (latestSuccessful) openRestore(latestSuccessful);
+              else showToast('Chưa có bản sao lưu nào để diễn tập');
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-outline/40 bg-brand-surface-high px-4 py-2.5 text-xs font-bold text-brand-text hover:bg-brand-surface-highest transition-colors"
+          >
+            <RotateCcw className="h-4 w-4 text-brand-primary" />
+            <span>Diễn tập phục hồi</span>
+          </button>
+          <button
+            onClick={() => setShowBackupModal(true)}
+            disabled={Boolean(runningBackupId)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-xs font-bold text-white shadow-md hover:bg-brand-primary/90 transition-all disabled:opacity-60"
+          >
+            {runningBackupId ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span>Đang sao lưu {backupProgress}%</span>
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4 fill-white" />
+                <span>Tạo bản sao lưu ngay</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b border-brand-outline/40">
-        {([
-          ['overview', 'Tổng quan', Gauge],
-          ['snapshots', 'Điểm khôi phục', Archive],
-          ['restores', 'Lịch sử phục hồi', History],
-          ['policy', 'Chính sách', Settings2]
-        ] as const).map(([tab, label, Icon]) => <button key={tab} onClick={() => setActiveTab(tab)} className={`flex shrink-0 items-center gap-2 rounded-b-none border-0 bg-transparent px-4 py-2.5 text-xs font-bold shadow-none ${activeTab === tab ? 'border-b-2 border-brand-primary text-brand-primary' : 'text-brand-text-muted'}`}><Icon className="h-4 w-4" /><span>{label}</span></button>)}
+      {/* Main Tab Navigation */}
+      <div className="flex gap-2 overflow-x-auto pb-1 border-b border-brand-outline/30">
+        {[
+          { id: 'overview', label: 'Tổng quan & Sẵn sàng DR', icon: Gauge, count: `${readinessScore}%` },
+          { id: 'snapshots', label: 'Kho bản sao lưu', icon: Archive, count: backups.length },
+          { id: 'restores', label: 'Lịch sử phục hồi', icon: History, count: restoreJobs.length },
+          { id: 'policy', label: 'Chính sách & Lịch tự động', icon: Settings2, count: policy.enabled ? 'Đang bật' : 'Tắt' }
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as PageTab)}
+              className={`flex shrink-0 items-center gap-2.5 rounded-xl px-4 py-2.5 text-xs font-bold transition-all ${
+                isActive
+                  ? 'bg-brand-primary text-white shadow-sm'
+                  : 'bg-brand-surface text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high border border-brand-outline/30'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
+                isActive ? 'bg-white/20 text-white' : 'bg-brand-surface-high text-brand-text-muted'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
+      {/* TAB 1: OVERVIEW */}
       {activeTab === 'overview' && (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Backup gần nhất" value={latestSuccessful ? formatRelativeTime(latestSuccessful.completedAt) : 'Chưa có'} detail={latestSuccessful ? `${latestSuccessful.id} · ${latestSuccessful.size}` : 'Chưa có điểm khôi phục thành công'} tone={latestSuccessful ? 'success' : 'danger'} />
-            <MetricCard icon={<CalendarClock className="h-4 w-4" />} label="Lần chạy kế tiếp" value={nextRun ? new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(nextRun) : 'Đã tắt'} detail={nextRun ? `${formatDate(nextRun.toISOString())} · ${FREQUENCY_LABELS[policy.frequency]}` : 'Lịch tự động đang tạm dừng'} tone={nextRun ? 'primary' : 'warning'} />
-            <MetricCard icon={<FileCheck2 className="h-4 w-4" />} label="Tính toàn vẹn" value={`${verifiedRate}%`} detail={`${successfulBackups.filter((item) => item.integrityStatus === 'VERIFIED').length}/${successfulBackups.length} snapshot đã xác minh`} tone={verifiedRate === 100 ? 'success' : 'warning'} />
-            <MetricCard icon={<HardDrive className="h-4 w-4" />} label="Dung lượng lưu trữ" value={`${storageUsedGb.toFixed(1)} GB`} detail="Hạn mức 50 GB · bao gồm bản sao chính" tone={storageUsedGb < 40 ? 'primary' : 'warning'} />
+        <div className="space-y-6">
+          {/* Key KPI Cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-brand-text-muted">Bản mới nhất</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-xl sm:text-2xl font-black text-brand-text">
+                {latestSuccessful ? formatRelativeTime(latestSuccessful.completedAt) : 'Chưa có'}
+              </p>
+              <p className="mt-1 text-xs text-brand-text-muted truncate" title={latestSuccessful?.id}>
+                {latestSuccessful ? `${latestSuccessful.id} · ${latestSuccessful.size}` : 'Chưa ghi nhận bản hoàn tất'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-brand-text-muted">Lịch sao lưu kế</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
+                  <CalendarClock className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-xl sm:text-2xl font-black text-brand-text">
+                {nextRun ? new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(nextRun) : 'Đang tắt'}
+              </p>
+              <p className="mt-1 text-xs text-brand-text-muted">
+                {nextRun ? `${formatDate(nextRun.toISOString())} · ${FREQUENCY_LABELS[policy.frequency]}` : 'Lịch tự động tạm ngưng'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-brand-text-muted">Tính toàn vẹn (SHA-256)</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <FileCheck2 className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-xl sm:text-2xl font-black text-brand-text">
+                {verifiedRate}%
+              </p>
+              <p className="mt-1 text-xs text-brand-text-muted">
+                {successfulBackups.filter(s => s.integrityStatus === 'VERIFIED').length}/{successfulBackups.length} snapshot đã xác minh
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-brand-text-muted">Dung lượng lưu trữ</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                  <HardDrive className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-xl sm:text-2xl font-black text-brand-text">
+                {storageUsedGb.toFixed(1)} GB
+              </p>
+              <p className="mt-1 text-xs text-brand-text-muted">
+                Kho Google Cloud Storage ({policy.primaryRegion})
+              </p>
+            </div>
           </div>
 
-          <section className="overflow-hidden rounded-xl border border-brand-outline/40 bg-brand-surface shadow-sm">
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-              <div className="border-b border-brand-outline/35 p-5 xl:border-b-0 xl:border-r">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${readinessScore === 100 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : readinessScore >= 75 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}><ShieldCheck className="h-5 w-5" /></div>
-                    <div><p className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Mức độ sẵn sàng</p><h2 className="mt-1 text-base font-extrabold text-brand-text">{readinessLabel}</h2></div>
+          {/* Readiness Assessment & Action Center */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Health Checklist */}
+            <div className="lg:col-span-2 rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 sm:p-6 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-brand-outline/25 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                    readinessScore === 100 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  }`}>
+                    <ShieldCheck className="h-5 w-5" />
                   </div>
-                  <div className="sm:text-right"><p className={`text-3xl font-black tracking-tight ${readinessScore === 100 ? 'text-emerald-600 dark:text-emerald-400' : readinessScore >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>{readinessScore}%</p><p className="text-[10px] text-brand-text-muted">{readinessChecks.filter((check) => check.passed).length}/{readinessChecks.length} điều kiện đạt</p></div>
+                  <div>
+                    <h2 className="text-base font-extrabold text-brand-text">Đánh giá khả năng sẵn sàng phục hồi</h2>
+                    <p className="text-xs text-brand-text-muted">{readinessLabel}</p>
+                  </div>
                 </div>
-                <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {readinessChecks.map((check) => (
-                    <button key={check.label} onClick={check.action} className="flex h-auto items-start gap-3 border border-brand-outline/35 bg-brand-surface-high/45 p-3 text-left shadow-none">
-                      {check.passed ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />}
-                      <span className="min-w-0 flex-1"><span className="block text-[11px] font-extrabold text-brand-text">{check.label}</span><span className="mt-1 block text-[9px] leading-relaxed text-brand-text-muted">{check.detail}</span></span>
-                      <span className="shrink-0 text-[9px] font-bold text-brand-primary">{check.actionLabel}</span>
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-black text-brand-primary">{readinessScore}%</span>
+                  <span className="text-xs text-brand-text-muted">({readinessChecks.filter(c => c.passed).length}/4 tiêu chuẩn)</span>
                 </div>
               </div>
 
-              <div className="p-5">
-                <div><h2 className="text-sm font-extrabold text-brand-text">Quy trình bảo vệ dữ liệu</h2><p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">Bốn lớp kiểm soát giúp bản sao có thể dùng được khi sự cố thực sự xảy ra.</p></div>
-                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {readinessChecks.map((check) => (
+                  <div
+                    key={check.label}
+                    onClick={check.action}
+                    className="group cursor-pointer rounded-xl border border-brand-outline/30 bg-brand-surface-high/30 p-3.5 hover:bg-brand-surface-high/70 transition-all flex items-start gap-3"
+                  >
+                    {check.passed ? (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-xs font-bold text-brand-text">{check.label}</p>
+                        <span className="text-[10px] font-semibold text-brand-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                          {check.actionLabel} →
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-brand-text-muted leading-relaxed">{check.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 4 Steps Visual Flow */}
+              <div className="pt-2 border-t border-brand-outline/20">
+                <p className="text-xs font-bold text-brand-text uppercase tracking-wider text-brand-text-muted mb-3">
+                  Quy trình bảo vệ & phục hồi chuẩn quốc tế
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { step: '01', title: 'Sao lưu', detail: 'Tạo snapshot tự động hoặc thủ công.', icon: <Database className="h-4 w-4" />, action: () => setShowBackupModal(true) },
-                    { step: '02', title: 'Xác minh', detail: 'Đối chiếu checksum và manifest dữ liệu.', icon: <FileCheck2 className="h-4 w-4" />, action: () => setActiveTab('snapshots') },
-                    { step: '03', title: 'Lưu giữ an toàn', detail: 'Mã hóa, WORM và sao chép liên vùng.', icon: <LockKeyhole className="h-4 w-4" />, action: () => setActiveTab('policy') },
-                    { step: '04', title: 'Phục hồi & diễn tập', detail: 'Khôi phục Sandbox trước khi Production.', icon: <RotateCcw className="h-4 w-4" />, action: () => setActiveTab('restores') }
-                  ].map((item) => (
-                    <button key={item.step} onClick={item.action} className="group flex h-auto items-start gap-3 border border-brand-outline/35 bg-transparent p-3 text-left shadow-none hover:bg-brand-surface-high/50">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">{item.icon}</span>
-                      <span><span className="block text-[9px] font-bold uppercase tracking-wider text-brand-primary">Bước {item.step}</span><span className="mt-0.5 block text-[11px] font-extrabold text-brand-text">{item.title}</span><span className="mt-1 block text-[9px] leading-relaxed text-brand-text-muted">{item.detail}</span></span>
-                    </button>
-                  ))}
+                    { step: '1', title: 'Tạo Snapshot', desc: 'Mã hóa AES-256', icon: Database },
+                    { step: '2', title: 'Xác minh Checksum', desc: 'Đối chiếu SHA-256', icon: FileCheck2 },
+                    { step: '3', title: 'Lưu trữ WORM', desc: 'Khóa chống Ransomware', icon: LockKeyhole },
+                    { step: '4', title: 'Diễn tập DR', desc: 'Sandbox an toàn', icon: RotateCcw }
+                  ].map((s) => {
+                    const StepIcon = s.icon;
+                    return (
+                      <div key={s.step} className="rounded-xl border border-brand-outline/25 bg-brand-surface-lowest/40 p-3 text-center">
+                        <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary mb-2">
+                          <StepIcon className="h-3.5 w-3.5" />
+                        </div>
+                        <p className="text-xs font-bold text-brand-text">{s.step}. {s.title}</p>
+                        <p className="text-[10px] text-brand-text-muted mt-0.5">{s.desc}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          </section>
 
-          {latestFailure && new Date(latestFailure.createdAt).getTime() > Date.now() - 7 * 86400000 && (
-            <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400"><AlertTriangle className="h-4 w-4" /></div><div><p className="text-xs font-extrabold text-brand-text">Có lần sao lưu thất bại trong 7 ngày qua</p><p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">{latestFailure.id}: {latestFailure.failureReason}</p></div></div>
-              <button onClick={() => { setStatusFilter('FAILED'); setActiveTab('snapshots'); }} className="whitespace-nowrap border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-700 dark:text-amber-400">Xem chi tiết</button>
-            </div>
-          )}
+            {/* Quick Security Status Sidebar */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 shadow-sm space-y-4">
+                <div className="flex items-center gap-2.5">
+                  <LockKeyhole className="h-4 w-4 text-brand-primary" />
+                  <h3 className="text-sm font-extrabold text-brand-text">Tham số RPO & RTO mục tiêu</h3>
+                </div>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between py-1.5 border-b border-brand-outline/20">
+                    <span className="text-brand-text-muted">RPO (Mất dữ liệu tối đa)</span>
+                    <strong className="text-brand-text font-mono">{rpoTargetHours} giờ</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-brand-outline/20">
+                    <span className="text-brand-text-muted">RTO (Thời gian phục hồi)</span>
+                    <strong className="text-brand-text font-mono">&lt; 60 phút</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-brand-outline/20">
+                    <span className="text-brand-text-muted">Mã hóa dữ liệu</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400">AES-256-GCM (KMS)</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-brand-outline/20">
+                    <span className="text-brand-text-muted">Khóa WORM (Bất biến)</span>
+                    <strong className="text-brand-text">{policy.immutableDays} ngày</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5">
+                    <span className="text-brand-text-muted">Vùng sao lưu</span>
+                    <strong className="text-brand-text">{policy.primaryRegion}</strong>
+                  </div>
+                </div>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <section className="rounded-xl border border-brand-outline/40 bg-brand-surface shadow-sm xl:col-span-2">
-              <div className="flex items-center justify-between gap-3 border-b border-brand-outline/35 px-5 py-4"><div><h2 className="text-sm font-extrabold text-brand-text">Hoạt động gần đây</h2><p className="mt-0.5 text-[10px] text-brand-text-muted">Trạng thái các điểm khôi phục mới nhất</p></div><button onClick={() => setActiveTab('snapshots')} className="border-0 bg-transparent px-2 py-1 text-[10px] font-bold text-brand-primary shadow-none">Xem tất cả</button></div>
-              <div className="divide-y divide-brand-outline/25">
-                {[...backups].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5).map((snapshot) => (
-                  <button key={snapshot.id} onClick={() => setSelectedSnapshotId(snapshot.id)} className="flex h-auto w-full items-center justify-between gap-4 rounded-none border-0 bg-transparent px-5 py-3.5 text-left shadow-none">
-                    <div className="flex min-w-0 items-center gap-3"><div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${snapshot.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : snapshot.status === 'FAILED' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-sky-500/10 text-sky-600 dark:text-sky-400'}`}>{snapshot.status === 'SUCCESS' ? <CheckCircle2 className="h-4 w-4" /> : snapshot.status === 'FAILED' ? <XCircle className="h-4 w-4" /> : <RefreshCw className="h-4 w-4 animate-spin" />}</div><div className="min-w-0"><p className="truncate font-mono text-[10px] font-bold text-brand-text">{snapshot.id}</p><p className="mt-1 truncate text-[10px] text-brand-text-muted">{TYPE_LABELS[snapshot.type]} · {SCOPE_LABELS[snapshot.scope]} · {snapshot.size}</p></div></div>
-                    <div className="shrink-0 text-right"><p className="text-[10px] font-bold text-brand-text">{formatRelativeTime(snapshot.createdAt)}</p><p className={`mt-1 text-[9px] font-bold ${INTEGRITY_CONFIG[snapshot.integrityStatus].className}`}>{INTEGRITY_CONFIG[snapshot.integrityStatus].label}</p></div>
-                  </button>
-                ))}
+                <button
+                  onClick={() => setActiveTab('policy')}
+                  className="w-full rounded-xl border border-brand-outline/40 bg-brand-surface-high px-3 py-2 text-xs font-bold text-brand-text hover:bg-brand-surface-highest transition-colors"
+                >
+                  Điều chỉnh chính sách bảo vệ
+                </button>
               </div>
-            </section>
 
-            <section className="space-y-4">
-              <div className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-brand-primary" /><h2 className="text-sm font-extrabold text-brand-text">Tư thế phục hồi DR</h2></div><div className="mt-4 space-y-3 text-[10px]"><div className="flex items-center justify-between"><span className="text-brand-text-muted">RPO mục tiêu</span><strong className="text-brand-text">{rpoTargetHours} giờ</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">RTO diễn tập gần nhất</span><strong className="text-brand-text">52 phút</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">Bản sao liên vùng</span><strong className={policy.crossRegionReplication ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>{policy.crossRegionReplication ? 'Hoạt động' : 'Đã tắt'}</strong></div><div className="flex items-center justify-between"><span className="text-brand-text-muted">Diễn tập gần nhất</span><strong className="text-brand-text">10/07/2026</strong></div></div><button onClick={() => setActiveTab('restores')} className="mt-4 w-full border border-brand-outline bg-brand-surface-high px-3 py-2 text-xs font-bold text-brand-text">Xem lịch sử diễn tập</button></div>
-              <div className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><div className="flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-brand-primary" /><h2 className="text-sm font-extrabold text-brand-text">Bảo vệ dữ liệu</h2></div><div className="mt-4 space-y-3 text-[10px]"><div><p className="text-brand-text-muted">Mã hóa</p><p className="mt-1 font-bold text-brand-text">AES-256-GCM · Cloud KMS</p></div><div><p className="text-brand-text-muted">Khóa bất biến mặc định</p><p className="mt-1 font-bold text-brand-text">{policy.immutableDays} ngày (WORM)</p></div><div><p className="text-brand-text-muted">Vùng chính → dự phòng</p><p className="mt-1 font-bold text-brand-text">{policy.primaryRegion} → {policy.replicaRegion}</p></div></div></div>
-            </section>
+              {latestFailure && (
+                <div className="rounded-2xl border border-red-500/25 bg-red-500/5 p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-xs font-bold">Bản sao lưu gặp sự cố</span>
+                  </div>
+                  <p className="text-xs text-brand-text-muted">{latestFailure.id}: {latestFailure.failureReason}</p>
+                  <button
+                    onClick={() => { setStatusFilter('FAILED'); setActiveTab('snapshots'); }}
+                    className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline"
+                  >
+                    Xem chi tiết sự cố →
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </>
+
+          {/* Recent Backups Table snippet */}
+          <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-extrabold text-brand-text">Các điểm khôi phục gần nhất</h3>
+                <p className="text-xs text-brand-text-muted">Snapshot mới nhất sẵn sàng cho việc phục hồi hoặc tải về</p>
+              </div>
+              <button
+                onClick={() => setActiveTab('snapshots')}
+                className="text-xs font-bold text-brand-primary hover:underline"
+              >
+                Xem tất cả ({backups.length}) →
+              </button>
+            </div>
+
+            <div className="divide-y divide-brand-outline/20">
+              {backups.slice(0, 4).map((snapshot) => (
+                <div
+                  key={snapshot.id}
+                  onClick={() => setSelectedSnapshotId(snapshot.id)}
+                  className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-brand-surface-high/30 px-3 rounded-xl cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      snapshot.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'
+                    }`}>
+                      {snapshot.status === 'SUCCESS' ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-brand-text">{snapshot.id}</span>
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${TYPE_CONFIG[snapshot.type].badgeClass}`}>
+                          {TYPE_CONFIG[snapshot.type].label}
+                        </span>
+                      </div>
+                      <p className="text-xs text-brand-text-muted truncate mt-0.5">{snapshot.filename} · {snapshot.size}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-brand-text-muted">{formatDateTime(snapshot.createdAt)}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedSnapshotId(snapshot.id); }}
+                      className="px-2.5 py-1 rounded-lg border border-brand-outline/40 bg-brand-surface text-xs font-bold text-brand-text hover:bg-brand-surface-high"
+                    >
+                      Chi tiết
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
+      {/* TAB 2: SNAPSHOTS (KHO BẢN SAO LƯU) */}
       {activeTab === 'snapshots' && (
-        <section className="rounded-xl border border-brand-outline/40 bg-brand-surface shadow-sm">
-          <div className="border-b border-brand-outline/35 p-4"><div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"><div><h2 className="text-sm font-extrabold text-brand-text">Danh sách điểm khôi phục</h2><p className="mt-1 text-[10px] text-brand-text-muted">Theo dõi trạng thái, checksum, retention và vị trí lưu trữ của từng snapshot.</p></div><div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4"><div className="relative"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-text-muted" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Tìm snapshot..." className="form-control pl-9" /></div><BeautifulSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as SnapshotStatusFilter)} className="form-control"><option value="ALL">Mọi trạng thái</option><option value="SUCCESS">Thành công</option><option value="FAILED">Thất bại</option><option value="IN_PROGRESS">Đang chạy</option></BeautifulSelect><BeautifulSelect value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as SnapshotTypeFilter)} className="form-control"><option value="ALL">Mọi loại backup</option><option value="AUTO">Tự động</option><option value="MANUAL">Thủ công</option><option value="PRE_RESTORE">Trước phục hồi</option></BeautifulSelect><BeautifulSelect value={integrityFilter} onChange={(event) => setIntegrityFilter(event.target.value as IntegrityFilter)} className="form-control"><option value="ALL">Mọi trạng thái toàn vẹn</option><option value="VERIFIED">Đã xác minh</option><option value="PENDING">Chờ xác minh</option><option value="FAILED">Không hợp lệ</option></BeautifulSelect></div></div></div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] border-collapse text-left">
-              <thead><tr className="border-b border-brand-outline/35 bg-brand-surface-lowest/60 text-[10px] font-bold uppercase tracking-wider text-brand-text-muted"><th className="px-4 py-3">Snapshot</th><th className="px-4 py-3">Thời gian</th><th className="px-4 py-3">Phạm vi</th><th className="px-4 py-3">Dung lượng</th><th className="px-4 py-3">Toàn vẹn</th><th className="px-4 py-3">Retention</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3 text-right">Tác vụ</th></tr></thead>
-              <tbody className="divide-y divide-brand-outline/25 text-xs">
-                {visibleBackups.length === 0 ? <tr><td colSpan={8} className="px-4 py-16 text-center"><Archive className="mx-auto h-8 w-8 text-brand-text-muted/50" /><p className="mt-3 font-bold text-brand-text">Không tìm thấy snapshot</p><p className="mt-1 text-[10px] text-brand-text-muted">Thử thay đổi từ khóa hoặc bộ lọc.</p></td></tr> : visibleBackups.map((snapshot) => (
-                  <tr key={snapshot.id} className="transition-colors hover:bg-brand-surface-high/40"><td className="px-4 py-3.5"><button onClick={() => setSelectedSnapshotId(snapshot.id)} className="min-h-0 border-0 bg-transparent p-0 text-left shadow-none"><p className="font-mono text-[10px] font-bold text-brand-primary">{snapshot.id}</p><p className="mt-1 max-w-[230px] truncate text-[10px] text-brand-text-muted">{snapshot.filename}</p></button></td><td className="px-4 py-3.5"><p className="font-bold text-brand-text">{formatDateTime(snapshot.createdAt)}</p><p className="mt-1 text-[10px] text-brand-text-muted">{formatRelativeTime(snapshot.createdAt)}</p></td><td className="px-4 py-3.5"><p className="font-bold text-brand-text">{SCOPE_LABELS[snapshot.scope]}</p><p className="mt-1 text-[10px] text-brand-text-muted">{TYPE_LABELS[snapshot.type]}</p></td><td className="px-4 py-3.5 font-bold text-brand-text">{snapshot.size}</td><td className="px-4 py-3.5"><p className={`font-bold ${INTEGRITY_CONFIG[snapshot.integrityStatus].className}`}>{INTEGRITY_CONFIG[snapshot.integrityStatus].label}</p>{snapshot.verifiedAt && <p className="mt-1 text-[9px] text-brand-text-muted">{formatDate(snapshot.verifiedAt)}</p>}</td><td className="px-4 py-3.5"><p className="font-bold text-brand-text">{RETENTION_LABELS[snapshot.retentionClass]}</p><p className="mt-1 text-[9px] text-brand-text-muted">Hết hạn {formatDate(snapshot.expiresAt)}</p></td><td className="px-4 py-3.5"><Badge className={STATUS_CONFIG[snapshot.status].className}>{STATUS_CONFIG[snapshot.status].icon}{STATUS_CONFIG[snapshot.status].label}</Badge></td><td className="px-4 py-3.5 text-right"><button onClick={() => setSelectedSnapshotId(snapshot.id)} className="whitespace-nowrap border border-brand-outline bg-brand-surface-high px-3 py-1.5 text-[10px] font-bold text-brand-text">Chi tiết</button></td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex flex-col gap-3 border-t border-brand-outline/35 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-[10px] text-brand-text-muted">Trang {page} / {pageCount} · {filteredBackups.length} snapshot</p><div className="flex gap-2"><button disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} aria-label="Trang snapshot trước"><ChevronLeft className="h-4 w-4" /></button><button disabled={page === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} aria-label="Trang snapshot sau"><ChevronRight className="h-4 w-4" /></button></div></div>
-        </section>
-      )}
-
-      {activeTab === 'restores' && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 p-4"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" /><div><p className="text-xs font-extrabold text-brand-text">Quy trình phục hồi có kiểm soát</p><p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">Mọi restore đều xác minh checksum trước khi chạy. Production yêu cầu chế độ bảo trì, điểm sao lưu trước phục hồi và xác nhận mã snapshot.</p></div></div></div>
-          <section className="rounded-xl border border-brand-outline/40 bg-brand-surface shadow-sm"><div className="border-b border-brand-outline/35 px-5 py-4"><h2 className="text-sm font-extrabold text-brand-text">Lịch sử phục hồi & diễn tập DR</h2><p className="mt-1 text-[10px] text-brand-text-muted">Theo dõi tiến độ, môi trường đích và kết quả xác minh sau phục hồi.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[940px] border-collapse text-left"><thead><tr className="border-b border-brand-outline/35 bg-brand-surface-lowest/60 text-[10px] font-bold uppercase tracking-wider text-brand-text-muted"><th className="px-5 py-3">Restore job</th><th className="px-5 py-3">Snapshot nguồn</th><th className="px-5 py-3">Môi trường đích</th><th className="px-5 py-3">Tiến độ</th><th className="px-5 py-3">Yêu cầu bởi</th><th className="px-5 py-3">Kết quả</th></tr></thead><tbody className="divide-y divide-brand-outline/25 text-xs">{restoreJobs.map((job) => <tr key={job.id}><td className="px-5 py-4"><p className="font-mono text-[10px] font-bold text-brand-primary">{job.id}</p><p className="mt-1 text-[9px] text-brand-text-muted">{formatDateTime(job.requestedAt)}</p></td><td className="px-5 py-4"><p className="font-mono text-[10px] font-bold text-brand-text">{job.snapshotId}</p><p className="mt-1 max-w-[220px] truncate text-[9px] text-brand-text-muted">{job.snapshotFilename}</p></td><td className="px-5 py-4"><Badge className={job.target === 'PRODUCTION' ? 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400' : 'border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400'}>{job.target === 'PRODUCTION' ? 'Production' : 'DR Sandbox'}</Badge><p className="mt-1.5 text-[9px] text-brand-text-muted">{job.maintenanceMode ? 'Có bảo trì' : 'Không ảnh hưởng Production'}</p></td><td className="px-5 py-4"><div className="w-28"><div className="mb-1 flex justify-between text-[9px] font-bold text-brand-text"><span>{job.progress}%</span><span>{job.validationPassed ? 'Đã kiểm tra' : 'Đang kiểm tra'}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-brand-surface-highest"><div style={{ width: `${job.progress}%` }} className={`h-full ${job.status === 'FAILED' ? 'bg-red-500' : 'bg-brand-primary'}`} /></div></div></td><td className="px-5 py-4"><p className="font-bold text-brand-text">{job.requestedBy}</p><p className="mt-1 text-[9px] text-brand-text-muted">{job.note}</p></td><td className="px-5 py-4"><Badge className={RESTORE_STATUS_CONFIG[job.status].className}>{RESTORE_STATUS_CONFIG[job.status].label}</Badge>{job.failureReason && <p className="mt-2 max-w-[230px] text-[9px] leading-relaxed text-red-600 dark:text-red-400">{job.failureReason}</p>}</td></tr>)}</tbody></table></div></section>
-        </div>
-      )}
+          {/* Filters Bar */}
+          <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-4 sm:p-5 shadow-sm space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-text-muted" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Tìm kiếm mã snapshot, tên file, ghi chú..."
+                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface-high text-xs text-brand-text focus:outline-none focus:border-brand-primary"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-text">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
 
-      {activeTab === 'policy' && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <div className="space-y-4 xl:col-span-2">
-            <section className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><div className="flex items-center justify-between gap-3 border-b border-brand-outline/30 pb-4"><div><h2 className="text-sm font-extrabold text-brand-text">Lịch sao lưu tự động</h2><p className="mt-1 text-[10px] text-brand-text-muted">Thiết lập tần suất và múi giờ cho toàn hệ thống.</p></div><label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-brand-text"><input type="checkbox" checked={draftPolicy.enabled} onChange={(event) => setDraftPolicy({ ...draftPolicy, enabled: event.target.checked })} className="h-4 w-4 accent-brand-primary" /> Đang bật</label></div><div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Tần suất</label><BeautifulSelect value={draftPolicy.frequency} onChange={(event) => setDraftPolicy({ ...draftPolicy, frequency: event.target.value as BackupPolicy['frequency'] })} className="form-control"><option value="EVERY_6_HOURS">Mỗi 6 giờ</option><option value="DAILY">Hằng ngày</option><option value="WEEKLY">Hằng tuần</option></BeautifulSelect></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Giờ chạy</label><input type="time" value={draftPolicy.time} onChange={(event) => setDraftPolicy({ ...draftPolicy, time: event.target.value })} disabled={draftPolicy.frequency === 'EVERY_6_HOURS'} className="form-control" /></div>{draftPolicy.frequency === 'WEEKLY' && <div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Ngày chạy</label><BeautifulSelect value={draftPolicy.weekday} onChange={(event) => setDraftPolicy({ ...draftPolicy, weekday: event.target.value as BackupPolicy['weekday'] })} className="form-control">{Object.entries(WEEKDAY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</BeautifulSelect></div>}<div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Múi giờ</label><BeautifulSelect value={draftPolicy.timezone} onChange={(event) => setDraftPolicy({ ...draftPolicy, timezone: event.target.value })} className="form-control"><option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (UTC+7)</option><option value="UTC">UTC</option><option value="Asia/Singapore">Asia/Singapore (UTC+8)</option></BeautifulSelect></div></div></section>
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                <BeautifulSelect
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as SnapshotStatusFilter)}
+                  className="text-xs"
+                >
+                  <option value="ALL">Mọi trạng thái</option>
+                  <option value="SUCCESS">Thành công</option>
+                  <option value="FAILED">Thất bại</option>
+                  <option value="IN_PROGRESS">Đang chạy</option>
+                </BeautifulSelect>
 
-            <section className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><div className="border-b border-brand-outline/30 pb-4"><h2 className="text-sm font-extrabold text-brand-text">Retention & khóa bất biến</h2><p className="mt-1 text-[10px] text-brand-text-muted">Chính sách GFS bảo vệ các điểm khôi phục theo ngày, tuần và tháng.</p></div><div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4"><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Bản hằng ngày</label><input type="number" min="1" max="31" value={draftPolicy.dailyRetention} onChange={(event) => setDraftPolicy({ ...draftPolicy, dailyRetention: Number(event.target.value) })} className="form-control" /><p className="field-hint">Số ngày lưu giữ</p></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Bản hằng tuần</label><input type="number" min="1" max="12" value={draftPolicy.weeklyRetention} onChange={(event) => setDraftPolicy({ ...draftPolicy, weeklyRetention: Number(event.target.value) })} className="form-control" /><p className="field-hint">Số tuần lưu giữ</p></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Bản hằng tháng</label><input type="number" min="1" max="60" value={draftPolicy.monthlyRetention} onChange={(event) => setDraftPolicy({ ...draftPolicy, monthlyRetention: Number(event.target.value) })} className="form-control" /><p className="field-hint">Số tháng lưu giữ</p></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Khóa WORM</label><input type="number" min="1" max="90" value={draftPolicy.immutableDays} onChange={(event) => setDraftPolicy({ ...draftPolicy, immutableDays: Number(event.target.value) })} className="form-control" /><p className="field-hint">Không thể xóa trong N ngày</p></div></div></section>
+                <BeautifulSelect
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value as SnapshotTypeFilter)}
+                  className="text-xs"
+                >
+                  <option value="ALL">Mọi loại sao lưu</option>
+                  <option value="AUTO">Tự động (Lịch)</option>
+                  <option value="MANUAL">Thủ công</option>
+                  <option value="PRE_RESTORE">Trước phục hồi</option>
+                </BeautifulSelect>
 
-            <section className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><div className="border-b border-brand-outline/30 pb-4"><h2 className="text-sm font-extrabold text-brand-text">Kho lưu trữ & bảo mật</h2><p className="mt-1 text-[10px] text-brand-text-muted">Mã hóa, nén và nhân bản snapshot sang vùng độc lập.</p></div><div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Vùng chính</label><BeautifulSelect value={draftPolicy.primaryRegion} onChange={(event) => setDraftPolicy({ ...draftPolicy, primaryRegion: event.target.value })} className="form-control"><option value="asia-southeast1">Singapore · asia-southeast1</option><option value="asia-east1">Taiwan · asia-east1</option><option value="asia-northeast1">Tokyo · asia-northeast1</option></BeautifulSelect></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Vùng dự phòng</label><BeautifulSelect value={draftPolicy.replicaRegion} onChange={(event) => setDraftPolicy({ ...draftPolicy, replicaRegion: event.target.value })} className="form-control"><option value="asia-east1">Taiwan · asia-east1</option><option value="asia-northeast1">Tokyo · asia-northeast1</option><option value="asia-southeast1">Singapore · asia-southeast1</option></BeautifulSelect></div><div className="sm:col-span-2"><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Cloud KMS key</label><input value={draftPolicy.kmsKeyId} onChange={(event) => setDraftPolicy({ ...draftPolicy, kmsKeyId: event.target.value })} className="form-control font-mono" /></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Nén dữ liệu</label><BeautifulSelect value={draftPolicy.compression} onChange={(event) => setDraftPolicy({ ...draftPolicy, compression: event.target.value as BackupPolicy['compression'] })} className="form-control"><option value="ZSTD">Zstandard (khuyến nghị)</option><option value="GZIP">GZIP</option></BeautifulSelect></div><div className="space-y-2 rounded-lg border border-brand-outline/35 bg-brand-surface-high/35 p-3"><label className="flex cursor-pointer items-center justify-between gap-3 text-[10px] font-bold text-brand-text"><span>Sao chép liên vùng</span><input type="checkbox" checked={draftPolicy.crossRegionReplication} onChange={(event) => setDraftPolicy({ ...draftPolicy, crossRegionReplication: event.target.checked })} className="h-4 w-4 accent-brand-primary" /></label><label className="flex cursor-pointer items-center justify-between gap-3 text-[10px] font-bold text-brand-text"><span>Xác minh tự động</span><input type="checkbox" checked={draftPolicy.automaticVerification} onChange={(event) => setDraftPolicy({ ...draftPolicy, automaticVerification: event.target.checked })} className="h-4 w-4 accent-brand-primary" /></label><label className="flex cursor-pointer items-center justify-between gap-3 text-[10px] font-bold text-brand-text"><span>Bao gồm Object Storage</span><input type="checkbox" checked={draftPolicy.includeObjectStorage} onChange={(event) => setDraftPolicy({ ...draftPolicy, includeObjectStorage: event.target.checked })} className="h-4 w-4 accent-brand-primary" /></label><label className="flex cursor-pointer items-center justify-between gap-3 text-[10px] font-bold text-brand-text"><span>Bao gồm audit log</span><input type="checkbox" checked={draftPolicy.includeAuditLogs} onChange={(event) => setDraftPolicy({ ...draftPolicy, includeAuditLogs: event.target.checked })} className="h-4 w-4 accent-brand-primary" /></label></div></div></section>
+                <BeautifulSelect
+                  value={integrityFilter}
+                  onChange={(e) => setIntegrityFilter(e.target.value as IntegrityFilter)}
+                  className="text-xs"
+                >
+                  <option value="ALL">Mọi kiểm tra toàn vẹn</option>
+                  <option value="VERIFIED">Đã xác minh SHA-256</option>
+                  <option value="PENDING">Chờ xác minh</option>
+                  <option value="FAILED">Lỗi Checksum</option>
+                </BeautifulSelect>
+              </div>
+            </div>
+
+            {/* Quick Filter Tags */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
+              <span className="text-brand-text-muted text-[11px] font-semibold mr-1">Lọc nhanh:</span>
+              <button
+                onClick={() => { setStatusFilter('ALL'); setTypeFilter('ALL'); setIntegrityFilter('ALL'); setSearchQuery(''); }}
+                className={`px-2 py-0.5 rounded-lg border text-[11px] font-medium transition-colors ${
+                  statusFilter === 'ALL' && typeFilter === 'ALL' && integrityFilter === 'ALL' && !searchQuery
+                    ? 'bg-brand-primary text-white border-brand-primary'
+                    : 'bg-brand-surface-high text-brand-text-muted border-brand-outline/30 hover:text-brand-text'
+                }`}
+              >
+                Tất cả ({backups.length})
+              </button>
+              <button
+                onClick={() => setTypeFilter('AUTO')}
+                className={`px-2 py-0.5 rounded-lg border text-[11px] font-medium transition-colors ${
+                  typeFilter === 'AUTO' ? 'bg-brand-primary text-white border-brand-primary' : 'bg-brand-surface-high text-brand-text-muted border-brand-outline/30 hover:text-brand-text'
+                }`}
+              >
+                Tự động ({backups.filter(b => b.type === 'AUTO').length})
+              </button>
+              <button
+                onClick={() => setTypeFilter('MANUAL')}
+                className={`px-2 py-0.5 rounded-lg border text-[11px] font-medium transition-colors ${
+                  typeFilter === 'MANUAL' ? 'bg-brand-primary text-white border-brand-primary' : 'bg-brand-surface-high text-brand-text-muted border-brand-outline/30 hover:text-brand-text'
+                }`}
+              >
+                Thủ công ({backups.filter(b => b.type === 'MANUAL').length})
+              </button>
+              <button
+                onClick={() => setIntegrityFilter('PENDING')}
+                className={`px-2 py-0.5 rounded-lg border text-[11px] font-medium transition-colors ${
+                  integrityFilter === 'PENDING' ? 'bg-amber-500 text-white border-amber-500' : 'bg-brand-surface-high text-brand-text-muted border-brand-outline/30 hover:text-brand-text'
+                }`}
+              >
+                Cần xác minh ({backups.filter(b => b.integrityStatus === 'PENDING').length})
+              </button>
+            </div>
           </div>
 
-          <aside className="space-y-4"><div className="rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm"><h2 className="text-sm font-extrabold text-brand-text">Tóm tắt chính sách</h2><div className="mt-4 space-y-3 text-[10px]"><div className="flex justify-between gap-3"><span className="text-brand-text-muted">Lịch chạy</span><strong className="text-right text-brand-text">{FREQUENCY_LABELS[draftPolicy.frequency]} {draftPolicy.frequency !== 'EVERY_6_HOURS' && `· ${draftPolicy.time}`}</strong></div><div className="flex justify-between gap-3"><span className="text-brand-text-muted">Retention GFS</span><strong className="text-right text-brand-text">{draftPolicy.dailyRetention} ngày · {draftPolicy.weeklyRetention} tuần · {draftPolicy.monthlyRetention} tháng</strong></div><div className="flex justify-between gap-3"><span className="text-brand-text-muted">Mã hóa</span><strong className="text-right text-emerald-600 dark:text-emerald-400">AES-256-GCM</strong></div><div className="flex justify-between gap-3"><span className="text-brand-text-muted">Lần cập nhật</span><strong className="text-right text-brand-text">{formatDateTime(policy.updatedAt)}</strong></div><div className="flex justify-between gap-3"><span className="text-brand-text-muted">Cập nhật bởi</span><strong className="text-right text-brand-text">{policy.updatedBy}</strong></div></div><button onClick={savePolicy} disabled={!draftPolicy.encryptionEnabled || !draftPolicy.kmsKeyId.trim()} className="mt-5 inline-flex w-full items-center justify-center gap-2 bg-brand-primary px-4 py-2 text-xs font-bold text-white"><Save className="h-4 w-4" /><span>Lưu chính sách</span></button></div><div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-5"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /><h2 className="text-sm font-extrabold text-brand-text">Kiểm soát an toàn</h2></div><ul className="mt-4 space-y-2 text-[10px] leading-relaxed text-brand-text-muted"><li>• Không cho phép tắt mã hóa snapshot.</li><li>• Production restore cần xác nhận ID chính xác.</li><li>• Snapshot trong thời gian WORM không thể xóa.</li><li>• Mọi thay đổi chính sách đều vào audit log.</li></ul></div></aside>
+          {/* Snapshots Table */}
+          <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-brand-outline/30 bg-brand-surface-lowest/60 text-[11px] font-bold uppercase tracking-wider text-brand-text-muted">
+                    <th className="py-3 px-4">Mã & Tên Snapshot</th>
+                    <th className="py-3 px-4">Thời gian tạo</th>
+                    <th className="py-3 px-4">Phạm vi</th>
+                    <th className="py-3 px-4">Dung lượng</th>
+                    <th className="py-3 px-4">Toàn vẹn SHA-256</th>
+                    <th className="py-3 px-4">Trạng thái</th>
+                    <th className="py-3 px-4 text-center w-36 min-w-[130px] whitespace-nowrap">Tác vụ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-outline/20">
+                  {visibleBackups.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-brand-text-muted">
+                        <Archive className="mx-auto h-8 w-8 text-brand-text-muted/40 mb-2" />
+                        <p className="font-bold text-brand-text">Không tìm thấy bản sao lưu nào</p>
+                        <p className="text-[11px] mt-1">Hãy thử thay đổi điều kiện tìm kiếm hoặc bộ lọc</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    visibleBackups.map((snapshot) => {
+                      const isLocked = isImmutable(snapshot);
+                      return (
+                        <tr
+                          key={snapshot.id}
+                          className="hover:bg-brand-surface-high/30 transition-colors cursor-pointer group"
+                          onClick={() => setSelectedSnapshotId(snapshot.id)}
+                        >
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex flex-col min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-bold text-brand-primary group-hover:underline">
+                                    {snapshot.id}
+                                  </span>
+                                  {isLocked && (
+                                    <span title={`Khóa bất biến WORM đến ${formatDateTime(snapshot.immutableUntil)}`}>
+                                      <LockKeyhole className="h-3 w-3 text-violet-500 shrink-0" />
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-brand-text-muted truncate max-w-[200px]" title={snapshot.filename}>
+                                  {snapshot.filename}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <p className="font-medium text-brand-text">{formatDateTime(snapshot.createdAt)}</p>
+                            <p className="text-[10px] text-brand-text-muted">{formatRelativeTime(snapshot.createdAt)}</p>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="font-semibold text-brand-text">{SCOPE_CONFIG[snapshot.scope].label}</span>
+                            <span className={`block mt-0.5 text-[10px] font-medium w-fit px-1.5 py-0.2 rounded border ${TYPE_CONFIG[snapshot.type].badgeClass}`}>
+                              {TYPE_CONFIG[snapshot.type].label}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-brand-text">
+                            {snapshot.size}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${INTEGRITY_CONFIG[snapshot.integrityStatus].badgeClass}`}>
+                                {INTEGRITY_CONFIG[snapshot.integrityStatus].icon}
+                                {INTEGRITY_CONFIG[snapshot.integrityStatus].label}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${STATUS_CONFIG[snapshot.status].className}`}>
+                              {STATUS_CONFIG[snapshot.status].icon}
+                              {STATUS_CONFIG[snapshot.status].label}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center w-36 min-w-[130px] whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="inline-flex items-center justify-center gap-1.5 flex-nowrap whitespace-nowrap">
+                              <button
+                                onClick={() => setSelectedSnapshotId(snapshot.id)}
+                                title="Xem chi tiết & thành phần"
+                                className="h-7 w-7 rounded-lg border border-brand-outline/35 bg-brand-surface-high hover:bg-brand-surface-highest text-brand-text flex items-center justify-center transition-colors shrink-0"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => downloadManifest(snapshot)}
+                                title="Tải file Manifest JSON"
+                                className="h-7 w-7 rounded-lg border border-brand-outline/35 bg-brand-surface-high hover:bg-brand-surface-highest text-brand-text flex items-center justify-center transition-colors shrink-0"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </button>
+                              {snapshot.status === 'SUCCESS' ? (
+                                <button
+                                  onClick={() => openRestore(snapshot)}
+                                  title="Khởi tạo phục hồi / Diễn tập"
+                                  className="h-7 w-7 rounded-lg bg-brand-primary text-white hover:bg-brand-primary/90 shadow-sm flex items-center justify-center transition-colors shrink-0"
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </button>
+                              ) : (
+                                <div className="h-7 w-7 shrink-0" aria-hidden="true" />
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination footer */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-t border-brand-outline/25 bg-brand-surface-lowest/30">
+              <span className="text-xs text-brand-text-muted">
+                Hiển thị trang <strong>{page}</strong> trên <strong>{pageCount}</strong> (Tổng cộng {filteredBackups.length} snapshot)
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  className="p-1.5 rounded-lg border border-brand-outline/35 bg-brand-surface text-brand-text disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="px-3 py-1 text-xs font-mono font-bold text-brand-text">
+                  {page} / {pageCount}
+                </span>
+                <button
+                  disabled={page === pageCount}
+                  onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+                  className="p-1.5 rounded-lg border border-brand-outline/35 bg-brand-surface text-brand-text disabled:opacity-40"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
+      {/* TAB 3: RESTORES & DR DRILLS (PHỤC HỒI & DIỄN TẬP) */}
+      {activeTab === 'restores' && (
+        <div className="space-y-6">
+          {/* Explanation Banner */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-sky-500/25 bg-sky-500/5 p-4 sm:p-5 space-y-2">
+              <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
+                <ShieldCheck className="h-5 w-5" />
+                <h3 className="text-sm font-extrabold">Diễn tập DR Sandbox (Khuyến nghị định kỳ)</h3>
+              </div>
+              <p className="text-xs text-brand-text-muted leading-relaxed">
+                Tạo một môi trường CSDL cô lập từ Snapshot để kiểm tra tính toàn vẹn và đo lường thời gian khôi phục (RTO). Hoàn toàn <strong>không ảnh hưởng đến tiệm đang hoạt động</strong>.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-red-500/25 bg-red-500/5 p-4 sm:p-5 space-y-2">
+              <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                <AlertTriangle className="h-5 w-5" />
+                <h3 className="text-sm font-extrabold">Phục hồi Production (Khi có sự cố thực tế)</h3>
+              </div>
+              <p className="text-xs text-brand-text-muted leading-relaxed">
+                Ghi đè CSDL hệ thống về thời điểm của Snapshot. Yêu cầu bật chế độ bảo trì, tạo snapshot an toàn ngay trước khi chạy và nhập mã xác nhận chính xác.
+              </p>
+            </div>
+          </div>
+
+          {/* Restore Jobs Table */}
+          <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface shadow-sm overflow-hidden space-y-3 p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-extrabold text-brand-text">Nhật ký tiến trình phục hồi & diễn tập</h2>
+                <p className="text-xs text-brand-text-muted">Theo dõi thời gian, tiến độ và kết quả của từng đợt khôi phục dữ liệu</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-brand-outline/30 bg-brand-surface-lowest/60 text-[11px] font-bold uppercase tracking-wider text-brand-text-muted">
+                    <th className="py-3 px-4">Mã Restore Job</th>
+                    <th className="py-3 px-4">Snapshot nguồn</th>
+                    <th className="py-3 px-4">Môi trường đích</th>
+                    <th className="py-3 px-4">Tiến độ thực hiện</th>
+                    <th className="py-3 px-4">Người yêu cầu & Ghi chú</th>
+                    <th className="py-3 px-4">Kết quả</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-outline/20">
+                  {restoreJobs.map((job) => (
+                    <tr key={job.id} className="hover:bg-brand-surface-high/20">
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-bold text-brand-primary">{job.id}</span>
+                        <p className="text-[10px] text-brand-text-muted">{formatDateTime(job.requestedAt)}</p>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-bold text-brand-text">{job.snapshotId}</span>
+                        <p className="text-[10px] text-brand-text-muted truncate max-w-[180px]">{job.snapshotFilename}</p>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          job.target === 'PRODUCTION'
+                            ? 'bg-red-500/10 text-red-600 border-red-500/25'
+                            : 'bg-sky-500/10 text-sky-600 border-sky-500/25'
+                        }`}>
+                          {job.target === 'PRODUCTION' ? 'Production' : 'DR Sandbox'}
+                        </span>
+                        <p className="text-[10px] text-brand-text-muted mt-0.5">
+                          {job.maintenanceMode ? 'Có bảo trì' : 'Không downtime'}
+                        </p>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="w-36">
+                          <div className="flex justify-between text-[10px] font-bold mb-1">
+                            <span>{job.progress}%</span>
+                            <span className="text-brand-text-muted">{job.validationPassed ? 'Đã kiểm tra' : 'Đang xử lý'}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-brand-surface-highest overflow-hidden">
+                            <div
+                              style={{ width: `${job.progress}%` }}
+                              className={`h-full transition-all duration-300 ${
+                                job.status === 'FAILED' ? 'bg-red-500' : 'bg-brand-primary'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <p className="font-medium text-brand-text">{job.requestedBy}</p>
+                        <p className="text-[10px] text-brand-text-muted italic truncate max-w-[200px]">{job.note}</p>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${RESTORE_STATUS_CONFIG[job.status].className}`}>
+                          {RESTORE_STATUS_CONFIG[job.status].icon}
+                          {RESTORE_STATUS_CONFIG[job.status].label}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: POLICY & SETTINGS (CHÍNH SÁCH SAO LƯU & TỰ ĐỘNG HÓA) */}
+      {activeTab === 'policy' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Automated Schedule Card */}
+            <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 sm:p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-brand-outline/25 pb-4">
+                <div>
+                  <h3 className="text-base font-extrabold text-brand-text">Lịch sao lưu tự động hệ thống</h3>
+                  <p className="text-xs text-brand-text-muted">Thiết lập tần suất và thời gian thực hiện tự động của Cron Job</p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-brand-text bg-brand-surface-high px-3 py-1.5 rounded-xl border border-brand-outline/30">
+                  <input
+                    type="checkbox"
+                    checked={draftPolicy.enabled}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, enabled: e.target.checked })}
+                    className="h-4 w-4 accent-brand-primary rounded"
+                  />
+                  <span>{draftPolicy.enabled ? 'Đang kích hoạt' : 'Đã tạm dừng'}</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Tần suất sao lưu</label>
+                  <BeautifulSelect
+                    value={draftPolicy.frequency}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, frequency: e.target.value as BackupPolicy['frequency'] })}
+                    className="w-full text-xs"
+                  >
+                    <option value="EVERY_6_HOURS">Mỗi 6 giờ (4 lần/ngày - RPO 6h)</option>
+                    <option value="DAILY">Hằng ngày (1 lần/ngày lúc đêm)</option>
+                    <option value="WEEKLY">Hằng tuần (Vào cuối tuần)</option>
+                  </BeautifulSelect>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Thời gian thực hiện (UTC+7)</label>
+                  <input
+                    type="time"
+                    value={draftPolicy.time}
+                    disabled={draftPolicy.frequency === 'EVERY_6_HOURS'}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, time: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface-high text-xs text-brand-text focus:outline-none focus:border-brand-primary disabled:opacity-50"
+                  />
+                </div>
+
+                {draftPolicy.frequency === 'WEEKLY' && (
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Ngày chạy trong tuần</label>
+                    <BeautifulSelect
+                      value={draftPolicy.weekday}
+                      onChange={(e) => setDraftPolicy({ ...draftPolicy, weekday: e.target.value as BackupPolicy['weekday'] })}
+                      className="w-full text-xs"
+                    >
+                      {Object.entries(WEEKDAY_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </BeautifulSelect>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Múi giờ hệ thống</label>
+                  <BeautifulSelect
+                    value={draftPolicy.timezone}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, timezone: e.target.value })}
+                    className="w-full text-xs"
+                  >
+                    <option value="Asia/Ho_Chi_Minh">Việt Nam · Asia/Ho_Chi_Minh (UTC+7)</option>
+                    <option value="UTC">Giờ Quốc tế · UTC (GMT+0)</option>
+                    <option value="Asia/Singapore">Singapore · Asia/Singapore (UTC+8)</option>
+                  </BeautifulSelect>
+                </div>
+              </div>
+            </div>
+
+            {/* Retention & WORM Policy */}
+            <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 sm:p-6 shadow-sm space-y-4">
+              <div className="border-b border-brand-outline/25 pb-4">
+                <h3 className="text-base font-extrabold text-brand-text">Chính sách lưu giữ GFS & Khóa bất biến WORM</h3>
+                <p className="text-xs text-brand-text-muted">Quản lý vòng đời snapshot (Grandfather-Father-Son) và bảo vệ chống Ransomware</p>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                <div className="p-3.5 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30">
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1">Bản ngày (Daily)</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={draftPolicy.dailyRetention}
+                      onChange={(e) => setDraftPolicy({ ...draftPolicy, dailyRetention: Number(e.target.value) })}
+                      className="w-16 px-2 py-1 rounded-lg border border-brand-outline/40 bg-brand-surface font-mono font-bold text-sm text-brand-text"
+                    />
+                    <span className="text-xs text-brand-text-muted">ngày</span>
+                  </div>
+                  <p className="text-[10px] text-brand-text-muted mt-1.5">Lưu 7 ngày gần nhất</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30">
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1">Bản tuần (Weekly)</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={draftPolicy.weeklyRetention}
+                      onChange={(e) => setDraftPolicy({ ...draftPolicy, weeklyRetention: Number(e.target.value) })}
+                      className="w-16 px-2 py-1 rounded-lg border border-brand-outline/40 bg-brand-surface font-mono font-bold text-sm text-brand-text"
+                    />
+                    <span className="text-xs text-brand-text-muted">tuần</span>
+                  </div>
+                  <p className="text-[10px] text-brand-text-muted mt-1.5">Lưu 4 tuần trong tháng</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30">
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1">Bản tháng (Monthly)</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={draftPolicy.monthlyRetention}
+                      onChange={(e) => setDraftPolicy({ ...draftPolicy, monthlyRetention: Number(e.target.value) })}
+                      className="w-16 px-2 py-1 rounded-lg border border-brand-outline/40 bg-brand-surface font-mono font-bold text-sm text-brand-text"
+                    />
+                    <span className="text-xs text-brand-text-muted">tháng</span>
+                  </div>
+                  <p className="text-[10px] text-brand-text-muted mt-1.5">Lưu 12 tháng gần nhất</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-violet-500/25 bg-violet-500/5">
+                  <label className="block text-[11px] font-bold uppercase text-violet-600 dark:text-violet-400 mb-1 flex items-center gap-1">
+                    <LockKeyhole className="h-3 w-3" /> Khóa WORM
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min="1"
+                      max="90"
+                      value={draftPolicy.immutableDays}
+                      onChange={(e) => setDraftPolicy({ ...draftPolicy, immutableDays: Number(e.target.value) })}
+                      className="w-16 px-2 py-1 rounded-lg border border-violet-500/40 bg-brand-surface font-mono font-bold text-sm text-brand-text"
+                    />
+                    <span className="text-xs text-brand-text-muted">ngày</span>
+                  </div>
+                  <p className="text-[10px] text-brand-text-muted mt-1.5">Không thể xóa trong N ngày</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Cloud Storage & Multi-Region */}
+            <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 sm:p-6 shadow-sm space-y-4">
+              <div className="border-b border-brand-outline/25 pb-4">
+                <h3 className="text-base font-extrabold text-brand-text">Hạ tầng đám mây & Bảo mật KMS</h3>
+                <p className="text-xs text-brand-text-muted">Mã hóa đối xứng AES-256 và nhân bản sang vùng thảm họa dự phòng</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Vùng lưu trữ chính</label>
+                  <BeautifulSelect
+                    value={draftPolicy.primaryRegion}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, primaryRegion: e.target.value })}
+                    className="w-full text-xs"
+                  >
+                    <option value="asia-southeast1">Singapore · asia-southeast1 (Chính)</option>
+                    <option value="asia-east1">Taiwan · asia-east1</option>
+                    <option value="asia-northeast1">Tokyo · asia-northeast1</option>
+                  </BeautifulSelect>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Vùng dự phòng thảm họa (Replica)</label>
+                  <BeautifulSelect
+                    value={draftPolicy.replicaRegion}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, replicaRegion: e.target.value })}
+                    className="w-full text-xs"
+                  >
+                    <option value="asia-east1">Taiwan · asia-east1 (Khuyến nghị)</option>
+                    <option value="asia-northeast1">Tokyo · asia-northeast1</option>
+                    <option value="asia-southeast1">Singapore · asia-southeast1</option>
+                  </BeautifulSelect>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Khóa Cloud KMS Key ARN</label>
+                  <input
+                    type="text"
+                    value={draftPolicy.kmsKeyId}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, kmsKeyId: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface-high font-mono text-xs text-brand-text focus:outline-none focus:border-brand-primary"
+                  />
+                </div>
+              </div>
+
+              {/* Toggles */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <label className="flex items-center justify-between p-3 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30 cursor-pointer">
+                  <div>
+                    <p className="text-xs font-bold text-brand-text">Sao chép liên vùng tự động</p>
+                    <p className="text-[10px] text-brand-text-muted">Nhân bản snapshot sang vùng dự phòng</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={draftPolicy.crossRegionReplication}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, crossRegionReplication: e.target.checked })}
+                    className="h-4 w-4 accent-brand-primary rounded"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30 cursor-pointer">
+                  <div>
+                    <p className="text-xs font-bold text-brand-text">Tự động xác minh Checksum</p>
+                    <p className="text-[10px] text-brand-text-muted">Kiểm tra SHA-256 ngay khi tạo xong</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={draftPolicy.automaticVerification}
+                    onChange={(e) => setDraftPolicy({ ...draftPolicy, automaticVerification: e.target.checked })}
+                    className="h-4 w-4 accent-brand-primary rounded"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Policy Summary Sidebar */}
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 sm:p-6 shadow-sm space-y-4">
+              <h3 className="text-sm font-extrabold text-brand-text flex items-center gap-2">
+                <Save className="h-4 w-4 text-brand-primary" />
+                Tóm tắt cấu hình đang áp dụng
+              </h3>
+
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between py-1 border-b border-brand-outline/20">
+                  <span className="text-brand-text-muted">Lịch định kỳ</span>
+                  <span className="font-semibold text-brand-text text-right">{FREQUENCY_LABELS[draftPolicy.frequency]}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-brand-outline/20">
+                  <span className="text-brand-text-muted">Chu kỳ GFS</span>
+                  <span className="font-semibold text-brand-text text-right">{draftPolicy.dailyRetention}N / {draftPolicy.weeklyRetention}T / {draftPolicy.monthlyRetention}Th</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-brand-outline/20">
+                  <span className="text-brand-text-muted">Khóa WORM</span>
+                  <span className="font-semibold text-violet-600 dark:text-violet-400">{draftPolicy.immutableDays} ngày</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-brand-outline/20">
+                  <span className="text-brand-text-muted">Sao chép liên vùng</span>
+                  <span className="font-semibold text-emerald-600">{draftPolicy.crossRegionReplication ? 'Đang bật' : 'Tắt'}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-brand-text-muted">Lần cập nhật cuối</span>
+                  <span className="text-brand-text text-right text-[11px]">{formatDateTime(policy.updatedAt)}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={savePolicy}
+                disabled={!draftPolicy.encryptionEnabled || !draftPolicy.kmsKeyId.trim()}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary py-2.5 px-4 text-xs font-bold text-white shadow-md hover:bg-brand-primary/90 transition-all"
+              >
+                <Save className="h-4 w-4" />
+                <span>Lưu thay đổi chính sách</span>
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-5 space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Tiêu chuẩn bảo mật tuân thủ</span>
+              </div>
+              <ul className="space-y-1.5 text-brand-text-muted text-[11px] leading-relaxed list-disc list-inside">
+                <li>Bảo mật CSDL đa tenant theo tiêu chuẩn ISO 27001</li>
+                <li>Tất cả bản snapshot đều được mã hóa trước khi tải lên Cloud</li>
+                <li>Ghi lại mọi thay đổi cấu hình vào Nhật ký kiểm toán (Audit Logs)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: CHI TIẾT SNAPSHOT */}
       {selectedSnapshot && (
         <Modal
           open
           onClose={() => setSelectedSnapshotId(null)}
-          eyebrow={selectedSnapshot.id}
-          title={selectedSnapshot.filename}
-          description={`${TYPE_LABELS[selectedSnapshot.type]} · ${SCOPE_LABELS[selectedSnapshot.scope]} · Tạo ${formatDateTime(selectedSnapshot.createdAt)}`}
-          headerAside={
-            <span className="flex flex-wrap items-center gap-2"><Badge className={STATUS_CONFIG[selectedSnapshot.status].className}>{STATUS_CONFIG[selectedSnapshot.status].icon}{STATUS_CONFIG[selectedSnapshot.status].label}</Badge>{isImmutable(selectedSnapshot) && <Badge className="border-violet-500/25 bg-violet-500/10 text-violet-600 dark:text-violet-400"><LockKeyhole className="h-3 w-3" />Bất biến</Badge>}</span>
-          }
+          title={`Chi tiết Snapshot: ${selectedSnapshot.id}`}
+          description={`${SCOPE_CONFIG[selectedSnapshot.scope].label} · Tạo ngày ${formatDateTime(selectedSnapshot.createdAt)}`}
           size="large"
           footer={
-              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-between">
-                <button onClick={() => deleteSnapshot(selectedSnapshot)} disabled={isImmutable(selectedSnapshot) || selectedSnapshot.status === 'IN_PROGRESS'} title={isImmutable(selectedSnapshot) ? `Đã khóa đến ${formatDateTime(selectedSnapshot.immutableUntil)}` : 'Xóa snapshot'} className="inline-flex min-w-0 items-center justify-center gap-2 border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-400 sm:mr-auto"><Trash2 className="h-4 w-4 shrink-0" /><span>Xóa</span></button>
-                <button onClick={() => downloadManifest(selectedSnapshot)} className="inline-flex min-w-0 items-center justify-center gap-2 border border-brand-outline bg-brand-surface px-3 py-2 text-xs font-bold text-brand-text"><FileJson className="h-4 w-4 shrink-0" /><span>Manifest</span></button>
-                {selectedSnapshot.status === 'SUCCESS' && <button onClick={() => verifySnapshot(selectedSnapshot)} disabled={selectedSnapshot.integrityStatus === 'PENDING'} className="inline-flex min-w-0 items-center justify-center gap-2 border border-brand-outline bg-brand-surface px-3 py-2 text-xs font-bold text-brand-text disabled:opacity-50"><FileCheck2 className="h-4 w-4 shrink-0" /><span>Xác minh</span></button>}
-                {selectedSnapshot.status === 'SUCCESS' && selectedSnapshot.integrityStatus === 'VERIFIED' && <button onClick={() => openRestore(selectedSnapshot)} className="col-span-2 inline-flex min-w-0 items-center justify-center gap-2 bg-brand-primary px-4 py-2 text-xs font-bold text-white sm:col-span-1"><RotateCcw className="h-4 w-4 shrink-0" /><span>Phục hồi</span></button>}
-              </div>
-          }
-        >
-            <div className="space-y-4">
-              {selectedSnapshot.status === 'FAILED' && <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-4"><div className="flex items-start gap-3"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" /><div><p className="text-xs font-extrabold text-brand-text">Snapshot không hoàn tất</p><p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">{selectedSnapshot.failureReason}</p></div></div></div>}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3"><div className="rounded-xl border border-brand-outline/35 bg-brand-surface-high/35 p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Dung lượng</p><p className="mt-2 text-lg font-extrabold text-brand-text">{selectedSnapshot.size}</p><p className="mt-1 text-[9px] text-brand-text-muted">Nén {policy.compression}</p></div><div className="rounded-xl border border-brand-outline/35 bg-brand-surface-high/35 p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Thời gian chạy</p><p className="mt-2 text-lg font-extrabold text-brand-text">{formatDuration(selectedSnapshot.durationSeconds)}</p><p className="mt-1 text-[9px] text-brand-text-muted">Hoàn tất {formatDateTime(selectedSnapshot.completedAt)}</p></div><div className="rounded-xl border border-brand-outline/35 bg-brand-surface-high/35 p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Tính toàn vẹn</p><p className={`mt-2 text-sm font-extrabold ${INTEGRITY_CONFIG[selectedSnapshot.integrityStatus].className}`}>{INTEGRITY_CONFIG[selectedSnapshot.integrityStatus].label}</p><p className="mt-1 text-[9px] text-brand-text-muted">{selectedSnapshot.verifiedAt ? formatDateTime(selectedSnapshot.verifiedAt) : 'Chưa có thời gian xác minh'}</p></div></div>
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <section className="rounded-xl border border-brand-outline/35 p-4"><div className="mb-3 flex items-center gap-2"><Layers3 className="h-4 w-4 text-brand-primary" /><h3 className="text-xs font-extrabold text-brand-text">Thành phần snapshot</h3></div><div className="divide-y divide-brand-outline/25">{selectedSnapshot.components.map((component) => <div key={component.key} className="flex items-center justify-between gap-3 py-2.5"><div className="min-w-0"><p className="text-[10px] font-bold text-brand-text">{component.label}</p><p className="mt-0.5 text-[9px] text-brand-text-muted">{component.records !== undefined ? `${component.records.toLocaleString('vi-VN')} bản ghi` : component.status === 'SKIPPED' ? 'Không thuộc phạm vi backup' : 'Không thể hoàn tất'}</p></div><div className="shrink-0 text-right"><p className={`text-[10px] font-bold ${component.status === 'INCLUDED' ? 'text-emerald-600 dark:text-emerald-400' : component.status === 'FAILED' ? 'text-red-600 dark:text-red-400' : 'text-brand-text-muted'}`}>{component.status === 'INCLUDED' ? 'Đã bao gồm' : component.status === 'FAILED' ? 'Thất bại' : 'Bỏ qua'}</p><p className="mt-0.5 text-[9px] text-brand-text-muted">{component.size}</p></div></div>)}</div></section>
-                <section className="rounded-xl border border-brand-outline/35 p-4"><div className="mb-3 flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-brand-primary" /><h3 className="text-xs font-extrabold text-brand-text">Tính toàn vẹn & mã hóa</h3></div><dl className="space-y-3 text-[10px]"><div><dt className="text-brand-text-muted">Checksum SHA-256</dt><dd className="mt-1 rounded-lg bg-brand-surface-high/50 p-2 font-mono text-[9px] font-bold leading-relaxed text-brand-text [overflow-wrap:anywhere]">{selectedSnapshot.checksum}</dd></div><div><dt className="text-brand-text-muted">Khóa mã hóa Cloud KMS</dt><dd className="mt-1 rounded-lg bg-brand-surface-high/50 p-2 font-mono text-[9px] font-bold leading-relaxed text-brand-text [overflow-wrap:anywhere]">{selectedSnapshot.kmsKeyId}</dd></div><div><dt className="text-brand-text-muted">Thuật toán</dt><dd className="mt-1 font-bold text-brand-text">{selectedSnapshot.encryption}</dd></div></dl></section>
-                <section className="rounded-xl border border-brand-outline/35 p-4"><div className="mb-3 flex items-center gap-2"><Cloud className="h-4 w-4 text-brand-primary" /><h3 className="text-xs font-extrabold text-brand-text">Lưu trữ & retention</h3></div><dl className="grid grid-cols-1 gap-3 text-[10px] sm:grid-cols-2"><div><dt className="text-brand-text-muted">Bucket chính</dt><dd className="mt-1 font-bold text-brand-text [overflow-wrap:anywhere]">gs://{selectedSnapshot.bucket}</dd></div><div><dt className="text-brand-text-muted">Vùng chính</dt><dd className="mt-1 font-bold text-brand-text">{selectedSnapshot.region}</dd></div><div><dt className="text-brand-text-muted">Bản sao dự phòng</dt><dd className="mt-1 font-bold text-brand-text">{selectedSnapshot.replicaRegion || 'Không tạo'}</dd></div><div><dt className="text-brand-text-muted">Retention class</dt><dd className="mt-1 font-bold text-brand-text">{RETENTION_LABELS[selectedSnapshot.retentionClass]}</dd></div><div><dt className="text-brand-text-muted">Hết hạn</dt><dd className="mt-1 font-bold text-brand-text">{formatDateTime(selectedSnapshot.expiresAt)}</dd></div><div><dt className="text-brand-text-muted">Bất biến đến</dt><dd className="mt-1 font-bold text-brand-text">{formatDateTime(selectedSnapshot.immutableUntil)}</dd></div></dl></section>
-                <section className="rounded-xl border border-brand-outline/35 p-4"><div className="mb-3 flex items-center gap-2"><History className="h-4 w-4 text-brand-primary" /><h3 className="text-xs font-extrabold text-brand-text">Nguồn tạo & ghi chú</h3></div><p className="text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Khởi tạo bởi</p><p className="mt-1 break-words text-xs font-bold text-brand-text">{selectedSnapshot.initiatedBy}</p><p className="mt-4 text-[9px] font-bold uppercase tracking-wider text-brand-text-muted">Lý do / ghi chú</p><p className="mt-1 text-[10px] leading-relaxed text-brand-text">{selectedSnapshot.note || 'Không có ghi chú.'}</p></section>
+            <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+              <button
+                onClick={() => deleteSnapshot(selectedSnapshot)}
+                disabled={isImmutable(selectedSnapshot) || selectedSnapshot.status === 'IN_PROGRESS'}
+                title={isImmutable(selectedSnapshot) ? 'Không thể xóa vì đang khóa WORM' : 'Xóa vĩnh viễn'}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-xs font-bold text-red-600 hover:bg-red-500/20 disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Xóa snapshot</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => downloadManifest(selectedSnapshot)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface text-xs font-bold text-brand-text hover:bg-brand-surface-high"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Tải Manifest JSON</span>
+                </button>
+                {selectedSnapshot.status === 'SUCCESS' && (
+                  <button
+                    onClick={() => verifySnapshot(selectedSnapshot)}
+                    disabled={selectedSnapshot.integrityStatus === 'PENDING'}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface text-xs font-bold text-brand-text hover:bg-brand-surface-high"
+                  >
+                    <FileCheck2 className="h-4 w-4" />
+                    <span>Xác minh lại SHA-256</span>
+                  </button>
+                )}
+                {selectedSnapshot.status === 'SUCCESS' && (
+                  <button
+                    onClick={() => openRestore(selectedSnapshot)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary text-xs font-bold text-white hover:bg-brand-primary/90 shadow-md"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    <span>Phục hồi dữ liệu</span>
+                  </button>
+                )}
               </div>
             </div>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            {/* Top Stat row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30">
+                <span className="text-[10px] uppercase font-bold text-brand-text-muted">Dung lượng file</span>
+                <p className="mt-1 font-mono font-bold text-sm text-brand-text">{selectedSnapshot.size}</p>
+              </div>
+              <div className="p-3 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30">
+                <span className="text-[10px] uppercase font-bold text-brand-text-muted">Thời gian chạy</span>
+                <p className="mt-1 font-bold text-sm text-brand-text">{formatDuration(selectedSnapshot.durationSeconds)}</p>
+              </div>
+              <div className="p-3 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30">
+                <span className="text-[10px] uppercase font-bold text-brand-text-muted">Khóa bất biến</span>
+                <p className="mt-1 font-bold text-sm text-violet-600 dark:text-violet-400">
+                  {isImmutable(selectedSnapshot) ? 'Đang khóa WORM' : 'Đã mở khóa'}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30">
+                <span className="text-[10px] uppercase font-bold text-brand-text-muted">Vùng lưu trữ</span>
+                <p className="mt-1 font-bold text-sm text-brand-text">{selectedSnapshot.region}</p>
+              </div>
+            </div>
+
+            {/* Components list */}
+            <div className="rounded-xl border border-brand-outline/30 p-4 space-y-3">
+              <h4 className="font-extrabold text-brand-text flex items-center gap-2">
+                <Layers3 className="h-4 w-4 text-brand-primary" />
+                Các thành phần đóng gói trong bản sao lưu
+              </h4>
+              <div className="divide-y divide-brand-outline/20">
+                {selectedSnapshot.components.map((c) => (
+                  <div key={c.key} className="py-2 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-brand-text">{c.label}</p>
+                      <p className="text-[10px] text-brand-text-muted">
+                        {c.records ? `${c.records.toLocaleString('vi-VN')} bản ghi dữ liệu` : c.status === 'SKIPPED' ? 'Không thuộc phạm vi chọn' : 'Hoàn tất'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        c.status === 'INCLUDED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-brand-surface-high text-brand-text-muted border-brand-outline/30'
+                      }`}>
+                        {c.status === 'INCLUDED' ? 'Đã bao gồm' : 'Bỏ qua'}
+                      </span>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5 font-mono">{c.size}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Checksum & Cloud KMS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-xl border border-brand-outline/30 bg-brand-surface-high/20 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-brand-text flex items-center gap-1.5">
+                    <FileCheck2 className="h-3.5 w-3.5 text-brand-primary" />
+                    Mã băm SHA-256 Checksum
+                  </span>
+                  <button
+                    onClick={() => copyText(selectedSnapshot.checksum, 'checksum')}
+                    className="text-[10px] font-bold text-brand-primary hover:underline flex items-center gap-1"
+                  >
+                    {copiedKey === 'checksum' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    Sao chép
+                  </button>
+                </div>
+                <p className="font-mono text-[10px] bg-brand-surface p-2 rounded-lg break-all text-brand-text-muted border border-brand-outline/25">
+                  {selectedSnapshot.checksum}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-brand-outline/30 bg-brand-surface-high/20 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-brand-text flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5 text-brand-primary" />
+                    Khóa KMS mã hóa
+                  </span>
+                  <span className="text-[10px] text-emerald-600 font-bold">AES-256-GCM</span>
+                </div>
+                <p className="font-mono text-[10px] bg-brand-surface p-2 rounded-lg break-all text-brand-text-muted border border-brand-outline/25">
+                  {selectedSnapshot.kmsKeyId}
+                </p>
+              </div>
+            </div>
+
+            {/* Note & initiator */}
+            <div className="p-3 rounded-xl border border-brand-outline/25 bg-brand-surface-high/20 text-xs">
+              <span className="font-bold text-brand-text">Người khởi tạo:</span> {selectedSnapshot.initiatedBy} · <span className="font-bold text-brand-text">Ghi chú:</span> {selectedSnapshot.note || 'Không có ghi chú.'}
+            </div>
+          </div>
         </Modal>
       )}
 
+      {/* MODAL 2: TẠO BẢN SAO LƯU THỦ CÔNG */}
       {showBackupModal && (
         <Modal
           open
           onClose={() => setShowBackupModal(false)}
-          title="Tạo bản sao lưu thủ công"
-          description="Snapshot được mã hóa, khóa bất biến và ghi nhận trong audit log."
+          title="Tạo bản sao lưu dữ liệu thủ công"
+          description="Snapshot sẽ được nén Zstandard, mã hóa AES-256 và khóa WORM chống xóa."
           size="medium"
-          closeOnBackdrop={false}
           footer={
-            <>
-              <button type="button" onClick={() => setShowBackupModal(false)} className="border border-brand-outline bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text">Hủy</button>
-              {/* Nút gửi nằm ở chân hộp thoại, ngoài thẻ form, nên phải trỏ về form bằng thuộc tính `form`. */}
-              <button type="submit" form="manual-backup-form" disabled={!manualNote.trim()} className="inline-flex items-center gap-2 whitespace-nowrap bg-brand-primary px-4 py-2 text-xs font-bold text-white"><Database className="h-4 w-4" /><span>Khởi chạy backup</span></button>
-            </>
+            <div className="flex items-center justify-end gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={() => setShowBackupModal(false)}
+                className="px-4 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface text-xs font-bold text-brand-text hover:bg-brand-surface-high"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                form="manual-backup-form"
+                disabled={!manualNote.trim()}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-brand-primary text-xs font-bold text-white hover:bg-brand-primary/90 shadow-md disabled:opacity-50"
+              >
+                <Database className="h-4 w-4" />
+                <span>Bắt đầu sao lưu</span>
+              </button>
+            </div>
           }
         >
-          <form id="manual-backup-form" onSubmit={triggerManualBackup}><div className="space-y-4"><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Phạm vi backup</label><BeautifulSelect value={manualScope} onChange={(event) => setManualScope(event.target.value as BackupSnapshot['scope'])} className="form-control"><option value="FULL">Toàn hệ thống · Database, files, cấu hình, audit</option><option value="DATABASE">Chỉ cơ sở dữ liệu PostgreSQL</option><option value="CONFIGURATION">Cấu hình hệ thống</option></BeautifulSelect></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Lý do tạo snapshot <span className="text-red-500">*</span></label><textarea rows={3} value={manualNote} onChange={(event) => setManualNote(event.target.value)} placeholder="Ví dụ: Tạo trước khi triển khai phiên bản 2.9.0..." className="form-control resize-none" required /></div><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-brand-outline/35 bg-brand-surface-high/35 p-3"><input type="checkbox" checked={manualReplicate} onChange={(event) => setManualReplicate(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-primary" /><span><strong className="block text-xs text-brand-text">Sao chép sang vùng dự phòng</strong><span className="mt-1 block text-[10px] text-brand-text-muted">{policy.primaryRegion} → {policy.replicaRegion}. Tăng khả năng phục hồi khi vùng chính gặp sự cố.</span></span></label><div className="grid grid-cols-2 gap-3 rounded-xl border border-brand-outline/35 p-3 text-[10px]"><div><p className="text-brand-text-muted">Mã hóa</p><p className="mt-1 font-bold text-brand-text">AES-256-GCM</p></div><div><p className="text-brand-text-muted">Khóa bất biến</p><p className="mt-1 font-bold text-brand-text">{policy.immutableDays} ngày</p></div><div><p className="text-brand-text-muted">Retention</p><p className="mt-1 font-bold text-brand-text">90 ngày</p></div><div><p className="text-brand-text-muted">Xác minh</p><p className="mt-1 font-bold text-brand-text">{policy.automaticVerification ? 'Tự động' : 'Thủ công'}</p></div></div></div></form>
+          <form id="manual-backup-form" onSubmit={triggerManualBackup} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Phạm vi đóng gói dữ liệu</label>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  { key: 'FULL', title: 'Toàn hệ thống (Khuyến nghị)', desc: 'Cơ sở dữ liệu PostgreSQL, file hình ảnh, cấu hình & audit log' },
+                  { key: 'DATABASE', title: 'Chỉ Cơ sở dữ liệu', desc: 'Bảng khách hàng, hóa đơn, dịch vụ và nhân viên salon' },
+                  { key: 'CONFIGURATION', title: 'Chỉ Cấu hình & Gói cước', desc: 'Thiết lập hệ thống, phân quyền và các mẫu thiết lập' }
+                ].map((s) => (
+                  <label
+                    key={s.key}
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      manualScope === s.key ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline/30 bg-brand-surface hover:bg-brand-surface-high/30'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="manualScope"
+                      checked={manualScope === s.key}
+                      onChange={() => setManualScope(s.key as BackupSnapshot['scope'])}
+                      className="mt-0.5 accent-brand-primary"
+                    />
+                    <div>
+                      <p className="font-bold text-brand-text">{s.title}</p>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">{s.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">
+                Lý do tạo snapshot <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={2}
+                value={manualNote}
+                onChange={(e) => setManualNote(e.target.value)}
+                placeholder="Ví dụ: Sao lưu trước khi nâng cấp hệ thống phiên bản v2.9..."
+                className="w-full px-3 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface-high text-xs text-brand-text focus:outline-none focus:border-brand-primary resize-none"
+                required
+              />
+            </div>
+
+            <label className="flex items-start gap-3 p-3 rounded-xl border border-brand-outline/30 bg-brand-surface-high/30 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={manualReplicate}
+                onChange={(e) => setManualReplicate(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-brand-primary rounded"
+              />
+              <div>
+                <p className="font-bold text-brand-text">Tự động sao chép sang vùng dự phòng ({policy.replicaRegion})</p>
+                <p className="text-[10px] text-brand-text-muted mt-0.5">Đảm bảo an toàn tuyệt đối khi vùng chính gặp sự cố thiên tai / mất điện mạng</p>
+              </div>
+            </label>
+          </form>
         </Modal>
       )}
 
+      {/* MODAL 3: PHỤC HỒI DỮ LIỆU */}
       {restoreSnapshot && (
         <Modal
           open
           onClose={() => setRestoreSnapshotId(null)}
-          title="Khởi tạo phục hồi dữ liệu"
-          description={restoreSnapshot.id}
+          title="Khởi tạo tiến trình phục hồi dữ liệu"
+          description={`Từ bản sao lưu: ${restoreSnapshot.id} (${restoreSnapshot.filename})`}
           size="medium"
-          closeOnBackdrop={false}
           footer={
-            <>
-              <button type="button" onClick={() => setRestoreSnapshotId(null)} className="border border-brand-outline bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text">Hủy</button>
-              <button type="submit" form="restore-request-form" disabled={!restoreNote.trim() || restoreConfirmation !== restoreSnapshot.id || (restoreTarget === 'PRODUCTION' && (!restoreMaintenance || !restorePreSnapshot))} className={`inline-flex items-center gap-2 whitespace-nowrap px-4 py-2 text-xs font-bold text-white ${restoreTarget === 'PRODUCTION' ? 'bg-red-600' : 'bg-brand-primary'}`}><RotateCcw className="h-4 w-4" /><span>{restoreTarget === 'PRODUCTION' ? 'Phục hồi Production' : 'Bắt đầu diễn tập'}</span></button>
-            </>
+            <div className="flex items-center justify-end gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={() => setRestoreSnapshotId(null)}
+                className="px-4 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface text-xs font-bold text-brand-text hover:bg-brand-surface-high"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                form="restore-request-form"
+                disabled={
+                  !restoreNote.trim() ||
+                  restoreConfirmation !== restoreSnapshot.id ||
+                  (restoreTarget === 'PRODUCTION' && (!restoreMaintenance || !restorePreSnapshot))
+                }
+                className={`inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-md disabled:opacity-50 ${
+                  restoreTarget === 'PRODUCTION' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-primary hover:bg-brand-primary/90'
+                }`}
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>{restoreTarget === 'PRODUCTION' ? 'Tiến hành phục hồi Production' : 'Khởi chạy DR Sandbox'}</span>
+              </button>
+            </div>
           }
         >
-          <form id="restore-request-form" onSubmit={requestRestore}><div className="space-y-4"><div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3"><div className="flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /><p className="text-xs font-extrabold text-brand-text">Snapshot đã vượt kiểm tra toàn vẹn</p></div><p className="mt-1.5 text-[10px] text-brand-text-muted">Checksum {restoreSnapshot.checksum.slice(0, 24)}… · {restoreSnapshot.size}</p></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Môi trường đích</label><div className="grid grid-cols-2 gap-3"><label className={`cursor-pointer rounded-xl border p-3 ${restoreTarget === 'DR_SANDBOX' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline/40'}`}><input type="radio" name="restoreTarget" value="DR_SANDBOX" checked={restoreTarget === 'DR_SANDBOX'} onChange={() => setRestoreTarget('DR_SANDBOX')} className="accent-brand-primary" /><strong className="ml-2 text-xs text-brand-text">DR Sandbox</strong><p className="mt-2 text-[9px] leading-relaxed text-brand-text-muted">Diễn tập cô lập, không ảnh hưởng tenant đang hoạt động.</p></label><label className={`cursor-pointer rounded-xl border p-3 ${restoreTarget === 'PRODUCTION' ? 'border-red-500 bg-red-500/5' : 'border-brand-outline/40'}`}><input type="radio" name="restoreTarget" value="PRODUCTION" checked={restoreTarget === 'PRODUCTION'} onChange={() => setRestoreTarget('PRODUCTION')} className="accent-red-500" /><strong className="ml-2 text-xs text-brand-text">Production</strong><p className="mt-2 text-[9px] leading-relaxed text-brand-text-muted">Ghi đè dữ liệu hiện tại; có thể gây gián đoạn dịch vụ.</p></label></div></div>{restoreTarget === 'PRODUCTION' && <div className="space-y-2 rounded-xl border border-red-500/25 bg-red-500/5 p-3"><label className="flex cursor-pointer items-center justify-between gap-3 text-[10px] font-bold text-brand-text"><span>Bật chế độ bảo trì trước khi restore</span><input type="checkbox" checked={restoreMaintenance} onChange={(event) => setRestoreMaintenance(event.target.checked)} className="h-4 w-4 accent-red-500" /></label><label className="flex cursor-pointer items-center justify-between gap-3 text-[10px] font-bold text-brand-text"><span>Tạo snapshot Production hiện tại</span><input type="checkbox" checked={restorePreSnapshot} onChange={(event) => setRestorePreSnapshot(event.target.checked)} className="h-4 w-4 accent-red-500" /></label></div>}<div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Mục đích phục hồi <span className="text-red-500">*</span></label><textarea rows={3} value={restoreNote} onChange={(event) => setRestoreNote(event.target.value)} placeholder="Mô tả sự cố, ticket liên quan hoặc mục tiêu diễn tập..." className="form-control resize-none" required /></div><div><label className="mb-1.5 block text-[10px] font-bold uppercase text-brand-text-muted">Nhập chính xác <span className="font-mono text-brand-primary">{restoreSnapshot.id}</span> để xác nhận</label><input value={restoreConfirmation} onChange={(event) => setRestoreConfirmation(event.target.value)} placeholder={restoreSnapshot.id} className="form-control font-mono" /></div></div></form>
+          <form id="restore-request-form" onSubmit={requestRestore} className="space-y-4 text-xs">
+            <div className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-bold">Snapshot đã sẵn sàng và hợp lệ</p>
+                <p className="text-[10px] text-brand-text-muted">Checksum SHA-256 đã được kiểm chứng an toàn</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">Chọn môi trường đích</label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  restoreTarget === 'DR_SANDBOX' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline/30'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="restoreTarget"
+                      value="DR_SANDBOX"
+                      checked={restoreTarget === 'DR_SANDBOX'}
+                      onChange={() => setRestoreTarget('DR_SANDBOX')}
+                      className="accent-brand-primary"
+                    />
+                    <strong className="text-brand-text">DR Sandbox</strong>
+                  </div>
+                  <p className="text-[10px] text-brand-text-muted mt-1.5">Diễn tập cô lập, không ảnh hưởng tiệm thật</p>
+                </label>
+
+                <label className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  restoreTarget === 'PRODUCTION' ? 'border-red-500 bg-red-500/5' : 'border-brand-outline/30'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="restoreTarget"
+                      value="PRODUCTION"
+                      checked={restoreTarget === 'PRODUCTION'}
+                      onChange={() => setRestoreTarget('PRODUCTION')}
+                      className="accent-red-500"
+                    />
+                    <strong className="text-red-600 dark:text-red-400">Production (Thực tế)</strong>
+                  </div>
+                  <p className="text-[10px] text-brand-text-muted mt-1.5">Ghi đè CSDL thật, có bảo trì tạm thời</p>
+                </label>
+              </div>
+            </div>
+
+            {restoreTarget === 'PRODUCTION' && (
+              <div className="p-3 rounded-xl border border-red-500/25 bg-red-500/5 space-y-2">
+                <label className="flex items-center justify-between cursor-pointer text-xs font-bold text-brand-text">
+                  <span>Bật chế độ bảo trì hệ thống trước khi restore</span>
+                  <input
+                    type="checkbox"
+                    checked={restoreMaintenance}
+                    onChange={(e) => setRestoreMaintenance(e.target.checked)}
+                    className="h-4 w-4 accent-red-600 rounded"
+                  />
+                </label>
+                <label className="flex items-center justify-between cursor-pointer text-xs font-bold text-brand-text">
+                  <span>Tự động tạo snapshot bản hiện tại trước khi ghi đè</span>
+                  <input
+                    type="checkbox"
+                    checked={restorePreSnapshot}
+                    onChange={(e) => setRestorePreSnapshot(e.target.checked)}
+                    className="h-4 w-4 accent-red-600 rounded"
+                  />
+                </label>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">
+                Mục đích / Mã ticket phục hồi <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={2}
+                value={restoreNote}
+                onChange={(e) => setRestoreNote(e.target.value)}
+                placeholder="Ví dụ: Diễn tập DR quý 3 / Xử lý sự cố theo ticket #8492..."
+                className="w-full px-3 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface-high text-xs text-brand-text focus:outline-none focus:border-brand-primary resize-none"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-brand-text-muted mb-1.5">
+                Xác nhận: Nhập chính xác mã <span className="font-mono text-brand-primary">{restoreSnapshot.id}</span>
+              </label>
+              <input
+                type="text"
+                value={restoreConfirmation}
+                onChange={(e) => setRestoreConfirmation(e.target.value)}
+                placeholder={restoreSnapshot.id}
+                className="w-full px-3 py-2 rounded-xl border border-brand-outline/40 bg-brand-surface-high font-mono text-xs text-brand-text focus:outline-none focus:border-brand-primary"
+              />
+            </div>
+          </form>
         </Modal>
       )}
     </div>

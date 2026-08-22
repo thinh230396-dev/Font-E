@@ -290,9 +290,19 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
   const updateAdminStatus = (admin: AdminUser, nextStatus: AdminStatus) => {
     setStatusOverrides((prev) => ({ ...prev, [admin.id]: nextStatus }));
 
+<<<<<<< HEAD
     // Đồng bộ trạng thái admin xuống các tenant thuộc quyền quản lý của admin này
     admin.tenantIds.forEach((tenantId) => {
       onUpdateTenant(tenantId, { adminStatus: nextStatus });
+=======
+    // Phương án 1: Đồng bộ 2 chiều toàn diện giữa Tenant Admin và Tenant
+    // Khi Admin bị khóa/mở khóa, toàn bộ tenant thuộc quyền quản lý cũng đồng thời chuyển trạng thái SUSPENDED / ACTIVE
+    admin.tenantIds.forEach((tenantId) => {
+      onUpdateTenant(tenantId, {
+        adminStatus: nextStatus,
+        status: nextStatus === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE'
+      });
+>>>>>>> 086b7e1 (commit deeeeeee)
     });
 
     if (
@@ -649,7 +659,11 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
     if (admin.status === 'ACTIVE' || admin.status === 'PENDING_VERIFICATION') {
       const tenantCount = admin.tenantCount || admin.tenantIds.length;
       const tenantDesc = tenantCount > 0
+<<<<<<< HEAD
         ? `Tài khoản này đang quản lý ${tenantCount} tenant (${admin.tenantName || 'tiệm liên kết'}). Khi bị khóa, quyền đăng nhập quản trị của Admin này sẽ bị tạm dừng và các tenant trực thuộc sẽ hiển thị làm mờ kèm nhãn cảnh báo "Admin đã bị khóa".`
+=======
+        ? `Tài khoản này đang quản lý ${tenantCount} tenant (${admin.tenantName || 'tiệm liên kết'}). Khi bị khóa, tài khoản Tenant Admin và toàn bộ tiệm liên kết sẽ tự động chuyển sang trạng thái tạm khóa ("SUSPENDED").`
+>>>>>>> 086b7e1 (commit deeeeeee)
         : `Tài khoản này sẽ bị đình chỉ quyền truy cập vào hệ thống.`;
 
       showConfirm(
@@ -657,16 +671,27 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
         `Bạn có chắc chắn muốn khóa tài khoản Tenant Admin "${admin.name}" (${admin.email})?\n\n${tenantDesc}`,
         () => {
           updateAdminStatus(admin, 'SUSPENDED');
+<<<<<<< HEAD
           showToast(`Đã khóa tạm thời tài khoản Tenant Admin "${admin.name}". Các tenant trực thuộc đã được cập nhật trạng thái làm mờ và gắn cờ cảnh báo.`);
+=======
+          showToast(`Đã khóa tài khoản Tenant Admin "${admin.name}" và tạm ngưng hoạt động các tiệm liên kết.`);
+>>>>>>> 086b7e1 (commit deeeeeee)
         }
       );
     } else {
       showConfirm(
         'Xác nhận mở khóa Tenant Admin',
+<<<<<<< HEAD
         `Bạn có chắc chắn muốn mở khóa cho Tenant Admin "${admin.name}" (${admin.email})? Quyền đăng nhập và quản lý các tenant (${admin.tenantName || 'tiệm liên kết'}) sẽ được khôi phục.`,
         () => {
           updateAdminStatus(admin, 'ACTIVE');
           showToast(`Đã kích hoạt lại tài khoản Tenant Admin "${admin.name}".`);
+=======
+        `Bạn có chắc chắn muốn mở khóa cho Tenant Admin "${admin.name}" (${admin.email})? Quyền đăng nhập quản trị và toàn bộ tiệm liên kết (${admin.tenantName || 'tiệm liên kết'}) sẽ được khôi phục hoạt động.`,
+        () => {
+          updateAdminStatus(admin, 'ACTIVE');
+          showToast(`Đã kích hoạt lại tài khoản Tenant Admin "${admin.name}" và các tiệm liên kết.`);
+>>>>>>> 086b7e1 (commit deeeeeee)
         }
       );
     }
@@ -836,12 +861,21 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-brand-outline/35 bg-brand-surface-lowest/40 text-caption font-bold text-brand-text-muted uppercase tracking-wider">
+<<<<<<< HEAD
                 <th className="py-3 px-5">Quản trị viên</th>
                 <th className="py-3 px-5">Tiệm liên kết</th>
                 <th className="py-3 px-5">Vai trò hệ thống</th>
                 <th className="py-3 px-5">Hoạt động cuối</th>
                 <th className="py-3 px-5">Trạng thái</th>
                 <th className="py-3 px-5 text-center w-40 min-w-[150px] whitespace-nowrap">Hành động</th>
+=======
+                <th className="py-2.5 px-3 sm:px-4">Quản trị viên</th>
+                <th className="py-2.5 px-3 sm:px-4">Tiệm liên kết</th>
+                <th className="py-2.5 px-3 sm:px-4 hidden md:table-cell">Vai trò</th>
+                <th className="py-2.5 px-3 sm:px-4 hidden lg:table-cell">Hoạt động cuối</th>
+                <th className="py-2.5 px-3 sm:px-4">Trạng thái</th>
+                <th className="py-2.5 px-3 sm:px-4 text-center w-32 min-w-[120px] whitespace-nowrap">Hành động</th>
+>>>>>>> 086b7e1 (commit deeeeeee)
               </tr>
             </thead>
             <tbody className="text-xs divide-y divide-brand-outline/25">
@@ -863,15 +897,22 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                         : 'hover:bg-brand-surface-high/25'
                     }`}
                   >
+<<<<<<< HEAD
                     <td className="py-3.5 px-5">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold ${
+=======
+                    <td className="py-3 px-3 sm:px-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 ${
+>>>>>>> 086b7e1 (commit deeeeeee)
                           isSuspended
                             ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
                             : 'bg-brand-surface-high border-brand-outline/30 text-brand-primary'
                         }`}>
                           {admin.name.charAt(0).toUpperCase()}
                         </div>
+<<<<<<< HEAD
                         <div className="flex flex-col">
                           <div className="flex items-center gap-1.5">
                             <span className={`font-bold ${isSuspended ? 'text-brand-text/90 line-through' : 'text-brand-text'}`}>
@@ -886,19 +927,40 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                           <span className="text-caption text-brand-text-muted flex items-center gap-1 mt-0.5">
                             <Mail className="w-3 h-3" />
                             {admin.email}
+=======
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`font-bold truncate text-xs sm:text-sm ${isSuspended ? 'text-brand-text/90 line-through' : 'text-brand-text'}`} title={admin.name}>
+                              {admin.name}
+                            </span>
+                            {isSuspended && (
+                              <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.2 bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold text-[9px] border border-rose-500/25 shrink-0">
+                                <Lock className="w-2.5 h-2.5" /> Khóa
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-caption text-brand-text-muted flex items-center gap-1 mt-0.5 truncate max-w-[140px] sm:max-w-[180px]" title={admin.email}>
+                            <Mail className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{admin.email}</span>
+>>>>>>> 086b7e1 (commit deeeeeee)
                           </span>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3.5 px-5">
+                    <td className="py-3 px-3 sm:px-4">
                       <span className="text-brand-text-muted font-semibold flex items-center gap-1.5">
-                        <Store className="w-3.5 h-3.5 text-brand-primary/80" />
-                        <span className="max-w-[260px] truncate" title={admin.tenantName}>
+                        <Store className="w-3.5 h-3.5 text-brand-primary/80 shrink-0" />
+                        <span className="max-w-[160px] sm:max-w-[220px] truncate" title={admin.tenantName}>
                           {admin.tenantName}
                         </span>
                       </span>
                       {admin.tenantCount > 1 && (
-                        <span className="text-caption text-brand-text-muted/70 mt-1 block">{admin.tenantCount} tenant liên kết</span>
+                        <span className="text-caption text-brand-text-muted/70 mt-0.5 block">{admin.tenantCount} tenant</span>
+                      )}
+                      {admin.tenantCount > 0 && isSuspended && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/25 mt-0.5">
+                          <Lock className="w-2.5 h-2.5" /> Bị giới hạn
+                        </span>
                       )}
                       {admin.tenantCount > 0 && isSuspended && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/25 mt-1">
@@ -906,7 +968,7 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                         </span>
                       )}
                     </td>
-                    <td className="py-3.5 px-5">
+                    <td className="py-3 px-3 sm:px-4 hidden md:table-cell">
                       <span className={`px-2 py-0.5 rounded text-caption font-bold ${
                         admin.role === 'Owner'
                           ? 'bg-brand-tertiary/10 text-brand-tertiary border border-brand-tertiary/20'
@@ -917,14 +979,19 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                         {admin.role}
                       </span>
                     </td>
-                    <td className="py-3.5 px-5 text-brand-text-muted font-medium tabular-nums">
+                    <td className="py-3 px-3 sm:px-4 hidden lg:table-cell text-brand-text-muted font-medium tabular-nums whitespace-nowrap">
                       {admin.lastActive}
                     </td>
-                    <td className="py-3.5 px-5">
+                    <td className="py-3 px-3 sm:px-4">
                       <StatusBadge status={admin.status} />
                     </td>
+<<<<<<< HEAD
                     <td className="py-3.5 px-5 text-center w-40 min-w-[150px] whitespace-nowrap">
                       <div className="sa-row-actions inline-flex items-center justify-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+=======
+                    <td className="py-3 px-3 sm:px-4 text-center w-32 min-w-[120px] whitespace-nowrap">
+                      <div className="inline-flex items-center justify-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+>>>>>>> 086b7e1 (commit deeeeeee)
                         <button
                           onClick={() => setSelectedAdmin(admin)}
                           title="Xem chi tiết Tenant Admin"

@@ -5,7 +5,6 @@ import {
   BadgePercent,
   CalendarClock,
   CalendarDays,
-  ChevronDown,
   CircleDollarSign,
   Plus,
   ReceiptText,
@@ -29,7 +28,7 @@ interface TenantAdminOverviewProps {
   staffLimit: number;
   onToggleDemo: () => void;
   onNavigate: (page: NailPageId) => void;
-  onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription'>) => void;
+  onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription' | 'support'>) => void;
 }
 
 const revenueSeries = [

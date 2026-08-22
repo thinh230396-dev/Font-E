@@ -92,6 +92,7 @@ export const EN_TRANSLATIONS: Record<string, string> = {
   'Vệ sinh & an toàn': 'Hygiene & safety',
   'Báo cáo': 'Reports',
   'Gói đăng ký': 'Subscription',
+  'Trung tâm trợ giúp': 'Help & Support',
   'Cài đặt tiệm': 'Salon settings',
 
   // ---- Menu tài khoản / tuỳ chọn -----------------------------------------

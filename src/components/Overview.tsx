@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   BellRing,
   Building2,
@@ -11,10 +12,14 @@ import {
   CircleDollarSign,
   Clock3,
   Eye,
+  Headphones,
+  Inbox,
   Lock,
+  MessageSquare,
   ReceiptText,
   ShieldCheck,
   Sparkles,
+  Timer,
   TrendingUp,
   Unlock,
   UsersRound,
@@ -22,18 +27,21 @@ import {
   XCircle,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
-import type { CurrencyCode, Invoice, SystemAlert, Tenant, TenantStatus } from '../types';
+import type { CurrencyCode, Invoice, SystemAlert, Tenant, TenantStatus, Ticket } from '../types';
 import { formatAlertTimestamp } from '../utils/alerts';
 import { convertMoney, formatMoney } from '../utils/money';
+import { getSlaState, isActive, PRIORITY_CONFIG, STATUS_CONFIG } from './HelpAndSupport';
 
 interface OverviewProps {
   tenants: Tenant[];
   invoices: Invoice[];
   alerts: SystemAlert[];
+  tickets?: Ticket[];
   onMarkAlertAsRead: (id: string) => void;
   onClearAllAlerts: () => void;
   onToggleTenantStatus: (id: string, newStatus: TenantStatus) => void;
   onViewTenant: (tenant: Tenant) => void;
+  onNavigateToTab?: (tab: string) => void;
   searchQuery: string;
   reportCurrency: CurrencyCode;
 }
@@ -123,10 +131,12 @@ export default function Overview({
   tenants,
   invoices,
   alerts,
+  tickets = [],
   onMarkAlertAsRead,
   onClearAllAlerts,
   onToggleTenantStatus,
   onViewTenant,
+  onNavigateToTab,
   searchQuery,
   reportCurrency,
 }: OverviewProps) {
@@ -143,6 +153,11 @@ export default function Overview({
   const healthyTenantCount = activeCount + trialCount + expiringCount;
   const activeRate = totalTenants ? Math.round((activeCount / totalTenants) * 100) : 0;
   const unreadAlerts = alerts.filter((alert) => !alert.isRead);
+  
+  // Support tickets overview calculations
+  const activeTickets = tickets.filter(isActive);
+  const breachedTickets = activeTickets.filter((ticket) => getSlaState(ticket).key === 'BREACHED');
+  const openTicketsCount = tickets.filter((ticket) => ticket.status === 'OPEN').length;
   const totalMonthlyRevenue = tenants.reduce(
     (total, tenant) =>
       total +
@@ -573,6 +588,140 @@ export default function Overview({
           </div>
         </section>
       </div>
+
+      {/* SUPPORT & SLA TICKETS HUB */}
+      <section className="sa-panel overflow-hidden">
+        <div className="sa-panel-heading border-b border-brand-outline/60 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
+                <Headphones className="h-4 w-4" />
+              </span>
+              <h2>Yêu cầu hỗ trợ & Ticket từ Salon</h2>
+              {activeTickets.length > 0 && (
+                <span className="sa-status-badge bg-sky-500/10 text-sky-600 border-sky-500/20 dark:text-sky-400">
+                  {activeTickets.length} đang chờ xử lý
+                </span>
+              )}
+              {breachedTickets.length > 0 && (
+                <span className="sa-status-badge bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-400">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  {breachedTickets.length} vi phạm SLA
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-brand-text-muted">
+              Giám sát các yêu cầu hỗ trợ kỹ thuật, gói cước và sự cố từ các chủ salon trong hệ thống.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="sa-text-button inline-flex items-center gap-1.5 font-bold text-brand-primary hover:underline cursor-pointer"
+            onClick={() => onNavigateToTab?.('support')}
+          >
+            Đến Trung tâm hỗ trợ <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {activeTickets.length === 0 ? (
+          <div className="sa-empty-state py-10 text-center">
+            <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+            <strong className="text-sm font-bold text-brand-text">Tất cả ticket đều đã được giải quyết</strong>
+            <p className="text-xs text-brand-text-muted mt-1 max-w-md mx-auto">
+              Không có yêu cầu hỗ trợ nào đang tồn đọng. Hệ thống vận hành trơn tru!
+            </p>
+            <button
+              type="button"
+              onClick={() => onNavigateToTab?.('support')}
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-outline bg-brand-surface text-xs font-bold text-brand-text"
+            >
+              Xem lịch sử ticket
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="sa-tenant-table">
+              <thead>
+                <tr>
+                  <th>Mã & Chủ đề</th>
+                  <th>Salon / Tenant</th>
+                  <th>Danh mục</th>
+                  <th>Ưu tiên</th>
+                  <th>Trạng thái</th>
+                  <th>SLA</th>
+                  <th className="text-right">Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeTickets.slice(0, 5).map((ticket) => {
+                  const sla = getSlaState(ticket);
+                  return (
+                    <tr key={ticket.id}>
+                      <td>
+                        <div className="min-w-0 max-w-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[11px] font-bold text-brand-primary">
+                              {ticket.id}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold text-brand-text truncate mt-0.5">
+                            {ticket.subject}
+                          </p>
+                        </div>
+                      </td>
+                      <td>
+                        <div>
+                          <strong className="text-xs font-semibold text-brand-text block">
+                            {ticket.tenantName}
+                          </strong>
+                          <span className="text-[10px] text-brand-text-muted">
+                            {ticket.requesterName}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="inline-block rounded-md bg-brand-surface-high px-2 py-0.5 text-[11px] font-medium text-brand-text">
+                          {ticket.category}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${PRIORITY_CONFIG[ticket.priority].className}`}>
+                          {PRIORITY_CONFIG[ticket.priority].label}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${STATUS_CONFIG[ticket.status].className}`}>
+                          {STATUS_CONFIG[ticket.status].label}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="text-[10px]">
+                          <span className={`font-bold flex items-center gap-1 ${sla.className}`}>
+                            <Timer className="h-3 w-3" />
+                            {sla.label}
+                          </span>
+                          <span className="text-brand-text-muted block text-[9px] mt-0.5">
+                            {sla.detail}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="text-right">
+                        <button
+                          type="button"
+                          onClick={() => onNavigateToTab?.('support')}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-brand-primary/30 bg-brand-primary/10 text-xs font-bold text-brand-primary hover:bg-brand-primary hover:text-white transition-colors cursor-pointer"
+                        >
+                          Xử lý <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

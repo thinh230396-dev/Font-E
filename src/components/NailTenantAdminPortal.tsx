@@ -23,6 +23,7 @@ import {
   LockKeyhole,
   Gift,
   Globe2,
+  Headphones,
   Image,
   LayoutDashboard,
   LogOut,
@@ -55,7 +56,7 @@ import {
   WalletCards,
   X
 } from 'lucide-react';
-import type { Branch, Invoice, PackageUpgradeRequest, SubscriptionPackage, Tenant } from '../types';
+import type { Branch, Invoice, PackageUpgradeRequest, SubscriptionPackage, Tenant, Ticket } from '../types';
 import { BRANCH_MODEL_OPTIONS, generateBranchCode, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches, validateBranchDraft } from '../utils/branches';
 import {
   formatSubscriptionLimit,
@@ -94,6 +95,7 @@ const TenantAdminFinance = lazy(() => import('./TenantAdminFinanceCompact'));
 const TenantAdminSanitation = lazy(() => import('./TenantAdminSanitation'));
 const TenantAdminReports = lazy(() => import('./TenantAdminReports'));
 const TenantAdminSubscription = lazy(() => import('./TenantAdminSubscription'));
+const TenantAdminHelpAndSupport = lazy(() => import('./TenantAdminHelpAndSupport'));
 const TenantAdminSettings = lazy(() => import('./TenantAdminSettings'));
 
 interface NailTenantAdminPortalProps {
@@ -110,6 +112,11 @@ interface NailTenantAdminPortalProps {
     billingCycle: 'monthly' | 'yearly',
     effectiveDate: 'immediate' | 'next_cycle'
   ) => void;
+  onCancelUpgradeRequest?: (requestId: string) => void;
+  onSubmitInvoicePaymentProof?: (
+    invoiceId: string,
+    proof: { transactionCode?: string; paymentProofNote?: string; paymentProofUrl?: string }
+  ) => void;
   /* Tuỳ chọn giao diện do App.tsx sở hữu (đã gắn vào <html data-theme>/<html lang>
      và lưu localStorage). Portal chỉ hiển thị và gọi ngược lên, không tự lưu —
      nếu không, đổi ở đây và đổi ở màn Superadmin sẽ lệch nhau. */
@@ -117,6 +124,8 @@ interface NailTenantAdminPortalProps {
   onThemeChange?: (theme: 'light' | 'dark') => void;
   interfaceLanguage?: InterfaceLanguage;
   onLanguageChange?: (language: InterfaceLanguage) => void;
+  tickets?: Ticket[];
+  onTicketsChange?: (tickets: Ticket[]) => void;
 }
 
 interface NavItem {
@@ -164,6 +173,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
       { id: 'sanitation', label: 'Vệ sinh & an toàn', icon: ShieldCheck, badge: '4' },
       { id: 'reports', label: 'Báo cáo', icon: BarChart3 },
       { id: 'subscription', label: 'Gói đăng ký', icon: BadgePercent },
+      { id: 'support', label: 'Trung tâm trợ giúp', icon: Headphones },
       { id: 'settings', label: 'Cài đặt tiệm', icon: Settings }
     ]
   }
@@ -351,7 +361,7 @@ interface OverviewPageProps {
   staffCount: number;
   staffLimit: number;
   onNavigate: (page: NailPageId) => void;
-  onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription'>) => void;
+  onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription' | 'support'>) => void;
 }
 function OverviewPage({ branch, ownerName, tenantName, tenant, demoMode, invoiceCount, onToggleDemo, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
   const t = useT();
@@ -1002,7 +1012,7 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
     </div>
   );
 }
-export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, upgradeRequests, onRequestUpgrade, onUpdateTenant, onLogout, themeMode = 'light', onThemeChange, interfaceLanguage = 'vi', onLanguageChange }: NailTenantAdminPortalProps) {
+export default function NailTenantAdminPortal({ account, tenant, subscriptionPackage, availablePackages, invoices, upgradeRequests, onRequestUpgrade, onUpdateTenant, onLogout, themeMode = 'light', onThemeChange, interfaceLanguage = 'vi', onLanguageChange, tickets = [], onTicketsChange = () => {} }: NailTenantAdminPortalProps) {
   const t = useT();
   const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
   const demoStorageKey = `tenant-admin-demo-mode:${tenantName}`;
@@ -1093,8 +1103,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
   const branchLimit = currentPackage.maxSalons;
   const staffLimit = currentPackage.maxStaff;
   const branchRows = rowsByPage.branches || (tenant ? [] : nailModuleConfigs.branches.rows);
-  const currentConfig = activePage === 'overview' || activePage === 'subscription' ? null : nailModuleConfigs[activePage];
-  const currentRows = activePage === 'overview' || activePage === 'subscription'
+  const currentConfig = activePage === 'overview' || activePage === 'subscription' || activePage === 'support' ? null : (nailModuleConfigs[activePage] || null);
+  const currentRows = activePage === 'overview' || activePage === 'subscription' || activePage === 'support'
     ? []
     : rowsByPage[activePage] || (demoMode || !tenant ? currentConfig?.rows : []) || [];
   const demoInvoices = useMemo(
@@ -1185,7 +1195,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     setSearchQuery('');
     setSelectedRow(null);
     setCreateOpen(false);
-    setActiveTab(page === 'overview' || page === 'subscription' ? '' : nailModuleConfigs[page].tabs[0]);
+    setActiveTab(page === 'overview' || page === 'subscription' || page === 'support' ? '' : (nailModuleConfigs[page]?.tabs?.[0] || ''));
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return true;
@@ -1225,7 +1235,7 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
     });
   };
 
-  const openCreate = (page?: Exclude<NailPageId, 'overview' | 'subscription'>) => {
+  const openCreate = (page?: Exclude<NailPageId, 'overview' | 'subscription' | 'support'>) => {
     const targetPage = (page || activePage) as NailPageId;
     const access = resolvePageAccess(targetPage);
     if (access !== 'full') {
@@ -1794,6 +1804,8 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 onUpdateTenant={onUpdateTenant}
                 pendingRequest={pendingUpgradeRequest}
                 onRequestUpgrade={onRequestUpgrade}
+                onCancelUpgradeRequest={onCancelUpgradeRequest}
+                onSubmitPaymentProof={onSubmitInvoicePaymentProof}
               />
             </Suspense>
           ) : activePage === 'branches' ? (
@@ -1981,6 +1993,18 @@ export default function NailTenantAdminPortal({ account, tenant, subscriptionPac
                 roleLabel="Owner · Tenant Admin"
                 accessMode={currentAccessMode}
                 readOnlyReason={readOnlyReason}
+                onNotify={setToast}
+              />
+            </Suspense>
+          ) : activePage === 'support' ? (
+            <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-caption font-bold text-slate-400">Đang tải trung tâm trợ giúp...</div>}>
+              <TenantAdminHelpAndSupport
+                tenantName={tenantName}
+                tenant={tenant}
+                account={account}
+                subscriptionPackage={currentPackage}
+                tickets={tickets}
+                onTicketsChange={onTicketsChange}
                 onNotify={setToast}
               />
             </Suspense>

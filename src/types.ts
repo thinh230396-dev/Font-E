@@ -273,6 +273,9 @@ export interface Invoice {
   refundedAmount?: number;
   refundedAt?: string;
   refundReason?: string;
+  paymentProofUrl?: string;
+  paymentProofNote?: string;
+  paymentProofSubmittedAt?: string;
   lineItems?: InvoiceLineItem[];
   paymentAttempts?: InvoicePaymentAttempt[];
   activities?: InvoiceActivity[];
@@ -478,6 +481,8 @@ export interface TicketMessage {
     id: string;
     name: string;
     size: string;
+    url?: string;
+    type?: string;
   }>;
 }
 

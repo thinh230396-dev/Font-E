@@ -94,13 +94,26 @@ const loadAlertsWithOneTimeMocks = (): SystemAlert[] => {
   return [...INITIAL_ALERTS, ...savedAlerts.filter((alert) => !mockIds.has(alert.id))];
 };
 
+const normalizeTenantStatusSync = (tenant: Tenant): Tenant => {
+  if (tenant.status === 'SUSPENDED' && tenant.adminStatus !== 'SUSPENDED') {
+    return { ...tenant, adminStatus: 'SUSPENDED' };
+  }
+  if (tenant.adminStatus === 'SUSPENDED' && tenant.status !== 'SUSPENDED') {
+    return { ...tenant, status: 'SUSPENDED' };
+  }
+  if (!tenant.adminStatus) {
+    return { ...tenant, adminStatus: tenant.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE' };
+  }
+  return tenant;
+};
+
 const loadTenantsWithOneTimeMocks = (): Tenant[] => {
   const savedTenants = loadLocalStorageData<Tenant[]>('tenants', []);
   const mocksWereSeeded = loadLocalStorageData<boolean>(TENANTS_MOCK_SEED_KEY, false);
-  if (mocksWereSeeded) return savedTenants;
+  if (mocksWereSeeded) return savedTenants.map(normalizeTenantStatusSync);
   saveLocalStorageData(TENANTS_MOCK_SEED_KEY, true);
   const savedIds = new Set(savedTenants.map((tenant) => tenant.id));
-  return [...INITIAL_TENANTS.filter((tenant) => !savedIds.has(tenant.id)), ...savedTenants];
+  return [...INITIAL_TENANTS.filter((tenant) => !savedIds.has(tenant.id)), ...savedTenants].map(normalizeTenantStatusSync);
 };
 
 const Overview = lazy(() => import('./components/Overview'));
@@ -709,37 +722,65 @@ export default function App() {
 
   const handleUpdateTenant = (id: string, updatedFields: Partial<Tenant>) => {
     const currentTenant = tenants.find((tenant) => tenant.id === id);
-    if (currentTenant && (
-      updatedFields.adminEmail !== undefined
-      || updatedFields.adminName !== undefined
-      || updatedFields.adminUsername !== undefined
-      || updatedFields.adminTempPassword !== undefined
-      || updatedFields.status !== undefined
-      || updatedFields.tenantAdminId !== undefined
-    )) {
-      syncTenantAuthAccount({ ...currentTenant, ...updatedFields });
+    if (!currentTenant) return;
+
+    // Phương án 1: Đồng bộ 2 chiều toàn diện giữa Tenant Admin và Tenant
+    const nextFields: Partial<Tenant> = { ...updatedFields };
+    if (updatedFields.status !== undefined && updatedFields.adminStatus === undefined) {
+      nextFields.adminStatus = updatedFields.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
+    } else if (updatedFields.adminStatus !== undefined && updatedFields.status === undefined) {
+      nextFields.status = updatedFields.adminStatus === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
     }
+
+    const mergedTenant = { ...currentTenant, ...nextFields };
+    if (
+      nextFields.adminEmail !== undefined
+      || nextFields.adminName !== undefined
+      || nextFields.adminUsername !== undefined
+      || nextFields.adminTempPassword !== undefined
+      || nextFields.status !== undefined
+      || nextFields.adminStatus !== undefined
+      || nextFields.tenantAdminId !== undefined
+    ) {
+      syncTenantAuthAccount(mergedTenant);
+    }
+
+    const adminEmail = (nextFields.adminEmail || currentTenant.adminEmail)?.trim().toLowerCase();
+    const targetAdminStatus = nextFields.adminStatus || (nextFields.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE');
+
     setTenants(prevTenants => prevTenants.map(t => {
-      if (t.id === id) {
+      const isTarget = t.id === id;
+      const isSameAdmin = !isTarget && adminEmail && t.adminEmail?.trim().toLowerCase() === adminEmail && (nextFields.adminStatus !== undefined || nextFields.status !== undefined);
+
+      if (isSameAdmin) {
+        return {
+          ...t,
+          adminStatus: targetAdminStatus,
+          status: targetAdminStatus === 'SUSPENDED' ? 'SUSPENDED' : (t.status === 'SUSPENDED' ? 'ACTIVE' : t.status),
+          lastSync: new Date().toISOString()
+        };
+      }
+
+      if (isTarget) {
         let subscriptionFields: Partial<Tenant> = {};
-        if (updatedFields.packageName && updatedFields.packageName !== t.packageName) {
-          const targetPackage = getSubscriptionPackage(packages, updatedFields.packageName);
-          const cycle = updatedFields.billingCycle || t.billingCycle || 'monthly';
-          const pricing = getSubscriptionPrice(packages, updatedFields.packageName, cycle);
+        if (nextFields.packageName && nextFields.packageName !== t.packageName) {
+          const targetPackage = getSubscriptionPackage(packages, nextFields.packageName);
+          const cycle = nextFields.billingCycle || t.billingCycle || 'monthly';
+          const pricing = getSubscriptionPrice(packages, nextFields.packageName, cycle);
           subscriptionFields = {
             subscriptionPackageId: targetPackage?.id,
             subscriptionPackageVersion: targetPackage?.version || 1,
-            subscriptionPrice: updatedFields.subscriptionPrice ?? pricing.price,
-            subscriptionCurrency: updatedFields.subscriptionCurrency ?? pricing.currency,
-            subscriptionStartedAt: updatedFields.planStartDate || new Date().toISOString().slice(0, 10),
+            subscriptionPrice: nextFields.subscriptionPrice ?? pricing.price,
+            subscriptionCurrency: nextFields.subscriptionCurrency ?? pricing.currency,
+            subscriptionStartedAt: nextFields.planStartDate || new Date().toISOString().slice(0, 10),
             subscriptionRenewsAt: getIsoDateAfterDays(getBillingCycleDays(cycle))
           };
         }
-        const nextTenant = { ...t, ...updatedFields, ...subscriptionFields, lastSync: new Date().toISOString() };
+        const nextTenant = { ...t, ...nextFields, ...subscriptionFields, lastSync: new Date().toISOString() };
         
         // Let's check if there are new custom invoices added
-        if (updatedFields.customInvoices && updatedFields.customInvoices.length > (t.customInvoices?.length || 0)) {
-          const newInvs = updatedFields.customInvoices.filter(newInv => 
+        if (nextFields.customInvoices && nextFields.customInvoices.length > (t.customInvoices?.length || 0)) {
+          const newInvs = nextFields.customInvoices.filter(newInv => 
             !(t.customInvoices || []).some(oldInv => oldInv.id === newInv.id)
           );
           
@@ -803,13 +844,22 @@ export default function App() {
       return t;
     }));
 
+    if (adminEmail && (nextFields.adminStatus !== undefined || nextFields.status !== undefined)) {
+      setTenantAdmins(prev => prev.map(admin => {
+        if (admin.email.trim().toLowerCase() === adminEmail || (nextFields.tenantAdminId && admin.id === nextFields.tenantAdminId)) {
+          return { ...admin, status: targetAdminStatus };
+        }
+        return admin;
+      }));
+    }
+
     if (currentTenant) {
-      const changes = buildAuditChanges(currentTenant, updatedFields);
+      const changes = buildAuditChanges(currentTenant, nextFields);
       recordAuditLog({
         eventCode: 'TENANT.UPDATED',
         event: 'Cập nhật thông tin tenant',
         description: `Superadmin đã cập nhật ${changes.length || 1} trường của tenant "${currentTenant.name}".`,
-        severity: updatedFields.status || updatedFields.packageName ? 'medium' : 'low',
+        severity: nextFields.status || nextFields.packageName ? 'medium' : 'low',
         status: 'success',
         category: 'TENANT',
         resource: `Tenant ${currentTenant.name}`,
@@ -874,28 +924,17 @@ export default function App() {
   const handleToggleTenantStatusFromOverview = (id: string, newStatus: TenantStatus) => {
     const currentTenant = tenants.find((tenant) => tenant.id === id);
     if (!currentTenant || currentTenant.status === newStatus) return;
-    setTenants((current) => current.map((tenant) => (
-      tenant.id === id ? { ...tenant, status: newStatus } : tenant
-    )));
+    
+    handleUpdateTenant(id, {
+      status: newStatus,
+      adminStatus: newStatus === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE'
+    });
+
     showToast(
       'Đã cập nhật trạng thái',
       newStatus === 'SUSPENDED' ? 'warning' : 'success',
-      { description: `Tenant "${currentTenant.name}" đã được chuyển sang trạng thái ${newStatus}.` }
+      { description: `Tenant "${currentTenant.name}" và tài khoản Tenant Admin đã được chuyển sang trạng thái ${newStatus}.` }
     );
-    if (currentTenant && currentTenant.status !== newStatus) {
-      recordAuditLog({
-        eventCode: 'TENANT.STATUS.UPDATED',
-        event: 'Cập nhật trạng thái tenant',
-        description: `Trạng thái tenant "${currentTenant.name}" được chuyển từ ${currentTenant.status} sang ${newStatus}.`,
-        severity: newStatus === 'SUSPENDED' ? 'high' : 'medium',
-        status: 'success',
-        category: 'TENANT',
-        resource: `Tenant ${currentTenant.name}`,
-        resourceId: id,
-        method: `CLIENT /tenants/${id}/status`,
-        changes: [{ field: 'status', before: currentTenant.status, after: newStatus }]
-      });
-    }
   };
 
   // Jump to Tenant View from overview when viewing details
@@ -1497,6 +1536,85 @@ export default function App() {
     return true;
   };
 
+  const handleCancelUpgradeRequest = (requestId: string) => {
+    const request = upgradeRequests.find((item) => item.id === requestId);
+    if (!request || request.status !== 'PENDING') return;
+
+    setUpgradeRequests((current) =>
+      current.map((item) => (item.id === requestId ? { ...item, status: 'REJECTED', reviewNote: 'Tenant đã hủy yêu cầu.' } : item))
+    );
+    setAlerts((current) => current.filter((alert) => alert.id !== `ALT-${requestId}`));
+    showToast('Đã hủy yêu cầu', 'info', { description: 'Yêu cầu nâng cấp gói đã được hủy bỏ.' });
+  };
+
+  const handleSubmitInvoicePaymentProof = (
+    invoiceId: string,
+    proof: { transactionCode?: string; paymentProofNote?: string; paymentProofUrl?: string }
+  ) => {
+    const nowIso = new Date().toISOString();
+    let updatedInvoiceTenantName = '';
+
+    setInvoices((current) =>
+      current.map((invoice) => {
+        if (invoice.id !== invoiceId && invoice.invoiceCode !== invoiceId) return invoice;
+        updatedInvoiceTenantName = invoice.tenantName;
+        const newActivities = [
+          ...(invoice.activities || []),
+          {
+            id: `ACT-${Date.now()}`,
+            action: 'Nộp chứng từ chuyển khoản',
+            actor: 'Tenant Admin',
+            description: `Đã nộp mã GD/bút toán "${proof.transactionCode || 'Chưa cung cấp'}" và đính kèm chứng từ thanh toán`,
+            createdAt: nowIso
+          }
+        ];
+        return {
+          ...invoice,
+          transactionCode: proof.transactionCode || invoice.transactionCode,
+          paymentProofUrl: proof.paymentProofUrl || invoice.paymentProofUrl,
+          paymentProofNote: proof.paymentProofNote || invoice.paymentProofNote,
+          paymentProofSubmittedAt: nowIso,
+          activities: newActivities
+        };
+      })
+    );
+
+    setTenants((current) =>
+      current.map((tenant) => {
+        if (!tenant.customInvoices?.some((inv) => inv.id === invoiceId || inv.invoiceCode === invoiceId)) return tenant;
+        return {
+          ...tenant,
+          customInvoices: tenant.customInvoices.map((inv) => {
+            if (inv.id !== invoiceId && inv.invoiceCode !== invoiceId) return inv;
+            return {
+              ...inv,
+              transactionCode: proof.transactionCode || inv.transactionCode,
+              paymentProofUrl: proof.paymentProofUrl || inv.paymentProofUrl,
+              paymentProofNote: proof.paymentProofNote || inv.paymentProofNote,
+              paymentProofSubmittedAt: nowIso
+            };
+          })
+        };
+      })
+    );
+
+    setAlerts((current) => [
+      {
+        id: `ALT-PAY-${Date.now()}`,
+        title: `Chứng từ thanh toán: ${updatedInvoiceTenantName || 'Tenant'}`,
+        description: `Hóa đơn ${invoiceId} đã được nộp chứng từ thanh toán. Super Admin cần đối soát và duyệt hóa đơn.`,
+        type: 'info',
+        createdAt: nowIso,
+        isRead: false
+      },
+      ...current
+    ]);
+
+    showToast('Đã gửi thông tin thanh toán', 'success', {
+      description: 'Hệ thống đã chuyển bằng chứng thanh toán đến Super Admin để đối soát & kích hoạt.'
+    });
+  };
+
   // Dynamic Badge counts to supply to sidebar
   const badgeCounts = {
     expiringSalons: tenants.filter(t => t.status === 'EXPIRING').length,
@@ -1515,10 +1633,12 @@ export default function App() {
             tenants={tenants}
             invoices={invoices}
             alerts={alerts}
+            tickets={tickets}
             onMarkAlertAsRead={handleMarkAlertAsRead}
             onClearAllAlerts={handleClearAllAlerts}
             onToggleTenantStatus={handleToggleTenantStatusFromOverview}
             onViewTenant={handleViewTenantFromOverview}
+            onNavigateToTab={(tab) => setActiveTab(tab)}
             searchQuery={searchQuery}
             reportCurrency={systemSettings.general.currency}
           />
@@ -1564,6 +1684,8 @@ export default function App() {
           <BillingAndInvoices
             invoices={invoices}
             tenants={tenants}
+            upgradeRequests={upgradeRequests}
+            onReviewUpgradeRequest={handleReviewUpgradeRequest}
             onUpdateInvoiceStatus={handleUpdateInvoiceStatus}
             onUpdateInvoice={handleUpdateInvoice}
             onCreateInvoice={handleCreateInvoice}
@@ -1706,12 +1828,16 @@ export default function App() {
             handleRequestPackageUpgrade(targetTenant, tenantPortalAccount, plan, billingCycle, effectiveDate);
           }
         }}
+        onCancelUpgradeRequest={handleCancelUpgradeRequest}
+        onSubmitInvoicePaymentProof={handleSubmitInvoicePaymentProof}
         onUpdateTenant={handleUpdateTenant}
         onLogout={handleLogout}
         themeMode={themeMode}
         onThemeChange={setThemeMode}
         interfaceLanguage={interfaceLanguage}
         onLanguageChange={setInterfaceLanguage}
+        tickets={tickets}
+        onTicketsChange={setTickets}
       />
     );
   }

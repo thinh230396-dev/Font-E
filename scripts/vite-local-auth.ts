@@ -186,6 +186,47 @@ export const localAuthPlugin = (): Plugin => ({
         return;
       }
 
+      if (request.method === 'PUT' && url.pathname === '/api/auth/accounts') {
+        const body = await readJsonBody(request) as Partial<LocalAccount>;
+        if (!body.email || !body.role) {
+          sendJson(response, 400, { error: 'Thiếu thông tin tài khoản.' });
+          return;
+        }
+        const index = LOCAL_ACCOUNTS.findIndex(
+          (acc) => acc.email.toLowerCase() === body.email?.toLowerCase() || (body.username && acc.username.toLowerCase() === body.username?.toLowerCase())
+        );
+        const updatedAccount: LocalAccount = {
+          email: body.email,
+          username: body.username || body.email.split('@')[0],
+          password: body.password || '123456',
+          role: body.role,
+          displayName: body.displayName || body.username || body.email,
+          tenantId: body.tenantId,
+          tenantName: body.tenantName,
+          branchCode: body.branchCode,
+          branchName: body.branchName
+        };
+        if (index >= 0) {
+          LOCAL_ACCOUNTS[index] = { ...LOCAL_ACCOUNTS[index], ...updatedAccount };
+        } else {
+          LOCAL_ACCOUNTS.push(updatedAccount);
+        }
+        sendJson(response, 200, { ok: true, account: publicAccount(updatedAccount) });
+        return;
+      }
+
+      if (request.method === 'DELETE' && url.pathname.startsWith('/api/auth/accounts/')) {
+        const identifier = decodeURIComponent(url.pathname.slice('/api/auth/accounts/'.length)).toLowerCase();
+        const index = LOCAL_ACCOUNTS.findIndex(
+          (acc) => acc.email.toLowerCase() === identifier || acc.username.toLowerCase() === identifier
+        );
+        if (index >= 0) {
+          LOCAL_ACCOUNTS.splice(index, 1);
+        }
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
       sendJson(response, 404, { error: 'Không tìm thấy API local.' });
     });
   }

@@ -18,7 +18,7 @@ export interface DataTableColumn<T> {
   actions?: boolean;
   width?: string;
   /** Ẩn cột ở màn hình hẹp thay vì cuộn ngang vô hạn (§17.2). */
-  hideBelow?: 'sm' | 'md' | 'lg';
+  hideBelow?: 'sm' | 'md' | 'lg' | 'xl';
   headerSrOnly?: boolean;
 }
 

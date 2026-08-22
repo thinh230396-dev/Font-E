@@ -26,10 +26,12 @@ import {
   ShieldCheck,
   WalletCards,
   X,
-  XCircle
+  XCircle,
+  Zap
 } from 'lucide-react';
-import type { CurrencyCode, Invoice, InvoiceActivity, Tenant } from '../types';
+import type { CurrencyCode, Invoice, InvoiceActivity, PackageUpgradeRequest, Tenant } from '../types';
 import { Modal, useToast } from './ui';
+import PackageUpgradeRequests from './PackageUpgradeRequests';
 import { convertMoney, formatMoney } from '../utils/money';
 import {
   getPaymentMethodLabel,
@@ -46,6 +48,13 @@ interface BillingAndInvoicesProps {
      tenant và email nhận hóa đơn đều phải gõ tay, sai một ký tự là hóa đơn
      không gắn được vào tenant nào. */
   tenants: Tenant[];
+  upgradeRequests?: PackageUpgradeRequest[];
+  onReviewUpgradeRequest?: (
+    requestId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    reviewNote: string,
+    effectiveDate: 'immediate' | 'next_cycle'
+  ) => Promise<boolean>;
   onUpdateInvoiceStatus: (id: string, newStatus: Invoice['status'], paymentDetails?: Partial<Invoice>) => void;
   onUpdateInvoice: (id: string, updates: Partial<Invoice>) => void;
   onCreateInvoice: (invoice: Invoice) => boolean;
@@ -53,7 +62,7 @@ interface BillingAndInvoicesProps {
   reportCurrency: CurrencyCode;
 }
 
-type PageTab = 'overview' | 'invoices';
+type PageTab = 'overview' | 'invoices' | 'upgrades';
 type DetailTab = 'details' | 'payments' | 'history';
 type DateRange = '7D' | '30D' | '90D' | 'ALL';
 
@@ -143,7 +152,17 @@ function MetricCard({ icon, label, value, detail, tone = 'primary' }: {
   );
 }
 
-export default function BillingAndInvoices({ invoices, tenants, onUpdateInvoiceStatus, onUpdateInvoice, onCreateInvoice, showConfirm, reportCurrency }: BillingAndInvoicesProps) {
+export default function BillingAndInvoices({
+  invoices,
+  tenants,
+  upgradeRequests = [],
+  onReviewUpgradeRequest,
+  onUpdateInvoiceStatus,
+  onUpdateInvoice,
+  onCreateInvoice,
+  showConfirm,
+  reportCurrency
+}: BillingAndInvoicesProps) {
   const showToast = useToast();
   const [activeTab, setActiveTab] = useState<PageTab>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -163,6 +182,8 @@ export default function BillingAndInvoices({ invoices, tenants, onUpdateInvoiceS
     billingCycle: 'monthly' as NonNullable<Invoice['billingCycle']>, amount: '', currency: reportCurrency,
     dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), description: '', note: ''
   });
+
+  const pendingUpgradeCount = useMemo(() => upgradeRequests.filter((r) => r.status === 'PENDING').length, [upgradeRequests]);
 
   const selectedInvoice = invoices.find((invoice) => invoice.id === selectedInvoiceId) || null;
   const refundInvoice = invoices.find((invoice) => invoice.id === refundInvoiceId) || null;
@@ -496,8 +517,33 @@ export default function BillingAndInvoices({ invoices, tenants, onUpdateInvoiceS
       </div>
 
       <div className="flex gap-1 overflow-x-auto border-b border-brand-outline/40">
-        {([['overview', 'Tổng quan', BarChart3], ['invoices', 'Danh sách hóa đơn', Receipt]] as const).map(([tab, label, Icon]) => <button key={tab} onClick={() => setActiveTab(tab)} className={`flex shrink-0 items-center gap-2 rounded-b-none border-0 bg-transparent px-4 py-2.5 text-xs font-bold shadow-none ${activeTab === tab ? 'border-b-2 border-brand-primary text-brand-primary' : 'text-brand-text-muted'}`}><Icon className="h-4 w-4" /><span>{label}</span></button>)}
+        {([
+          ['overview', 'Tổng quan', BarChart3, 0],
+          ['invoices', 'Danh sách hóa đơn', Receipt, 0],
+          ['upgrades', 'Yêu cầu nâng cấp gói', Zap, pendingUpgradeCount]
+        ] as const).map(([tab, label, Icon, count]) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex shrink-0 items-center gap-2 rounded-b-none border-0 bg-transparent px-4 py-2.5 text-xs font-bold shadow-none ${activeTab === tab ? 'border-b-2 border-brand-primary text-brand-primary' : 'text-brand-text-muted'}`}
+          >
+            <Icon className="h-4 w-4" />
+            <span>{label}</span>
+            {Boolean(count) && (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-black text-white">
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
+
+      {activeTab === 'upgrades' && (
+        <PackageUpgradeRequests
+          requests={upgradeRequests}
+          onReview={onReviewUpgradeRequest || (async () => false)}
+        />
+      )}
 
       {activeTab === 'overview' && <section className="rounded-2xl border border-brand-outline/40 bg-brand-surface p-4 shadow-sm sm:p-5"><div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-extrabold text-brand-text">Toàn cảnh tài chính</h2><p className="mt-1 text-[10px] text-brand-text-muted">Tổng hợp {rangeInvoices.length} hóa đơn trong khoảng thời gian đã chọn, quy đổi về {reportCurrency}.</p></div><BeautifulSelect value={dateRange} onChange={(event) => setDateRange(event.target.value as DateRange)} className="form-control w-full sm:w-44"><option value="7D">7 ngày qua</option><option value="30D">30 ngày qua</option><option value="90D">90 ngày qua</option><option value="ALL">Toàn bộ thời gian</option></BeautifulSelect></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard icon={<WalletCards className="h-4 w-4" />} label="Thực thu ròng" value={formatMoney(summary.netCollected, reportCurrency)} detail={`${summary.paidCount} hóa đơn đã thu · phí cổng ${formatMoney(summary.fees, reportCurrency)}`} tone="success" /><MetricCard icon={<CalendarClock className="h-4 w-4" />} label="Đang chờ thu" value={formatMoney(summary.pending, reportCurrency)} detail={`${summary.pendingCount} hóa đơn còn trong hạn`} tone="warning" /><MetricCard icon={<AlertTriangle className="h-4 w-4" />} label="Công nợ quá hạn" value={formatMoney(summary.overdue, reportCurrency)} detail={`${summary.overdueCount} hóa đơn cần xử lý`} tone={summary.overdueCount ? 'danger' : 'success'} /><MetricCard icon={<Percent className="h-4 w-4" />} label="Tỷ lệ thu tiền" value={`${summary.collectionRate}%`} detail={`${summary.paidCount}/${summary.paidCount + summary.pendingCount + summary.overdueCount} hóa đơn có thể thu đã thanh toán`} tone={summary.collectionRate >= 90 ? 'success' : 'warning'} /></div></section>}
 
@@ -601,7 +647,68 @@ export default function BillingAndInvoices({ invoices, tenants, onUpdateInvoiceS
             <div data-print-hide className="flex shrink-0 gap-1 overflow-x-auto border-b border-brand-outline/35 bg-brand-surface px-4 pt-2 sm:px-6">{([['details', 'Chi tiết', FileText], ['payments', 'Thanh toán', CreditCard], ['history', 'Lịch sử', Clock3]] as const).map(([tab, label, Icon]) => <button key={tab} onClick={() => setDetailTab(tab)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-b-none border-0 bg-transparent px-3 py-2 text-xs font-bold shadow-none ${detailTab === tab ? 'border-b-2 border-brand-primary text-brand-primary' : 'text-brand-text-muted hover:text-brand-text'}`}><Icon className="h-3.5 w-3.5" /><span>{label}</span></button>)}</div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-brand-surface-lowest/20 p-4 sm:p-6">
               {detailTab === 'details' && <div className="space-y-4"><section className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 shadow-sm"><div className="mb-4 flex items-center gap-2"><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary/10"><Receipt className="h-4 w-4 text-brand-primary" /></div><div><h3 className="text-xs font-extrabold text-brand-text">Nội dung hóa đơn</h3><p className="mt-0.5 text-[9px] text-brand-text-muted">Chi tiết các khoản phí được phát hành</p></div></div><div className="overflow-x-auto rounded-xl border border-brand-outline/30"><table className="w-full min-w-[520px] text-left text-[10px]"><thead className="bg-brand-surface-lowest/70"><tr className="border-b border-brand-outline/35 text-[9px] font-bold uppercase tracking-wide text-brand-text-muted"><th className="px-4 py-3">Mô tả</th><th className="px-3 py-3 text-center">SL</th><th className="px-3 py-3 text-right">Đơn giá</th><th className="px-4 py-3 text-right">Thành tiền</th></tr></thead><tbody>{selectedInvoiceLineItems.map((item) => <tr key={item.id} className="border-b border-brand-outline/20 last:border-0"><td className="px-4 py-3.5 font-bold text-brand-text">{item.description}<p className="mt-1 text-[9px] font-normal text-brand-text-muted">Thuế suất {item.taxRate}%</p></td><td className="px-3 py-3.5 text-center text-brand-text">{item.quantity}</td><td className="px-3 py-3.5 text-right tabular-nums text-brand-text">{formatMoney(item.unitPrice, selectedInvoice.currency)}</td><td className="px-4 py-3.5 text-right tabular-nums font-extrabold text-brand-text">{formatMoney(item.amount, selectedInvoice.currency)}</td></tr>)}</tbody></table></div><dl className="ml-auto mt-4 max-w-sm space-y-2 rounded-xl bg-brand-surface-lowest/60 p-4 text-[10px]"><div className="flex justify-between gap-4"><dt className="text-brand-text-muted">Tạm tính</dt><dd className="tabular-nums font-bold text-brand-text">{formatMoney(selectedInvoice.subtotal ?? selectedInvoice.amount, selectedInvoice.currency)}</dd></div><div className="flex justify-between gap-4"><dt className="text-brand-text-muted">Chiết khấu</dt><dd className="tabular-nums font-bold text-brand-text">− {formatMoney(selectedInvoice.discountAmount || 0, selectedInvoice.currency)}</dd></div><div className="flex justify-between gap-4"><dt className="text-brand-text-muted">Thuế</dt><dd className="tabular-nums font-bold text-brand-text">{formatMoney(selectedInvoice.taxAmount || 0, selectedInvoice.currency)}</dd></div><div className="flex justify-between gap-4 border-t border-brand-outline/35 pt-3 text-xs"><dt className="font-extrabold text-brand-text">Tổng cộng</dt><dd className="tabular-nums font-extrabold text-brand-primary">{formatMoney(selectedInvoice.amount, selectedInvoice.currency)}</dd></div></dl></section><section className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 shadow-sm"><div className="mb-4 flex items-center gap-2"><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary/10"><Building2 className="h-4 w-4 text-brand-primary" /></div><div><h3 className="text-xs font-extrabold text-brand-text">Thông tin xuất hóa đơn</h3><p className="mt-0.5 text-[9px] text-brand-text-muted">Thông tin pháp lý và địa chỉ nhận hóa đơn</p></div></div><dl className="grid grid-cols-1 gap-x-6 gap-y-4 text-[10px] sm:grid-cols-2"><div><dt className="text-brand-text-muted">Đơn vị / Tenant</dt><dd className="mt-1 font-bold text-brand-text">{selectedInvoice.billingCompany || selectedInvoice.tenantName}</dd></div><div><dt className="text-brand-text-muted">Email nhận hóa đơn</dt><dd className="mt-1 break-all font-bold text-brand-text">{selectedInvoice.billingEmail || 'Chưa cung cấp'}</dd></div><div><dt className="text-brand-text-muted">Mã số thuế</dt><dd className="mt-1 font-bold text-brand-text">{selectedInvoice.taxCode || 'Không áp dụng'}</dd></div><div><dt className="text-brand-text-muted">Mã tenant</dt><dd className="mt-1 font-mono font-bold text-brand-text">{selectedInvoice.tenantId}</dd></div><div className="sm:col-span-2"><dt className="text-brand-text-muted">Địa chỉ thanh toán</dt><dd className="mt-1 font-bold leading-relaxed text-brand-text">{selectedInvoice.billingAddress || 'Chưa cung cấp'}</dd></div></dl></section><section className="rounded-2xl border border-brand-outline/35 bg-brand-surface p-5 shadow-sm"><div className="mb-4 flex items-center gap-2"><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary/10"><CalendarClock className="h-4 w-4 text-brand-primary" /></div><div><h3 className="text-xs font-extrabold text-brand-text">Thông tin dịch vụ</h3><p className="mt-0.5 text-[9px] text-brand-text-muted">Gói cước, kỳ sử dụng và thông tin nội bộ</p></div></div><div className="grid grid-cols-1 gap-x-6 gap-y-4 text-[10px] sm:grid-cols-2"><div><p className="text-brand-text-muted">Gói / chu kỳ</p><p className="mt-1 font-bold text-brand-text">{selectedInvoice.planName || 'Không áp dụng'} · {selectedInvoice.billingCycle === 'yearly' ? 'Năm' : 'Tháng'}</p></div><div><p className="text-brand-text-muted">Kỳ dịch vụ</p><p className="mt-1 font-bold leading-relaxed text-brand-text">{selectedInvoice.servicePeriod || selectedInvoice.billingPeriod}</p></div><div><p className="text-brand-text-muted">Phát hành bởi</p><p className="mt-1 break-all font-bold text-brand-text">{selectedInvoice.issuedBy || 'Hệ thống Billing'}</p></div><div><p className="text-brand-text-muted">Ghi chú</p><p className="mt-1 font-bold leading-relaxed text-brand-text">{selectedInvoice.note || 'Không có ghi chú'}</p></div></div></section></div>}
-              {detailTab === 'payments' && <div className="space-y-4"><section className="rounded-xl border border-brand-outline/35 p-4"><div className="mb-3 flex items-center gap-2"><Landmark className="h-4 w-4 text-brand-primary" /><h3 className="text-xs font-extrabold text-brand-text">Thông tin thực nhận</h3></div><dl className="grid grid-cols-1 gap-3 text-[10px] sm:grid-cols-2"><div><dt className="text-brand-text-muted">Phương thức</dt><dd className="mt-1 font-bold text-brand-text">{getPaymentMethodLabel(selectedInvoice)}</dd></div><div><dt className="text-brand-text-muted">Mã giao dịch</dt><dd className={`mt-1 font-bold ${selectedInvoice.transactionCode?.trim() ? 'font-mono ' : ''}${getTransactionDisplay(selectedInvoice) === 'Thiếu mã giao dịch' ? 'text-amber-600 dark:text-amber-400' : 'text-brand-text'}`}>{getTransactionDisplay(selectedInvoice)}</dd></div><div><dt className="text-brand-text-muted">Phí cổng thanh toán</dt><dd className="mt-1 tabular-nums font-bold text-brand-text">{formatMoney(selectedInvoice.processingFee || 0, selectedInvoice.currency)}</dd></div><div><dt className="text-brand-text-muted">Thực nhận sau phí/hoàn</dt><dd className="mt-1 tabular-nums font-bold text-brand-text">{formatMoney(selectedInvoice.netReceived || 0, selectedInvoice.currency)}</dd></div></dl></section>{selectedInvoice.refundStatus && selectedInvoice.refundStatus !== 'NONE' && <section className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4"><div className="flex items-center gap-2"><RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" /><h3 className="text-xs font-extrabold text-brand-text">Thông tin hoàn tiền</h3></div><dl className="mt-3 grid grid-cols-1 gap-3 text-[10px] sm:grid-cols-2"><div><dt className="text-brand-text-muted">Đã hoàn</dt><dd className="mt-1 tabular-nums font-extrabold text-brand-text">{formatMoney(selectedInvoice.refundedAmount || 0, selectedInvoice.currency)}</dd></div><div><dt className="text-brand-text-muted">Thời gian</dt><dd className="mt-1 font-bold text-brand-text">{formatDateTime(selectedInvoice.refundedAt)}</dd></div><div className="sm:col-span-2"><dt className="text-brand-text-muted">Lý do</dt><dd className="mt-1 font-bold text-brand-text">{selectedInvoice.refundReason}</dd></div></dl></section>}<section className="rounded-xl border border-brand-outline/35 p-4"><h3 className="text-xs font-extrabold text-brand-text">Các lần thanh toán</h3><div className="mt-3 divide-y divide-brand-outline/25">{(selectedInvoice.paymentAttempts || []).length === 0 ? <p className="py-5 text-center text-[10px] text-brand-text-muted">{selectedInvoice.status === 'PAID' ? 'Thanh toán được ghi nhận từ dữ liệu cũ, chưa có lịch sử lần thanh toán.' : 'Chưa phát sinh lần thanh toán nào.'}</p> : (selectedInvoice.paymentAttempts || []).map((attempt) => <div key={attempt.id} className="flex items-start justify-between gap-3 py-3"><div><div className="flex items-center gap-2"><Badge className={attempt.status === 'SUCCESS' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : attempt.status === 'FAILED' ? 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400' : 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400'}>{attempt.status === 'SUCCESS' ? 'Thành công' : attempt.status === 'FAILED' ? 'Thất bại' : 'Đang chờ'}</Badge><span className="text-[10px] font-bold text-brand-text">{GATEWAY_LABELS[attempt.gateway]}</span></div><p className="mt-1.5 text-[9px] text-brand-text-muted">{formatDateTime(attempt.attemptedAt)} · {attempt.transactionCode || attempt.failureReason || (attempt.gateway === 'MANUAL' ? 'Không yêu cầu mã giao dịch' : 'Thiếu mã giao dịch')}</p></div><p className="tabular-nums text-xs font-extrabold text-brand-text">{formatMoney(attempt.amount, selectedInvoice.currency)}</p></div>)}</div></section></div>}
+              {detailTab === 'payments' && <div className="space-y-4">
+                {Boolean(selectedInvoice.paymentProofSubmittedAt || selectedInvoice.paymentProofNote || selectedInvoice.paymentProofUrl) && (
+                  <section className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <h3 className="text-xs font-extrabold text-brand-text">Bằng chứng thanh toán từ Tenant</h3>
+                      </div>
+                      <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[9px] font-bold text-blue-600 dark:text-blue-400">
+                        Nộp lúc {formatDateTime(selectedInvoice.paymentProofSubmittedAt)}
+                      </span>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-1 gap-3 text-[10px] sm:grid-cols-2">
+                      <div>
+                        <dt className="text-brand-text-muted">Mã tham chiếu / Giao dịch</dt>
+                        <dd className="mt-1 font-mono font-bold text-brand-text">{selectedInvoice.transactionCode || 'Chưa cung cấp'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-brand-text-muted">Ghi chú chuyển khoản</dt>
+                        <dd className="mt-1 font-bold text-brand-text">{selectedInvoice.paymentProofNote || 'Không có ghi chú'}</dd>
+                      </div>
+                      {selectedInvoice.paymentProofUrl && (
+                        <div className="sm:col-span-2">
+                          <dt className="text-brand-text-muted">Hình ảnh / Chứng từ đính kèm</dt>
+                          <dd className="mt-2">
+                            <a
+                              href={selectedInvoice.paymentProofUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block overflow-hidden rounded-lg border border-brand-outline/40 hover:opacity-90"
+                            >
+                              <img
+                                src={selectedInvoice.paymentProofUrl}
+                                alt="Chứng từ thanh toán"
+                                className="max-h-48 object-contain"
+                              />
+                            </a>
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                    {selectedInvoice.status !== 'PAID' && (
+                      <div className="mt-3 flex justify-end border-t border-blue-500/20 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaymentCapture({
+                              invoiceId: selectedInvoice.id,
+                              gateway: inferPaymentGateway(selectedInvoice.paymentMethod) || 'BANK_TRANSFER',
+                              transactionCode: selectedInvoice.transactionCode || ''
+                            });
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Đối soát khớp & Duyệt thanh toán</span>
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                )}
+                <section className="rounded-xl border border-brand-outline/35 p-4"><div className="mb-3 flex items-center gap-2"><Landmark className="h-4 w-4 text-brand-primary" /><h3 className="text-xs font-extrabold text-brand-text">Thông tin thực nhận</h3></div><dl className="grid grid-cols-1 gap-3 text-[10px] sm:grid-cols-2"><div><dt className="text-brand-text-muted">Phương thức</dt><dd className="mt-1 font-bold text-brand-text">{getPaymentMethodLabel(selectedInvoice)}</dd></div><div><dt className="text-brand-text-muted">Mã giao dịch</dt><dd className={`mt-1 font-bold ${selectedInvoice.transactionCode?.trim() ? 'font-mono ' : ''}${getTransactionDisplay(selectedInvoice) === 'Thiếu mã giao dịch' ? 'text-amber-600 dark:text-amber-400' : 'text-brand-text'}`}>{getTransactionDisplay(selectedInvoice)}</dd></div><div><dt className="text-brand-text-muted">Phí cổng thanh toán</dt><dd className="mt-1 tabular-nums font-bold text-brand-text">{formatMoney(selectedInvoice.processingFee || 0, selectedInvoice.currency)}</dd></div><div><dt className="text-brand-text-muted">Thực nhận sau phí/hoàn</dt><dd className="mt-1 tabular-nums font-bold text-brand-text">{formatMoney(selectedInvoice.netReceived || 0, selectedInvoice.currency)}</dd></div></dl></section>{selectedInvoice.refundStatus && selectedInvoice.refundStatus !== 'NONE' && <section className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4"><div className="flex items-center gap-2"><RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" /><h3 className="text-xs font-extrabold text-brand-text">Thông tin hoàn tiền</h3></div><dl className="mt-3 grid grid-cols-1 gap-3 text-[10px] sm:grid-cols-2"><div><dt className="text-brand-text-muted">Đã hoàn</dt><dd className="mt-1 tabular-nums font-extrabold text-brand-text">{formatMoney(selectedInvoice.refundedAmount || 0, selectedInvoice.currency)}</dd></div><div><dt className="text-brand-text-muted">Thời gian</dt><dd className="mt-1 font-bold text-brand-text">{formatDateTime(selectedInvoice.refundedAt)}</dd></div><div className="sm:col-span-2"><dt className="text-brand-text-muted">Lý do</dt><dd className="mt-1 font-bold text-brand-text">{selectedInvoice.refundReason}</dd></div></dl></section>}<section className="rounded-xl border border-brand-outline/35 p-4"><h3 className="text-xs font-extrabold text-brand-text">Các lần thanh toán</h3><div className="mt-3 divide-y divide-brand-outline/25">{(selectedInvoice.paymentAttempts || []).length === 0 ? <p className="py-5 text-center text-[10px] text-brand-text-muted">{selectedInvoice.status === 'PAID' ? 'Thanh toán được ghi nhận từ dữ liệu cũ, chưa có lịch sử lần thanh toán.' : 'Chưa phát sinh lần thanh toán nào.'}</p> : (selectedInvoice.paymentAttempts || []).map((attempt) => <div key={attempt.id} className="flex items-start justify-between gap-3 py-3"><div><div className="flex items-center gap-2"><Badge className={attempt.status === 'SUCCESS' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : attempt.status === 'FAILED' ? 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400' : 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400'}>{attempt.status === 'SUCCESS' ? 'Thành công' : attempt.status === 'FAILED' ? 'Thất bại' : 'Đang chờ'}</Badge><span className="text-[10px] font-bold text-brand-text">{GATEWAY_LABELS[attempt.gateway]}</span></div><p className="mt-1.5 text-[9px] text-brand-text-muted">{formatDateTime(attempt.attemptedAt)} · {attempt.transactionCode || attempt.failureReason || (attempt.gateway === 'MANUAL' ? 'Không yêu cầu mã giao dịch' : 'Thiếu mã giao dịch')}</p></div><p className="tabular-nums text-xs font-extrabold text-brand-text">{formatMoney(attempt.amount, selectedInvoice.currency)}</p></div>)}</div></section></div>}
               {detailTab === 'history' && <div className="space-y-0">{[...(selectedInvoice.activities || [])].reverse().map((activity, index) => <div key={activity.id} className="relative flex gap-3 pb-5">{index < (selectedInvoice.activities || []).length - 1 && <div className="absolute left-[7px] top-4 h-full w-px bg-brand-outline" />}<div className="relative mt-1 h-4 w-4 shrink-0 rounded-full border-4 border-brand-surface bg-brand-primary" /><div><p className="text-xs font-extrabold text-brand-text">{activity.action}</p><p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">{activity.description}</p><p className="mt-1 text-[9px] text-brand-text-muted">{activity.actor} · {formatDateTime(activity.createdAt)}</p></div></div>)}</div>}
             </div>
         </Modal>

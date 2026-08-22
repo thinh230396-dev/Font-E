@@ -17,7 +17,8 @@ export type NailPageId =
   | 'finance'
   | 'sanitation'
   | 'reports'
-  | 'settings';
+  | 'settings'
+  | 'support';
 
 export type UiTone = 'violet' | 'blue' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'slate';
 
@@ -121,7 +122,7 @@ export const REFUND_APPROVAL_OPTIONS = [
 ];
 
 export interface NailModuleConfig {
-  id: Exclude<NailPageId, 'overview' | 'subscription'>;
+  id: Exclude<NailPageId, 'overview' | 'subscription' | 'support'>;
   eyebrow: string;
   title: string;
   description: string;
@@ -153,7 +154,7 @@ export interface NailModuleConfig {
 
 const d = (label: string, value: string) => ({ label, value });
 
-export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscription'>, NailModuleConfig> = {
+export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscription' | 'support'>, NailModuleConfig> = {
   branches: {
     id: 'branches', eyebrow: 'Phạm vi quản trị tenant', title: 'Chi nhánh', description: 'Quản lý các chi nhánh thuộc tenant, người phụ trách, giờ hoạt động và hiệu suất theo gói đăng ký.', primaryAction: 'Thêm chi nhánh', secondaryAction: 'Xuất danh sách',
     stats: [

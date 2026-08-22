@@ -34,6 +34,7 @@ const initialTenant = (
   subscriptionStartedAt: '2026-07-01',
   subscriptionRenewsAt: packageName === 'Enterprise' ? '2027-06-30' : '2026-07-31',
   planStartDate: '2026-07-01',
+  adminStatus: status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE',
   paymentStatus: status === 'OVERDUE' ? 'OVERDUE' : 'PAID'
 });
 

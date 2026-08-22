@@ -1,5 +1,5 @@
 import BeautifulSelect from './BeautifulSelect';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react';
 import {
   AlertTriangle,
   BarChart3,
@@ -11,11 +11,14 @@ import {
   ExternalLink,
   FileText,
   Headphones,
+  Image as ImageIcon,
   Inbox,
   Mail,
+  Maximize2,
   MessageSquare,
   Paperclip,
   Phone,
+  Plus,
   Search,
   Send,
   ShieldCheck,
@@ -23,6 +26,8 @@ import {
   Tag,
   Ticket as TicketIcon,
   Timer,
+  Trash2,
+  Upload,
   UserCheck,
   Users,
   X,
@@ -30,7 +35,7 @@ import {
 } from 'lucide-react';
 import type { Ticket, TicketHistoryEntry, TicketMessage } from '../types';
 import { recordAuditLog } from '../utils/auditLogs';
-import { Modal } from './ui';
+import { Button, Modal } from './ui';
 
 interface HelpAndSupportProps {
   tickets: Ticket[];
@@ -43,13 +48,13 @@ type SortMode = 'UPDATED_DESC' | 'CREATED_DESC' | 'PRIORITY_DESC' | 'SLA_ASC';
 type DetailTab = 'conversation' | 'history' | 'details';
 
 const PAGE_SIZE = 7;
-const ACTIVE_STATUSES: Ticket['status'][] = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'ESCALATED'];
+export const ACTIVE_STATUSES: Ticket['status'][] = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'ESCALATED'];
 
-const SUPPORT_AGENTS = [
+export const SUPPORT_AGENTS = [
   { id: 'SUPERADMIN', name: 'Superadmin', email: 'superadmin@salonsys.vn', team: 'SECURITY' as const }
 ];
 
-const STATUS_CONFIG: Record<Ticket['status'], { label: string; className: string }> = {
+export const STATUS_CONFIG: Record<Ticket['status'], { label: string; className: string }> = {
   OPEN: { label: 'Mới', className: 'border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400' },
   ASSIGNED: { label: 'Đã phân công', className: 'border-violet-500/25 bg-violet-500/10 text-violet-600 dark:text-violet-400' },
   IN_PROGRESS: { label: 'Đang xử lý', className: 'border-blue-500/25 bg-blue-500/10 text-blue-600 dark:text-blue-400' },
@@ -59,28 +64,28 @@ const STATUS_CONFIG: Record<Ticket['status'], { label: string; className: string
   CLOSED: { label: 'Đã đóng', className: 'border-brand-outline bg-brand-surface-high text-brand-text-muted' }
 };
 
-const PRIORITY_CONFIG: Record<Ticket['priority'], { label: string; weight: number; className: string }> = {
+export const PRIORITY_CONFIG: Record<Ticket['priority'], { label: string; weight: number; className: string }> = {
   URGENT: { label: 'Khẩn cấp', weight: 4, className: 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400' },
   HIGH: { label: 'Cao', weight: 3, className: 'border-orange-500/25 bg-orange-500/10 text-orange-600 dark:text-orange-400' },
   MEDIUM: { label: 'Trung bình', weight: 2, className: 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400' },
   LOW: { label: 'Thấp', weight: 1, className: 'border-brand-outline bg-brand-surface-high text-brand-text-muted' }
 };
 
-const TEAM_LABELS: Record<Ticket['team'], string> = {
+export const TEAM_LABELS: Record<Ticket['team'], string> = {
   L1_SUPPORT: 'Hỗ trợ tuyến 1',
   TECHNICAL: 'Kỹ thuật',
   BILLING: 'Thanh toán',
   SECURITY: 'Bảo mật'
 };
 
-const CHANNEL_CONFIG: Record<Ticket['channel'], { label: string; icon: ReactNode }> = {
+export const CHANNEL_CONFIG: Record<Ticket['channel'], { label: string; icon: ReactNode }> = {
   EMAIL: { label: 'Email', icon: <Mail className="h-3 w-3" /> },
   CHAT: { label: 'Chat', icon: <MessageSquare className="h-3 w-3" /> },
   PHONE: { label: 'Điện thoại', icon: <Phone className="h-3 w-3" /> },
   SYSTEM: { label: 'Tự động', icon: <Zap className="h-3 w-3" /> }
 };
 
-const formatDateTime = (value: string) => {
+export const formatDateTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   const datePart = new Intl.DateTimeFormat('vi-VN', {
@@ -92,7 +97,7 @@ const formatDateTime = (value: string) => {
   return `${datePart} · ${timePart}`;
 };
 
-const formatRelativeTime = (value: string) => {
+export const formatRelativeTime = (value: string) => {
   const minutes = Math.floor((Date.now() - new Date(value).getTime()) / 60000);
   if (minutes < 1) return 'Vừa xong';
   if (minutes < 60) return `${minutes} phút trước`;
@@ -100,7 +105,7 @@ const formatRelativeTime = (value: string) => {
   return `${Math.floor(minutes / 1440)} ngày trước`;
 };
 
-const formatDuration = (minutes: number) => {
+export const formatDuration = (minutes: number) => {
   const absolute = Math.abs(Math.round(minutes));
   if (absolute < 60) return `${absolute} phút`;
   const hours = Math.floor(absolute / 60);
@@ -109,9 +114,9 @@ const formatDuration = (minutes: number) => {
   return `${Math.floor(hours / 24)} ngày ${hours % 24} giờ`;
 };
 
-const isActive = (ticket: Ticket) => ACTIVE_STATUSES.includes(ticket.status);
+export const isActive = (ticket: Ticket) => ACTIVE_STATUSES.includes(ticket.status);
 
-const getSlaState = (ticket: Ticket) => {
+export const getSlaState = (ticket: Ticket) => {
   if (!isActive(ticket)) {
     return { key: 'ON_TRACK' as const, label: 'Đã hoàn tất', detail: 'SLA đã kết thúc', className: 'text-emerald-600 dark:text-emerald-400', bar: 'bg-emerald-500' };
   }
@@ -156,10 +161,16 @@ function Badge({ className, children }: { className: string; children: ReactNode
   return <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-bold ${className}`}>{children}</span>;
 }
 
-function ConversationMessage({ message, requesterName, tenantName }: {
+function ConversationMessage({
+  message,
+  requesterName,
+  tenantName,
+  onImageClick
+}: {
   message: TicketMessage;
   requesterName: string;
   tenantName: string;
+  onImageClick?: (att: { id: string; name: string; size?: string; url?: string; type?: string }) => void;
 }) {
   const isInternal = message.type === 'INTERNAL_NOTE';
   const isSystem = message.type === 'SYSTEM_EVENT' || message.authorRole === 'SYSTEM';
@@ -203,9 +214,64 @@ function ConversationMessage({ message, requesterName, tenantName }: {
           <time className="text-[9px] text-brand-text-muted">{formatDateTime(message.createdAt)}</time>
         </div>
         <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-brand-text">{message.body}</p>
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {/* Image Grid */}
+            {message.attachments.some((att) => att.type?.startsWith('image/') || att.url?.startsWith('data:image') || /\.(png|jpg|jpeg|webp|gif)$/i.test(att.name)) && (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {message.attachments
+                  .filter((att) => att.type?.startsWith('image/') || att.url?.startsWith('data:image') || /\.(png|jpg|jpeg|webp|gif)$/i.test(att.name))
+                  .map((att) => (
+                    <div
+                      key={att.id}
+                      onClick={() => onImageClick?.(att)}
+                      className="group relative cursor-pointer overflow-hidden rounded-xl border border-amber-500/30 bg-black/5 dark:bg-black/20"
+                    >
+                      {att.url ? (
+                        <img
+                          src={att.url}
+                          alt={att.name}
+                          className="h-28 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-28 w-full items-center justify-center bg-amber-100 text-amber-600">
+                          <ImageIcon className="h-8 w-8" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-bold text-white">
+                          <Maximize2 className="h-3 w-3" /> Phóng to
+                        </span>
+                      </div>
+                      <div className="absolute bottom-0 inset-x-0 truncate bg-black/60 px-2 py-0.5 text-[9px] text-white">
+                        {att.name}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+            {/* Non-image attachments */}
+            {message.attachments.some((att) => !(att.type?.startsWith('image/') || att.url?.startsWith('data:image') || /\.(png|jpg|jpeg|webp|gif)$/i.test(att.name))) && (
+              <div className="flex flex-wrap gap-2">
+                {message.attachments
+                  .filter((att) => !(att.type?.startsWith('image/') || att.url?.startsWith('data:image') || /\.(png|jpg|jpeg|webp|gif)$/i.test(att.name)))
+                  .map((attachment) => (
+                    <div key={attachment.id} className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-800 dark:text-amber-200">
+                      <Paperclip className="h-3.5 w-3.5 text-amber-600" />
+                      <span className="font-bold">{attachment.name}</span>
+                      <span className="opacity-75">{attachment.size}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
       </article>
     );
   }
+
+  const imageAttachments = (message.attachments || []).filter((att) => att.type?.startsWith('image/') || att.url?.startsWith('data:image') || /\.(png|jpg|jpeg|webp|gif)$/i.test(att.name));
+  const fileAttachments = (message.attachments || []).filter((att) => !(att.type?.startsWith('image/') || att.url?.startsWith('data:image') || /\.(png|jpg|jpeg|webp|gif)$/i.test(att.name)));
 
   return (
     <article className={`flex items-end gap-2.5 ${isSupport ? 'justify-end' : 'justify-start'}`}>
@@ -222,9 +288,44 @@ function ConversationMessage({ message, requesterName, tenantName }: {
           <time className="text-[9px] text-brand-text-muted">{formatDateTime(message.createdAt)}</time>
         </div>
         <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-brand-text">{message.body}</p>
-        {message.attachments && message.attachments.length > 0 && (
+
+        {/* Render Image Grid */}
+        {imageAttachments.length > 0 && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {imageAttachments.map((att) => (
+              <div
+                key={att.id}
+                onClick={() => onImageClick?.(att)}
+                className="group relative cursor-pointer overflow-hidden rounded-xl border border-brand-outline/40 bg-black/5 dark:bg-black/20"
+              >
+                {att.url ? (
+                  <img
+                    src={att.url}
+                    alt={att.name}
+                    className="h-28 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-28 w-full items-center justify-center bg-brand-surface-high text-brand-text-muted">
+                    <ImageIcon className="h-8 w-8" />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-bold text-white">
+                    <Maximize2 className="h-3 w-3" /> Phóng to
+                  </span>
+                </div>
+                <div className="absolute bottom-0 inset-x-0 truncate bg-black/60 px-2 py-0.5 text-[9px] text-white">
+                  {att.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Render Non-image attachments */}
+        {fileAttachments.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {message.attachments.map((attachment) => (
+            {fileAttachments.map((attachment) => (
               <div key={attachment.id} className="inline-flex items-center gap-2 rounded-lg border border-brand-outline/40 bg-brand-surface px-3 py-2 text-[10px] text-brand-text">
                 <Paperclip className="h-3.5 w-3.5 text-brand-primary" />
                 <span className="font-bold">{attachment.name}</span>
@@ -233,6 +334,7 @@ function ConversationMessage({ message, requesterName, tenantName }: {
             ))}
           </div>
         )}
+
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-brand-outline/25 pt-2 text-[9px] text-brand-text-muted">
           <span>{message.authorEmail}</span>
           <span className="inline-flex items-center gap-1.5">{isCustomer ? <><Inbox className="h-3 w-3" /> Tin nhắn đến từ {requesterName}</> : <><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Đã gửi tới khách hàng</>}</span>
@@ -281,6 +383,69 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
   const [detailTab, setDetailTab] = useState<DetailTab>('conversation');
   const [replyType, setReplyType] = useState<'PUBLIC_REPLY' | 'INTERNAL_NOTE'>('PUBLIC_REPLY');
   const [replyText, setReplyText] = useState('');
+  const [replyAttachedFiles, setReplyAttachedFiles] = useState<Array<{ id: string; name: string; size: string; url?: string; type?: string }>>([]);
+  const [previewImage, setPreviewImage] = useState<{ id?: string; name: string; size?: string; url?: string } | null>(null);
+  const replyFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Helper to process files into data URLs
+  const processFiles = (files: FileList | File[]) => {
+    const list = Array.from(files);
+    list.forEach((file) => {
+      const isImg = file.type.startsWith('image/');
+      const formatSize = (bytes: number) => {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      };
+
+      if (isImg) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = ev.target?.result as string;
+          setReplyAttachedFiles((prev) => [
+            ...prev,
+            {
+              id: 'ATT-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
+              name: file.name,
+              size: formatSize(file.size),
+              url: dataUrl,
+              type: file.type
+            }
+          ]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setReplyAttachedFiles((prev) => [
+          ...prev,
+          {
+            id: 'ATT-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
+            name: file.name,
+            size: formatSize(file.size),
+            type: file.type
+          }
+        ]);
+      }
+    });
+  };
+
+  const handlePasteReply = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+      const imageFiles = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'));
+      if (imageFiles.length > 0) {
+        processFiles(imageFiles);
+      }
+    }
+  };
+
+  // Create Ticket Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createTenantName, setCreateTenantName] = useState('');
+  const [createRequesterName, setCreateRequesterName] = useState('');
+  const [createRequesterEmail, setCreateRequesterEmail] = useState('');
+  const [createSubject, setCreateSubject] = useState('');
+  const [createCategory, setCreateCategory] = useState('Kỹ thuật');
+  const [createPriority, setCreatePriority] = useState<Ticket['priority']>('MEDIUM');
+  const [createDescription, setCreateDescription] = useState('');
 
   const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) || null;
   const categories = useMemo(() => Array.from(new Set(tickets.map((ticket) => ticket.category))).sort(), [tickets]);
@@ -395,7 +560,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
 
   const handleSendReply = (event: FormEvent) => {
     event.preventDefault();
-    if (!selectedTicket || !replyText.trim()) return;
+    if (!selectedTicket || (!replyText.trim() && replyAttachedFiles.length === 0)) return;
     const now = new Date().toISOString();
     const message: TicketMessage = {
       id: createId('MSG'),
@@ -403,8 +568,9 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
       authorEmail: 'superadmin@salonsys.vn',
       authorRole: 'SUPERADMIN',
       type: replyType,
-      body: replyText.trim(),
-      createdAt: now
+      body: replyText.trim() || (replyAttachedFiles.length > 0 ? 'Đã đính kèm tệp / hình ảnh' : ''),
+      createdAt: now,
+      attachments: replyAttachedFiles.length > 0 ? [...replyAttachedFiles] : undefined
     };
     updateTicket(selectedTicket.id, (current) => ({
       ...current,
@@ -422,6 +588,7 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
       method: `CLIENT /support/tickets/${selectedTicket.id}/messages`, metadata: { messageType: replyType }
     });
     setReplyText('');
+    setReplyAttachedFiles([]);
   };
 
   const handleResolve = (ticket: Ticket) => {
@@ -455,6 +622,85 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
     });
   };
 
+  const handleCreateTicketSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!createSubject.trim() || !createDescription.trim()) return;
+
+    const now = new Date();
+    const isUrgent = createPriority === 'URGENT';
+    const isHigh = createPriority === 'HIGH';
+    
+    // SLA calculation: response time & resolution time
+    const responseMinutes = isUrgent ? 15 : isHigh ? 60 : 240;
+    const resolutionHours = isUrgent ? 4 : isHigh ? 24 : 72;
+
+    const firstResponseDueAt = new Date(now.getTime() + responseMinutes * 60000).toISOString();
+    const resolutionDueAt = new Date(now.getTime() + resolutionHours * 3600000).toISOString();
+
+    const newTicket: Ticket = {
+      id: createId('TCK'),
+      tenantId: 'TEN-MANUAL',
+      tenantName: createTenantName.trim() || 'Hệ thống / Chung',
+      requesterName: createRequesterName.trim() || 'Superadmin Support Desk',
+      requesterEmail: createRequesterEmail.trim() || 'superadmin@salonsys.vn',
+      plan: 'Enterprise',
+      subject: createSubject.trim(),
+      description: createDescription.trim(),
+      category: createCategory,
+      priority: createPriority,
+      status: 'OPEN',
+      channel: 'SYSTEM',
+      team: 'TECHNICAL',
+      firstResponseDueAt,
+      resolutionDueAt,
+      tags: ['superadmin-created', createCategory.toLowerCase()],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      messages: [
+        {
+          id: createId('MSG'),
+          authorName: createRequesterName.trim() || 'Superadmin Support Desk',
+          authorEmail: createRequesterEmail.trim() || 'superadmin@salonsys.vn',
+          authorRole: 'SUPERADMIN',
+          body: createDescription.trim(),
+          createdAt: now.toISOString(),
+          type: 'PUBLIC_REPLY'
+        }
+      ],
+      history: [
+        {
+          id: createId('HIS'),
+          action: 'Tạo ticket mới',
+          detail: 'Ticket được khởi tạo bởi Superadmin qua Trung tâm hỗ trợ.',
+          actor: 'Superadmin',
+          createdAt: now.toISOString()
+        }
+      ]
+    };
+
+    onTicketsChange([newTicket, ...tickets]);
+    recordAuditLog({
+      eventCode: 'SUPPORT.TICKETS.CREATED',
+      event: 'Khởi tạo ticket hỗ trợ',
+      description: `Superadmin đã tạo ticket ${newTicket.id} cho ${newTicket.tenantName}.`,
+      severity: 'low',
+      status: 'success',
+      category: 'SUPPORT',
+      resource: `Ticket ${newTicket.id}`,
+      resourceId: newTicket.id,
+      method: 'CLIENT /support/tickets/create'
+    });
+
+    // Reset and close
+    setCreateTenantName('');
+    setCreateRequesterName('');
+    setCreateRequesterEmail('');
+    setCreateSubject('');
+    setCreateDescription('');
+    setShowCreateModal(false);
+    setSelectedTicketId(newTicket.id);
+  };
+
   const resetFilters = () => {
     setSearchQuery('');
     setStatusFilter('ALL');
@@ -479,9 +725,24 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
             </div>
           </div>
         </div>
-        <button onClick={exportCsv} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-brand-outline bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text">
-          <Download className="h-4 w-4" /> <span>Xuất CSV</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={exportCsv}
+            className="text-xs font-bold"
+          >
+            <Download className="h-4 w-4 mr-1.5" />
+            Xuất CSV
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => setShowCreateModal(true)}
+            className="text-xs font-bold"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Tạo ticket mới
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -734,7 +995,13 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
                   </article>
 
                   {(selectedTicket.messages || []).map((message) => (
-                    <ConversationMessage key={message.id} message={message} requesterName={selectedTicket.requesterName} tenantName={selectedTicket.tenantName} />
+                    <ConversationMessage
+                      key={message.id}
+                      message={message}
+                      requesterName={selectedTicket.requesterName}
+                      tenantName={selectedTicket.tenantName}
+                      onImageClick={(att) => setPreviewImage(att)}
+                    />
                   ))}
                 </div>
               )}
@@ -757,6 +1024,20 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
             <div className="shrink-0 border-t border-brand-outline/40 bg-brand-surface-lowest/60 p-3 sm:p-4 lg:col-start-1 lg:row-start-3">
               {detailTab === 'conversation' && isActive(selectedTicket) ? (
                 <form onSubmit={handleSendReply}>
+                  <input
+                    type="file"
+                    ref={replyFileInputRef}
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        processFiles(e.target.files);
+                        e.target.value = '';
+                      }
+                    }}
+                    className="hidden"
+                  />
+
                   <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
                     <div>
                       <p className="text-xs font-extrabold text-brand-text">{replyType === 'PUBLIC_REPLY' ? 'Soạn phản hồi khách hàng' : 'Thêm ghi chú nội bộ'}</p>
@@ -767,9 +1048,55 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
                       <button type="button" onClick={() => setReplyType('INTERNAL_NOTE')} className={`min-h-0 rounded-lg border-0 px-3 py-1.5 text-[10px] font-bold shadow-none ${replyType === 'INTERNAL_NOTE' ? 'bg-amber-500 text-white' : 'bg-transparent text-brand-text-muted'}`}>Ghi chú nội bộ</button>
                     </div>
                   </div>
+
+                  {replyAttachedFiles.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-2 rounded-xl border border-brand-outline/40 bg-brand-surface p-2">
+                      {replyAttachedFiles.map((file) => (
+                        <div
+                          key={file.id}
+                          className="flex items-center gap-2 rounded-lg border border-brand-outline/40 bg-brand-surface-high p-1 pr-2 text-xs"
+                        >
+                          {file.url ? (
+                            <img src={file.url} alt={file.name} className="h-7 w-7 rounded object-cover" />
+                          ) : (
+                            <ImageIcon className="h-4 w-4 text-brand-primary" />
+                          )}
+                          <div className="max-w-[120px] truncate text-[10px]">
+                            <p className="truncate font-bold text-brand-text">{file.name}</p>
+                            <p className="text-brand-text-muted">{file.size}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setReplyAttachedFiles((prev) => prev.filter((f) => f.id !== file.id))}
+                            className="rounded p-0.5 text-brand-text-muted hover:text-rose-500"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                    <textarea rows={2} value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder={replyType === 'PUBLIC_REPLY' ? `Nhập nội dung trả lời ${selectedTicket.requesterName}...` : 'Nhập ghi chú dành cho đội ngũ nội bộ...'} className={`min-h-16 min-w-0 flex-1 resize-none rounded-xl border px-3 py-2.5 text-xs leading-relaxed text-brand-text outline-none placeholder:text-brand-text-muted/60 ${replyType === 'INTERNAL_NOTE' ? 'border-amber-500/35 bg-amber-500/5' : 'border-brand-outline/50 bg-brand-surface'}`} />
-                    <button type="submit" disabled={!replyText.trim()} className={`inline-flex min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-2 text-xs font-bold text-white ${replyType === 'PUBLIC_REPLY' ? 'bg-brand-primary' : 'bg-amber-500'}`}><Send className="h-3.5 w-3.5" /><span>{replyType === 'PUBLIC_REPLY' ? 'Gửi phản hồi' : 'Lưu ghi chú'}</span></button>
+                    <div className="relative flex-1">
+                      <textarea
+                        rows={2}
+                        value={replyText}
+                        onChange={(event) => setReplyText(event.target.value)}
+                        onPaste={handlePasteReply}
+                        placeholder={replyType === 'PUBLIC_REPLY' ? `Nhập nội dung trả lời ${selectedTicket.requesterName} (dán hoặc đính kèm ảnh)...` : 'Nhập ghi chú dành cho đội ngũ nội bộ...'}
+                        className={`min-h-16 w-full resize-none rounded-xl border px-3 py-2.5 pr-10 text-xs leading-relaxed text-brand-text outline-none placeholder:text-brand-text-muted/60 ${replyType === 'INTERNAL_NOTE' ? 'border-amber-500/35 bg-amber-500/5' : 'border-brand-outline/50 bg-brand-surface'}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => replyFileInputRef.current?.click()}
+                        title="Đính kèm hình ảnh / ảnh chụp màn hình"
+                        className="absolute bottom-2.5 right-2.5 rounded-lg p-1.5 text-brand-text-muted hover:bg-brand-surface-high hover:text-brand-primary"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <button type="submit" disabled={!replyText.trim() && replyAttachedFiles.length === 0} className={`inline-flex min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-2 text-xs font-bold text-white ${replyType === 'PUBLIC_REPLY' ? 'bg-brand-primary' : 'bg-amber-500'}`}><Send className="h-3.5 w-3.5" /><span>{replyType === 'PUBLIC_REPLY' ? 'Gửi phản hồi' : 'Lưu ghi chú'}</span></button>
                   </div>
                 </form>
               ) : (
@@ -779,6 +1106,204 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
               )}
             </div>
             </div>
+        </Modal>
+      )}
+
+      {/* MODAL: IMAGE LIGHTBOX PREVIEW */}
+      {previewImage && (
+        <Modal
+          open={!!previewImage}
+          onClose={() => setPreviewImage(null)}
+          title={previewImage.name || 'Ảnh đính kèm'}
+          size="large"
+        >
+          <div className="space-y-4">
+            <div className="flex max-h-[70vh] min-h-[220px] items-center justify-center overflow-hidden rounded-2xl bg-black/90 p-2 shadow-inner">
+              {previewImage.url ? (
+                <img
+                  src={previewImage.url}
+                  alt={previewImage.name}
+                  className="max-h-[65vh] w-auto max-w-full rounded-lg object-contain"
+                />
+              ) : (
+                <div className="py-16 text-center text-slate-400">
+                  <ImageIcon className="mx-auto h-12 w-12 text-slate-600" />
+                  <p className="mt-2 text-xs">Không có dữ liệu hiển thị ảnh xem trước.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-outline/30 pt-3">
+              <div className="text-xs text-brand-text-muted">
+                <span className="font-bold text-brand-text">{previewImage.name}</span>
+                {previewImage.size && <span className="ml-2">({previewImage.size})</span>}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {previewImage.url && (
+                  <a
+                    href={previewImage.url}
+                    download={previewImage.name || 'anh-dinh-kem.png'}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-brand-primary px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-brand-primary/90"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Tải xuống</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewImage(null)}
+                  className="rounded-xl border border-brand-outline bg-brand-surface px-4 py-2 text-xs font-bold text-brand-text hover:bg-brand-surface-high"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* CREATE TICKET MODAL */}
+      {showCreateModal && (
+        <Modal
+          open
+          onClose={() => setShowCreateModal(false)}
+          title="Tạo ticket hỗ trợ mới"
+          eyebrow="Superadmin Support Desk"
+          icon={<Plus className="h-5 w-5 text-brand-primary" />}
+          size="medium"
+          footer={
+            <div className="flex w-full items-center justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!createSubject.trim() || !createDescription.trim()}
+                onClick={handleCreateTicketSubmit}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Khởi tạo Ticket
+              </Button>
+            </div>
+          }
+        >
+          <form onSubmit={handleCreateTicketSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-caption font-bold text-brand-text mb-1">
+                Chủ đề / Yêu cầu <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={createSubject}
+                onChange={(e) => setCreateSubject(e.target.value)}
+                placeholder="VD: Sự cố đồng bộ lịch hẹn, Yêu cầu nâng cấp gói..."
+                className="w-full rounded-control border border-brand-outline bg-brand-surface px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-caption font-bold text-brand-text mb-1">
+                  Tenant / Salon
+                </label>
+                <input
+                  type="text"
+                  value={createTenantName}
+                  onChange={(e) => setCreateTenantName(e.target.value)}
+                  placeholder="VD: Lumière Hair Studio"
+                  className="w-full rounded-control border border-brand-outline bg-brand-surface px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-caption font-bold text-brand-text mb-1">
+                  Danh mục
+                </label>
+                <BeautifulSelect
+                  value={createCategory}
+                  onChange={(e) => setCreateCategory(e.target.value)}
+                  className="w-full"
+                >
+                  <option value="Kỹ thuật">Kỹ thuật & Hệ thống</option>
+                  <option value="Thanh toán & Gói">Thanh toán & Gói cước</option>
+                  <option value="Chi nhánh & Nhân sự">Chi nhánh & Nhân sự</option>
+                  <option value="Tài khoản & Quyền">Tài khoản & Phân quyền</option>
+                  <option value="Khác">Khác / Hỗ trợ chung</option>
+                </BeautifulSelect>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-caption font-bold text-brand-text mb-1">
+                  Người yêu cầu / Đại diện
+                </label>
+                <input
+                  type="text"
+                  value={createRequesterName}
+                  onChange={(e) => setCreateRequesterName(e.target.value)}
+                  placeholder="VD: Nguyễn Văn Boss"
+                  className="w-full rounded-control border border-brand-outline bg-brand-surface px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-caption font-bold text-brand-text mb-1">
+                  Email liên hệ
+                </label>
+                <input
+                  type="email"
+                  value={createRequesterEmail}
+                  onChange={(e) => setCreateRequesterEmail(e.target.value)}
+                  placeholder="VD: tenantadmin@lumierehair.vn"
+                  className="w-full rounded-control border border-brand-outline bg-brand-surface px-3 py-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-caption font-bold text-brand-text mb-1">
+                Mức độ ưu tiên
+              </label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as Ticket['priority'][]).map((pri) => (
+                  <button
+                    key={pri}
+                    type="button"
+                    onClick={() => setCreatePriority(pri)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
+                      createPriority === pri
+                        ? pri === 'URGENT'
+                          ? 'border-red-500 bg-red-500/15 text-red-600 dark:text-red-400'
+                          : pri === 'HIGH'
+                            ? 'border-orange-500 bg-orange-500/15 text-orange-600 dark:text-orange-400'
+                            : 'border-brand-primary bg-brand-primary/15 text-brand-primary'
+                        : 'border-brand-outline bg-brand-surface text-brand-text-muted hover:border-brand-outline-strong'
+                    }`}
+                  >
+                    {PRIORITY_CONFIG[pri].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-caption font-bold text-brand-text mb-1">
+                Nội dung chi tiết yêu cầu <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                required
+                rows={4}
+                value={createDescription}
+                onChange={(e) => setCreateDescription(e.target.value)}
+                placeholder="Mô tả chi tiết vấn đề, triệu chứng, mã lỗi hoặc yêu cầu cụ thể..."
+                className="w-full rounded-control border border-brand-outline bg-brand-surface px-3 py-2 text-xs leading-relaxed text-brand-text focus:border-brand-primary focus:outline-none"
+              />
+            </div>
+          </form>
         </Modal>
       )}
     </div>
