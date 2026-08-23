@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
+  Award,
   CalendarCheck2,
   CalendarDays,
   Check,
@@ -10,7 +11,10 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Clock3,
+  Crown,
   Filter,
+  Gift,
+  History,
   LayoutGrid,
   LayoutList,
   MapPin,
@@ -21,10 +25,12 @@ import {
   Phone,
   Plus,
   ReceiptText,
+  RotateCcw,
   Search,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  UserCheck,
   UserRound,
   UsersRound,
   X
@@ -33,8 +39,9 @@ import BeautifulSelect from './BeautifulSelect';
 import { formatMoney as formatCurrency } from '../utils/money';
 import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader } from './ui';
 import type { DataTableColumn } from './ui';
+import { getTenantCustomers, type TenantCustomer, tierMeta } from '../utils/tenantCustomers';
 
-type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'REFUNDED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
 type BranchCode = 'Q1' | 'Q3';
 type ViewMode = 'SCHEDULE' | 'LIST';
@@ -65,6 +72,12 @@ interface TenantAppointment {
   cancellationNote?: string;
   cancelledAt?: string;
   cancelledBy?: string;
+  refundAmount?: number;
+  refundReason?: string;
+  refundMethod?: 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
+  refundNote?: string;
+  refundedAt?: string;
+  refundedBy?: string;
   createdAt: string;
 }
 
@@ -89,6 +102,10 @@ interface TenantAdminAppointmentsProps {
     allergies: string;
     nailCondition: string;
     favoriteTechnician: string;
+    tier?: string;
+    points?: number;
+    totalSpent?: number;
+    visits?: number;
   } | null;
   onBookingRequestHandled?: () => void;
 }
@@ -122,6 +139,7 @@ const appointmentStatusText: Record<AppointmentStatus, { label: string; short: s
   CONFIRMED: { label: 'Đã xác nhận', short: 'Xác nhận' },
   CHECKED_IN: { label: 'Đã đến', short: 'Đã đến' },
   IN_SERVICE: { label: 'Đang phục vụ', short: 'Phục vụ' },
+  REFUNDED: { label: 'Đã hoàn tiền', short: 'Hoàn tiền' },
   COMPLETED: { label: 'Hoàn thành', short: 'Xong' },
   CANCELLED: { label: 'Đã hủy', short: 'Đã hủy' },
   NO_SHOW: { label: 'Không đến', short: 'Vắng' }
@@ -157,6 +175,15 @@ const cancellationReasons = [
   'Khách yêu cầu đổi ngày',
   'Salon không đủ nguồn lực',
   'Trùng lịch hoặc sai thông tin',
+  'Khác'
+];
+
+const refundReasons = [
+  'Khách không hài lòng chất lượng dịch vụ',
+  'KTV thao tác sai / làm đau / tổn thương móng',
+  'Sản phẩm gây dị ứng / kích ứng da hoặc móng',
+  'Sự cố kỹ thuật (hỏng máy, mất điện, hết vật tư)',
+  'Khách có việc gấp phải dừng dịch vụ giữa chừng',
   'Khác'
 ];
 
@@ -215,7 +242,9 @@ export const generateAppointmentSeed = (): TenantAppointment[] => {
     { id: 'APT-1051', customer: 'Mai Đức Anh', phone: '0901 533 008', date: currentDate, start: '15:30', duration: 75, service: 'Combo manicure & sơn gel', staff: 'Gia Huy', branch: 'Q1', source: 'ZALO', status: 'PENDING', price: 480_000, deposit: 0, note: '', station: 'M-12', reminderSent: false, createdBy: 'Quản lý Q1', createdAt },
     { id: 'APT-1052', customer: 'Tạ Mỹ Duyên', phone: '0933 112 800', date: prevDate, start: '14:00', duration: 150, service: 'Đắp gel nối móng', staff: 'Minh Châu', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 1_350_000, deposit: 500_000, note: '', station: 'VIP-02', reminderSent: true, createdBy: 'Website booking', createdAt },
     { id: 'APT-1053', customer: 'Huỳnh Phương Thảo', phone: '0905 811 229', date: nextDate, start: '09:30', duration: 120, service: 'Nail Art Premium', staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1_200_000, deposit: 500_000, note: 'Khách cần hoàn tất trước 12:00.', station: 'VIP-01', reminderSent: true, createdBy: 'Website booking', createdAt },
-    { id: 'APT-1054', customer: 'Phan Gia Hân', phone: '0974 360 118', date: nextDate, start: '13:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 380_000, deposit: 0, note: '', station: 'M-04', reminderSent: false, createdBy: 'Owner', createdAt }
+    { id: 'APT-1054', customer: 'Phan Gia Hân', phone: '0974 360 118', date: nextDate, start: '13:00', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'PENDING', price: 380_000, deposit: 0, note: '', station: 'M-04', reminderSent: false, createdBy: 'Owner', createdAt },
+    { id: 'APT-1055', customer: 'Lê Hoàng Nam', phone: '0919 445 882', date: currentDate, start: '17:00', duration: 45, service: 'Tháo gel & dưỡng móng', staff: 'Quốc Bảo', branch: 'Q3', source: 'PHONE', status: 'CANCELLED', price: 220_000, deposit: 0, note: 'Khách gọi báo hoãn', station: 'P-01', reminderSent: false, createdBy: 'Lễ tân Mai', cancellationReason: '', cancellationNote: '', cancelledAt: '10:30 · Hôm nay', cancelledBy: 'Lễ tân Mai', createdAt },
+    { id: 'APT-1056', customer: 'Võ Mai Phương', phone: '0908 991 234', date: currentDate, start: '14:15', duration: 60, service: 'Sơn gel Hàn Quốc', staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'REFUNDED', price: 380_000, deposit: 100_000, note: 'Khách bị rát da tay khi hơ đèn gel, đã xử lý hoàn tiền tại chỗ và sát khuẩn.', station: 'M-03', reminderSent: true, createdBy: 'Lễ tân Mai', refundAmount: 380_000, refundReason: 'Sản phẩm gây dị ứng / kích ứng da hoặc móng', refundMethod: 'CASH', refundNote: 'Đã hoàn 380.000đ tiền mặt tại quầy, tặng voucher dưỡng móng 100k cho lần sau.', refundedAt: '15:05 · Hôm nay', refundedBy: 'Lễ tân Mai', createdAt }
   ];
 };
 
@@ -418,11 +447,117 @@ export default function TenantAdminAppointments({
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancellationNote, setCancellationNote] = useState('');
   const [cancellationError, setCancellationError] = useState('');
+  const [showRefundForm, setShowRefundForm] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundMethod, setRefundMethod] = useState<'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY'>('CASH');
+  const [refundNote, setRefundNote] = useState('');
+  const [refundError, setRefundError] = useState('');
   const canManage = accessMode === 'full' && !readOnlyReason;
   const isReceptionist = roleLabel.toLowerCase().startsWith('receptionist');
   const now = new Date();
   const currentTimeLabel = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   const currentMinuteOfDay = now.getHours() * 60 + now.getMinutes();
+
+  // Đồng bộ danh sách khách hàng từ hồ sơ Salon (Tenant Customers)
+  const [customerList, setCustomerList] = useState<TenantCustomer[]>(() => getTenantCustomers(tenantName));
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [isCustomerUnlinked, setIsCustomerUnlinked] = useState(false);
+
+  useEffect(() => {
+    const handleCustomersUpdated = () => {
+      setCustomerList(getTenantCustomers(tenantName));
+    };
+    window.addEventListener('salonsys_customers_updated', handleCustomersUpdated);
+    window.addEventListener('storage', handleCustomersUpdated);
+    return () => {
+      window.removeEventListener('salonsys_customers_updated', handleCustomersUpdated);
+      window.removeEventListener('storage', handleCustomersUpdated);
+    };
+  }, [tenantName]);
+
+  // Khách hàng đang được khớp với form hiện tại
+  const cleanPhoneInput = form.phone.replace(/[\s.-]/g, '');
+  const matchedCustomer = useMemo(() => {
+    if (isCustomerUnlinked) return null;
+    if (form.customerId) {
+      const byId = customerList.find((c) => c.id === form.customerId);
+      if (byId) return byId;
+    }
+    if (cleanPhoneInput && cleanPhoneInput.length >= 9) {
+      const byPhone = customerList.find((c) => c.phone.replace(/[\s.-]/g, '') === cleanPhoneInput);
+      if (byPhone) return byPhone;
+    }
+    return null;
+  }, [customerList, form.customerId, cleanPhoneInput, isCustomerUnlinked]);
+
+  // Khách hàng liên kết với lịch hẹn đang được xem chi tiết
+  const matchedCustomerDetail = useMemo(() => {
+    if (!selectedAppointment) return null;
+    if (selectedAppointment.customerId) {
+      const byId = customerList.find((c) => c.id === selectedAppointment.customerId);
+      if (byId) return byId;
+    }
+    const aptPhoneDigits = selectedAppointment.phone.replace(/[\s.-]/g, '');
+    if (aptPhoneDigits) {
+      const byPhone = customerList.find((c) => c.phone.replace(/[\s.-]/g, '') === aptPhoneDigits);
+      if (byPhone) return byPhone;
+    }
+    return null;
+  }, [customerList, selectedAppointment]);
+
+  const selectCustomer = (customer: TenantCustomer) => {
+    setIsCustomerUnlinked(false);
+    const preferredStaff = (customer.favoriteTechnician && customer.favoriteTechnician !== 'Chưa xác định')
+      ? staffDirectory.find((staff) => staff.branch === form.branch && staff.name === customer.favoriteTechnician)?.name
+      : undefined;
+    const safetyNotes = [
+      customer.note,
+      customer.allergies && customer.allergies !== 'Không ghi nhận' && customer.allergies !== 'Chưa khai báo' ? `Dị ứng: ${customer.allergies}` : '',
+      customer.nailCondition && customer.nailCondition !== 'Chưa đánh giá' ? `Tình trạng móng: ${customer.nailCondition}` : '',
+      customer.preferences?.length ? `Sở thích: ${customer.preferences.join(', ')}` : ''
+    ].filter(Boolean).join('\n');
+
+    setForm((current) => ({
+      ...current,
+      customerId: customer.id,
+      customer: customer.name,
+      phone: customer.phone,
+      staff: preferredStaff || current.staff,
+      note: current.note ? `${current.note}\n${safetyNotes}` : safetyNotes
+    }));
+    if (fieldErrors.customer) setFieldErrors((prev) => ({ ...prev, customer: '' }));
+    if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: '' }));
+    setCustomerSearchQuery('');
+    setCustomerDropdownOpen(false);
+    setShowCustomerPicker(false);
+    onNotify?.(`Đã đồng bộ hồ sơ ${customer.name} (Tích luỹ: ${customer.points.toLocaleString('vi-VN')} điểm).`);
+  };
+
+  const clearCustomerLink = () => {
+    setIsCustomerUnlinked(true);
+    setForm((current) => ({
+      ...current,
+      customerId: ''
+    }));
+    onNotify?.('Đã bỏ liên kết hồ sơ khách hàng. Thông tin sẽ được lưu độc lập.');
+  };
+
+  // Gợi ý khách hàng khi nhập tên hoặc số điện thoại
+  const customerSuggestions = useMemo(() => {
+    if (!customerDropdownOpen && !form.customer.trim() && !form.phone.trim()) return [];
+    const query = (customerSearchQuery || form.customer || form.phone).toLowerCase().trim();
+    if (!query || query.length < 2) return [];
+    const digits = query.replace(/\D/g, '');
+    return customerList.filter((c) => {
+      const nameMatch = c.name.toLowerCase().includes(query);
+      const phoneMatch = Boolean(digits && c.phone.replace(/\D/g, '').includes(digits));
+      const idMatch = c.id.toLowerCase().includes(query);
+      return nameMatch || phoneMatch || idMatch;
+    }).slice(0, 5);
+  }, [customerList, customerDropdownOpen, customerSearchQuery, form.customer, form.phone]);
 
   useEffect(() => {
     try {
@@ -468,11 +603,14 @@ export default function TenantAdminAppointments({
 
   useEffect(() => {
     if (!bookingRequest) return;
-    const preferredStaff = staffDirectory.find((staff) => staff.branch === bookingRequest.branch && staff.name === bookingRequest.favoriteTechnician)?.name;
+    setIsCustomerUnlinked(false);
+    const preferredStaff = (bookingRequest.favoriteTechnician && bookingRequest.favoriteTechnician !== 'Chưa xác định')
+      ? staffDirectory.find((staff) => staff.branch === bookingRequest.branch && staff.name === bookingRequest.favoriteTechnician)?.name
+      : undefined;
     const safetyNotes = [
       bookingRequest.note,
-      bookingRequest.allergies && bookingRequest.allergies !== 'Không ghi nhận' ? `Dị ứng: ${bookingRequest.allergies}` : '',
-      bookingRequest.nailCondition ? `Tình trạng móng: ${bookingRequest.nailCondition}` : ''
+      bookingRequest.allergies && bookingRequest.allergies !== 'Không ghi nhận' && bookingRequest.allergies !== 'Chưa khai báo' ? `Dị ứng: ${bookingRequest.allergies}` : '',
+      bookingRequest.nailCondition && bookingRequest.nailCondition !== 'Chưa đánh giá' ? `Tình trạng móng: ${bookingRequest.nailCondition}` : ''
     ].filter(Boolean).join('\n');
     const nextForm = emptyForm(selectedDate, bookingRequest.branch);
     setForm({
@@ -704,7 +842,7 @@ export default function TenantAdminAppointments({
    * không còn chỗ nào để bỏ lọc.
    */
   const statusFilterChips = useMemo(() => (
-    (['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const)
+    (['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'REFUNDED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const)
       .map((status) => ({
         status,
         count: status === 'ALL'
@@ -762,6 +900,7 @@ export default function TenantAdminAppointments({
 
   const openCreateForm = () => {
     if (!requireManageAccess()) return;
+    setIsCustomerUnlinked(false);
     setForm(emptyForm(selectedDate, selectedBranch));
     setFormError('');
     setFieldErrors({});
@@ -774,6 +913,7 @@ export default function TenantAdminAppointments({
       onNotify?.('Receptionist chỉ được sửa lịch trước khi dịch vụ bắt đầu.');
       return;
     }
+    setIsCustomerUnlinked(false);
     setForm({
       customerId: appointment.customerId || '',
       customer: appointment.customer,
@@ -796,8 +936,8 @@ export default function TenantAdminAppointments({
 
   const openCancelForm = () => {
     if (!selectedAppointment || !requireManageAccess()) return;
-    setCancellationReason('');
-    setCancellationNote('');
+    setCancellationReason(selectedAppointment.cancellationReason || '');
+    setCancellationNote(selectedAppointment.cancellationNote || '');
     setCancellationError('');
     setShowCancelForm(true);
   };
@@ -814,22 +954,105 @@ export default function TenantAdminAppointments({
       return;
     }
 
-    const cancelledAt = new Date().toLocaleString('vi-VN', {
+    const isAlreadyCancelled = selectedAppointment.status === 'CANCELLED';
+    const cancelledAt = selectedAppointment.cancelledAt || new Date().toLocaleString('vi-VN', {
       hour: '2-digit',
       minute: '2-digit',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
     });
+    const updatedAppointment: TenantAppointment = {
+      ...selectedAppointment,
+      status: 'CANCELLED',
+      cancellationReason,
+      cancellationNote: cancellationNote.trim(),
+      cancelledAt,
+      cancelledBy: selectedAppointment.cancelledBy || roleLabel
+    };
     updateAppointment(selectedAppointment.id, {
       status: 'CANCELLED',
       cancellationReason,
       cancellationNote: cancellationNote.trim(),
       cancelledAt,
-      cancelledBy: roleLabel
+      cancelledBy: selectedAppointment.cancelledBy || roleLabel
     });
+    setSelectedAppointment(updatedAppointment);
     setShowCancelForm(false);
-    onNotify?.(`Đã hủy lịch ${selectedAppointment.id} và lưu lý do vào lịch sử.`);
+    onNotify?.(isAlreadyCancelled
+      ? `Đã cập nhật lý do hủy cho lịch ${selectedAppointment.id}.`
+      : `Đã hủy lịch ${selectedAppointment.id} và lưu lý do vào lịch sử.`
+    );
+  };
+
+  const openRefundForm = () => {
+    if (!selectedAppointment || !requireManageAccess()) return;
+    setRefundReason(selectedAppointment.refundReason || refundReasons[0]);
+    setRefundAmount(
+      selectedAppointment.refundAmount !== undefined
+        ? String(selectedAppointment.refundAmount)
+        : String(selectedAppointment.price)
+    );
+    setRefundMethod(selectedAppointment.refundMethod || 'CASH');
+    setRefundNote(selectedAppointment.refundNote || '');
+    setRefundError('');
+    setShowRefundForm(true);
+  };
+
+  const submitRefund = (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedAppointment || !requireManageAccess()) return;
+    const parsedAmount = Number(refundAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setRefundError('Vui lòng nhập số tiền hoàn hợp lệ (lớn hơn 0đ).');
+      return;
+    }
+    if (parsedAmount > selectedAppointment.price) {
+      setRefundError(`Số tiền hoàn không được vượt quá tổng tiền dịch vụ (${formatCurrency(selectedAppointment.price)}).`);
+      return;
+    }
+    if (!refundReason) {
+      setRefundError('Vui lòng chọn lý do hoàn tiền / sự cố.');
+      return;
+    }
+    if (refundReason === 'Khác' && !refundNote.trim()) {
+      setRefundError('Vui lòng nhập ghi chú khi chọn lý do “Khác”.');
+      return;
+    }
+
+    const isAlreadyRefunded = selectedAppointment.status === 'REFUNDED';
+    const refundedAt = selectedAppointment.refundedAt || new Date().toLocaleString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const updatedAppointment: TenantAppointment = {
+      ...selectedAppointment,
+      status: 'REFUNDED',
+      refundAmount: parsedAmount,
+      refundReason,
+      refundMethod,
+      refundNote: refundNote.trim(),
+      refundedAt,
+      refundedBy: selectedAppointment.refundedBy || roleLabel
+    };
+    updateAppointment(selectedAppointment.id, {
+      status: 'REFUNDED',
+      refundAmount: parsedAmount,
+      refundReason,
+      refundMethod,
+      refundNote: refundNote.trim(),
+      refundedAt,
+      refundedBy: selectedAppointment.refundedBy || roleLabel
+    });
+    setSelectedAppointment(updatedAppointment);
+    setShowRefundForm(false);
+    onNotify?.(isAlreadyRefunded
+      ? `Đã cập nhật thông tin hoàn tiền cho lịch ${selectedAppointment.id}.`
+      : `Đã hoàn tiền ${formatCurrency(parsedAmount)} cho lịch ${selectedAppointment.id} (Sự cố trong khi phục vụ).`
+    );
   };
 
   const submitAppointment = (event: FormEvent) => {
@@ -1106,6 +1329,72 @@ export default function TenantAdminAppointments({
           >
             Chi tiết
           </Button>
+          {appointment.status === 'CANCELLED' && (
+            <Button
+              size="small"
+              variant="secondary"
+              disabled={!canManage}
+              iconLeading={<Pencil className="h-3.5 w-3.5" />}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedAppointment(appointment);
+                setCancellationReason(appointment.cancellationReason || '');
+                setCancellationNote(appointment.cancellationNote || '');
+                setCancellationError('');
+                setShowCancelForm(true);
+              }}
+            >
+              {appointment.cancellationReason ? 'Sửa lý do' : 'Ghi lý do'}
+            </Button>
+          )}
+          {appointment.status === 'REFUNDED' && (
+            <Button
+              size="small"
+              variant="secondary"
+              disabled={!canManage}
+              iconLeading={<Pencil className="h-3.5 w-3.5" />}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedAppointment(appointment);
+                setRefundReason(appointment.refundReason || refundReasons[0]);
+                setRefundAmount(
+                  appointment.refundAmount !== undefined
+                    ? String(appointment.refundAmount)
+                    : String(appointment.price)
+                );
+                setRefundMethod(appointment.refundMethod || 'CASH');
+                setRefundNote(appointment.refundNote || '');
+                setRefundError('');
+                setShowRefundForm(true);
+              }}
+            >
+              {appointment.refundReason ? 'Sửa hoàn tiền' : 'Ghi hoàn tiền'}
+            </Button>
+          )}
+          {appointment.status === 'IN_SERVICE' && (
+            <Button
+              size="small"
+              variant="ghost"
+              disabled={!canManage}
+              iconLeading={<RotateCcw className="h-3.5 w-3.5 text-amber-600" />}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedAppointment(appointment);
+                setRefundReason(appointment.refundReason || refundReasons[0]);
+                setRefundAmount(
+                  appointment.refundAmount !== undefined
+                    ? String(appointment.refundAmount)
+                    : String(appointment.price)
+                );
+                setRefundMethod(appointment.refundMethod || 'CASH');
+                setRefundNote(appointment.refundNote || '');
+                setRefundError('');
+                setShowRefundForm(true);
+              }}
+            >
+              Hoàn tiền
+            </Button>
+          )}
           {nextStatus[appointment.status] && !(isReceptionist && appointment.status === 'IN_SERVICE') && (
             <Button
               size="small"
@@ -1124,15 +1413,22 @@ export default function TenantAdminAppointments({
 
   return (
     <div className={`flex flex-col gap-4 ${isReceptionist ? 'appointments-receptionist' : ''}`}>
-      {/* Đây là màn hình duy nhất của Tenant Admin không có <h1>, nên trình đọc
-          màn hình không đọc được tên trang và nó cũng là trang duy nhất lệch
-          khuôn đầu trang. Ở shell Lễ tân thì không thêm: tên trang đã nằm trên
-          topbar của shell đó, và bàn lễ tân cần trọn chiều cao cho lịch. */}
-      {!isReceptionist && (
-        <PageHeader
-          title="Lịch hẹn"
-        />
-      )}
+      <PageHeader
+        title={isReceptionist ? 'Lịch hẹn tại quầy' : 'Lịch hẹn'}
+        actions={(
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={openCreateForm}
+              disabled={!canManage}
+              className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 hover:bg-pink-700 px-4 text-caption font-black text-white shadow-none disabled:border-slate-300 disabled:bg-slate-300 cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              Tạo lịch hẹn mới
+            </button>
+          </div>
+        )}
+      />
       <section className={`isolate border border-brand-outline bg-brand-surface ${isScheduleExpanded ? 'ui-fullscreen-layer fixed inset-0 flex flex-col rounded-none' : 'overflow-hidden rounded-card shadow-card'}`}>
         {/* Thanh điều khiển hai hàng, chia theo nhóm việc: hàng trên là "đang xem
             ngày nào", hàng dưới là "làm gì với ngày đó". Trước đây tất cả dồn vào
@@ -1697,9 +1993,41 @@ export default function TenantAdminAppointments({
         )}
         footer={selectedAppointment && (
           <>
-            {!['COMPLETED', 'CANCELLED', 'NO_SHOW', ...(isReceptionist ? ['IN_SERVICE' as AppointmentStatus] : [])].includes(selectedAppointment.status) && (
-              <Button variant="ghost" onClick={openCancelForm} disabled={!canManage} className="mr-auto">
-                Hủy lịch hẹn
+            {selectedAppointment.status === 'CANCELLED' ? (
+              <Button
+                variant="secondary"
+                onClick={openCancelForm}
+                disabled={!canManage}
+                iconLeading={<Pencil />}
+                className="mr-auto"
+              >
+                {selectedAppointment.cancellationReason ? 'Chỉnh sửa lý do hủy' : 'Bổ sung lý do hủy'}
+              </Button>
+            ) : selectedAppointment.status === 'REFUNDED' ? (
+              <Button
+                variant="secondary"
+                onClick={openRefundForm}
+                disabled={!canManage}
+                iconLeading={<Pencil />}
+                className="mr-auto"
+              >
+                {selectedAppointment.refundReason ? 'Chỉnh sửa hoàn tiền' : 'Bổ sung lý do hoàn tiền'}
+              </Button>
+            ) : (
+              !['COMPLETED', 'NO_SHOW', ...(isReceptionist ? ['IN_SERVICE' as AppointmentStatus] : [])].includes(selectedAppointment.status) && (
+                <Button variant="ghost" onClick={openCancelForm} disabled={!canManage} className="mr-auto">
+                  Hủy lịch hẹn
+                </Button>
+              )
+            )}
+            {!['CANCELLED', 'REFUNDED', 'NO_SHOW'].includes(selectedAppointment.status) && (
+              <Button
+                variant="secondary"
+                onClick={openRefundForm}
+                disabled={!canManage}
+                iconLeading={<RotateCcw className="h-4 w-4 text-amber-600" />}
+              >
+                Hoàn tiền (Sự cố)
               </Button>
             )}
             <Button
@@ -1758,10 +2086,27 @@ export default function TenantAdminAppointments({
                     {selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-card-title text-brand-text">{selectedAppointment.customer}</p>
-                    <p className="mt-0.5 text-body text-brand-text-muted">
-                      {selectedAppointment.firstVisit ? 'Khách lần đầu sử dụng dịch vụ' : 'Khách đã có hồ sơ tại salon'}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-card-title text-brand-text">{selectedAppointment.customer}</p>
+                      {matchedCustomerDetail && (
+                        <span className={`inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-caption font-bold ${tierMeta[matchedCustomerDetail.tier]?.badge || 'bg-slate-100 text-slate-700'}`}>
+                          {matchedCustomerDetail.tier === 'VIP' && <Crown className="h-3 w-3" />}
+                          {tierMeta[matchedCustomerDetail.tier]?.label || matchedCustomerDetail.tier}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-caption text-brand-text-muted">
+                      <span>{selectedAppointment.firstVisit ? 'Khách lần đầu sử dụng dịch vụ' : 'Khách đã có hồ sơ tại salon'}</span>
+                      {matchedCustomerDetail && (
+                        <>
+                          <span>•</span>
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <Gift className="h-3 w-3" />
+                            {matchedCustomerDetail.points.toLocaleString('vi-VN')} điểm tích luỹ
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1809,6 +2154,16 @@ export default function TenantAdminAppointments({
                   <p className="mt-0.5 text-caption text-brand-text-muted">
                     {staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role || 'Kỹ thuật viên'}
                   </p>
+                  {matchedCustomerDetail?.favoriteTechnician &&
+                   matchedCustomerDetail.favoriteTechnician !== 'Chưa xác định' && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-violet-500/15 dark:bg-violet-500/25 px-2 py-1 text-[11px] font-bold text-violet-800 dark:text-violet-300 border border-violet-500/25">
+                      <UserCheck className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+                      <span>KTV ruột của khách: {matchedCustomerDetail.favoriteTechnician}</span>
+                      {matchedCustomerDetail.favoriteTechnician === selectedAppointment.staff && (
+                        <span className="text-emerald-600 dark:text-emerald-400">✓ Đang phục vụ</span>
+                      )}
+                    </div>
+                  )}
                   <p className="mt-2 border-t border-brand-outline pt-2 text-caption text-brand-text-muted">
                     Nguồn đặt: {sourceLabels[selectedAppointment.source]}
                   </p>
@@ -1867,12 +2222,25 @@ export default function TenantAdminAppointments({
                 <section className="p-4 ui-tone ui-tone--danger">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-body font-semibold text-brand-text">Thông tin hủy lịch</h3>
-                    {selectedAppointment.cancelledAt && (
-                      <span className="text-caption tabular-nums text-brand-text-muted">{selectedAppointment.cancelledAt}</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {selectedAppointment.cancelledAt && (
+                        <span className="text-caption tabular-nums text-brand-text-muted">{selectedAppointment.cancelledAt}</span>
+                      )}
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        disabled={!canManage}
+                        iconLeading={<Pencil className="h-3.5 w-3.5" />}
+                        onClick={openCancelForm}
+                      >
+                        {selectedAppointment.cancellationReason ? 'Sửa lý do hủy' : 'Ghi lý do hủy'}
+                      </Button>
+                    </div>
                   </div>
                   <p className="mt-2 text-body font-semibold text-brand-text">
-                    {selectedAppointment.cancellationReason || 'Chưa ghi nhận lý do'}
+                    {selectedAppointment.cancellationReason || (
+                      <span className="italic text-brand-text-muted">Chưa ghi nhận lý do (Nhấn "Ghi lý do hủy" để bổ sung)</span>
+                    )}
                   </p>
                   <div className="mt-2 rounded-control border border-brand-outline bg-brand-surface px-3 py-2">
                     <p className="text-caption uppercase tracking-wide text-brand-text-muted">Ghi chú hủy</p>
@@ -1886,17 +2254,96 @@ export default function TenantAdminAppointments({
                 </section>
               )}
 
+              {selectedAppointment.status === 'REFUNDED' && (
+                <section className="p-4 ui-tone ui-tone--warning">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="h-5 w-5 text-amber-600" aria-hidden="true" />
+                      <h3 className="text-body font-semibold text-brand-text">Thông tin hoàn tiền / Sự cố</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedAppointment.refundedAt && (
+                        <span className="text-caption tabular-nums text-brand-text-muted">{selectedAppointment.refundedAt}</span>
+                      )}
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        disabled={!canManage}
+                        iconLeading={<Pencil className="h-3.5 w-3.5" />}
+                        onClick={openRefundForm}
+                      >
+                        {selectedAppointment.refundReason ? 'Sửa thông tin' : 'Ghi thông tin'}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="rounded-control border border-brand-outline bg-brand-surface px-3 py-2">
+                      <p className="text-caption uppercase tracking-wide text-brand-text-muted">Số tiền đã hoàn</p>
+                      <p className="mt-0.5 text-body font-bold text-amber-600">
+                        {formatCurrency(selectedAppointment.refundAmount ?? selectedAppointment.price)}
+                      </p>
+                    </div>
+                    <div className="rounded-control border border-brand-outline bg-brand-surface px-3 py-2">
+                      <p className="text-caption uppercase tracking-wide text-brand-text-muted">Hình thức hoàn</p>
+                      <p className="mt-0.5 text-body font-semibold text-brand-text">
+                        {selectedAppointment.refundMethod === 'BANK' ? 'Chuyển khoản' :
+                         selectedAppointment.refundMethod === 'CARD' ? 'Thẻ POS' :
+                         selectedAppointment.refundMethod === 'MOMO' ? 'Ví MoMo' :
+                         selectedAppointment.refundMethod === 'ZALOPAY' ? 'Ví ZaloPay' : 'Tiền mặt tại quầy'}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-body font-semibold text-brand-text">
+                    Lý do sự cố: {selectedAppointment.refundReason || (
+                      <span className="italic text-brand-text-muted">Chưa ghi nhận lý do (Nhấn "Ghi thông tin" để bổ sung)</span>
+                    )}
+                  </p>
+                  <div className="mt-2 rounded-control border border-brand-outline bg-brand-surface px-3 py-2">
+                    <p className="text-caption uppercase tracking-wide text-brand-text-muted">Ghi chú sự cố &amp; xử lý</p>
+                    <p className="mt-1 text-body leading-5 text-brand-text">
+                      {selectedAppointment.refundNote || 'Không có ghi chú bổ sung.'}
+                    </p>
+                  </div>
+                  <p className="mt-2 text-caption text-brand-text-muted">
+                    Thực hiện bởi {selectedAppointment.refundedBy || roleLabel}
+                  </p>
+                </section>
+              )}
+
               <section className="rounded-card border border-brand-outline p-4">
-                <h3 className="text-body font-semibold text-brand-text">Tiến trình phục vụ</h3>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-body font-semibold text-brand-text">Tiến trình phục vụ</h3>
+                  {selectedAppointment.status === 'REFUNDED' && (
+                    <span className="rounded-pill bg-amber-50 px-2.5 py-0.5 text-caption font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                      Đã xử lý hoàn tiền
+                    </span>
+                  )}
+                </div>
                 <ol className="mt-3 flex gap-2">
-                  {(['CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'] as AppointmentStatus[]).map((status, index) => {
-                    const order: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', 'COMPLETED'];
+                  {(['CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', selectedAppointment.status === 'REFUNDED' ? 'REFUNDED' : 'COMPLETED'] as AppointmentStatus[]).map((status, index) => {
+                    const order: AppointmentStatus[] = ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_SERVICE', selectedAppointment.status === 'REFUNDED' ? 'REFUNDED' : 'COMPLETED'];
                     const isReached = order.indexOf(selectedAppointment.status) >= order.indexOf(status);
+                    const isRefundStep = status === 'REFUNDED';
                     return (
                       <li key={status} className="min-w-0 flex-1">
-                        <div aria-hidden="true" className={`h-2 rounded-pill ${isReached ? 'bg-[var(--accent)]' : 'bg-brand-surface-high'}`} />
-                        <p className={`mt-2 truncate text-center text-caption font-semibold ${isReached ? 'text-[color:var(--accent-strong)]' : 'text-brand-text-muted'}`}>
-                          {index === 0 ? 'Xác nhận' : index === 1 ? 'Đã đến' : index === 2 ? 'Phục vụ' : 'Hoàn thành'}
+                        <div
+                          aria-hidden="true"
+                          className={`h-2 rounded-pill ${
+                            isRefundStep && isReached
+                              ? 'bg-amber-500'
+                              : isReached
+                              ? 'bg-[var(--accent)]'
+                              : 'bg-brand-surface-high'
+                          }`}
+                        />
+                        <p className={`mt-2 truncate text-center text-caption font-semibold ${
+                          isRefundStep && isReached
+                            ? 'font-bold text-amber-600 dark:text-amber-400'
+                            : isReached
+                            ? 'text-[color:var(--accent-strong)]'
+                            : 'text-brand-text-muted'
+                        }`}>
+                          {index === 0 ? 'Xác nhận' : index === 1 ? 'Đã đến' : index === 2 ? 'Phục vụ' : isRefundStep ? 'Hoàn tiền' : 'Hoàn thành'}
                           {isReached && <span className="sr-only"> (đã qua)</span>}
                         </p>
                       </li>
@@ -1921,26 +2368,30 @@ export default function TenantAdminAppointments({
         )}
       </Modal>
 
-      {/* Hủy lịch hẹn */}
+      {/* Hủy / Cập nhật lý do hủy lịch hẹn */}
       <Modal
         open={showCancelForm && Boolean(selectedAppointment)}
         onClose={() => setShowCancelForm(false)}
         size="medium"
         closeOnBackdrop={false}
         icon={<CircleAlert aria-hidden="true" />}
-        title="Hủy lịch hẹn"
-        description="Lý do và ghi chú sẽ được lưu trong lịch sử lịch hẹn."
+        title={selectedAppointment?.status === 'CANCELLED'
+          ? (selectedAppointment.cancellationReason ? 'Chỉnh sửa lý do hủy' : 'Bổ sung lý do hủy lịch')
+          : 'Hủy lịch hẹn'}
+        description={selectedAppointment?.status === 'CANCELLED'
+          ? 'Cập nhật lý do và ghi chú hủy để đối soát và lưu trữ hồ sơ lịch hẹn.'
+          : 'Lý do và ghi chú sẽ được lưu trong lịch sử lịch hẹn.'}
         footer={(
           <>
             <Button variant="secondary" onClick={() => setShowCancelForm(false)}>Quay lại</Button>
             <Button
-              variant="danger"
+              variant={selectedAppointment?.status === 'CANCELLED' ? 'primary' : 'danger'}
               type="submit"
               form="tenant-appointment-cancel-form"
               disabled={!cancellationReason}
-              iconLeading={<X />}
+              iconLeading={selectedAppointment?.status === 'CANCELLED' ? <Check /> : <X />}
             >
-              Xác nhận hủy lịch
+              {selectedAppointment?.status === 'CANCELLED' ? 'Lưu thông tin hủy' : 'Xác nhận hủy lịch'}
             </Button>
           </>
         )}
@@ -2022,6 +2473,140 @@ export default function TenantAdminAppointments({
         )}
       </Modal>
 
+      {/* Hoàn tiền / Xử lý sự cố trong khi làm */}
+      <Modal
+        open={showRefundForm && Boolean(selectedAppointment)}
+        onClose={() => setShowRefundForm(false)}
+        size="medium"
+        closeOnBackdrop={false}
+        icon={<RotateCcw aria-hidden="true" className="text-amber-600" />}
+        title={selectedAppointment?.status === 'REFUNDED'
+          ? (selectedAppointment.refundReason ? 'Chỉnh sửa thông tin hoàn tiền' : 'Bổ sung thông tin hoàn tiền')
+          : 'Hoàn tiền / Sự cố trong dịch vụ'}
+        description={selectedAppointment?.status === 'REFUNDED'
+          ? 'Cập nhật số tiền hoàn, lý do sự cố và giải pháp đã thực hiện cho khách.'
+          : 'Chuyển sang trạng thái hoàn tiền khi xảy ra sự cố trong quá trình thực hiện dịch vụ.'}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setShowRefundForm(false)}>Quay lại</Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="tenant-appointment-refund-form"
+              iconLeading={<Check />}
+            >
+              {selectedAppointment?.status === 'REFUNDED' ? 'Lưu thông tin hoàn tiền' : 'Xác nhận hoàn tiền'}
+            </Button>
+          </>
+        )}
+      >
+        {selectedAppointment && (
+          <form id="tenant-appointment-refund-form" onSubmit={submitRefund} noValidate className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 rounded-card border border-brand-outline bg-brand-surface-lowest p-3">
+              <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-amber-100 text-caption font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                {selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-body font-semibold text-brand-text">{selectedAppointment.customer}</p>
+                <p className="mt-0.5 truncate text-caption text-brand-text-muted">
+                  {selectedAppointment.id} · KTV: {selectedAppointment.staff} · Tổng tiền: {formatCurrency(selectedAppointment.price)} (Đã cọc: {formatCurrency(selectedAppointment.deposit)})
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 text-body leading-5 text-brand-text ui-tone ui-tone--warning">
+              <p className="font-semibold text-amber-800 dark:text-amber-300">
+                Quy trình xử lý sự cố trong khi phục vụ
+              </p>
+              <p className="mt-1 text-caption text-brand-text-muted">
+                Trạng thái sẽ được chuyển sang <strong>Đã hoàn tiền</strong>. Số tiền hoàn và lý do sẽ được lưu vào lịch sử đối soát của chi nhánh.
+              </p>
+            </div>
+
+            {refundError && (
+              <p role="alert" className="flex items-start gap-2 p-3 text-body font-semibold text-brand-text ui-tone ui-tone--danger">
+                <CircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{refundError}
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Số tiền hoàn lại cho khách" required helper={`Tối đa ${formatCurrency(selectedAppointment.price)}`}>
+                <input
+                  type="number"
+                  min="0"
+                  max={selectedAppointment.price}
+                  step="10000"
+                  value={refundAmount}
+                  onChange={(event) => { setRefundAmount(event.target.value); setRefundError(''); }}
+                  placeholder="Ví dụ: 350000"
+                />
+              </Field>
+
+              <Field label="Phương thức hoàn tiền" required>
+                <BeautifulSelect
+                  value={refundMethod}
+                  onChange={(event) => setRefundMethod(event.target.value as typeof refundMethod)}
+                  className="w-full"
+                >
+                  <option value="CASH">Tiền mặt tại quầy</option>
+                  <option value="BANK">Chuyển khoản ngân hàng</option>
+                  <option value="MOMO">Ví MoMo</option>
+                  <option value="ZALOPAY">Ví ZaloPay</option>
+                  <option value="CARD">Hoàn thẻ</option>
+                </BeautifulSelect>
+              </Field>
+            </div>
+
+            <fieldset className="border-0 p-0">
+              <legend className="mb-2 text-body font-semibold text-brand-text">
+                Lý do sự cố / hoàn tiền <span className="text-brand-error" title="Bắt buộc"><span aria-hidden="true">*</span><span className="sr-only">Bắt buộc</span></span>
+              </legend>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {refundReasons.map((reason) => {
+                  const isSelected = refundReason === reason;
+                  return (
+                    <label
+                      key={reason}
+                      className={`flex min-h-11 cursor-pointer items-center gap-2.5 p-3 text-body text-brand-text ui-tone ${isSelected ? 'ui-tone--warning' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="refund-reason"
+                        value={reason}
+                        checked={isSelected}
+                        onChange={() => { setRefundReason(reason); setRefundError(''); }}
+                        className="h-4 w-4 shrink-0 accent-amber-600"
+                      />
+                      {reason}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <Field
+              label="Ghi chú sự cố &amp; giải pháp xử lý"
+              required={refundReason === 'Khác'}
+              helper={`${refundNote.length}/500 ký tự${refundReason === 'Khác' ? '' : ' · không bắt buộc'}`}
+            >
+              <textarea
+                value={refundNote}
+                maxLength={500}
+                rows={3}
+                onChange={(event) => { setRefundNote(event.target.value); setRefundError(''); }}
+                placeholder="Ví dụ: Khách bị rát da tay khi hơ đèn gel, đã xử lý sát khuẩn và hoàn tiền tại chỗ, tặng voucher 100k cho lần sau..."
+                className="w-full resize-y py-2.5 leading-5"
+              />
+            </Field>
+
+            <p className="flex items-start gap-2 p-3 text-body leading-5 text-brand-text-muted ui-tone">
+              <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Hệ thống sẽ ghi nhận nhân viên thực hiện hoàn tiền là <strong className="text-brand-text">{roleLabel}</strong>.</span>
+            </p>
+          </form>
+        )}
+      </Modal>
+
       {/* Tạo và chỉnh sửa lịch hẹn */}
       <Modal
         open={Boolean(formMode)}
@@ -2053,38 +2638,230 @@ export default function TenantAdminAppointments({
           )}
 
           <fieldset className="border-0 p-0">
-            <legend className="mb-3 flex items-center gap-2 text-card-title text-brand-text">
-              <UserRound aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Thông tin khách hàng
-            </legend>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Tên khách hàng" required error={fieldErrors.customer}>
-                <input
-                  type="text"
-                  value={form.customer}
-                  onChange={(event) => {
-                    setForm((current) => ({ ...current, customer: event.target.value }));
-                    if (fieldErrors.customer) setFieldErrors((prev) => ({ ...prev, customer: '' }));
-                  }}
-                  placeholder="Ví dụ: Nguyễn Minh Anh"
-                />
-              </Field>
-              <Field label="Số điện thoại" required helper="Định dạng Việt Nam, ví dụ 0912 884 206." error={fieldErrors.phone}>
-                <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(event) => {
-                    setForm((current) => ({ ...current, phone: event.target.value }));
-                    if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: '' }));
-                  }}
-                  placeholder="09xx xxx xxx"
-                />
-              </Field>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <legend className="flex items-center gap-2 text-card-title text-brand-text">
+                <UserRound aria-hidden="true" className="h-5 w-5 text-brand-text-muted" />Thông tin khách hàng
+              </legend>
+              <Button
+                type="button"
+                variant="secondary"
+                size="small"
+                onClick={() => setShowCustomerPicker(true)}
+                iconLeading={<Search className="h-3.5 w-3.5" />}
+              >
+                {matchedCustomer ? 'Chọn khách khác' : 'Chọn từ hồ sơ'}
+              </Button>
             </div>
-            {form.customerId && (
-              <p className="mt-3 flex items-center gap-2 p-3 text-body text-brand-text ui-tone ui-tone--info">
-                <Check aria-hidden="true" className="h-4 w-4 shrink-0" />
-                Đã liên kết hồ sơ khách hàng <strong>{form.customerId}</strong>
-              </p>
+
+            {matchedCustomer ? (
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 transition-all">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${tierMeta[matchedCustomer.tier]?.avatar || 'from-emerald-500 to-teal-600'} text-white font-black text-sm shadow-xs`}
+                    >
+                      {matchedCustomer.name.split(' ').slice(-2).map((w) => w[0]).join('')}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-sm font-black text-brand-text">{matchedCustomer.name}</h4>
+                        <span className="rounded-md bg-brand-surface px-1.5 py-0.5 text-[11px] font-bold text-brand-text-muted border border-brand-outline">
+                          {matchedCustomer.id}
+                        </span>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${tierMeta[matchedCustomer.tier]?.badge || 'bg-slate-100 text-slate-700'}`}>
+                          {matchedCustomer.tier === 'VIP' && <Crown className="h-3 w-3" />}
+                          {tierMeta[matchedCustomer.tier]?.label || matchedCustomer.tier}
+                        </span>
+                      </div>
+
+                      {/* Điểm tích luỹ đồng bộ */}
+                      <div className="mt-2 flex flex-wrap items-center gap-3">
+                        <div className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 dark:bg-emerald-500/25 px-2.5 py-1 text-xs font-black text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 shadow-2xs">
+                          <Gift className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Điểm tích luỹ: {matchedCustomer.points.toLocaleString('vi-VN')} điểm</span>
+                        </div>
+                        <span className="text-caption text-brand-text-muted">
+                          {matchedCustomer.visits} lượt ghé · Đã chi: {formatCurrency(matchedCustomer.totalSpent)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={clearCustomerLink}
+                    className="shrink-0 text-caption font-semibold text-brand-text-muted hover:text-brand-error underline"
+                  >
+                    Bỏ liên kết
+                  </button>
+                </div>
+
+                {/* Gợi ý KTV ruột và cảnh báo an toàn móng */}
+                <div className="mt-3 pt-3 border-t border-emerald-500/20 flex flex-wrap items-center gap-2">
+                  {matchedCustomer.favoriteTechnician &&
+                   matchedCustomer.favoriteTechnician !== 'Chưa xác định' &&
+                   matchedCustomer.favoriteTechnician !== 'Chưa chọn' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm((curr) => ({ ...curr, staff: matchedCustomer.favoriteTechnician }));
+                        onNotify?.(`Đã gán KTV ruột: ${matchedCustomer.favoriteTechnician}`);
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                        form.staff === matchedCustomer.favoriteTechnician
+                          ? 'bg-brand-primary text-white shadow-xs'
+                          : 'bg-brand-surface text-brand-text border border-brand-outline hover:border-brand-primary'
+                      }`}
+                    >
+                      <UserCheck className="h-3.5 w-3.5" />
+                      KTV ruột: {matchedCustomer.favoriteTechnician}
+                      {form.staff === matchedCustomer.favoriteTechnician && ' (Đã chọn)'}
+                    </button>
+                  )}
+                  {matchedCustomer.allergies && matchedCustomer.allergies !== 'Không ghi nhận' && (
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 px-2 py-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 border border-amber-500/25">
+                      ⚠️ Dị ứng: {matchedCustomer.allergies}
+                    </span>
+                  )}
+                  {matchedCustomer.nailCondition && (
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-500/15 px-2 py-1 text-[11px] font-bold text-indigo-800 dark:text-indigo-300 border border-indigo-500/25">
+                      💅 Tình trạng: {matchedCustomer.nailCondition}
+                    </span>
+                  )}
+                </div>
+
+                {/* Input số điện thoại & tên hiển thị ẩn/gọn */}
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 pt-2 border-t border-emerald-500/15">
+                  <Field label="Tên khách hàng" required error={fieldErrors.customer}>
+                    <input
+                      type="text"
+                      value={form.customer}
+                      onChange={(event) => {
+                        setForm((current) => ({ ...current, customer: event.target.value }));
+                        if (fieldErrors.customer) setFieldErrors((prev) => ({ ...prev, customer: '' }));
+                      }}
+                      placeholder="Tên khách"
+                    />
+                  </Field>
+                  <Field label="Số điện thoại" required error={fieldErrors.phone}>
+                    <input
+                      type="tel"
+                      value={form.phone}
+                      onChange={(event) => {
+                        setForm((current) => ({ ...current, phone: event.target.value }));
+                        if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: '' }));
+                      }}
+                      placeholder="09xx xxx xxx"
+                    />
+                  </Field>
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="relative">
+                    <Field label="Tên khách hàng" required error={fieldErrors.customer}>
+                      <input
+                        type="text"
+                        value={form.customer}
+                        onFocus={() => setCustomerDropdownOpen(true)}
+                        onChange={(event) => {
+                          setForm((current) => ({ ...current, customer: event.target.value }));
+                          setCustomerSearchQuery(event.target.value);
+                          setCustomerDropdownOpen(true);
+                          if (fieldErrors.customer) setFieldErrors((prev) => ({ ...prev, customer: '' }));
+                        }}
+                        placeholder="Nhập tên khách hoặc tìm hồ sơ..."
+                      />
+                    </Field>
+                  </div>
+                  <div className="relative">
+                    <Field label="Số điện thoại" required helper="Định dạng Việt Nam, ví dụ 0912 884 206." error={fieldErrors.phone}>
+                      <input
+                        type="tel"
+                        value={form.phone}
+                        onFocus={() => setCustomerDropdownOpen(true)}
+                        onChange={(event) => {
+                          setForm((current) => ({ ...current, phone: event.target.value }));
+                          setCustomerSearchQuery(event.target.value);
+                          setCustomerDropdownOpen(true);
+                          if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: '' }));
+                        }}
+                        placeholder="09xx xxx xxx"
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                {isCustomerUnlinked && (
+                  <div className="mt-2 flex items-center justify-between rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                    <span>Đang ở chế độ nhập tự do (đã bỏ liên kết hồ sơ).</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomerUnlinked(false)}
+                      className="font-bold underline hover:text-amber-900 dark:hover:text-amber-200 cursor-pointer"
+                    >
+                      Khớp lại hồ sơ
+                    </button>
+                  </div>
+                )}
+
+                {/* Autocomplete gợi ý khách hàng từ hồ sơ Salon */}
+                {customerDropdownOpen && customerSuggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-2xl">
+                    <div className="flex items-center justify-between border-b border-brand-outline bg-brand-surface-high/50 px-3 py-2 text-caption font-bold text-brand-text-muted">
+                      <span className="flex items-center gap-1.5">
+                        <UsersRound className="h-3.5 w-3.5 text-brand-primary" />
+                        Tìm thấy {customerSuggestions.length} khách có hồ sơ trong tiệm:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerDropdownOpen(false)}
+                        className="text-brand-text-muted hover:text-brand-text"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <ul className="max-h-60 overflow-y-auto divide-y divide-brand-outline/60">
+                      {customerSuggestions.map((cust) => (
+                        <li key={cust.id}>
+                          <button
+                            type="button"
+                            onClick={() => selectCustomer(cust)}
+                            className="w-full text-left p-3 hover:bg-brand-surface-high flex items-center justify-between gap-3 transition"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${tierMeta[cust.tier]?.avatar || 'from-emerald-500 to-teal-600'} text-white font-bold text-xs`}>
+                                {cust.name.split(' ').slice(-2).map((w) => w[0]).join('')}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="truncate text-xs font-bold text-brand-text">{cust.name}</p>
+                                  <span className="rounded bg-brand-surface-high px-1 py-0.2 text-[10px] font-semibold text-brand-text-muted">
+                                    {cust.id}
+                                  </span>
+                                  <span className={`rounded-full px-2 py-0.2 text-[10px] font-bold ${tierMeta[cust.tier]?.badge || 'bg-slate-100'}`}>
+                                    {tierMeta[cust.tier]?.label || cust.tier}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-brand-text-muted mt-0.5">{cust.phone}</p>
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-0.5 text-xs font-black text-emerald-700 dark:text-emerald-300">
+                                <Gift className="h-3 w-3" />
+                                {cust.points.toLocaleString('vi-VN')} điểm
+                              </span>
+                              <p className="text-[10px] text-brand-text-muted mt-0.5">Click để chọn</p>
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </fieldset>
 
@@ -2347,6 +3124,88 @@ export default function TenantAdminAppointments({
             </Field>
           </fieldset>
         </form>
+      </Modal>
+
+      {/* Hộp thoại chọn khách hàng từ hồ sơ Salon */}
+      <Modal
+        open={showCustomerPicker}
+        onClose={() => setShowCustomerPicker(false)}
+        size="medium"
+        title="Chọn khách hàng từ hồ sơ tiệm"
+        description="Dữ liệu khách hàng, hạng thành viên và điểm tích luỹ sẽ tự động đồng bộ vào lịch hẹn."
+        footer={(
+          <Button variant="secondary" onClick={() => setShowCustomerPicker(false)}>Đóng</Button>
+        )}
+      >
+        <div className="flex flex-col gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-text-muted" />
+            <input
+              type="text"
+              value={customerSearchQuery}
+              onChange={(e) => setCustomerSearchQuery(e.target.value)}
+              placeholder="Tìm theo tên khách, số điện thoại, mã CUS..."
+              className="h-11 w-full rounded-xl border border-brand-outline bg-brand-surface-high/40 pl-9 pr-3 text-xs font-semibold text-brand-text outline-none focus:border-brand-primary focus:bg-brand-surface"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-96 overflow-y-auto divide-y divide-brand-outline rounded-xl border border-brand-outline bg-brand-surface">
+            {customerList
+              .filter((c) => {
+                if (!customerSearchQuery.trim()) return true;
+                const q = customerSearchQuery.toLowerCase();
+                const digits = q.replace(/\D/g, '');
+                return (
+                  c.name.toLowerCase().includes(q) ||
+                  c.id.toLowerCase().includes(q) ||
+                  (digits && c.phone.replace(/\D/g, '').includes(digits))
+                );
+              })
+              .map((c) => (
+                <div
+                  key={c.id}
+                  className="p-3 hover:bg-brand-surface-high/60 flex items-center justify-between gap-3 transition"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${tierMeta[c.tier]?.avatar || 'from-emerald-500 to-teal-600'} text-white font-bold text-xs shadow-2xs`}>
+                      {c.name.split(' ').slice(-2).map((w) => w[0]).join('')}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-bold text-brand-text">{c.name}</p>
+                        <span className="rounded bg-brand-surface-high px-1.5 py-0.5 text-[10px] font-semibold text-brand-text-muted">
+                          {c.id}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tierMeta[c.tier]?.badge || 'bg-slate-100'}`}>
+                          {tierMeta[c.tier]?.label || c.tier}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-brand-text-muted">
+                        <span>{c.phone}</span>
+                        <span>•</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <Gift className="h-3 w-3" />
+                          {c.points.toLocaleString('vi-VN')} điểm tích luỹ
+                        </span>
+                        <span>•</span>
+                        <span>{c.visits} lần ghé</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="small"
+                    onClick={() => selectCustomer(c)}
+                  >
+                    Chọn
+                  </Button>
+                </div>
+              ))}
+          </div>
+        </div>
       </Modal>
     </div>
   );

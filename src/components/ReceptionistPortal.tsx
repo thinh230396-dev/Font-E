@@ -68,7 +68,7 @@ import { resetTenantMockStorage } from '../utils/mockDataReset';
 import { validateAndCalculatePromotion, type LoyaltyProgram } from '../utils/promotionUtils';
 import { serviceSeed, type SalonService } from './TenantAdminServices';
 import { designSeed, colorSeed, type NailDesign, type PolishColor } from './TenantAdminNailGallery';
-import { Button, Field, Modal, StatusBadge } from './ui';
+import { Button, Field, Modal, PageHeader, StatusBadge } from './ui';
 
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
 const TenantAdminCustomers = lazy(() => import('./TenantAdminCustomers'));
@@ -78,7 +78,7 @@ const ReceptionistStations = lazy(() => import('./ReceptionistStations'));
 const ReceptionistTechnicians = lazy(() => import('./ReceptionistTechnicians'));
 
 type ReceptionPage = 'desk' | 'appointments' | 'customers' | 'products' | 'stations' | 'technicians' | 'payments';
-type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' | 'REFUNDED';
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
 type BranchCode = 'Q1' | 'Q3';
 type PaymentMethod = 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
@@ -291,6 +291,7 @@ export interface SplitPaymentEntry {
   method: PaymentMethod;
   amount: number;
   reference?: string;
+  payerName?: string;
 }
 
 interface ReceptionAppointment {
@@ -555,6 +556,7 @@ const appointmentStatusLabel: Record<AppointmentStatus, string> = {
   COMPLETED: 'Hoàn tất',
   CANCELLED: 'Đã hủy',
   NO_SHOW: 'Không đến',
+  REFUNDED: 'Đã hoàn tiền',
 };
 
 const methodMeta: Record<PaymentMethod, { label: string; icon: typeof Banknote }> = {
@@ -859,6 +861,21 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   }, [colorsData, branchCode]);
 
   const [page, setPage] = useState<ReceptionPage>('desk');
+  const [appointmentBookingRequest, setAppointmentBookingRequest] = useState<{
+    requestId: number;
+    customerId: string;
+    name: string;
+    phone: string;
+    branch: BranchCode;
+    note: string;
+    allergies: string;
+    nailCondition: string;
+    favoriteTechnician: string;
+    tier?: string;
+    points?: number;
+    totalSpent?: number;
+    visits?: number;
+  } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -965,6 +982,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [technicianShiftFilter, setTechnicianShiftFilter] = useState<'ALL' | TechnicianShift>('ALL');
   const [technicianSpecialtyFilter, setTechnicianSpecialtyFilter] = useState('ALL');
   const [deskQueueFilter, setDeskQueueFilter] = useState<DeskQueueFilter>('ACTION');
+  const [deskViewMode, setDeskViewMode] = useState<'QUEUE' | 'STATIONS' | 'STAFF'>('QUEUE');
   const [editingTechnician, setEditingTechnician] = useState<ReceptionTechnician | null>(null);
   const [technicianEditForm, setTechnicianEditForm] = useState<TechnicianEditForm>({ status: 'PRESENT', shift: 'FULL_DAY', checkIn: '', checkOut: '', leaveNote: '' });
   const [appointmentEditForm, setAppointmentEditForm] = useState<AppointmentEditForm>({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [] as string[], specialTags: [] as string[], designName: '', designLevel: 0, designSurcharge: 0 });
@@ -1110,14 +1128,17 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     const query = searchQuery.trim().toLowerCase();
     return !query || `${appointment.customer} ${appointment.phone} ${appointment.service} ${appointment.staff} ${appointment.station || ''}`.toLowerCase().includes(query);
   }).sort((a, b) => {
-    const priority: Record<AppointmentStatus, number> = { CHECKED_IN: 0, IN_SERVICE: 1, PENDING: 2, CONFIRMED: 3, COMPLETED: 4, CANCELLED: 5, NO_SHOW: 6 };
+    const priority: Record<AppointmentStatus, number> = { CHECKED_IN: 0, IN_SERVICE: 1, PENDING: 2, CONFIRMED: 3, COMPLETED: 4, CANCELLED: 5, NO_SHOW: 6, REFUNDED: 7 };
     return priority[a.status] - priority[b.status] || a.start.localeCompare(b.start);
   });
   const invoiceSubtotal = invoiceLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
   const invoiceDiscount = Math.max(0, Number(paymentForm.discount) || 0);
   const invoiceTip = Math.max(0, Number(paymentForm.tip) || 0);
   const invoiceTaxAndFees = 0;
-  const invoiceTotal = Math.max(0, invoiceSubtotal - (paymentAppointment?.deposit || 0) - invoiceDiscount + invoiceTip + invoiceTaxAndFees);
+  const totalMergedDeposit = (paymentAppointment?.deposit || 0) + appointments.filter((a) => mergedAppointmentIds.includes(a.id)).reduce((sum, a) => sum + a.deposit, 0);
+  const invoiceTotal = Math.max(0, invoiceSubtotal - totalMergedDeposit - invoiceDiscount + invoiceTip + invoiceTaxAndFees);
+  const totalSplitAllocated = splitPaymentsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const splitDifference = invoiceTotal - totalSplitAllocated;
   const cashCollectedToday = paidToday
     .filter((payment) => payment.method === 'CASH')
     .reduce((sum, payment) => sum + Math.max(0, payment.total - payment.deposit), 0);
@@ -1463,7 +1484,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     };
     setAppointments((current) => [appointment, ...current]);
     setWalkInOpen(false);
-    setWalkIn({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', designName: '', designLevel: 0, designSurcharge: 0 });
+    setWalkIn({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [], specialTags: [], designName: '', designLevel: 0, designSurcharge: 0 });
     setToast(`Đã tiếp nhận khách vãng lai ${appointment.customer}.`);
   };
 
@@ -1477,6 +1498,139 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       price: selected ? String(selected.price) : walkIn.price,
       duration: selected?.duration ? String(selected.duration) : walkIn.duration,
     });
+  };
+
+  const submitQuickWalkIn = (action: 'START_NOW' | 'CHECK_IN_QUEUE' = 'START_NOW') => {
+    if (!requireOpenShift()) return;
+    const customerName = quickWalkInForm.customer.trim() || `Khách vãng lai #${Date.now().toString().slice(-4)}`;
+    const phone = quickWalkInForm.phone.trim() || '0900 000 000';
+    const duration = parseInt(quickWalkInForm.duration, 10) || 60;
+    const price = parseInt(quickWalkInForm.price, 10) || 450000;
+    const staff = quickWalkInForm.staff || 'Chưa phân công';
+    const station = quickWalkInForm.station || undefined;
+    const isStartNow = action === 'START_NOW';
+
+    const newAppointment: ReceptionAppointment = {
+      id: makeId('APT'),
+      customer: customerName,
+      phone,
+      date: today(),
+      start: nowTime(),
+      duration,
+      service: quickWalkInForm.service,
+      services: [quickWalkInForm.service],
+      staff,
+      station,
+      branch: branchCode,
+      source: 'RECEPTION',
+      status: isStartNow ? 'IN_SERVICE' : 'CHECKED_IN',
+      serviceStartedAt: isStartNow ? new Date().toISOString() : undefined,
+      price,
+      deposit: 0,
+      note: quickWalkInForm.note.trim(),
+      allergies: quickWalkInForm.allergies,
+      createdBy: account.displayName,
+      firstVisit: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    setAppointments((current) => [newAppointment, ...current]);
+
+    if (isStartNow && staff !== 'Chưa phân công') {
+      setTechnicians((current) => current.map((t) => t.name === staff ? { ...t, status: 'SERVING' } : t));
+    }
+
+    setQuickWalkInOpen(false);
+    setQuickWalkInForm({
+      customer: '',
+      phone: '',
+      service: 'Gel Manicure',
+      staff: '',
+      station: '',
+      duration: '60',
+      price: '450000',
+      allergies: [],
+      note: '',
+      quickAction: 'START_NOW',
+    });
+
+    setToast(isStartNow ? `⚡ Đã tiếp nhận & bắt đầu dịch vụ ngay cho ${customerName}!` : `⚡ Đã tiếp nhận & check-in hàng chờ cho ${customerName}!`);
+  };
+
+  const extendServiceDuration = (appointmentId: string, extraMinutes = 15) => {
+    setAppointments((current) => current.map((a) => {
+      if (a.id !== appointmentId) return a;
+      return {
+        ...a,
+        serviceExtendedMinutes: (a.serviceExtendedMinutes || 0) + extraMinutes,
+      };
+    }));
+    const apt = appointments.find((a) => a.id === appointmentId);
+    setToast(`⏱️ Đã gia hạn thêm +${extraMinutes} phút cho "${apt?.customer || 'khách'}".`);
+  };
+
+  const mergeAppointmentToBill = (otherAppointment: ReceptionAppointment) => {
+    if (mergedAppointmentIds.includes(otherAppointment.id)) return;
+    const services = otherAppointment.services?.length ? otherAppointment.services : [otherAppointment.service];
+    const splitPrice = Math.floor(otherAppointment.price / services.length);
+    const newLines: InvoiceLineDraft[] = services.map((name, index) => {
+      const catalogMatch = serviceCatalog.find((s) => s.name === name);
+      const originalBasePrice = catalogMatch ? catalogMatch.price : (index === services.length - 1 ? otherAppointment.price - splitPrice * index : splitPrice);
+      return {
+        id: `${makeId('LINE')}-merge-${otherAppointment.id}-${index}`,
+        type: 'SERVICE',
+        name,
+        quantity: 1,
+        basePrice: originalBasePrice,
+        unitPrice: originalBasePrice,
+        staff: otherAppointment.staff,
+        fromCustomerName: otherAppointment.customer,
+        fromAppointmentId: otherAppointment.id,
+      };
+    });
+    setInvoiceLines((prev) => [...prev, ...newLines]);
+    setMergedAppointmentIds((prev) => [...prev, otherAppointment.id]);
+    setShowMergeSelector(false);
+    setToast(`Đã gộp dịch vụ của khách "${otherAppointment.customer}" vào hóa đơn.`);
+  };
+
+  const unmergeAppointmentFromBill = (aptId: string) => {
+    const targetApt = appointments.find((a) => a.id === aptId);
+    setInvoiceLines((prev) => prev.filter((l) => l.fromAppointmentId !== aptId));
+    setMergedAppointmentIds((prev) => prev.filter((id) => id !== aptId));
+    setToast(`Đã tách hóa đơn của "${targetApt?.customer || 'khách gộp'}".`);
+  };
+
+  const splitEqually = (numPeople: number) => {
+    const perPerson = Math.floor(invoiceTotal / numPeople);
+    const remainder = invoiceTotal - (perPerson * numPeople);
+    const methods: PaymentMethod[] = ['CASH', 'BANK', 'CARD', 'MOMO', 'ZALOPAY'];
+    const newSplits: SplitPaymentEntry[] = Array.from({ length: numPeople }, (_, i) => ({
+      id: `SP-${Date.now()}-${i}`,
+      method: methods[i % methods.length],
+      amount: i === 0 ? perPerson + remainder : perPerson,
+      reference: '',
+    }));
+    setSplitPaymentsList(newSplits);
+    setToast(`Đã chia đều hóa đơn cho ${numPeople} người (${money(perPerson)}/người).`);
+  };
+
+  const addSplitRow = () => {
+    const currentTotal = splitPaymentsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const remaining = Math.max(0, invoiceTotal - currentTotal);
+    setSplitPaymentsList((prev) => [
+      ...prev,
+      { id: `SP-${Date.now()}-${prev.length + 1}`, method: 'BANK', amount: remaining, reference: '' },
+    ]);
+  };
+
+  const removeSplitRow = (id: string) => {
+    if (splitPaymentsList.length <= 1) return;
+    setSplitPaymentsList((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const updateSplitRow = (id: string, patch: Partial<SplitPaymentEntry>) => {
+    setSplitPaymentsList((prev) => prev.map((s) => s.id === id ? { ...s, ...patch } : s));
   };
 
   const openAppointmentEdit = (appointment: ReceptionAppointment) => {
@@ -1585,10 +1739,16 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
 
     setPaymentAppointment(appointment);
     const existingDraft = invoiceDrafts[appointment.id];
+    setMergedAppointmentIds(existingDraft?.mergedIds || []);
+    setShowMergeSelector(false);
+    setSplitPaymentMode(Boolean(existingDraft?.splitPayments?.length));
     if (existingDraft && existingDraft.lines?.length) {
       setInvoiceLines(existingDraft.lines);
       setPaymentForm(existingDraft.form || { method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
       setSelectedPromoId(existingDraft.promoId || '');
+      setSplitPaymentsList(existingDraft.splitPayments && existingDraft.splitPayments.length > 0 ? existingDraft.splitPayments : [
+        { id: 'SP-1', method: 'CASH', amount: Math.max(0, (appointment.price || 0) - (appointment.deposit || 0)), reference: '' }
+      ]);
     } else {
       const selectedServices = appointment.services?.length ? appointment.services : [appointment.service];
       const splitPrice = Math.floor(appointment.price / selectedServices.length);
@@ -1611,6 +1771,9 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
         };
       }));
       setPaymentForm({ method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
+      setSplitPaymentsList([
+        { id: 'SP-1', method: 'CASH', amount: Math.max(0, (appointment.price || 0) - (appointment.deposit || 0)), reference: '' }
+      ]);
     }
     setInvoiceCatalogTab('SERVICE');
     setInvoiceCatalogQuery('');
@@ -1786,9 +1949,25 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     const tip = Math.max(0, Number(paymentForm.tip) || 0);
     if (discount > subtotal) return setFormError('Giảm giá không được lớn hơn tổng tiền hàng.');
     const grandTotal = Math.max(0, subtotal - discount + tip);
-    if (grandTotal < paymentAppointment.deposit) return setFormError('Tổng hóa đơn sau giảm giá không được thấp hơn số tiền khách đã đặt cọc.');
-    if (paymentForm.method !== 'CASH' && !paymentForm.reference.trim()) return setFormError('Vui lòng nhập mã giao dịch để đối soát.');
-    if (paymentForm.method !== 'CASH' && payments.some((payment) => payment.reference?.trim().toLowerCase() === paymentForm.reference.trim().toLowerCase() && payment.appointmentId !== paymentAppointment.id)) return setFormError('Mã giao dịch đã được sử dụng. Vui lòng kiểm tra lại để tránh ghi nhận trùng.');
+    const allDeposits = (paymentAppointment.deposit || 0) + appointments.filter((a) => mergedAppointmentIds.includes(a.id)).reduce((sum, a) => sum + a.deposit, 0);
+    if (grandTotal < allDeposits) return setFormError('Tổng hóa đơn sau giảm giá không được thấp hơn số tiền khách đã đặt cọc.');
+
+    if (splitPaymentMode) {
+      if (!splitPaymentsList.length) return setFormError('Vui lòng thêm ít nhất một phương thức chia hóa đơn.');
+      if (splitDifference !== 0) {
+        return setFormError(`Tổng tiền các phương thức (${money(totalSplitAllocated)}) chưa khớp với số tiền thực thu (${money(invoiceTotal)}). Chênh lệch: ${money(Math.abs(splitDifference))}.`);
+      }
+      for (let i = 0; i < splitPaymentsList.length; i++) {
+        const item = splitPaymentsList[i];
+        if (item.amount <= 0) return setFormError(`Phương thức #${i + 1} có số tiền không hợp lệ.`);
+        if (item.method !== 'CASH' && !item.reference?.trim()) {
+          return setFormError(`Phương thức #${i + 1} (${methodMeta[item.method].label}) cần nhập mã giao dịch để đối soát.`);
+        }
+      }
+    } else {
+      if (paymentForm.method !== 'CASH' && !paymentForm.reference.trim()) return setFormError('Vui lòng nhập mã giao dịch để đối soát.');
+      if (paymentForm.method !== 'CASH' && payments.some((payment) => payment.reference?.trim().toLowerCase() === paymentForm.reference.trim().toLowerCase() && payment.appointmentId !== paymentAppointment.id)) return setFormError('Mã giao dịch đã được sử dụng. Vui lòng kiểm tra lại để tránh ghi nhận trùng.');
+    }
     
     setFormError('');
     setShowPaymentConfirm(true);
@@ -1800,31 +1979,42 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     const discount = Math.max(0, Number(paymentForm.discount) || 0);
     const tip = Math.max(0, Number(paymentForm.tip) || 0);
     const grandTotal = Math.max(0, subtotal - discount + tip);
-    const amountDue = Math.max(0, grandTotal - paymentAppointment.deposit);
+    const allMergedDeposits = (paymentAppointment.deposit || 0) + appointments.filter((a) => mergedAppointmentIds.includes(a.id)).reduce((sum, a) => sum + a.deposit, 0);
+    const amountDue = Math.max(0, grandTotal - allMergedDeposits);
     const timestamp = new Date();
     const existingInvoice = payments.find((payment) => payment.appointmentId === paymentAppointment.id && ['PARTIAL', 'PENDING'].includes(payment.status));
     
+    const allInvolvedAppointmentIds = [paymentAppointment.id, ...mergedAppointmentIds];
+    const mergedCustomers = appointments.filter((a) => mergedAppointmentIds.includes(a.id)).map((a) => a.customer);
+    const customerDisplay = mergedCustomers.length ? `${paymentAppointment.customer} (+ ${mergedCustomers.join(', ')})` : paymentAppointment.customer;
+    const paymentMethodUsed = splitPaymentMode ? (splitPaymentsList[0]?.method || 'CASH') : paymentForm.method;
+
     const payment: ReceptionPayment = {
       id: existingInvoice?.id || makeId('INV'),
       appointmentId: paymentAppointment.id,
-      customer: paymentAppointment.customer,
+      mergedAppointmentIds: mergedAppointmentIds.length ? mergedAppointmentIds : undefined,
+      customer: customerDisplay,
       phone: paymentAppointment.phone,
       branch: paymentAppointment.branch,
       createdAt: `${timestamp.toLocaleDateString('vi-VN')} · ${nowTime()}`,
       subtotal,
       discount,
       tip,
-      deposit: paymentAppointment.deposit,
+      deposit: allMergedDeposits,
       total: grandTotal,
       paid: grandTotal,
       refunded: 0,
       status: 'PAID',
-      method: paymentForm.method,
-      reference: paymentForm.reference.trim() || undefined,
+      method: paymentMethodUsed,
+      reference: splitPaymentMode ? 'Tách thanh toán' : (paymentForm.reference.trim() || undefined),
+      splitPayments: splitPaymentMode ? splitPaymentsList.map((s) => ({ method: s.method, amount: s.amount, reference: s.reference?.trim() || undefined })) : undefined,
       cashier: account.displayName,
       source: 'POS tại quầy',
       items: invoiceLines.map((line) => {
         let displayName = line.name.trim();
+        if (line.fromCustomerName) {
+          displayName = `[${line.fromCustomerName}] ` + displayName;
+        }
         if (line.designName) {
           const diffText = line.difficultyLabel || (line.designLevel ? `Độ khó mức ${line.designLevel}` : '');
           displayName += ` + Mẫu: ${line.designName}${diffText ? ` (${diffText})` : ''}${line.designSurcharge ? ` [+${money(line.designSurcharge)}]` : ''}`;
@@ -1853,29 +2043,47 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       note: paymentForm.note.trim() || undefined,
       audit: [
         ...(existingInvoice?.audit || []),
-        `${nowTime()} · ${account.displayName} xác nhận ${invoiceLines.length} dịch vụ/sản phẩm (gồm chi tiết mẫu vẽ & phụ thu độ khó) và thanh toán qua ${methodMeta[paymentForm.method].label}`,
-        `${nowTime()} · Áp dụng cọc ${money(paymentAppointment.deposit)}, thực thu tại quầy ${money(amountDue)}`,
+        `${nowTime()} · ${account.displayName} hoàn tất thanh toán hóa đơn ${mergedAppointmentIds.length ? `gộp ${1 + mergedAppointmentIds.length} khách` : ''}`,
+        splitPaymentMode
+          ? `${nowTime()} · Tách thanh toán: ${splitPaymentsList.map((s) => `${methodMeta[s.method].label} (${money(s.amount)})`).join(' + ')}`
+          : `${nowTime()} · Thanh toán qua ${methodMeta[paymentForm.method].label}`,
+        `${nowTime()} · Áp dụng cọc ${money(allMergedDeposits)}, thực thu tại quầy ${money(amountDue)}`,
       ],
     };
     setPayments((current) => existingInvoice
       ? current.map((item) => item.id === existingInvoice.id ? payment : item)
       : [payment, ...current]);
-    const serviceNames = invoiceLines.filter((line) => line.type === 'SERVICE').map((line) => line.name.trim());
-    const serviceSubtotal = invoiceLines.filter((line) => line.type === 'SERVICE').reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
-    setAppointments((current) => current.map((item) => item.id === paymentAppointment.id ? {
-      ...item,
-      status: 'COMPLETED',
-      service: serviceNames.join(' + ') || item.service,
-      services: serviceNames.length ? serviceNames : item.services,
-      price: serviceSubtotal,
-    } : item));
-    const hasOtherActiveService = appointments.some((item) => item.id !== paymentAppointment.id && item.staff === paymentAppointment.staff && item.status === 'IN_SERVICE');
-    if (!hasOtherActiveService) {
-      setTechnicians((current) => current.map((item) => item.name === paymentAppointment.staff && item.status === 'SERVING' ? { ...item, status: 'PRESENT' } : item));
-    }
+
+    setAppointments((current) => current.map((item) => {
+      if (allInvolvedAppointmentIds.includes(item.id)) {
+        const itemLines = invoiceLines.filter((l) => l.fromAppointmentId ? l.fromAppointmentId === item.id : item.id === paymentAppointment.id);
+        const serviceNames = itemLines.filter((line) => line.type === 'SERVICE').map((line) => line.name.trim());
+        const serviceSubtotal = itemLines.filter((line) => line.type === 'SERVICE').reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+        return {
+          ...item,
+          status: 'COMPLETED',
+          service: serviceNames.join(' + ') || item.service,
+          services: serviceNames.length ? serviceNames : item.services,
+          price: serviceSubtotal > 0 ? serviceSubtotal : item.price,
+        };
+      }
+      return item;
+    }));
+
+    const involvedStaffs = appointments.filter((a) => allInvolvedAppointmentIds.includes(a.id)).map((a) => a.staff);
+    setTechnicians((current) => current.map((item) => {
+      if (involvedStaffs.includes(item.name) && item.status === 'SERVING') {
+        const stillHasOther = appointments.some((a) => !allInvolvedAppointmentIds.includes(a.id) && a.staff === item.name && a.status === 'IN_SERVICE');
+        if (!stillHasOther) {
+          return { ...item, status: 'PRESENT' };
+        }
+      }
+      return item;
+    }));
+
     setInvoiceDrafts((current) => {
       const next = { ...current };
-      delete next[paymentAppointment.id];
+      allInvolvedAppointmentIds.forEach((id) => delete next[id]);
       try {
         localStorage.setItem(invoiceDraftsStorageKey, JSON.stringify(next));
       } catch {
@@ -1885,6 +2093,8 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     });
     setShowPaymentConfirm(false);
     setPaymentAppointment(null);
+    setMergedAppointmentIds([]);
+    setSplitPaymentMode(false);
     setToast(`Đã thu ${money(amountDue)} từ khách hàng ${payment.customer}.`);
   };
 
@@ -1922,294 +2132,781 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setSearchQuery('');
   };
 
-  const renderDesk = () => (
-    <div className="space-y-5">
-      {/* Đầu trang: tên màn hình + hành động chính, không dùng khối trang trí. */}
-      <section className="rounded-card border border-brand-outline bg-brand-surface p-5 shadow-card sm:p-6">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-          <div className="min-w-0">
+  const renderDesk = () => {
+    const currentStations = stationCatalog[branchCode] || [];
+    const totalStations = currentStations.length;
+    const availableTechsCount = availableTechnicians.length;
+    const isShiftOpen = shift.status === 'OPEN';
+
+    return (
+      <div className="space-y-4">
+        {/* 1. Header chuẩn theo khung PageHeader (Đồng bộ với Khách hàng tại quầy) */}
+        <PageHeader
+          title="Bàn tiếp tân"
+          titleAside={(
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 text-caption font-bold uppercase tracking-wider text-brand-secondary">
-                <Activity className="h-3.5 w-3.5" /> Trung tâm vận hành
-              </span>
-              <StatusBadge
-                status={shift.status === 'OPEN' ? 'ACTIVE' : 'INACTIVE'}
-                label={shift.status === 'OPEN'
+              <button
+                type="button"
+                onClick={() => openShiftDialog(isShiftOpen ? 'CLOSE' : 'OPEN')}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition cursor-pointer border ${
+                  isShiftOpen
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                    : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 hover:bg-rose-500/20'
+                }`}
+                title="Bấm để đổi trạng thái ca / chốt ca"
+              >
+                <span className={`h-2 w-2 rounded-full ${isShiftOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                {isShiftOpen
                   ? `Ca đang mở · ${new Date(shift.openedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
-                  : 'Ca đã đóng'}
-                size="small"
-              />
+                  : 'Ca đã đóng (Mở ca ngay)'}
+              </button>
+              <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-brand-outline bg-brand-surface-high px-2.5 py-0.5 text-caption font-semibold text-brand-text-muted">
+                <MapPin className="h-3 w-3 text-brand-secondary" />
+                {branchName}
+              </span>
             </div>
-            <h1 className="mt-3 max-w-3xl text-2xl font-black tracking-[-0.03em] text-brand-text sm:text-3xl">
-              Chào {account.displayName.split(' ').slice(-2).join(' ')}, bàn lễ tân đã sẵn sàng.
-            </h1>
-            <p className="mt-2 max-w-2xl text-body leading-6 text-brand-text-muted">
-              Theo dõi luồng khách, phân công nguồn lực và hoàn tất thanh toán trong một màn hình.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-caption font-bold text-brand-text-muted">
-              <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-brand-secondary" />{new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</span>
-              <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-brand-secondary" />{branchName}</span>
-              <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-brand-secondary" />Phạm vi Receptionist</span>
-            </div>
-          </div>
-          <div className="grid min-w-0 gap-2 sm:grid-cols-3">
-            <Button variant="primary" iconLeading={<Plus />} onClick={() => { if (requireOpenShift()) setWalkInOpen(true); }}>
-              Tiếp nhận khách
-            </Button>
-            <Button variant="secondary" iconLeading={<CalendarClock />} onClick={() => navigate('appointments')}>
-              Tạo lịch hẹn
-            </Button>
-            <Button variant="secondary" iconLeading={<DoorOpen />} onClick={() => openShiftDialog(shift.status === 'OPEN' ? 'CLOSE' : 'OPEN')}>
-              {shift.status === 'OPEN' ? 'Chốt ca' : 'Mở ca'}
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-        {[
-          { label: 'Lịch hôm nay', value: String(todayAppointments.length), note: `${completedToday} đã hoàn tất`, icon: CalendarCheck2, tone: 'bg-brand-primary/10 text-brand-primary ring-brand-primary/18' },
-          { label: 'Cần xử lý', value: String(actionableAppointments.length), note: `${unassignedAppointments.length} chưa phân công`, icon: AlertCircle, tone: 'bg-brand-tertiary/10 text-brand-tertiary ring-brand-tertiary/18' },
-          { label: 'Khách tại salon', value: String(activeAppointments.length), note: `${activeAppointments.filter((item) => item.status === 'CHECKED_IN').length} đang chờ`, icon: UsersRound, tone: 'bg-brand-secondary/10 text-brand-secondary ring-brand-secondary/18' },
-          { label: 'Đang phục vụ', value: String(activeAppointments.filter((item) => item.status === 'IN_SERVICE').length), note: `${occupiedStations} ghế đang dùng`, icon: Armchair, tone: 'bg-brand-primary/10 text-brand-primary ring-brand-primary/18' },
-          { label: 'Doanh thu đã thu', value: money(todayRevenue), note: `${paidToday.length} giao dịch`, icon: CircleDollarSign, tone: 'bg-brand-secondary/10 text-brand-secondary ring-brand-secondary/18' },
-        ].map((item, index) => {
-          const Icon = item.icon;
-          return (
-            <article key={item.label} className={`rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm ${index === 4 ? 'col-span-2 xl:col-span-1' : ''}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-caption font-black uppercase tracking-[0.1em] text-brand-text-muted">{item.label}</p>
-                  <p className="mt-2 truncate text-xl font-black tracking-tight text-brand-text">{item.value}</p>
-                  <p className="mt-1 text-body font-semibold text-brand-text-muted">{item.note}</p>
-                </div>
-                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${item.tone}`}><Icon className="h-5 w-5" /></span>
-              </div>
-            </article>
-          );
-        })}
-      </section>
-
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,0.65fr)]">
-        <div className="overflow-hidden rounded-[24px] border border-brand-outline bg-brand-surface shadow-sm">
-          <div className="border-b border-brand-outline p-4 sm:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-brand-secondary"><TimerReset className="h-4 w-4" /><p className="text-body font-black uppercase tracking-[0.12em]">Hàng đợi thao tác</p></div>
-                <h2 className="mt-1 text-lg font-black tracking-tight text-brand-text">Ưu tiên cần xử lý tại quầy</h2>
-                <p className="mt-1 text-body font-medium text-brand-text-muted">Khách đã đến được đưa lên trước, sau đó là lịch chờ xác nhận.</p>
-              </div>
-              <button type="button" onClick={() => navigate('appointments')} className="flex w-fit items-center gap-2 rounded-xl border border-brand-outline bg-brand-surface-high px-3 py-2 text-body font-black text-brand-text hover:border-brand-secondary hover:text-brand-secondary">
-                Toàn bộ lịch hẹn <ArrowUpRight className="h-3.5 w-3.5" />
+          )}
+          actions={(
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { if (requireOpenShift()) setQuickWalkInOpen(true); }}
+                className="flex h-10 items-center gap-2 border border-amber-500 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 px-4 text-caption font-black text-white shadow-none cursor-pointer"
+              >
+                <Zap className="h-4 w-4 text-amber-200 fill-amber-200" />
+                ⚡ Walk-in (5s)
+              </button>
+              <button
+                type="button"
+                onClick={() => { if (requireOpenShift()) setWalkInOpen(true); }}
+                className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 hover:bg-pink-700 px-4 text-caption font-black text-white shadow-none cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                Tiếp nhận khách
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('appointments')}
+                className="flex h-10 items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 px-4 text-caption font-bold text-slate-700 shadow-none cursor-pointer"
+              >
+                <CalendarClock className="h-4 w-4" />
+                Tạo lịch hẹn
+              </button>
+              <button
+                type="button"
+                onClick={() => openShiftDialog(isShiftOpen ? 'CLOSE' : 'OPEN')}
+                className="flex h-10 items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 px-4 text-caption font-bold text-slate-600 shadow-none cursor-pointer"
+              >
+                <DoorOpen className="h-4 w-4" />
+                {isShiftOpen ? 'Chốt ca' : 'Mở ca'}
               </button>
             </div>
-            <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Lọc hàng đợi lễ tân">
-              {[
-                { id: 'ACTION' as DeskQueueFilter, label: 'Cần xử lý', value: actionableAppointments.length },
-                { id: 'UPCOMING' as DeskQueueFilter, label: 'Sắp đến', value: upcomingAppointments.length },
-                { id: 'WAITING' as DeskQueueFilter, label: 'Đang chờ', value: activeAppointments.filter((item) => item.status === 'CHECKED_IN').length },
-                { id: 'IN_SERVICE' as DeskQueueFilter, label: 'Đang làm', value: activeAppointments.filter((item) => item.status === 'IN_SERVICE').length },
-              ].map((item) => {
-                const active = deskQueueFilter === item.id;
-                return (
-                  <button key={item.id} type="button" role="tab" aria-selected={active} onClick={() => setDeskQueueFilter(item.id)} className={`shrink-0 rounded-full border px-3 py-2 text-body font-black ${active ? 'border-brand-secondary bg-brand-secondary text-white shadow-sm' : 'border-brand-outline bg-brand-surface-high text-brand-text-muted hover:text-brand-text'}`}>
-                    {item.label} <span className={`ml-1 rounded-full px-1.5 py-0.5 ${active ? 'bg-white/20' : 'bg-brand-surface'}`}>{item.value}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          )}
+        />
 
-          <div className="divide-y divide-brand-outline">
-            {deskQueueAppointments.length === 0 && (
-              <div className="p-10 text-center">
-                <CheckCircle2 className="mx-auto h-9 w-9 text-brand-secondary" />
-                <p className="mt-3 text-sm font-black text-brand-text">Không còn việc trong nhóm này</p>
-                <p className="mt-1 text-xs text-brand-text-muted">Hàng đợi đã được xử lý xong.</p>
+        {/* 2. 5 Live Metric Cards: Cô đọng, con số lớn, không thừa chữ */}
+        <section className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-5">
+          <article className="rounded-2xl border border-brand-outline bg-brand-surface p-3.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-brand-text-muted">Tại Salon</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-secondary/10 text-brand-secondary">
+                <UsersRound className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black tracking-tight text-brand-text">{activeAppointments.length}</span>
+              <span className="text-xs font-bold text-brand-secondary">khách</span>
+            </div>
+            <p className="mt-1 text-[11px] font-medium text-brand-text-muted">
+              {activeAppointments.filter((item) => item.status === 'CHECKED_IN').length} đang chờ · {activeAppointments.filter((item) => item.status === 'IN_SERVICE').length} đang làm
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-brand-outline bg-brand-surface p-3.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-brand-text-muted">Đang Phục Vụ</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
+                <Armchair className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black tracking-tight text-brand-text">{activeAppointments.filter((item) => item.status === 'IN_SERVICE').length}</span>
+              <span className="text-xs font-bold text-brand-text-muted">ca</span>
+            </div>
+            <p className="mt-1 text-[11px] font-medium text-brand-text-muted">
+              {occupiedStations}/{totalStations} ghế đang dùng
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-brand-outline bg-brand-surface p-3.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-brand-text-muted">Cần Xử Lý</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <AlertCircle className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black tracking-tight text-brand-text">{actionableAppointments.length}</span>
+              {unassignedAppointments.length > 0 && (
+                <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-black text-amber-700 dark:text-amber-300">
+                  {unassignedAppointments.length} chưa KTV
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-[11px] font-medium text-brand-text-muted">
+              {unassignedAppointments.length > 0 ? 'Cần phân công ngay' : 'Đã phân công đủ'}
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-brand-outline bg-brand-surface p-3.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-brand-text-muted">Lịch Sắp Đến</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
+                <Clock3 className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black tracking-tight text-brand-text">{upcomingAppointments.length}</span>
+              <span className="text-xs font-bold text-brand-text-muted">lịch</span>
+            </div>
+            <p className="mt-1 text-[11px] font-medium text-brand-text-muted">
+              Hôm nay: {todayAppointments.length} lịch ({completedToday} xong)
+            </p>
+          </article>
+
+          <article className="col-span-2 rounded-2xl border border-brand-outline bg-brand-surface p-3.5 shadow-xs xl:col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-brand-text-muted">Doanh Thu Ca</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <CircleDollarSign className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-xl font-black tracking-tight text-emerald-600 dark:text-emerald-400 truncate">{money(todayRevenue)}</span>
+            </div>
+            <p className="mt-1 text-[11px] font-medium text-brand-text-muted">
+              {paidToday.length} hóa đơn đã thu
+            </p>
+          </article>
+        </section>
+
+        {/* 3. Main Workspace Grid */}
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.65fr)]">
+          {/* Main Panel */}
+          <div className="overflow-hidden rounded-2xl border border-brand-outline bg-brand-surface shadow-xs">
+            {/* View Switcher & Filter Bar */}
+            <div className="border-b border-brand-outline p-3.5 sm:p-4 bg-brand-surface-high/30">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {/* View Tabs */}
+                <div className="flex rounded-xl bg-brand-surface p-1 border border-brand-outline">
+                  <button
+                    type="button"
+                    onClick={() => setDeskViewMode('QUEUE')}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black transition cursor-pointer ${
+                      deskViewMode === 'QUEUE'
+                        ? 'bg-brand-secondary text-white shadow-xs'
+                        : 'text-brand-text-muted hover:text-brand-text'
+                    }`}
+                  >
+                    <TimerReset className="h-3.5 w-3.5" />
+                    <span>Hàng đợi ({deskQueueAppointments.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeskViewMode('STATIONS')}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black transition cursor-pointer ${
+                      deskViewMode === 'STATIONS'
+                        ? 'bg-brand-secondary text-white shadow-xs'
+                        : 'text-brand-text-muted hover:text-brand-text'
+                    }`}
+                  >
+                    <Armchair className="h-3.5 w-3.5" />
+                    <span>Sơ đồ ghế ({occupiedStations}/{totalStations})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeskViewMode('STAFF')}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black transition cursor-pointer ${
+                      deskViewMode === 'STAFF'
+                        ? 'bg-brand-secondary text-white shadow-xs'
+                        : 'text-brand-text-muted hover:text-brand-text'
+                    }`}
+                  >
+                    <UserCheck className="h-3.5 w-3.5" />
+                    <span>KTV trực ca ({availableTechsCount} rảnh)</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate('appointments')}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-brand-secondary hover:underline"
+                  >
+                    Toàn bộ lịch <ArrowUpRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-filter chips for Queue view */}
+              {deskViewMode === 'QUEUE' && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-brand-outline/60">
+                  <div className="flex gap-1.5 overflow-x-auto" role="tablist">
+                    {[
+                      { id: 'ACTION' as DeskQueueFilter, label: 'Cần xử lý', value: actionableAppointments.length },
+                      { id: 'IN_SERVICE' as DeskQueueFilter, label: '⏱️ Đang làm', value: activeAppointments.filter((item) => item.status === 'IN_SERVICE').length },
+                      { id: 'WAITING' as DeskQueueFilter, label: '⏳ Đang chờ', value: activeAppointments.filter((item) => item.status === 'CHECKED_IN').length },
+                      { id: 'UPCOMING' as DeskQueueFilter, label: '📅 Sắp đến', value: upcomingAppointments.length },
+                    ].map((item) => {
+                      const active = deskQueueFilter === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setDeskQueueFilter(item.id)}
+                          className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-black transition cursor-pointer ${
+                            active
+                              ? 'bg-brand-primary text-white shadow-xs'
+                              : 'bg-brand-surface border border-brand-outline text-brand-text-muted hover:text-brand-text'
+                          }`}
+                        >
+                          {item.label}
+                          <span className={`ml-1.5 rounded-full px-1.5 py-0.2 text-[10px] ${active ? 'bg-white/25 text-white' : 'bg-brand-surface-high text-brand-text-muted'}`}>
+                            {item.value}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[11px] font-semibold text-brand-text-muted">
+                    Hiển thị {deskQueueAppointments.length} khách
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* TAB CONTENT: 1. QUEUE */}
+            {deskViewMode === 'QUEUE' && (
+              <div className="divide-y divide-brand-outline">
+                {deskQueueAppointments.length === 0 && (
+                  <div className="p-12 text-center">
+                    <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
+                    <p className="mt-2.5 text-sm font-black text-brand-text">Không có khách trong mục này</p>
+                    <p className="mt-0.5 text-xs text-brand-text-muted">Tất cả lịch hẹn hiện tại đã được xử lý xong.</p>
+                  </div>
+                )}
+                {deskQueueAppointments.map((appointment) => {
+                  const isUnassigned = appointment.staff === 'Chưa phân công';
+                  const isWaiting = appointment.status === 'CHECKED_IN';
+                  const isInService = appointment.status === 'IN_SERVICE';
+                  const timerStatus = isInService ? getServiceTimerStatus(appointment) : null;
+                  const customerAlerts = extractCustomerAlerts(appointment);
+
+                  return (
+                    <article
+                      key={appointment.id}
+                      className={`p-3.5 sm:p-4 transition hover:bg-brand-surface-high/30 ${
+                        isWaiting
+                          ? 'bg-brand-secondary/5'
+                          : timerStatus?.isOverrun
+                            ? 'bg-rose-500/10 border-l-4 border-l-rose-500'
+                            : ''
+                      }`}
+                    >
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[68px_minmax(0,1fr)_auto] lg:items-center">
+                        {/* Time & Duration badge */}
+                        <div className="flex items-center justify-between lg:block">
+                          <div className="rounded-xl border border-brand-outline bg-brand-surface px-2.5 py-1.5 text-center shadow-2xs">
+                            <p className="text-sm font-black tabular-nums text-brand-text">{appointment.start}</p>
+                            <p className="text-[10px] font-bold uppercase text-brand-text-muted">{appointment.duration}p</p>
+                          </div>
+                          <div className="lg:hidden">
+                            <StatusBadge status={appointment.status} label={appointmentStatusLabel[appointment.status]} size="small" />
+                          </div>
+                        </div>
+
+                        {/* Middle info */}
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="text-sm font-black text-brand-text">{appointment.customer}</p>
+                            <span className="hidden lg:inline-flex">
+                              <StatusBadge status={appointment.status} label={appointmentStatusLabel[appointment.status]} size="small" />
+                            </span>
+                            {appointment.station && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-brand-surface-high border border-brand-outline px-1.5 py-0.5 text-[10px] font-black text-brand-text">
+                                <Armchair className="h-3 w-3 text-brand-secondary" /> {appointment.station}
+                              </span>
+                            )}
+                            {appointment.firstVisit && (
+                              <span className="rounded-md bg-brand-primary/10 px-1.5 py-0.5 text-[10px] font-black text-brand-primary border border-brand-primary/20">
+                                Mới
+                              </span>
+                            )}
+                            {isUnassigned && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-black text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                                <AlertCircle className="h-3 w-3" /> Chưa KTV
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Allergy / VIP Tags */}
+                          {customerAlerts.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {customerAlerts.map((alert, aIdx) => (
+                                <span
+                                  key={`${alert.label}-${aIdx}`}
+                                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold border ${
+                                    alert.tone === 'danger'
+                                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                                      : alert.tone === 'warning'
+                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                                        : alert.tone === 'purple'
+                                          ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30'
+                                          : 'bg-brand-primary/10 text-brand-primary border-brand-primary/30'
+                                  }`}
+                                >
+                                  <span>{alert.icon}</span>
+                                  <span>{alert.label}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Service & Staff row */}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-brand-text-muted">
+                            <span className="font-bold text-brand-text">{appointment.service}</span>
+                            <span className="inline-flex items-center gap-1">
+                              <UserCheck className="h-3.5 w-3.5 text-brand-secondary" />
+                              <strong className={isUnassigned ? 'text-amber-600 font-black' : 'text-brand-text'}>
+                                {appointment.staff}
+                              </strong>
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <Phone className="h-3 w-3" /> {appointment.phone}
+                            </span>
+                            {appointment.deposit > 0 && (
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                Cọc {money(appointment.deposit)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Live Service Timer with slim progress bar */}
+                          {isInService && timerStatus && (
+                            <div
+                              className={`mt-2 rounded-lg border p-2 text-xs transition-all ${
+                                timerStatus.isOverrun
+                                  ? 'border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/30'
+                                  : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                <div className="flex items-center gap-1.5 font-bold">
+                                  <Clock3 className={`h-3.5 w-3.5 ${timerStatus.isOverrun ? 'text-rose-600 animate-spin' : 'text-emerald-600'}`} />
+                                  {timerStatus.isOverrun ? (
+                                    <span className="font-black text-rose-600 dark:text-rose-400">
+                                      🚨 Quá giờ +{timerStatus.overrunMinutes}p ({timerStatus.elapsedMinutes}/{timerStatus.duration}p)
+                                    </span>
+                                  ) : (
+                                    <span>
+                                      ⏱️ Tiến độ: <strong>{timerStatus.elapsedMinutes}/{timerStatus.duration}p</strong> (Còn {timerStatus.remainingMinutes}p)
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => extendServiceDuration(appointment.id, 15)}
+                                    className="rounded bg-brand-surface border border-brand-outline hover:border-brand-primary px-1.5 py-0.5 text-[10px] font-black text-brand-text cursor-pointer"
+                                    title="Gia hạn thêm 15 phút"
+                                  >
+                                    +15p
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => extendServiceDuration(appointment.id, 30)}
+                                    className="rounded bg-brand-surface border border-brand-outline hover:border-brand-primary px-1.5 py-0.5 text-[10px] font-black text-brand-text cursor-pointer"
+                                    title="Gia hạn thêm 30 phút"
+                                  >
+                                    +30p
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-brand-outline/40">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    timerStatus.isOverrun ? 'bg-rose-500 w-full' : 'bg-emerald-500'
+                                  }`}
+                                  style={{
+                                    width: timerStatus.isOverrun
+                                      ? '100%'
+                                      : `${Math.min(100, Math.round((timerStatus.elapsedMinutes / timerStatus.duration) * 100))}%`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {appointment.note && (
+                            <p className="mt-1.5 text-[11px] text-brand-text-muted bg-brand-surface-high/50 rounded px-2 py-0.5 inline-block">
+                              <span className="font-bold text-brand-text">Ghi chú:</span> {appointment.note}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Quick action buttons */}
+                        <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                          <a
+                            href={`tel:${appointment.phone.replace(/\s/g, '')}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-brand-outline bg-brand-surface text-brand-text-muted hover:text-brand-secondary"
+                            aria-label={`Gọi ${appointment.customer}`}
+                            title="Gọi điện cho khách"
+                          >
+                            <Phone className="h-3.5 w-3.5" />
+                          </a>
+
+                          {['PENDING', 'CONFIRMED'].includes(appointment.status) && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openAppointmentEdit(appointment)}
+                                className="rounded-lg border border-brand-outline bg-brand-surface px-2.5 py-1.5 text-xs font-bold text-brand-text hover:bg-brand-surface-high cursor-pointer"
+                              >
+                                {isUnassigned ? 'Gán KTV' : 'Sửa'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateAppointmentStatus(appointment, 'CHECKED_IN')}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-black text-white cursor-pointer shadow-xs"
+                              >
+                                <Check className="h-3.5 w-3.5" /> Check-in
+                              </button>
+                            </>
+                          )}
+
+                          {appointment.status === 'CHECKED_IN' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openAppointmentEdit(appointment)}
+                                className="rounded-lg border border-brand-outline bg-brand-surface px-2.5 py-1.5 text-xs font-bold text-brand-text hover:bg-brand-surface-high cursor-pointer"
+                              >
+                                {isUnassigned ? 'Gán KTV/Ghế' : 'Sửa'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateAppointmentStatus(appointment, 'IN_SERVICE')}
+                                className="rounded-lg bg-brand-primary hover:bg-brand-primary/90 px-3 py-1.5 text-xs font-black text-white cursor-pointer shadow-xs"
+                              >
+                                Bắt đầu làm
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openPayment(appointment)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 px-2.5 py-1.5 text-xs font-black cursor-pointer"
+                              >
+                                <ReceiptText className="h-3.5 w-3.5" />
+                                {invoiceDrafts[appointment.id]?.lines?.length ? `Hóa đơn (${invoiceDrafts[appointment.id].lines.length})` : 'Tạo HĐ'}
+                              </button>
+                            </>
+                          )}
+
+                          {appointment.status === 'IN_SERVICE' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openPayment(appointment)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-brand-outline bg-brand-surface hover:bg-brand-surface-high px-2.5 py-1.5 text-xs font-bold text-brand-text cursor-pointer"
+                                title="Thêm dịch vụ / mẫu vẽ / sản phẩm"
+                              >
+                                + Món phụ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openPayment(appointment)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-black text-white shadow-xs cursor-pointer"
+                              >
+                                <ReceiptText className="h-3.5 w-3.5" /> Thu tiền & Hoàn tất
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
-            {deskQueueAppointments.slice(0, 7).map((appointment) => {
-              const isUnassigned = appointment.staff === 'Chưa phân công';
-              const isWaiting = appointment.status === 'CHECKED_IN';
-              return (
-                <article key={appointment.id} className={`group p-4 transition hover:bg-brand-surface-high/40 sm:p-5 ${isWaiting ? 'bg-brand-secondary/30' : ''}`}>
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-[70px_minmax(0,1fr)_auto] lg:items-center">
-                    <div className="flex items-center gap-3 lg:block">
-                      <div className="rounded-2xl border border-brand-outline bg-brand-surface px-3 py-2 text-center shadow-sm">
-                        <p className="text-base font-black tabular-nums text-brand-text">{appointment.start}</p>
-                        <p className="mt-0.5 text-caption font-black uppercase tracking-wider text-brand-text-muted">{appointment.duration} phút</p>
-                      </div>
-                      <div className="lg:hidden">
-                        <StatusBadge status={appointment.status} label={appointmentStatusLabel[appointment.status]} size="small" />
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-black text-brand-text">{appointment.customer}</p>
-                        <span className="hidden lg:inline-flex"><StatusBadge status={appointment.status} label={appointmentStatusLabel[appointment.status]} size="small" /></span>
-                        {appointment.firstVisit && <span className="rounded-full bg-brand-primary/10 px-2 py-1 text-caption font-black text-brand-primary ring-1 ring-brand-primary/18">Khách mới</span>}
-                        {isUnassigned && <span className="inline-flex items-center gap-1 rounded-full bg-brand-tertiary/10 px-2 py-1 text-caption font-black text-brand-tertiary ring-1 ring-brand-tertiary"><AlertCircle className="h-3 w-3" /> Chưa phân công</span>}
-                      </div>
-                      <p className="mt-1.5 truncate text-xs font-bold text-brand-text">{appointment.service}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-body font-semibold text-brand-text-muted">
-                        <span className="inline-flex items-center gap-1.5"><UserCheck className="h-3.5 w-3.5" />{appointment.staff}</span>
-                        {appointment.station && <span className="inline-flex items-center gap-1.5"><Armchair className="h-3.5 w-3.5" />{appointment.station}</span>}
-                        <span className="inline-flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{appointment.phone}</span>
-                        {appointment.deposit > 0 && <span className="font-black text-brand-secondary">Cọc {money(appointment.deposit)}</span>}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 lg:max-w-[280px] lg:justify-end">
-                      <a href={`tel:${appointment.phone.replace(/\s/g, '')}`} className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface text-brand-text-muted hover:text-brand-secondary" aria-label={`Gọi ${appointment.customer}`}><Phone className="h-3.5 w-3.5" /></a>
-                      {appointment.status !== 'IN_SERVICE' && (
-                        <button type="button" onClick={() => openAppointmentEdit(appointment)} className="rounded-xl border border-brand-outline bg-brand-surface px-3 py-2 text-body font-black text-brand-text hover:bg-brand-surface-high">
-                          {isUnassigned ? 'Phân công' : 'Chỉnh lịch'}
+
+            {/* TAB CONTENT: 2. LIVE STATIONS GRID */}
+            {deskViewMode === 'STATIONS' && (
+              <div className="p-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {currentStations.map((stationId) => {
+                    const occupyingAppt = activeAppointments.find((a) => a.station === stationId && a.status === 'IN_SERVICE');
+                    const reservedAppt = activeAppointments.find((a) => a.station === stationId && a.status === 'CHECKED_IN');
+                    const timerStatus = occupyingAppt ? getServiceTimerStatus(occupyingAppt) : null;
+
+                    if (occupyingAppt) {
+                      return (
+                        <div
+                          key={stationId}
+                          className={`rounded-xl border p-3 bg-brand-surface transition ${
+                            timerStatus?.isOverrun
+                              ? 'border-rose-500 bg-rose-500/5 ring-1 ring-rose-500/30'
+                              : 'border-emerald-500/50 bg-emerald-500/5'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="rounded-md bg-brand-primary text-white px-2 py-0.5 text-xs font-black">
+                              {stationId}
+                            </span>
+                            <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400">
+                              Đang làm
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs font-black text-brand-text truncate">{occupyingAppt.customer}</p>
+                          <p className="text-[11px] text-brand-text-muted truncate">{occupyingAppt.service}</p>
+                          <p className="text-[11px] font-semibold text-brand-secondary truncate">KTV: {occupyingAppt.staff}</p>
+                          
+                          {timerStatus && (
+                            <div className="mt-2 text-[10px] font-bold">
+                              {timerStatus.isOverrun ? (
+                                <span className="text-rose-600 font-black">🚨 Quá {timerStatus.overrunMinutes}p</span>
+                              ) : (
+                                <span className="text-emerald-600">⏱️ {timerStatus.elapsedMinutes}/{timerStatus.duration}p (còn {timerStatus.remainingMinutes}p)</span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="mt-2.5 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openPayment(occupyingAppt)}
+                              className="flex-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white py-1 text-[11px] font-black text-center cursor-pointer"
+                            >
+                              Thu tiền
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => extendServiceDuration(occupyingAppt.id, 15)}
+                              className="rounded border border-brand-outline bg-brand-surface px-1.5 py-1 text-[10px] font-bold text-brand-text hover:bg-brand-surface-high cursor-pointer"
+                              title="+15p"
+                            >
+                              +15p
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (reservedAppt) {
+                      return (
+                        <div key={stationId} className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="rounded-md bg-amber-500 text-white px-2 py-0.5 text-xs font-black">
+                              {stationId}
+                            </span>
+                            <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-300">
+                              Đang chờ
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs font-black text-brand-text truncate">{reservedAppt.customer}</p>
+                          <p className="text-[11px] text-brand-text-muted truncate">{reservedAppt.service}</p>
+                          <p className="text-[11px] font-semibold text-brand-secondary truncate">KTV: {reservedAppt.staff}</p>
+                          <button
+                            type="button"
+                            onClick={() => updateAppointmentStatus(reservedAppt, 'IN_SERVICE')}
+                            className="mt-2.5 w-full rounded bg-brand-primary hover:bg-brand-primary/90 text-white py-1 text-[11px] font-black text-center cursor-pointer"
+                          >
+                            Bắt đầu làm
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={stationId} className="rounded-xl border border-dashed border-brand-outline bg-brand-surface p-3 hover:border-brand-primary transition">
+                        <div className="flex items-center justify-between">
+                          <span className="rounded-md bg-brand-surface-high border border-brand-outline px-2 py-0.5 text-xs font-black text-brand-text">
+                            {stationId}
+                          </span>
+                          <span className="text-[10px] font-bold uppercase text-brand-text-muted">
+                            Trống
+                          </span>
+                        </div>
+                        <p className="mt-3 text-xs font-medium text-brand-text-muted text-center">Ghế sẵn sàng</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (requireOpenShift()) {
+                              setQuickWalkInForm((prev) => ({ ...prev, station: stationId }));
+                              setQuickWalkInOpen(true);
+                            }
+                          }}
+                          className="mt-2.5 w-full rounded bg-brand-surface-high hover:bg-brand-primary hover:text-white border border-brand-outline text-brand-text py-1 text-[11px] font-bold text-center cursor-pointer transition"
+                        >
+                          ⚡ Xếp khách nhanh
                         </button>
-                      )}
-                      {['PENDING', 'CONFIRMED'].includes(appointment.status) && <button type="button" onClick={() => updateAppointmentStatus(appointment, 'CHECKED_IN')} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-secondary px-3 py-2 text-body font-black text-white hover:bg-brand-secondary cursor-pointer"><Check className="h-3.5 w-3.5" /> Check-in</button>}
-                      {appointment.status === 'CHECKED_IN' && (
-                        <>
-                          <button type="button" onClick={() => updateAppointmentStatus(appointment, 'IN_SERVICE')} className={`rounded-xl px-3 py-2 text-body font-black text-white cursor-pointer ${isUnassigned ? 'bg-brand-tertiary hover:bg-brand-tertiary' : 'bg-brand-primary hover:bg-brand-primary'}`}>Bắt đầu dịch vụ</button>
-                          <button type="button" onClick={() => openPayment(appointment)} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 px-3 py-2 text-body font-black cursor-pointer">
-                            <ReceiptText className="h-3.5 w-3.5" /> {invoiceDrafts[appointment.id]?.lines?.length ? `Hóa đơn (${invoiceDrafts[appointment.id].lines.length})` : 'Tạo hóa đơn'}
-                          </button>
-                        </>
-                      )}
-                      {appointment.status === 'IN_SERVICE' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => openPayment(appointment)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 px-3 py-2 text-body font-black cursor-pointer"
-                            title="Thêm món, dịch vụ hoặc sản phẩm phụ phát sinh trong khi đang làm dịch vụ"
-                          >
-                            <ReceiptText className="h-3.5 w-3.5" />
-                            {invoiceDrafts[appointment.id]?.lines?.length ? `Sửa hóa đơn (${invoiceDrafts[appointment.id].lines.length})` : 'Tạo / Thêm dịch vụ'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openPayment(appointment)}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 text-body font-black text-white shadow-sm cursor-pointer"
-                          >
-                            <ReceiptText className="h-3.5 w-3.5" /> Thu tiền & hoàn tất
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {appointment.note && <p className="mt-3 rounded-xl bg-brand-surface-high/60 px-3 py-2 text-caption font-semibold leading-4 text-brand-text-muted"><span className="font-black text-brand-text">Lưu ý:</span> {appointment.note}</p>}
-                </article>
-              );
-            })}
-          </div>
-          {deskQueueAppointments.length > 7 && <button type="button" onClick={() => navigate('appointments')} className="flex w-full items-center justify-center gap-2 border-t border-brand-outline py-3 text-body font-black text-brand-secondary hover:bg-brand-secondary/10">Xem thêm {deskQueueAppointments.length - 7} lịch <ChevronRight className="h-3.5 w-3.5" /></button>}
-        </div>
-
-        <aside className="space-y-5">
-          <div className="rounded-[24px] border border-brand-outline bg-brand-surface p-4 shadow-sm sm:p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-body font-black uppercase tracking-[0.12em] text-brand-tertiary">Sắp đến</p>
-                <h2 className="mt-1 text-base font-black text-brand-text">Lịch kế tiếp</h2>
-              </div>
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-tertiary/10 text-brand-tertiary ring-1 ring-brand-tertiary/18"><Clock3 className="h-5 w-5" /></span>
-            </div>
-            <div className="mt-4 space-y-2">
-              {upcomingAppointments.slice(0, 3).map((appointment, index) => (
-                <article key={appointment.id} className={`rounded-2xl border p-3 ${index === 0 ? 'border-brand-tertiary bg-brand-tertiary/60' : 'border-brand-outline bg-brand-surface-high/35'}`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`flex h-11 w-12 shrink-0 items-center justify-center rounded-xl text-xs font-black tabular-nums ${index === 0 ? 'bg-brand-tertiary text-white' : 'bg-brand-surface text-brand-text ring-1 ring-brand-outline'}`}>{appointment.start}</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-xs font-black text-brand-text">{appointment.customer}</p>
-                        {index === 0 && <span className="shrink-0 text-caption font-black uppercase text-brand-tertiary">Kế tiếp</span>}
                       </div>
-                      <p className="mt-1 truncate text-caption font-semibold text-brand-text-muted">{appointment.service}</p>
-                      <p className="mt-1 truncate text-caption text-brand-text-muted">{appointment.staff}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2">
-                    <button type="button" onClick={() => updateAppointmentStatus(appointment, 'CHECKED_IN')} className="flex items-center justify-center gap-1 rounded-xl bg-brand-secondary px-2 py-2 text-caption font-black text-white"><Check className="h-3 w-3" /> Check-in</button>
-                    <a href={`tel:${appointment.phone.replace(/\s/g, '')}`} className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface text-brand-text-muted" aria-label={`Gọi ${appointment.customer}`}><Phone className="h-3.5 w-3.5" /></a>
-                    <a href={`sms:${appointment.phone.replace(/\s/g, '')}`} className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface text-brand-text-muted" aria-label={`Nhắn ${appointment.customer}`}><MessageCircle className="h-3.5 w-3.5" /></a>
-                  </div>
-                </article>
-              ))}
-              {upcomingAppointments.length === 0 && <p className="rounded-xl border border-dashed border-brand-outline py-8 text-center text-xs font-semibold text-brand-text-muted">Không còn khách sắp đến.</p>}
-            </div>
-          </div>
-
-          <div className="rounded-[24px] border border-brand-outline bg-brand-surface p-4 shadow-sm sm:p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-body font-black uppercase tracking-[0.12em] text-brand-primary">Nguồn lực</p>
-                <h2 className="mt-1 text-base font-black text-brand-text">Sẵn sàng phục vụ</h2>
-              </div>
-              <button type="button" onClick={() => navigate('technicians')} className="text-caption font-black text-brand-secondary hover:underline">Chi tiết</button>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {[
-                { label: 'Sẵn sàng', value: availableTechnicians.length, color: 'text-brand-secondary' },
-                { label: 'Đang làm', value: servingTechnicians.length, color: 'text-brand-primary' },
-                { label: 'Ghế dùng', value: occupiedStations, color: 'text-brand-secondary' },
-              ].map((item) => <div key={item.label} className="rounded-xl bg-brand-surface-high/55 p-2.5 text-center"><p className={`text-lg font-black ${item.color}`}>{item.value}</p><p className="mt-1 text-caption font-black uppercase tracking-wide text-brand-text-muted">{item.label}</p></div>)}
-            </div>
-            <div className="mt-3 space-y-2">
-              {branchTechnicians.filter((technician) => ['PRESENT', 'SERVING', 'BREAK'].includes(technician.status)).slice(0, 4).map((technician) => (
-                <div key={technician.id} className="flex items-center gap-3 rounded-xl border border-brand-outline px-3 py-2">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-brand-secondary/15 text-caption font-black text-brand-secondary">{technician.initials}</span>
-                  <div className="min-w-0 flex-1"><p className="truncate text-body font-black text-brand-text">{technician.name}</p><p className="truncate text-caption font-semibold text-brand-text-muted">{technician.specialty}</p></div>
-                  <StatusBadge status={technician.status} label={technicianStatusMeta[technician.status].label} size="small" />
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </div>
-        </aside>
-      </section>
+              </div>
+            )}
 
-      <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
-        <article className="rounded-[24px] border border-brand-outline bg-brand-surface p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2"><Banknote className="h-4 w-4 text-brand-secondary" /><p className="text-body font-black uppercase tracking-[0.12em] text-brand-secondary">Đối soát ca</p></div>
-              <h2 className="mt-1 text-base font-black text-brand-text">Quỹ và giao dịch trong ngày</h2>
-            </div>
-            <button type="button" onClick={() => navigate('payments')} className="flex items-center gap-2 rounded-xl border border-brand-outline bg-brand-surface-high px-3 py-2 text-body font-black text-brand-text">Xem thanh toán <ChevronRight className="h-3.5 w-3.5" /></button>
+            {/* TAB CONTENT: 3. STAFF ON-DUTY */}
+            {deskViewMode === 'STAFF' && (
+              <div className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {branchTechnicians.filter((t) => ['PRESENT', 'SERVING', 'BREAK'].includes(t.status)).map((tech) => {
+                    const activeAppt = activeAppointments.find((a) => a.staff === tech.name && a.status === 'IN_SERVICE');
+                    return (
+                      <div key={tech.id} className="rounded-xl border border-brand-outline bg-brand-surface p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-secondary/15 text-xs font-black text-brand-secondary">
+                              {tech.initials}
+                            </span>
+                            <div>
+                              <p className="text-xs font-black text-brand-text">{tech.name}</p>
+                              <p className="text-[10px] text-brand-text-muted">{tech.specialty}</p>
+                            </div>
+                          </div>
+                          <StatusBadge status={tech.status} label={technicianStatusMeta[tech.status].label} size="small" />
+                        </div>
+                        <div className="mt-2.5 pt-2 border-t border-brand-outline/60 text-xs">
+                          {activeAppt ? (
+                            <p className="text-[11px] font-medium text-brand-primary truncate">
+                              Đang phục vụ: <strong>{activeAppt.customer}</strong> ({activeAppt.station || 'Chưa ghế'})
+                            </p>
+                          ) : (
+                            <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                              🟢 Sẵn sàng nhận khách tiếp theo
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-brand-surface-high/55 p-4"><p className="text-caption font-black uppercase tracking-wide text-brand-text-muted">Quỹ đầu ca</p><p className="mt-2 text-base font-black text-brand-text">{money(shift.openingCash)}</p></div>
-            <div className="rounded-2xl bg-brand-secondary/10 p-4 ring-1 ring-brand-secondary/18"><p className="text-caption font-black uppercase tracking-wide text-brand-secondary">Tổng đã thu</p><p className="mt-2 text-base font-black text-brand-secondary">{money(todayRevenue)}</p></div>
-            <div className="rounded-2xl bg-brand-surface-high/55 p-4"><p className="text-caption font-black uppercase tracking-wide text-brand-text-muted">Số giao dịch</p><p className="mt-2 text-base font-black text-brand-text">{paidToday.length} giao dịch</p></div>
-          </div>
-        </article>
 
-        <article className="rounded-[24px] border border-brand-outline bg-brand-surface p-4 shadow-sm sm:p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-secondary/10 text-brand-secondary ring-1 ring-brand-secondary/18"><BadgeCheck className="h-5 w-5" /></span>
-            <div>
-              <p className="text-body font-black uppercase tracking-[0.12em] text-brand-text-muted">Vai trò đang đăng nhập</p>
-              <h2 className="mt-1 text-base font-black text-brand-text">Receptionist · {account.displayName}</h2>
-              <p className="mt-1 text-body font-semibold text-brand-text-muted">{account.email}</p>
+          {/* Right Assist Panel */}
+          <aside className="space-y-4">
+            {/* Next Arrivals */}
+            <div className="rounded-2xl border border-brand-outline bg-brand-surface p-3.5 sm:p-4 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-brand-text">Lịch Kế Tiếp ({upcomingAppointments.length})</h3>
+                </div>
+                <Clock3 className="h-4 w-4 text-brand-primary" />
+              </div>
+              <div className="mt-3 space-y-2">
+                {upcomingAppointments.slice(0, 3).map((appointment, index) => (
+                  <article
+                    key={appointment.id}
+                    className={`rounded-xl border p-2.5 transition ${
+                      index === 0
+                        ? 'border-brand-primary/40 bg-brand-primary/5'
+                        : 'border-brand-outline bg-brand-surface-high/30'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className={`flex h-9 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-black tabular-nums ${
+                        index === 0 ? 'bg-brand-primary text-white' : 'bg-brand-surface text-brand-text border border-brand-outline'
+                      }`}>
+                        {appointment.start}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="truncate text-xs font-black text-brand-text">{appointment.customer}</p>
+                          {index === 0 && <span className="text-[10px] font-black text-brand-primary">Kế tiếp</span>}
+                        </div>
+                        <p className="truncate text-[11px] text-brand-text-muted">{appointment.service}</p>
+                        <p className="truncate text-[10px] font-semibold text-brand-secondary">{appointment.staff}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-[1fr_auto_auto] gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => updateAppointmentStatus(appointment, 'CHECKED_IN')}
+                        className="flex items-center justify-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-2 py-1 text-[11px] font-black text-white cursor-pointer"
+                      >
+                        <Check className="h-3 w-3" /> Check-in
+                      </button>
+                      <a
+                        href={`tel:${appointment.phone.replace(/\s/g, '')}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-outline bg-brand-surface text-brand-text-muted hover:text-brand-secondary"
+                        aria-label={`Gọi ${appointment.customer}`}
+                      >
+                        <Phone className="h-3 w-3" />
+                      </a>
+                      <a
+                        href={`sms:${appointment.phone.replace(/\s/g, '')}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-outline bg-brand-surface text-brand-text-muted hover:text-brand-secondary"
+                        aria-label={`Nhắn tin ${appointment.customer}`}
+                      >
+                        <MessageCircle className="h-3 w-3" />
+                      </a>
+                    </div>
+                  </article>
+                ))}
+                {upcomingAppointments.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-brand-outline py-6 text-center text-xs font-semibold text-brand-text-muted">
+                    Không còn khách sắp đến hôm nay.
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {[
-              'Tiếp nhận & check-in khách',
-              'Tạo, chỉnh và điều phối lịch',
-              'Phân công kỹ thuật viên',
-              'Thu tiền & in hóa đơn',
-            ].map((permission) => <div key={permission} className="flex items-center gap-2 rounded-xl bg-brand-surface-high/50 px-3 py-2 text-caption font-bold text-brand-text"><CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-brand-secondary" />{permission}</div>)}
-          </div>
-          <p className="mt-3 flex items-start gap-2 text-caption font-semibold leading-4 text-brand-text-muted"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-secondary" />Dữ liệu và thao tác được giới hạn tại {branchName}.</p>
-        </article>
-      </section>
 
-      <div className="flex justify-end">
-        <button type="button" onClick={loadMockReceptionData} className="flex items-center gap-2 rounded-xl border border-brand-outline bg-brand-surface px-3 py-2 text-caption font-black text-brand-text-muted hover:text-brand-secondary">
-          <Sparkles className="h-3.5 w-3.5" /> Khôi phục dữ liệu mẫu
-        </button>
+            {/* Shift Reconcile & Drawer Summary */}
+            <div className="rounded-2xl border border-brand-outline bg-brand-surface p-3.5 sm:p-4 shadow-xs">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black uppercase tracking-wider text-brand-text">Quỹ & Thu Ngân Ca</h3>
+                <button
+                  type="button"
+                  onClick={() => navigate('payments')}
+                  className="text-xs font-bold text-brand-secondary hover:underline"
+                >
+                  POS <ArrowUpRight className="h-3 w-3 inline" />
+                </button>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-brand-surface-high/50 p-2.5">
+                  <p className="text-[10px] font-bold uppercase text-brand-text-muted">Quỹ đầu ca</p>
+                  <p className="mt-1 font-black text-brand-text">{money(shift.openingCash)}</p>
+                </div>
+                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5">
+                  <p className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Đã thu ca</p>
+                  <p className="mt-1 font-black text-emerald-700 dark:text-emerald-400">{money(todayRevenue)}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between pt-2 border-t border-brand-outline/60 text-xs">
+                <span className="text-brand-text-muted">Đã thanh toán:</span>
+                <strong className="text-brand-text">{paidToday.length} đơn</strong>
+              </div>
+            </div>
+
+            {/* Quick Mock Reset */}
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={loadMockReceptionData}
+                className="flex items-center gap-1.5 text-[11px] font-bold text-brand-text-muted hover:text-brand-secondary cursor-pointer"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> Khôi phục dữ liệu mẫu
+              </button>
+            </div>
+          </aside>
+        </section>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderTechnicians = () => (
     <div className="space-y-4">
@@ -2394,8 +3091,41 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       />
     );
     const commonProps = { searchQuery, onSearchQueryChange: setSearchQuery, selectedBranch: branchCode, onSelectedBranchChange: () => undefined, branchLocked: true, tenantName, roleLabel: `Receptionist · ${account.displayName} · ${branchName}`, accessMode: 'full' as const, onNotify: setToast };
-    if (page === 'appointments') return <TenantAdminAppointments {...commonProps} />;
-    if (page === 'customers') return <TenantAdminCustomers {...commonProps} onBookCustomer={(customer) => { setSearchQuery(customer.phone); setPage('appointments'); setToast(`Đã chọn ${customer.name}. Hãy tạo lịch hẹn mới.`); }} />;
+    if (page === 'appointments') {
+      return (
+        <TenantAdminAppointments
+          {...commonProps}
+          bookingRequest={appointmentBookingRequest}
+          onBookingRequestHandled={() => setAppointmentBookingRequest(null)}
+        />
+      );
+    }
+    if (page === 'customers') {
+      return (
+        <TenantAdminCustomers
+          {...commonProps}
+          onBookCustomer={(customer) => {
+            setAppointmentBookingRequest({
+              requestId: Date.now(),
+              customerId: customer.id,
+              name: customer.name,
+              phone: customer.phone,
+              branch: customer.branch || branchCode,
+              note: customer.note,
+              allergies: customer.allergies,
+              nailCondition: customer.nailCondition,
+              favoriteTechnician: customer.favoriteTechnician,
+              tier: customer.tier,
+              points: customer.points,
+              totalSpent: customer.totalSpent,
+              visits: customer.visits,
+            });
+            setPage('appointments');
+            setToast(`Đã tự động điền thông tin ${customer.name} (Tích luỹ: ${customer.points.toLocaleString('vi-VN')} điểm).`);
+          }}
+        />
+      );
+    }
     if (page === 'products') return <ReceptionistProducts {...commonProps} />;
     if (page === 'stations') return <ReceptionistStations {...commonProps} />;
     return <TenantAdminPayments {...commonProps} />;
@@ -2544,20 +3274,6 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
 
       <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[var(--size-sidebar)]'}`}>
         <header className="role-topbar sticky top-0 z-[var(--z-sticky)] flex h-[var(--size-topbar)] items-center gap-3 border-b border-brand-outline px-4 sm:px-6">
-          <Button variant="secondary" size="small" iconOnly aria-label="Mở menu" onClick={() => setSidebarOpen(true)} className="lg:hidden"><Menu /></Button>
-          <button
-            type="button"
-            onClick={toggleSidebarCollapsed}
-            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
-            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
-            className="hidden lg:flex h-9 w-9 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface text-brand-text-muted hover:bg-brand-surface-high hover:text-brand-text transition cursor-pointer"
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </button>
           <div className="hidden min-w-0 sm:block"><p className="text-caption font-bold uppercase tracking-wider text-brand-text-muted">{new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</p><p className="mt-0.5 text-body font-bold text-brand-text">{navItems.find((item) => item.id === page)?.label}</p></div>
           <div className="relative ml-auto hidden w-full max-w-sm md:block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={page === 'products' ? 'Tìm tên, SKU, lô sản phẩm...' : page === 'stations' ? 'Tìm mã ghế, khách, kỹ thuật viên...' : 'Tìm tên, số điện thoại, dịch vụ...'} className="h-[var(--size-control)] w-full rounded-control border border-brand-outline bg-brand-surface-lowest pl-10 pr-4 text-body outline-none focus:border-brand-secondary" /></div>
           <span className="hidden sm:flex" title="Tài khoản chỉ được điều phối chi nhánh này"><StatusBadge status="ACTIVE" label={branchCode === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3'} /></span>
@@ -2812,6 +3528,128 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
             </Field>
             {formError && <p role="alert" className="p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger">{formError}</p>}
           </form>
+        </Modal>
+      )}
+
+      {/* ⚡ Chế độ Walk-in cấp tốc (1-Click Walk-in 5 giây) */}
+      {quickWalkInOpen && (
+        <Modal
+          open
+          size="medium"
+          icon={<Zap className="text-amber-500" />}
+          title="⚡ Walk-in Cấp tốc (5 Giây)"
+          description="Nhận khách vãng lai tức thì không bắt buộc nhập tên hay SĐT nếu khách đang vội."
+          onClose={() => { setQuickWalkInOpen(false); setFormError(''); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => { setQuickWalkInOpen(false); setFormError(''); }}>Hủy</Button>
+              <Button
+                type="button"
+                onClick={() => submitQuickWalkIn('START_NOW')}
+                variant="primary"
+                iconLeading={<Zap className="h-4 w-4" />}
+                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black shadow-md shadow-amber-500/25 cursor-pointer"
+              >
+                Nhận khách ngay (5s)
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs font-semibold text-amber-800 dark:text-amber-300">
+              ⚡ Hệ thống tự động gán mã định danh, giờ bắt đầu và đưa khách trực tiếp vào trạng thái <strong>Đang làm dịch vụ</strong> mà không gián đoạn luồng phục vụ.
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Dịch vụ cơ bản *">
+                <select
+                  value={quickWalkInForm.service}
+                  onChange={(e) => {
+                    const foundService = serviceCatalog.find((s) => s.name === e.target.value);
+                    setQuickWalkInForm({
+                      ...quickWalkInForm,
+                      service: e.target.value,
+                      price: foundService ? String(foundService.price) : quickWalkInForm.price,
+                      duration: foundService?.duration ? String(foundService.duration) : quickWalkInForm.duration,
+                    });
+                  }}
+                  className="reception-input font-bold"
+                >
+                  {serviceCatalog.map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {s.name} · {money(s.price)} ({s.duration}p)
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Chọn ghế trống *">
+                <select
+                  value={quickWalkInForm.station}
+                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, station: e.target.value })}
+                  className="reception-input font-bold"
+                >
+                  <option value="">-- Chọn ghế salon --</option>
+                  {stationCatalog[branchCode]?.map((st) => (
+                    <option key={st} value={st}>
+                      💺 {st}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Chỉ định KTV (Tùy chọn)">
+                <select
+                  value={quickWalkInForm.staff}
+                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, staff: e.target.value })}
+                  className="reception-input"
+                >
+                  <option value="Chưa phân công">Chưa phân công (Chọn sau)</option>
+                  {assignableTechnicians.map((tech) => (
+                    <option key={tech.id} value={tech.name}>
+                      {tech.name} ({technicianStatusMeta[tech.status].label})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Tên khách (Để trống = Khách Vãng Lai)">
+                <input
+                  type="text"
+                  value={quickWalkInForm.customer}
+                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, customer: e.target.value })}
+                  placeholder="Khách Vãng Lai..."
+                  className="reception-input"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Số điện thoại (Không bắt buộc)">
+                <input
+                  type="tel"
+                  value={quickWalkInForm.phone}
+                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, phone: e.target.value })}
+                  placeholder="09xx..."
+                  className="reception-input"
+                />
+              </Field>
+
+              <Field label="Lưu ý / Dị ứng nhanh">
+                <input
+                  type="text"
+                  value={quickWalkInForm.note}
+                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, note: e.target.value })}
+                  placeholder="Ví dụ: Da nhạy cảm, móng mỏng, vội..."
+                  className="reception-input"
+                />
+              </Field>
+            </div>
+
+            {formError && <p role="alert" className="p-2.5 text-xs font-bold text-rose-600 bg-rose-500/10 rounded-xl border border-rose-500/20">{formError}</p>}
+          </div>
         </Modal>
       )}
 
@@ -3170,6 +4008,70 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                     <p className="mt-0.5 truncate text-caption text-brand-text-muted">{paymentAppointment.phone} · ID: {paymentAppointment.id}</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-brand-primary/10 px-2.5 py-1 text-caption font-black text-brand-primary">{branchCode}</span>
+                </div>
+
+                {/* 🔗 GỘP HÓA ĐƠN (MERGE BILLS) CHO KHÁCH ĐI THEO NHÓM / MẸ CON / BẠN BÈ */}
+                <div className="mt-2.5 rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-xs font-black text-indigo-700 dark:text-indigo-300">
+                      <UsersRound className="h-3.5 w-3.5" /> Gộp hóa đơn nhóm / bạn bè (Merge Bills)
+                    </span>
+                    {mergedAppointmentIds.length > 0 && (
+                      <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-[10px] font-black text-indigo-600 dark:text-indigo-400">
+                        Đang gộp {mergedAppointmentIds.length} khách
+                      </span>
+                    )}
+                  </div>
+
+                  {mergedAppointmentIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {mergedAppointmentIds.map((mId) => {
+                        const mApp = appointments.find((a) => a.id === mId);
+                        return (
+                          <span
+                            key={mId}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 px-2 py-1 text-xs font-bold text-indigo-700 dark:text-indigo-300"
+                          >
+                            <span>🔗 {mApp?.customer || mId} ({mApp?.station || 'Ghế'})</span>
+                            <button
+                              type="button"
+                              onClick={() => unmergeAppointmentFromBill(mId)}
+                              className="text-rose-500 hover:text-rose-700 p-0.5 rounded cursor-pointer"
+                              title="Tách ra khỏi hóa đơn này"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Danh sách các khách/ghế khác đang hoạt động có thể gộp */}
+                  {appointments.filter((a) => a.id !== paymentAppointment.id && a.branch === branchCode && ['CHECKED_IN', 'IN_SERVICE'].includes(a.status) && !mergedAppointmentIds.includes(a.id)).length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1.5 text-caption">
+                      <span className="text-brand-text-muted font-bold">Gộp thêm:</span>
+                      {appointments
+                        .filter((a) => a.id !== paymentAppointment.id && a.branch === branchCode && ['CHECKED_IN', 'IN_SERVICE'].includes(a.status) && !mergedAppointmentIds.includes(a.id))
+                        .slice(0, 3)
+                        .map((otherApp) => (
+                          <button
+                            key={otherApp.id}
+                            type="button"
+                            onClick={() => mergeAppointmentToBill(otherApp)}
+                            className="inline-flex items-center gap-1 rounded-md border border-indigo-500/30 bg-brand-surface px-2 py-1 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10 cursor-pointer shadow-2xs"
+                          >
+                            <Plus className="h-2.5 w-2.5" /> {otherApp.customer} ({otherApp.station || otherApp.start})
+                          </button>
+                        ))}
+                    </div>
+                  ) : (
+                    mergedAppointmentIds.length === 0 && (
+                      <p className="text-[11px] text-brand-text-muted">
+                        Không có khách đang làm khác tại chi nhánh để gộp.
+                      </p>
+                    )
+                  )}
                 </div>
 
                 <div className="mt-3 flex flex-col gap-2 shrink-0 pb-2 w-full min-w-0 sm:flex-row sm:items-center sm:justify-between">
@@ -3571,26 +4473,200 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                 </div>
               </div>
 
-              {/* Thẻ 3: Phương thức & Xác nhận thanh toán */}
+              {/* Thẻ 3: Phương thức & Xác nhận thanh toán (Hỗ trợ Tách hóa đơn / Split Payments) */}
               <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm space-y-3 lg:shrink-0">
-                <p className="text-caption font-extrabold uppercase tracking-[0.08em] text-brand-text-muted">Phương thức thanh toán</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {Object.entries(methodMeta).map(([value, meta]) => {
-                    const Icon = meta.icon;
-                    const selected = paymentForm.method === value;
-                    return (
-                      <button key={value} type="button" onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })} className={`flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border p-1.5 text-caption font-bold transition-all ${selected ? 'border-brand-secondary bg-brand-secondary/15 text-brand-secondary shadow-sm' : 'border-brand-outline text-brand-text-muted hover:bg-brand-surface-high'}`}>
-                        <Icon className="h-3.5 w-3.5" />
-                        {meta.label}
-                      </button>
-                    );
-                  })}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-outline/40 pb-2">
+                  <p className="text-caption font-extrabold uppercase tracking-[0.08em] text-brand-text-muted">
+                    Phương thức thanh toán
+                  </p>
+                  
+                  {/* Mode switcher: Đơn lẻ vs Tách nhiều phương thức */}
+                  <div className="flex items-center gap-1 rounded-lg bg-brand-surface-high p-1 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setSplitPaymentMode(false)}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                        !splitPaymentMode
+                          ? 'bg-brand-secondary text-white font-black shadow-xs'
+                          : 'text-brand-text-muted hover:text-brand-text'
+                      }`}
+                    >
+                      1 Phương thức
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSplitPaymentMode(true);
+                        if (splitPaymentsList.length === 0) {
+                          splitEqually(2);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                        splitPaymentMode
+                          ? 'bg-indigo-600 text-white font-black shadow-xs'
+                          : 'text-brand-text-muted hover:text-brand-text'
+                      }`}
+                    >
+                      <Split className="h-3 w-3" /> Tách / Chia tiền (Split)
+                    </button>
+                  </div>
                 </div>
 
-                {paymentForm.method !== 'CASH' && (
-                  <input value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className="reception-input h-8 text-body" placeholder="Mã giao dịch chuyển khoản / thẻ *" />
+                {!splitPaymentMode ? (
+                  /* Chế độ 1 Phương thức thanh toán chuẩn */
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {Object.entries(methodMeta).map(([value, meta]) => {
+                        const Icon = meta.icon;
+                        const selected = paymentForm.method === value;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setPaymentForm({ ...paymentForm, method: value as PaymentMethod })}
+                            className={`flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border p-1.5 text-caption font-bold transition-all cursor-pointer ${
+                              selected
+                                ? 'border-brand-secondary bg-brand-secondary/15 text-brand-secondary shadow-sm'
+                                : 'border-brand-outline text-brand-text-muted hover:bg-brand-surface-high'
+                            }`}
+                          >
+                            <Icon className="h-3.5 w-3.5" />
+                            {meta.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {paymentForm.method !== 'CASH' && (
+                      <input
+                        value={paymentForm.reference}
+                        onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })}
+                        className="reception-input h-8 text-body"
+                        placeholder="Mã giao dịch chuyển khoản / thẻ *"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  /* Chế độ Tách nhiều hình thức / Chia tiền theo nhóm (Split Payments) */
+                  <div className="space-y-3 rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-caption font-black text-indigo-700 dark:text-indigo-300">
+                        Chia nhanh:
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => splitEqually(2)}
+                          className="rounded-md border border-indigo-500/30 bg-brand-surface px-2 py-0.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10 cursor-pointer"
+                        >
+                          Chia 2 (50/50)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => splitEqually(3)}
+                          className="rounded-md border border-indigo-500/30 bg-brand-surface px-2 py-0.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10 cursor-pointer"
+                        >
+                          Chia 3
+                        </button>
+                        <button
+                          type="button"
+                          onClick={addSplitRow}
+                          className="rounded-md bg-indigo-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-indigo-700 cursor-pointer shadow-2xs"
+                        >
+                          + Thêm phần
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Danh sách các phần thanh toán */}
+                    <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                      {splitPaymentsList.map((splitRow, idx) => (
+                        <div
+                          key={splitRow.id}
+                          className="grid grid-cols-[100px_minmax(0,1fr)_minmax(0,1fr)_28px] items-center gap-1.5 rounded-lg border border-brand-outline bg-brand-surface p-2 text-xs"
+                        >
+                          {/* Phương thức */}
+                          <select
+                            value={splitRow.method}
+                            onChange={(e) => updateSplitRow(splitRow.id, { method: e.target.value as PaymentMethod })}
+                            className="h-8 rounded-md border border-brand-outline bg-brand-surface-high px-1 text-[11px] font-bold text-brand-text outline-none"
+                          >
+                            {Object.entries(methodMeta).map(([val, meta]) => (
+                              <option key={val} value={val}>{meta.label}</option>
+                            ))}
+                          </select>
+
+                          {/* Số tiền */}
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1000"
+                              value={splitRow.amount}
+                              onChange={(e) => updateSplitRow(splitRow.id, { amount: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                              className="h-8 w-full rounded-md border border-brand-outline bg-brand-surface-high px-2 text-right text-xs font-black text-brand-text outline-none focus:border-brand-secondary"
+                              placeholder="0"
+                            />
+                          </div>
+
+                          {/* Người trả / Mã GD */}
+                          <input
+                            type="text"
+                            value={splitRow.payerName}
+                            onChange={(e) => updateSplitRow(splitRow.id, { payerName: e.target.value })}
+                            placeholder={splitRow.method === 'CASH' ? `Phần ${idx + 1}...` : 'Mã GD / Tên...'}
+                            className="h-8 w-full rounded-md border border-brand-outline bg-brand-surface-high px-2 text-[11px] text-brand-text outline-none"
+                          />
+
+                          {/* Nút xóa */}
+                          <button
+                            type="button"
+                            onClick={() => removeSplitRow(splitRow.id)}
+                            className="flex h-7 w-7 items-center justify-center rounded text-rose-500 hover:bg-rose-500/10 cursor-pointer"
+                            title="Xóa phần này"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Đối soát chênh lệch tổng tiền chia */}
+                    {(() => {
+                      const currentSplitSum = splitPaymentsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                      const diff = invoiceTotal - currentSplitSum;
+                      return (
+                        <div
+                          className={`rounded-lg p-2 text-xs font-bold ${
+                            diff === 0
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                              : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>Đã phân bổ: <strong>{money(currentSplitSum)}</strong></span>
+                            {diff === 0 ? (
+                              <span className="flex items-center gap-1 font-black text-emerald-600 dark:text-emerald-400">
+                                <Check className="h-3.5 w-3.5" /> Khớp 100%
+                              </span>
+                            ) : (
+                              <span className="font-black text-rose-600 dark:text-rose-400">
+                                {diff > 0 ? `Còn thiếu ${money(diff)}` : `Vượt quá ${money(Math.abs(diff))}`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 )}
-                <textarea value={paymentForm.note} onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })} className="reception-input min-h-[50px] text-body resize-none" placeholder="Ghi chú hóa đơn (không bắt buộc)..." />
+
+                <textarea
+                  value={paymentForm.note}
+                  onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })}
+                  className="reception-input min-h-[50px] text-body resize-none"
+                  placeholder="Ghi chú hóa đơn (không bắt buộc)..."
+                />
                 {formError && <p role="alert" className="rounded-xl bg-brand-error/10 p-2.5 text-caption font-bold leading-4 text-brand-error">{formError}</p>}
               </div>
             </aside>

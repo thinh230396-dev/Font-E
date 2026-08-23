@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { PageHeader } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
 type ProductCategory = 'POLISH' | 'CHEMICAL' | 'CARE' | 'DISPOSABLE' | 'ACCESSORY';
@@ -661,82 +662,30 @@ export default function ReceptionistProducts({
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#172554] via-[#1e3a8a] to-[#075985] p-5 text-white shadow-[0_20px_55px_rgba(30,58,138,0.24)] sm:p-6">
-        <div className="pointer-events-none absolute -right-12 -top-20 h-64 w-64 rounded-full bg-cyan-300/15 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-1/3 h-28 w-72 rounded-full bg-violet-300/10 blur-3xl" />
-        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-blue-100">
-              <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_0_5px_rgba(103,232,249,0.12)]" />
-              Kiểm soát tại quầy · Chi nhánh {assignedBranch === 'Q3' ? 'Quận 3' : 'Quận 1'}
-              <span className="text-white/30">•</span>
-              <span className="normal-case tracking-normal text-white/65">{tenantName}</span>
-            </div>
-            <h1 className="mt-3 text-2xl font-black tracking-[-0.04em] sm:text-3xl">
-              Sản phẩm & cảnh báo tồn kho
-            </h1>
-            <p className="mt-2 max-w-2xl text-[10px] leading-5 text-blue-50/75">
-              Phát hiện sản phẩm sắp hết, đã hết hoặc gần hết hạn; kiểm kê tại quầy và gửi báo cáo
-              bổ sung cho quản lý.
-            </p>
-          </div>
+      <PageHeader
+        title="Sản phẩm & Cảnh báo tồn kho"
+        actions={(
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setSelectedIds(urgentIds)}
-              className="flex h-11 items-center gap-2 border border-white/20 bg-white/10 px-4 text-[9px] font-black text-white shadow-sm backdrop-blur"
+              className="flex h-10 items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 px-4 text-caption font-bold text-slate-700 shadow-none cursor-pointer"
             >
-              <CheckCircle2 className="h-4 w-4" />
-              Chọn tất cả cảnh báo
+              <CheckCircle2 className="h-4 w-4 text-brand-secondary" />
+              Chọn tất cả cảnh báo ({urgentIds.length})
             </button>
             <button
               type="button"
               onClick={() => openReport(selectedIds.length ? selectedIds : urgentIds)}
               disabled={!canManage || (!selectedIds.length && !urgentIds.length)}
-              className="flex h-11 items-center gap-2 border border-white bg-white px-4 text-[9px] font-black text-blue-900 shadow-lg disabled:opacity-50"
+              className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 hover:bg-pink-700 px-4 text-caption font-black text-white shadow-none disabled:border-slate-300 disabled:bg-slate-300 cursor-pointer"
             >
               <FileBarChart className="h-4 w-4" />
               Tạo báo cáo bổ sung
             </button>
           </div>
-        </div>
-        <div className="relative mt-5 grid gap-2 sm:grid-cols-3">
-          {[
-            { icon: AlertTriangle, label: 'Cảnh báo theo mức tồn', text: 'So với ngưỡng tối thiểu' },
-            { icon: ClipboardCheck, label: 'Kiểm kê có nhật ký', text: 'Lưu chênh lệch và người thao tác' },
-            { icon: Send, label: 'Báo cáo cho quản lý', text: 'Gợi ý số lượng cần bổ sung' },
-          ].map(({ icon: Icon, label, text }) => (
-            <div key={label} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.07] p-3 backdrop-blur">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-cyan-100">
-                <Icon className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-[8px] font-black text-white">{label}</p>
-                <p className="mt-1 text-[7px] text-blue-50/60">{text}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
-            <ShieldCheck className="h-4.5 w-4.5" />
-          </span>
-          <div>
-            <p className="text-[10px] font-black text-slate-800">Quyền thao tác: {roleLabel}</p>
-            <p className="mt-1 text-[8px] leading-4 text-slate-500">
-              Lễ tân được xem tồn kho, ghi nhận kiểm kê và gửi báo cáo bổ sung tại chi nhánh được
-              phân công; không được sửa mức tồn, giá vốn, nhà cung cấp hoặc tự nhập hàng.
-            </p>
-          </div>
-        </div>
-        <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[8px] font-black text-blue-700 ring-1 ring-blue-200">
-          <Store className="mr-1 inline h-3 w-3" />
-          {branchLocked ? 'Chi nhánh đã khóa' : 'Theo chi nhánh'}
-        </span>
-      </section>
+        )}
+      />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -1346,7 +1295,7 @@ export default function ReceptionistProducts({
               <button
                 type="button"
                 onClick={() => setReportOpen(false)}
-                className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
                 aria-label="Đóng"
               >
                 <X className="h-4 w-4" />
@@ -1418,13 +1367,13 @@ export default function ReceptionistProducts({
               <button
                 type="button"
                 onClick={() => setReportOpen(false)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-2 border border-blue-700 bg-blue-600 px-5 text-[9px] font-black text-white shadow-lg shadow-blue-200"
+                className="flex h-10 items-center gap-2 rounded-xl border border-blue-700 bg-blue-600 px-5 text-[9px] font-black text-white shadow-lg shadow-blue-200 transition-colors hover:bg-blue-700 cursor-pointer"
               >
                 <Send className="h-4 w-4" />
                 Gửi báo cáo
@@ -1454,7 +1403,7 @@ export default function ReceptionistProducts({
               <button
                 type="button"
                 onClick={() => setCountProduct(null)}
-                className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
                 aria-label="Đóng"
               >
                 <X className="h-4 w-4" />
@@ -1505,13 +1454,13 @@ export default function ReceptionistProducts({
               <button
                 type="button"
                 onClick={() => setCountProduct(null)}
-                className="border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[9px] font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-2 border border-blue-700 bg-blue-600 px-5 text-[9px] font-black text-white shadow-sm"
+                className="flex h-10 items-center gap-2 rounded-xl border border-blue-700 bg-blue-600 px-5 text-[9px] font-black text-white shadow-sm transition-colors hover:bg-blue-700 cursor-pointer"
               >
                 <ClipboardCheck className="h-4 w-4" />
                 Lưu kiểm kê

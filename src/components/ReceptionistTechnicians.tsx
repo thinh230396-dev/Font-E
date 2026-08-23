@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { PageHeader } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
 type TechnicianStatus =
@@ -45,7 +46,8 @@ type AppointmentStatus =
   | 'IN_SERVICE'
   | 'COMPLETED'
   | 'CANCELLED'
-  | 'NO_SHOW';
+  | 'NO_SHOW'
+  | 'REFUNDED';
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
 
 interface Technician {
@@ -562,49 +564,35 @@ export default function ReceptionistTechnicians({
 
   return (
     <div className="space-y-4">
-      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#063b32] via-[#075e4e] to-[#0e7662] p-5 text-white shadow-xl shadow-emerald-950/10 sm:p-7">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-emerald-300/10 blur-2xl" />
-        <div className="pointer-events-none absolute bottom-0 right-1/3 h-32 w-32 rounded-full bg-cyan-300/10 blur-2xl" />
-        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-end">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/20 bg-white/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-emerald-100">
-              <UsersRound className="h-3.5 w-3.5" />
-              Điều phối kỹ thuật viên
-            </span>
-            <h1 className="mt-4 max-w-3xl text-2xl font-black tracking-tight sm:text-3xl">
-              Đúng người, đúng kỹ năng, đúng khung giờ
-            </h1>
-            <p className="mt-2 max-w-2xl text-[11px] font-semibold leading-5 text-emerald-50/75 sm:text-xs">
-              Theo dõi nhân sự theo thời gian thực, cân bằng tải và phân công khách nhanh tại {branchName}.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-xl bg-white/10 px-3 py-2 text-[9px] font-bold text-emerald-50">
-                {readyCount} người sẵn sàng
-              </span>
-              <span className="rounded-xl bg-white/10 px-3 py-2 text-[9px] font-bold text-emerald-50">
-                {unassignedAppointments.length} khách cần phân công
-              </span>
-              <span className="rounded-xl bg-white/10 px-3 py-2 text-[9px] font-bold text-emerald-50">
-                Tải trung bình {averageLoad}%
-              </span>
-            </div>
+      <PageHeader
+        title="Kỹ thuật viên & Điều phối ca"
+        actions={(
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('PRESENT');
+                setShiftFilter('ALL');
+                setSkillFilter('ALL');
+              }}
+              className="flex h-10 items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 px-4 text-caption font-bold text-slate-700 shadow-none cursor-pointer"
+            >
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              KTV sẵn sàng ({readyCount})
+            </button>
+            {unassignedAppointments.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAssigningAppointment(unassignedAppointments[0])}
+                className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 hover:bg-pink-700 px-4 text-caption font-black text-white shadow-none cursor-pointer"
+              >
+                <Sparkles className="h-4 w-4" />
+                Phân công khách ({unassignedAppointments.length})
+              </button>
+            )}
           </div>
-          <div className="rounded-2xl border border-white/15 bg-black/10 p-4 backdrop-blur-sm">
-            <div className="flex items-start gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
-                  Quyền {roleLabel.split('·')[0].trim()}
-                </p>
-                <p className="mt-1 text-[9px] leading-4 text-emerald-50/70">
-                  Được xem lịch, cập nhật trạng thái vận hành và phân công khách. Hồ sơ nghề nghiệp,
-                  bảng lương, hoa hồng và phê duyệt nghỉ thuộc quyền quản lý.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+        )}
+      />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {[

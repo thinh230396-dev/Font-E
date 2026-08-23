@@ -25,6 +25,7 @@ import {
   Sparkles,
   Star,
   TrendingUp,
+  UserCheck,
   UserRound,
   UsersRound,
   WalletCards,
@@ -33,43 +34,7 @@ import {
 import BeautifulSelect from './BeautifulSelect';
 import { formatMoney as money } from '../utils/money';
 
-type CustomerTier = 'VIP' | 'LOYAL' | 'STANDARD' | 'NEW';
-type CustomerStatus = 'ACTIVE' | 'CARE' | 'INACTIVE';
-type BranchCode = 'Q1' | 'Q3';
-
-interface ServiceVisit {
-  date: string;
-  service: string;
-  technician: string;
-  amount: number;
-  rating?: number;
-}
-
-interface TenantCustomer {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  birthday: string;
-  branch: BranchCode;
-  tier: CustomerTier;
-  status: CustomerStatus;
-  source: string;
-  visits: number;
-  totalSpent: number;
-  points: number;
-  lastVisit: string;
-  nextAppointment?: string;
-  favoriteTechnician: string;
-  preferences: string[];
-  allergies: string;
-  nailCondition: string;
-  note: string;
-  consent: string[];
-  tags: string[];
-  history: ServiceVisit[];
-  activity: string[];
-}
+import type { TenantCustomer, CustomerTier, CustomerStatus, BranchCode, ServiceVisit } from '../utils/tenantCustomers';
 
 interface LinkedAppointment {
   id: string;
@@ -100,12 +65,7 @@ interface TenantAdminCustomersProps {
   accessMode?: 'full' | 'limited' | 'locked';
   readOnlyReason?: string;
   onNotify?: (message: string) => void;
-  onBookCustomer?: (
-    customer: Pick<
-      TenantCustomer,
-      'id' | 'name' | 'phone' | 'branch' | 'note' | 'allergies' | 'nailCondition' | 'favoriteTechnician'
-    >,
-  ) => void;
+  onBookCustomer?: (customer: TenantCustomer) => void;
 }
 
 interface CustomerForm {
@@ -116,6 +76,7 @@ interface CustomerForm {
   branch: BranchCode;
   tier: CustomerTier;
   source: string;
+  favoriteTechnician: string;
   preferences: string;
   allergies: string;
   nailCondition: string;
@@ -467,6 +428,7 @@ const emptyForm = (branch: BranchCode): CustomerForm => ({
   branch,
   tier: 'NEW',
   source: 'Khách vãng lai',
+  favoriteTechnician: '',
   preferences: '',
   allergies: '',
   nailCondition: '',
@@ -514,7 +476,35 @@ export default function TenantAdminCustomers({
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(customers));
+    window.dispatchEvent(new CustomEvent('salonsys_customers_updated', { detail: { storageKey, customers } }));
   }, [customers, storageKey]);
+
+  useEffect(() => {
+    const syncCustomers = () => {
+      try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          setCustomers(JSON.parse(stored));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const handleUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ storageKey?: string; customers?: TenantCustomer[] }>;
+      if (customEvent.detail?.customers) {
+        setCustomers(customEvent.detail.customers);
+      } else {
+        syncCustomers();
+      }
+    };
+    window.addEventListener('salonsys_customers_updated', handleUpdated);
+    window.addEventListener('storage', syncCustomers);
+    return () => {
+      window.removeEventListener('salonsys_customers_updated', handleUpdated);
+      window.removeEventListener('storage', syncCustomers);
+    };
+  }, [storageKey]);
 
   useEffect(() => {
     const syncAppointments = () => {
@@ -672,6 +662,7 @@ export default function TenantAdminCustomers({
       branch: customer.branch,
       tier: customer.tier,
       source: customer.source,
+      favoriteTechnician: customer.favoriteTechnician && customer.favoriteTechnician !== 'Chưa xác định' ? customer.favoriteTechnician : '',
       preferences: customer.preferences.join(', '),
       allergies: customer.allergies,
       nailCondition: customer.nailCondition,
@@ -732,6 +723,7 @@ export default function TenantAdminCustomers({
                 ...customer,
                 ...form,
                 tier: safeTier,
+                favoriteTechnician: form.favoriteTechnician.trim() || 'Chưa xác định',
                 preferences,
                 allergies: form.allergies.trim() || 'Chưa khai báo',
                 nailCondition: form.nailCondition.trim() || 'Chưa đánh giá',
@@ -749,6 +741,7 @@ export default function TenantAdminCustomers({
         id: `CUS-${Date.now().toString().slice(-4)}`,
         ...form,
         tier: 'NEW',
+        favoriteTechnician: form.favoriteTechnician.trim() || 'Chưa xác định',
         preferences,
         allergies: form.allergies.trim() || 'Chưa khai báo',
         nailCondition: form.nailCondition.trim() || 'Chưa đánh giá',
@@ -757,7 +750,6 @@ export default function TenantAdminCustomers({
         totalSpent: 0,
         points: 0,
         lastVisit: 'Chưa phát sinh',
-        favoriteTechnician: 'Chưa xác định',
         tags: ['Khách mới tại quầy'],
         history: [],
         activity: [`${activityTime()} · Tạo hồ sơ bởi ${isReceptionist ? 'Lễ tân' : roleLabel}`],
@@ -1449,6 +1441,17 @@ export default function TenantAdminCustomers({
                         <p className="mt-2 text-caption text-slate-400">Chi nhánh chính</p>
                         <p className="mt-1 font-black text-slate-700">{branchName(selected.branch)}</p>
                       </div>
+                      <div className="customer-detail-subcard col-span-2 rounded-xl bg-emerald-50/70 border border-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-900/50 p-3">
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <p className="text-caption font-bold text-emerald-950 dark:text-emerald-200">Kỹ thuật viên yêu thích (KTV ruột)</p>
+                        </div>
+                        <p className="mt-1 text-caption font-black text-emerald-800 dark:text-emerald-300">
+                          {selected.favoriteTechnician && selected.favoriteTechnician !== 'Chưa xác định'
+                            ? selected.favoriteTechnician
+                            : 'Chưa có KTV ruột (Sẽ cập nhật sau lần phục vụ)'}
+                        </p>
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {selected.consent.length ? (
@@ -1654,6 +1657,24 @@ export default function TenantAdminCustomers({
                   <option>Instagram</option>
                   <option>TikTok</option>
                   <option>Khách vãng lai</option>
+                </BeautifulSelect>
+              </label>
+
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Kỹ thuật viên yêu thích (KTV ruột)</span>
+                <BeautifulSelect
+                  value={form.favoriteTechnician}
+                  onChange={(event) => setForm((current) => ({ ...current, favoriteTechnician: event.target.value }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
+                  aria-label="Kỹ thuật viên yêu thích"
+                >
+                  <option value="">Chưa chỉ định KTV ruột</option>
+                  <option value="Thảo Nguyễn">Thảo Nguyễn (Chuyên Nail Art & Đắp bột)</option>
+                  <option value="Minh Châu">Minh Châu (Chuyên Chăm sóc Móng & Spa)</option>
+                  <option value="Hà My">Hà My (Chuyên Design & Sơn gel Hàn Quốc)</option>
+                  <option value="Thuỳ Dương">Thuỳ Dương (Chuyên Pedicure & Massage)</option>
+                  <option value="Phương Vy">Phương Vy (Chuyên Vẽ Gel & Ombre)</option>
+                  <option value="Bảo Trâm">Bảo Trâm (Chuyên Đính đá & Form móng)</option>
                 </BeautifulSelect>
               </label>
 

@@ -106,7 +106,13 @@ export default function BeautifulSelect({
   const filteredOptions = query.trim()
     ? options.filter((option) => option.label.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi')))
     : options;
-  const isTenantSelect = Boolean(rootRef.current?.closest('.role-shell--tenant'));
+  const isReceptionSelect = Boolean(
+    rootRef.current?.closest('.role-shell--reception') ||
+    rootRef.current?.closest('.reception-workspace') ||
+    rootRef.current?.closest('[data-receptionist="true"]') ||
+    document.querySelector('.role-shell--reception')
+  );
+  const isTenantSelect = Boolean(rootRef.current?.closest('.role-shell--tenant')) && !isReceptionSelect;
 
   /**
    * Rất nhiều nơi gọi không truyền class hình dạng nào — ví dụ ô "Chọn thao
@@ -259,7 +265,7 @@ export default function BeautifulSelect({
       ref={menuRef}
       role="listbox"
       aria-label={selectProps['aria-label'] || name || 'Danh sách lựa chọn'}
-      className={`beautiful-select-menu ${isTenantSelect ? 'beautiful-select-menu--tenant' : ''} fixed z-[10050] flex flex-col overflow-hidden rounded-xl border border-brand-outline/60 bg-brand-surface shadow-2xl`}
+      className={`beautiful-select-menu ${isTenantSelect ? 'beautiful-select-menu--tenant' : ''} ${isReceptionSelect ? 'beautiful-select-menu--reception' : ''} fixed z-[10050] flex flex-col overflow-hidden rounded-xl border border-brand-outline/60 bg-brand-surface shadow-2xl`}
       style={menuStyle}
       onKeyDown={handleMenuKeyDown}
     >
@@ -298,7 +304,7 @@ export default function BeautifulSelect({
                           ? 'bg-rose-50 text-rose-700'
                           : option.tone === 'off'
                           ? 'bg-slate-100 text-slate-500'
-                          : 'bg-violet-50 text-violet-700'
+                          : 'bg-emerald-50 text-emerald-700'
                       }`}
                       aria-hidden="true"
                     >
@@ -315,7 +321,7 @@ export default function BeautifulSelect({
                       )}
                       {option.helper && (
                         <span className={`mt-0.5 block truncate text-caption font-semibold leading-4 ${
-                          option.tone === 'available' ? 'text-emerald-600' : option.tone === 'auto' ? 'text-violet-600' : 'text-rose-600'
+                          option.tone === 'available' ? 'text-emerald-600' : option.tone === 'auto' ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
                           {option.helper}
                         </span>
@@ -330,7 +336,7 @@ export default function BeautifulSelect({
                             ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'
                             : option.tone === 'off'
                             ? 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
-                            : 'bg-violet-50 text-violet-700 ring-1 ring-violet-200'
+                            : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
                         }`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${
                             option.tone === 'available'
@@ -339,7 +345,7 @@ export default function BeautifulSelect({
                               ? 'bg-rose-500'
                               : option.tone === 'off'
                               ? 'bg-slate-400'
-                              : 'bg-violet-500'
+                              : 'bg-emerald-500'
                           }`} />
                           {option.status}
                         </span>
@@ -409,7 +415,7 @@ export default function BeautifulSelect({
                 ? 'bg-rose-500'
                 : selectedOption?.tone === 'off'
                 ? 'bg-slate-400'
-                : 'bg-violet-500'
+                : 'bg-emerald-500'
             }`} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-caption font-extrabold leading-5 text-slate-800">

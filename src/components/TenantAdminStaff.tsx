@@ -1851,7 +1851,7 @@ export default function TenantAdminStaff({
                 type="button"
                 onClick={() => setSelectedStaff(null)}
                 aria-label="Đóng"
-                className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2201,7 +2201,7 @@ export default function TenantAdminStaff({
                 type="button"
                 onClick={() => setShiftAction(null)}
                 aria-label="Đóng"
-                className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-400 shadow-sm"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-400 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -2248,14 +2248,14 @@ export default function TenantAdminStaff({
               <button
                 type="button"
                 onClick={() => setShiftAction(null)}
-                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 type="button"
                 onClick={confirmShiftAction}
-                className={`flex items-center gap-2 border px-5 text-caption font-black text-white shadow-lg ${shiftAction.type === "START" ? "border-emerald-700 bg-emerald-600 shadow-emerald-100" : "border-rose-700 bg-rose-600 shadow-rose-100"}`}
+                className={`flex h-10 items-center gap-2 rounded-xl border px-5 text-caption font-black text-white shadow-lg cursor-pointer transition-colors ${shiftAction.type === "START" ? "border-emerald-700 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100" : "border-rose-700 bg-rose-600 hover:bg-rose-700 shadow-rose-100"}`}
               >
                 <Clock3 className="h-4 w-4" />
                 {shiftAction.type === "START"
@@ -2294,7 +2294,7 @@ export default function TenantAdminStaff({
                 type="button"
                 onClick={() => setFormMode(null)}
                 aria-label="Đóng"
-                className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2646,13 +2646,13 @@ export default function TenantAdminStaff({
               <button
                 type="button"
                 onClick={() => setFormMode(null)}
-                className="border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-2 border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200"
+                className="flex h-10 items-center gap-2 rounded-xl border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 cursor-pointer transition-colors"
               >
                 <UserCog className="h-4 w-4" />
                 {formMode === "CREATE" ? "Tạo hồ sơ" : "Lưu thay đổi"}

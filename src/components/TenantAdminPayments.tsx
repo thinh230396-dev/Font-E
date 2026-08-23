@@ -306,6 +306,7 @@ const TAX_RATE_MAX = 100;
 const clampTaxRate = (value: number) => Math.min(TAX_RATE_MAX, Math.max(TAX_RATE_MIN, Math.round(value)));
 
 export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, branchLocked = false, tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify }: TenantAdminPaymentsProps) {
+  const isReceptionist = /receptionist|lễ tân/i.test(roleLabel);
   const storageKey = `tenant-admin-payments-v1:${tenantName}`;
   const loyaltyStorageKey = `tenant-admin-loyalty-v1:${tenantName}`;
   const expenseStorageKey = `tenant-admin-expenses-v1:${tenantName}`;
@@ -1108,21 +1109,32 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
 
   return <div className="tenant-admin-payments space-y-5">
     <PageHeader
-        title="Thanh toán & đối soát"
+        title={isReceptionist ? 'Hóa đơn & Thu ngân' : 'Thanh toán & đối soát'}
         actions={(
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={exportReport} className="flex h-11 items-center gap-2 border border-slate-200 bg-white px-4 font-semibold text-slate-600 shadow-sm hover:bg-slate-50">
-              <Download className="h-4 w-4" />Xuất đối soát
-            </button>
+            {!isReceptionist && (
+              <button
+                type="button"
+                onClick={exportReport}
+                className="flex h-10 items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 px-4 text-caption font-bold text-slate-600 shadow-none cursor-pointer"
+              >
+                <Download className="h-4 w-4" />Xuất đối soát
+              </button>
+            )}
             <button
               type="button"
               onClick={() => openCreateExpense('OWNER_WITHDRAW')}
               disabled={!canManage}
-              className="flex h-11 items-center gap-2 border border-rose-700 bg-rose-600 px-4 font-semibold text-white shadow-lg shadow-rose-200 hover:bg-rose-700 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+              className="flex h-10 items-center gap-2 border border-rose-200 bg-rose-50 hover:bg-rose-100 px-4 text-caption font-bold text-rose-700 shadow-none disabled:border-slate-300 disabled:bg-slate-300 cursor-pointer"
             >
               <Minus className="h-4 w-4" />Lập phiếu chi / Rút tiền
             </button>
-            <button type="button" onClick={() => openCapture()} disabled={!canManage} className="flex h-11 items-center gap-2 border border-emerald-700 bg-emerald-600 px-4 font-semibold text-white shadow-lg shadow-emerald-200 hover:bg-emerald-700 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none">
+            <button
+              type="button"
+              onClick={() => openCapture()}
+              disabled={!canManage}
+              className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 hover:bg-pink-700 px-4 text-caption font-black text-white shadow-none disabled:border-slate-300 disabled:bg-slate-300 cursor-pointer"
+            >
               <CircleDollarSign className="h-4 w-4" />Ghi nhận thanh toán
             </button>
           </div>

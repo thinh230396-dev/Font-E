@@ -1101,6 +1101,10 @@ export default function NailTenantAdminPortal({
     allergies: string;
     nailCondition: string;
     favoriteTechnician: string;
+    tier?: string;
+    points?: number;
+    totalSpent?: number;
+    visits?: number;
   } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => (
@@ -1350,6 +1354,10 @@ export default function NailTenantAdminPortal({
     allergies: string;
     nailCondition: string;
     favoriteTechnician: string;
+    tier?: string;
+    points?: number;
+    totalSpent?: number;
+    visits?: number;
   }) => {
     const appointmentAccess = resolvePageAccess('appointments');
     if (appointmentAccess !== 'full') {
@@ -1371,7 +1379,11 @@ export default function NailTenantAdminPortal({
       note: customer.note,
       allergies: customer.allergies,
       nailCondition: customer.nailCondition,
-      favoriteTechnician: customer.favoriteTechnician
+      favoriteTechnician: customer.favoriteTechnician,
+      tier: customer.tier,
+      points: customer.points,
+      totalSpent: customer.totalSpent,
+      visits: customer.visits,
     });
   };
 

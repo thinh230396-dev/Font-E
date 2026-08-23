@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
-import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition } from './ui';
+import { Button, DataTable, Field, Modal, PageHeader, StatusBadge, getStatusDefinition } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
 type StationArea = 'MANICURE' | 'PEDICURE' | 'VIP';
@@ -678,64 +678,37 @@ export default function ReceptionistStations({
 
   return (
     <div className="space-y-5">
-      {/* Đầu trang theo README §8.2: tên màn hình, mô tả, hành động chính bên phải. */}
-      <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 text-caption font-bold text-brand-secondary">
-            <span className="h-2 w-2 rounded-pill bg-brand-secondary" />
-            Sơ đồ vận hành trực tiếp · Chi nhánh {branchName(branch)}
-            <span className="text-brand-text-muted">•</span>
-            <span className="font-normal text-brand-text-muted">Cập nhật {nowTime()}</span>
+      <PageHeader
+        title="Ghế & phòng phục vụ"
+        actions={(
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAreaFilter('ALL');
+                setStatusFilter('READY');
+                setViewMode('MAP');
+              }}
+              className="flex h-10 items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 px-4 text-caption font-bold text-slate-700 shadow-none cursor-pointer"
+            >
+              <Sparkles className="h-4 w-4 text-brand-secondary" />
+              Tìm ghế trống
+            </button>
+            {waitingAppointments[0] ? (
+              <button
+                type="button"
+                onClick={() => openAssign(waitingAppointments[0])}
+                className="flex h-10 items-center gap-2 border border-pink-600 bg-pink-600 hover:bg-pink-700 px-4 text-caption font-black text-white shadow-none cursor-pointer"
+              >
+                <UserRound className="h-4 w-4" />
+                Xếp khách đang chờ ({waitingAppointments.length})
+              </button>
+            ) : (
+              <StatusBadge status="READY" label="Không có khách chờ ghế" />
+            )}
           </div>
-          <h1 className="mt-2 text-2xl font-black tracking-[-0.035em] text-brand-text sm:text-3xl">
-            Ghế &amp; phòng phục vụ
-          </h1>
-          <p className="mt-2 max-w-2xl text-body text-brand-text-muted">
-            Theo dõi ghế trống, khách đang làm, thời gian dự kiến, vệ sinh và sự cố để điều phối tại
-            quầy nhanh, chính xác.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            iconLeading={<Sparkles />}
-            onClick={() => {
-              setAreaFilter('ALL');
-              setStatusFilter('READY');
-              setViewMode('MAP');
-            }}
-          >
-            Tìm ghế trống
-          </Button>
-          {waitingAppointments[0] ? (
-            <Button variant="primary" iconLeading={<UserRound />} onClick={() => openAssign(waitingAppointments[0])}>
-              Xếp khách đang chờ
-            </Button>
-          ) : (
-            <StatusBadge status="READY" label="Không có khách chờ ghế" />
-          )}
-        </div>
-      </section>
-
-      {/* Phạm vi quyền */}
-      <section className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between ui-tone ui-tone--success">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-brand-secondary text-brand-on-primary">
-            <ShieldCheck className="h-[18px] w-[18px]" />
-          </span>
-          <div>
-            <p className="text-body font-bold text-brand-text">Quyền thao tác: {roleLabel}</p>
-            <p className="mt-1 text-caption leading-5 text-brand-text-muted">
-              Được xếp khách vào ghế trống, xác nhận vệ sinh và báo sự cố tại chi nhánh được phân
-              công. Không được thêm/xóa vị trí, thay cấu hình hoặc tự mở lại ghế đang khóa.
-            </p>
-          </div>
-        </div>
-        <span className="flex w-fit items-center gap-1.5 rounded-pill border border-brand-outline bg-brand-surface px-3 py-1.5 text-caption font-bold text-brand-text">
-          <MapPin className="h-3.5 w-3.5" />
-          {branchLocked ? 'Chi nhánh đã khóa' : branchName(branch)}
-        </span>
-      </section>
+        )}
+      />
 
       {/* Chỉ số tổng quan */}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

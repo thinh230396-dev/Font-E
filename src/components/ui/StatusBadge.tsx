@@ -15,6 +15,7 @@ import {
   PackageCheck,
   PauseCircle,
   PlayCircle,
+  RotateCcw,
   Send,
   SprayCan,
   Thermometer,
@@ -54,6 +55,7 @@ export type StatusKey =
   | 'WARNING'
   | 'FAILED'
   | 'CANCELLED'
+  | 'REFUNDED'
   // Quy trình duyệt, phiếu hỗ trợ, lịch hẹn
   | 'PENDING'
   | 'APPROVED'
@@ -112,6 +114,7 @@ export const STATUS_MAP: Record<StatusKey, StatusDefinition> = {
   WARNING: { label: 'Cần chú ý', tone: 'warning', icon: AlertTriangle },
   FAILED: { label: 'Thất bại', tone: 'danger', icon: XCircle },
   CANCELLED: { label: 'Đã hủy', tone: 'danger', icon: Ban },
+  REFUNDED: { label: 'Đã hoàn tiền', tone: 'warning', icon: RotateCcw },
 
   PENDING: { label: 'Chờ xử lý', tone: 'warning', icon: Hourglass },
   APPROVED: { label: 'Đã duyệt', tone: 'success', icon: ThumbsUp },
