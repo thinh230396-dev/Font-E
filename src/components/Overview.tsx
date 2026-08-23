@@ -49,28 +49,28 @@ interface OverviewProps {
 const STATUS_META: Record<TenantStatus, { label: string; color: string; className: string }> = {
   ACTIVE: {
     label: 'Hoạt động',
-    color: '#17b890',
-    className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400',
+    color: '#10b981',
+    className: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700/50',
   },
   TRIAL: {
     label: 'Dùng thử',
-    color: '#7667e8',
-    className: 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:text-violet-400',
+    color: '#8b5cf6',
+    className: 'bg-violet-50 text-violet-800 border-violet-300 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-700/50',
   },
   EXPIRING: {
     label: 'Sắp hết hạn',
-    color: '#f4a340',
-    className: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400',
+    color: '#f59e0b',
+    className: 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700/50',
   },
   OVERDUE: {
     label: 'Quá hạn',
-    color: '#ef6576',
-    className: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-400',
+    color: '#f43f5e',
+    className: 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-700/50',
   },
   SUSPENDED: {
     label: 'Tạm ngưng',
-    color: '#94a3b8',
-    className: 'bg-slate-500/10 text-slate-600 border-slate-500/20 dark:text-slate-300',
+    color: '#ef4444',
+    className: 'bg-red-50 text-red-800 border-red-300 dark:bg-red-950/50 dark:text-red-300 dark:border-red-700/50',
   },
 };
 
@@ -483,7 +483,7 @@ export default function Overview({
                   return (
                   <tr
                     key={tenant.id}
-                    className={isAdminSuspended ? 'opacity-75 bg-amber-500/[0.04] dark:bg-amber-950/[0.15] border-l-2 border-l-amber-500' : undefined}
+                    className={isAdminSuspended ? 'bg-amber-500/[0.04] dark:bg-amber-950/[0.15] border-l-2 border-l-amber-500' : undefined}
                   >
                     <td>
                       <button type="button" className="sa-tenant-name" onClick={() => onViewTenant(tenant)}>
@@ -709,9 +709,9 @@ export default function Overview({
                         <button
                           type="button"
                           onClick={() => onNavigateToTab?.('support')}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-brand-primary/30 bg-brand-primary/10 text-xs font-bold text-brand-primary hover:bg-brand-primary hover:text-white transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-outline bg-brand-surface text-xs font-semibold text-brand-text shadow-xs hover:border-brand-primary hover:text-brand-primary hover:bg-brand-surface-high active:bg-brand-primary active:text-white active:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/30 transition-all cursor-pointer"
                         >
-                          Xử lý <ArrowRight className="h-3 w-3" />
+                          Xử lý <ArrowRight className="h-3.5 w-3.5" />
                         </button>
                       </td>
                     </tr>
