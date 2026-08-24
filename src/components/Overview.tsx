@@ -529,11 +529,14 @@ export default function Overview({
               <p>Hiển thị {Math.min(filteredTenants.length, 6)} trên {filteredTenants.length} tenant trong hệ thống</p>
             </div>
             <button
+              id="overview-btn-view-all-tenants"
               type="button"
-              className="sa-text-button"
+              className="sa-text-button inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-outline bg-brand-surface text-xs font-bold text-brand-primary hover:bg-brand-surface-high hover:border-brand-primary active:scale-95 transition-all cursor-pointer shadow-xs"
               onClick={() => onNavigateToTab?.('salons')}
+              title="Chuyển đến trang danh sách Quản lý Tenant"
+              aria-label="Xem tất cả danh sách tenant"
             >
-              Xem tất cả <ChevronRight className="h-3.5 w-3.5" />
+              Xem tất cả <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 

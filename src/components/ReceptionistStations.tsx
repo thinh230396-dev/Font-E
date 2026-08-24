@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
-import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition } from './ui';
+import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader, Pagination } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
 type StationArea = 'MANICURE' | 'PEDICURE' | 'VIP';

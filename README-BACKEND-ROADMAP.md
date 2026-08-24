@@ -13,7 +13,7 @@ Tài liệu này biến `README-BUSINESS-RULES.md` thành **lịch làm việc t
 
 ## Mục lục
 
-0. [Quyết định chốt ngày 24/08](#0-quyết-định-chốt-ngày-2408) · 1. [Phép tính thời gian](#1-phép-tính-thời-gian--tại-sao-phải-cắt) · 2. [Cách chia ngày](#2-cách-chia-ngày) · 3. [Cấu trúc thư mục](#3-cấu-trúc-thư-mục-server) · 4. [Lịch 20 ngày](#4-lịch-20-ngày) · 5. [Chi tiết từng ngày](#5-chi-tiết-từng-ngày) · 6. [Đường cắt khi trễ](#6-đường-cắt-khi-trễ) · 7. [Rủi ro](#7-rủi-ro-đã-biết) · 8. [Giả định tự chốt](#8-giả-định-tôi-tự-chốt)
+0. [Quyết định chốt ngày 24/08](#0-quyết-định-chốt-ngày-2408) · 1. [Phép tính thời gian](#1-phép-tính-thời-gian--tại-sao-phải-cắt) · 2. [Cách chia ngày](#2-cách-chia-ngày) · 3. [Cấu trúc thư mục](#3-cấu-trúc-thư-mục-server) · 4. [Lịch 20 ngày](#4-lịch-20-ngày) · 5. [Chi tiết từng ngày](#5-chi-tiết-từng-ngày) · 6. [Đường cắt khi trễ](#6-đường-cắt-khi-trễ) · 7. [Rủi ro](#7-rủi-ro-đã-biết) · 8. [Giả định tự chốt](#8-giả-định-tôi-tự-chốt) · 9. [Bảng chức năng: làm gì, bỏ gì](#9-bảng-chức-năng-làm-gì-bỏ-gì)
 
 ---
 
@@ -29,12 +29,14 @@ Mười hai quyết định này chốt trong phiên lập lộ trình, bổ sun
 | 4 | Contract lỗi **`{ error: { code, message, fields } }`** | Frontend gắn được thông báo vào đúng ô nhập — chốt §22 mục 3 |
 | 5 | **Luôn bắt chọn tiệm** sau khi đăng nhập (mọi TenantAdmin) | Chốt §22 mục 2. Bỏ cột `last_active_tenant_id` khỏi kế hoạch |
 | 6 | **Vitest chỉ cho phân quyền + cách ly tenant**, không test CRUD | ~1 ngày, phủ đúng BR-ISO-006 |
-| 7 | Nối frontend theo **mạch demo vàng** trước | ~13 màn hình thay vì 22 |
+| 7 | Nối frontend theo **mạch demo vàng** trước | ~14 màn hình thay vì 22 |
 | 8 | Màn chưa nối API **giữ `localStorage` + dải nhãn "Dữ liệu mẫu"** | Không có dữ liệu giả trình bày như thật |
 | 9 | **Chỉ chạy localhost**, không deploy | Tiết kiệm 1 ngày. `npm run build` vẫn phải chạy được để phòng thân |
 | 10 | **Bỏ USD, toàn hệ thống VND số nguyên** | Đúng BR-VAL-003. Bỏ `convertMoney` và tỷ giá cứng 25000 ở `src/utils/money.ts:5` |
 | 11 | Phiên là **cookie + bảng `app_sessions`**, không JWT | BR-AUTH-022 bắt kiểm tra trạng thái tài khoản mỗi request; JWT không thu hồi được giữa chừng |
 | 12 | **Chốt npm**, xóa `bun.lock` | Nợ kỹ thuật §21.3 |
+| 13 | **Clean Architecture 4 tầng đầy đủ**: use case là class có `execute()`, có DTO vào/ra, có mapper và presenter riêng | Tốn thêm 3–4 ngày → **bỏ lát cắt gói đăng ký (ngày 17)** và **rút báo cáo doanh thu còn 2 chiều** (ngày, chi nhánh) |
+| 14 | Backend viết bằng **TypeScript**, chạy bằng `tsx` | `tsx` và `typescript` đã có sẵn trong `devDependencies`. Clean Architecture sống bằng port — trong JS thuần thì port chỉ là chú thích, không có gì cưỡng chế |
 
 > Quyết định 11 suy ra từ source, không phải lựa chọn: `scripts/sites-worker.js:191-258` đã làm đúng mô hình cookie + bảng phiên, chuyển sang Express gần như bê nguyên.
 
@@ -56,14 +58,14 @@ Vượt 27 giờ. Nên phạm vi bị cắt như sau:
 | Khối | Giờ | Ghi chú |
 |---|---:|---|
 | Backend 9 module | 68 | Bỏ 4 endpoint báo cáo nâng cao |
-| Frontend — **chỉ mạch demo vàng**, 13 màn | 56 | Xem bảng dưới |
+| Frontend — **chỉ mạch demo vàng**, 14 màn | 58 | Xem bảng dưới |
 | Vitest phân quyền + cách ly tenant | 8 | |
 | Dọn dẹp (bỏ USD, nhãn dữ liệu mẫu, code chết) | 4 | |
 | Tổng duyệt + sửa lỗi + seed lại | 12 | |
-| **Đệm** | **12** | 1,5 ngày cho sự cố |
+| **Đệm** | **10** | 1,25 ngày cho sự cố |
 | **Cộng** | **160** | |
 
-**13 màn hình được nối API:**
+**14 màn hình được nối API:**
 
 | # | Màn hình | Dòng | Giờ | Vì sao trong mạch demo |
 |---|---|---:|---:|---|
@@ -76,9 +78,10 @@ Vượt 27 giờ. Nên phạm vi bị cắt như sau:
 | 7 | `TenantAdminCustomers` | — | 3 | Hồ sơ khách |
 | 8–11 | `ReceptionistPortal` — lịch hẹn, check-in, thu tiền, hóa đơn | 5.493 | 14 | Trái tim của demo |
 | 12 | `TenantAdminReports` | — | 4 | Bước cuối mạch demo |
-| 13 | Hạ tầng: `apiClient` + services + hooks + dải nhãn | — | 8 | Dùng chung |
+| 13 | `SecurityAndLogs` — phần danh sách nhật ký | 826 | 2 | Server đã ghi log, không có màn đọc thì log thành vô hình |
+| 14 | Hạ tầng: `apiClient` + services + hooks + dải nhãn | — | 8 | Dùng chung |
 
-**Màn hình của 9 module nhưng KHÔNG nối** (giữ `localStorage` + dải nhãn): `TenantAdminAppointments` (3.212 dòng — cổng lễ tân đã demo lịch hẹn rồi), `TenantDetailModal` phần nâng cao, `Overview`, `SystemReports`, `SecurityAndLogs`, `TenantAdminOverview`.
+**Màn hình của 9 module nhưng KHÔNG nối** (giữ `localStorage` + dải nhãn): `TenantAdminAppointments` (3.212 dòng — cổng lễ tân đã demo lịch hẹn rồi), `TenantDetailModal` phần nâng cao, `Overview`, `SystemReports`, `TenantAdminOverview`, và phần thu hồi phiên + chính sách lưu trữ của `SecurityAndLogs`.
 
 ---
 
@@ -112,22 +115,65 @@ server/
       004_audit.sql           audit_logs
     query.js                  ★ LỚP TRUY VẤN DÙNG CHUNG — BR-ISO-002, BR-DEL-002
     seed.js
-  middleware/
-    session.js                cookie → phiên → user + active_tenant_id (BR-AUTH-022)
-    authorize.js              4 bước theo đúng thứ tự BR-TENANT-013
-    readonly.js               chặn ghi khi tenant hết hạn (BR-TENANT-012)
-    audit.js                  8 sự kiện (BR-AUD-002)
-    error.js                  contract lỗi { error: { code, message, fields } }
-  modules/
-    auth/ tenants/ packages/ branches/ services/ staff/
-    customers/ appointments/ invoices/ reports/
-      <ten>.routes.js         chỉ định tuyến + kiểm tra đầu vào
-      <ten>.service.js        nghiệp vụ + SQL
-  lib/
-    errors.js  validate.js  ids.js  status.js
-  data/
-    salonsys.db               tệp SQLite — thêm vào .gitignore
 ```
+
+> ⚠️ **Sơ đồ trên đã lỗi thời từ ngày 1.** Sau khi chốt Clean Architecture 4 tầng đầy đủ (§0 mục 13) và TypeScript (§0 mục 14), cấu trúc thật là sơ đồ bên dưới. Giữ lại sơ đồ cũ để thấy vì sao đổi.
+
+### 3.1 Cấu trúc thật — bốn tầng Clean Architecture
+
+Bốn thư mục dưới `server/src/` ứng đúng bốn vòng tròn. **Chiều phụ thuộc chỉ đi vào trong**: `infrastructure → adapters → application → domain`. Không mũi tên nào đi ngược.
+
+```
+server/
+  tsconfig.json
+  src/
+    domain/                 ◄── Enterprise Business Rules — không import gì từ ngoài
+      entities/               User, Session — quy tắc luôn đúng về một thực thể
+      value-objects/          Email, RawPassword — dữ liệu tự kiểm tra chính mình
+      policies/               AuthPolicy — hằng số nghiệp vụ (5 lần sai, khóa 15 phút)
+      repositories/           ★ PORT: interface do domain đặt ra, tầng ngoài phải theo
+      errors/                 DomainError
+
+    application/            ◄── Application Business Rules
+      use-cases/              class có execute() — mỗi tình huống sử dụng một tệp
+      dto/                    hình dạng dữ liệu vào và ra, tách khỏi entity
+      mappers/                entity → DTO, chặn password_hash lọt ra ngoài
+      ports/                  PasswordHasher, Clock, IdGenerator, DatabaseClient
+      errors/                 ApplicationError và các lỗi con
+
+    adapters/               ◄── Interface Adapters — không biết Express, không biết SQLite
+      controllers/            đọc HttpRequest → gọi use case → trả HttpResponse
+      presenters/             ★ nơi DUY NHẤT ánh xạ mã lỗi sang HTTP status
+      persistence/            bản cài đặt repository, viết SQL qua cổng DatabaseClient
+      http/                   HttpRequest / HttpResponse độc lập framework
+
+    infrastructure/         ◄── Frameworks & Drivers — vòng ngoài cùng
+      database/               NodeSqliteClient (nơi DUY NHẤT import node:sqlite),
+                              Migrator, migrations/*.sql
+      http/                   Express, route, middleware, expressAdapter
+      security/               ScryptPasswordHasher
+      system/                 SystemClock, CryptoIdGenerator
+      config/                 env.ts
+      di/                     Container.ts — composition root
+      seed/                   tài khoản demo
+    main.ts                   khởi động: migration → container → seed → mở cổng
+
+    shared/                   AppError, ErrorCode — dùng chung mọi tầng
+  data/
+    salonsys.db               tệp SQLite — đã thêm vào .gitignore
+```
+
+**Migration thêm dần theo ngày:** `0001_auth.sql` (xong ngày 1) · `0002_platform.sql` + `0003_salon.sql` (ngày 2) · `0004_user_tenants.sql` (ngày 3) · `0005_audit.sql`.
+
+Lớp truy vấn dùng chung ở BR-ISO-002 trong kiến trúc này **không phải một tệp `query.js`** mà là lớp cơ sở của các repository trong `adapters/persistence/` — bộ lọc tenant đặt ở đó, không endpoint nào tự viết `WHERE tenant_id`.
+
+**Ba chỗ then chốt, để tra nhanh khi viết báo cáo:**
+
+| Nguyên tắc | Chứng minh bằng tệp nào |
+|---|---|
+| Đảo ngược phụ thuộc | `domain/repositories/UserRepository.ts` đặt ra interface; `adapters/persistence/SqlUserRepository.ts` cài đặt nó; `infrastructure/di/Container.ts` ráp hai thứ lại |
+| Domain không biết framework | Tìm `node:sqlite` trong cả backend chỉ ra đúng một tệp: `infrastructure/database/NodeSqliteClient.ts` |
+| Domain không biết HTTP | `AppError` không có `httpStatus`; toàn bộ ánh xạ nằm ở `adapters/presenters/HttpErrorPresenter.ts` |
 
 Frontend thêm hai thư mục, theo khuôn `src/utils/authApi.ts` nhưng **không chép cách nuốt lỗi của nó** (`README-MIGRATION.md` §12.4):
 
@@ -172,7 +218,7 @@ npm run dev
 | 14 | FE `ReceptionistPortal` — lịch hẹn, check-in, đổi trạng thái | |
 | 15 | FE `ReceptionistPortal` — thu tiền, hóa đơn | |
 | 16 | BE báo cáo doanh thu 4 chiều + FE `TenantAdminReports` | **③ Trọn mạch demo** |
-| 17 | Lát cắt gói đăng ký — **cắt đầu tiên nếu trễ** | |
+| 17 | ~~Lát cắt gói đăng ký~~ — **đã cắt** để bù chi phí Clean Architecture 4 tầng (§0 mục 13). Ngày này chuyển thành đệm cho các lát cắt trước | |
 | 18 | Vitest đợt 2 + dọn dẹp: bỏ USD, dải nhãn "Dữ liệu mẫu", audit log | |
 | 19 | Tổng duyệt: seed lại, chạy trọn kịch bản 3 vai, sửa lỗi | |
 | 20 | Đệm + tổng duyệt lần hai + đóng gói hướng dẫn chạy | |
@@ -185,7 +231,7 @@ npm run dev
 
 | Giờ | Việc |
 |---:|---|
-| 1 | `server/` + Express + `npm i express`; thêm `dev:api` vào `package.json`; proxy `/api` trong `vite.config.ts`; **gỡ `viteLocalAuth()`** |
+| 1 | `server/` + Express + `npm i express`; thêm `dev:api` vào `package.json`; proxy `/api` trong `vite.config.ts`; **gỡ `viteLocalAuth()`** — kéo theo hồi quy: `/api/package-upgrade-requests` mất chỗ phục vụ, xem §10 |
 | 1 | `db/connection.js`, `db/migrate.js`, bảng `schema_migrations` |
 | 1 | `lib/errors.js` + `middleware/error.js` — mã lỗi: `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `TENANT_READONLY`, `LIMIT_EXCEEDED`, `SLOT_CONFLICT`, `INTERNAL` |
 | 3 | Port xác thực từ `scripts/sites-worker.js:191-358`: hash SHA-256 + salt, khóa 15 phút sau 5 lần sai, cookie HttpOnly `SameSite=Strict`, phiên 8 giờ / 30 ngày nếu ghi nhớ |
@@ -327,7 +373,8 @@ Luồng 5 bước BR-SUB-008. Phần backend port được nhiều từ `scripts
 |---:|---|
 | 4 | ~8 test còn lại: chống trùng lịch, công thức tiền, chuyển trạng thái sai bị từ chối, tổng hoàn không vượt tổng đã thu |
 | 2 | Bỏ USD ở 8 file, bỏ `convertMoney` và tỷ giá cứng `src/utils/money.ts:5` |
-| 2 | Dải nhãn "Dữ liệu mẫu — chưa nối máy chủ" cho các màn chưa nối; bỏ `recordAuditLog()` phía client (đang giả mạo actor và IP) |
+| 2 | Nối `SecurityAndLogs` vào `GET /api/audit-logs`, **rồi mới** bỏ `recordAuditLog()` ở 19 chỗ trong `App.tsx` và 1 chỗ trong `DataBackup.tsx`. Đúng thứ tự này — gỡ trước khi nối là để lại một màn trống, dù server vẫn đang ghi log |
+| 2 | Dải nhãn "Dữ liệu mẫu — chưa nối máy chủ" cho các màn chưa nối |
 
 ### Ngày 19 — Tổng duyệt
 
@@ -383,4 +430,112 @@ Những điểm còn bỏ ngỏ ở `README-BUSINESS-RULES.md` §22 mà tôi ch�
 | 3 | Lịch hẹn `PENDING` quá hạn (§22 mục 5) | Chỉ hiện nhãn "quá hạn" tính lúc đọc, không tự đổi trạng thái | Nhất quán với BR-TENANT-003 — không có job nền |
 | 4 | Node tối thiểu (§22 mục 7) | `>=22` trong `engines` | `node:sqlite` có từ 22.5 |
 | 5 | Chế độ demo | Giữ công tắc `demoMode` sẵn có, nhưng mặc định **tắt** sau khi có backend | Còn dùng để trình bày dữ liệu mẫu khi cần |
-| 6 | Thư viện lấy dữ liệu ở frontend | Tự viết hook, **không** thêm React Query | 13 màn hình không đủ nhiều để bù chi phí học và thêm một dependency |
+| 6 | Thư viện lấy dữ liệu ở frontend | Tự viết hook, **không** thêm React Query | 14 màn hình không đủ nhiều để bù chi phí học và thêm một dependency |
+
+---
+
+## 9. Bảng chức năng: làm gì, bỏ gì
+
+Bảng tra cứu để trả lời nhanh câu "cái này có làm không". Bốn mức, từ đầy đủ nhất xuống không có gì.
+
+### 9.1 Mức A — API thật + database + màn hình đã nối
+
+Đây là phần chạy bằng dữ liệu thật, có thể vặn hỏi thoải mái khi bảo vệ.
+
+| Module | Chức năng cụ thể | Endpoint | Rule |
+|---|---|---:|---|
+| **Xác thực** | Đăng nhập, phiên cookie, đăng xuất, khóa 15 phút sau 5 lần sai, chọn tiệm đang làm việc, một tài khoản quản nhiều tiệm, Superadmin cấp tài khoản chủ tiệm, chủ tiệm cấp tài khoản lễ tân, khóa và vô hiệu tài khoản | 8 | BR-AUTH-001…031 |
+| **Tenant** | Tạo tenant kèm chi nhánh chính và tài khoản chủ tiệm trong một giao dịch, sửa, khóa, gia hạn hạn dùng, xóa mềm, tính `TRIAL`/`OVERDUE` lúc đọc, chặn ghi khi hết hạn | 7 | BR-TENANT-001…022 |
+| **Chi nhánh** | Thêm, sửa, vô hiệu hóa, chặn xóa chi nhánh chính, cưỡng chế `max_salons` | 4 | BR-BRANCH-001…008 |
+| **Dịch vụ** | Thêm, sửa, ngừng bán, giá chốt tại thời điểm lập hóa đơn | 4 | BR-SVC-001…009 |
+| **Nhân viên** | Hồ sơ kỹ thuật viên và lễ tân, gán chi nhánh, ca cố định, nghỉ việc, cấp tài khoản đăng nhập cho lễ tân, cưỡng chế `max_staff` | 5 | BR-EMP-001…011 |
+| **Khách hàng** | Thêm, sửa, vô hiệu, tra cứu theo số điện thoại duy nhất trong tenant, hạng khách suy từ tổng chi tiêu | 5 | BR-CUS-001…009 |
+| **Lịch hẹn** | Tạo nhiều dịch vụ một lịch, **chống trùng giờ kỹ thuật viên**, dời lịch, 7 trạng thái với sơ đồ chuyển cố định, cảnh báo ngoài ca và đặt trong quá khứ, tiền cọc | 6 | BR-APT-001…041 |
+| **Hóa đơn bán hàng** | Tạo từ lịch hẹn hoặc bán lẻ, dòng nhập tay, giảm giá kèm lý do, tip, **thu nhiều lần nhiều phương thức**, hoàn tiền, số hóa đơn theo tenant reset mỗi ngày, tự hoàn tất lịch hẹn khi đủ tiền | 7 | BR-INV-001…033 · BR-PAY-001…008 |
+| **Báo cáo doanh thu** | Theo tiền thực thu, 4 chiều: ngày, chi nhánh, nhân viên, dịch vụ; hoa hồng tính lúc hiển thị | 4 | BR-REV-001…008 |
+| **Nhật ký kiểm toán** | Ghi 8 loại sự kiện **ở server**, không sửa không xóa, Superadmin xem tất cả, chủ tiệm xem tenant mình | 1 | BR-AUD-001…005 |
+| **Gói đăng ký** *(ngày 17)* | Bảng gói, quyền tính năng theo gói, yêu cầu nâng cấp 5 bước, hóa đơn đăng ký, nộp chứng từ và xác nhận | 10 | BR-SUB-001…011 |
+
+Cộng khoảng **61 endpoint**. Riêng dòng cuối là thứ bị cắt đầu tiên nếu trễ.
+
+### 9.2 Mức B — có API, nhưng màn hình giữ `localStorage`
+
+Backend đã có dữ liệu, chỉ là màn hình chưa kịp nối. Mỗi màn mang một dải nhãn "Dữ liệu mẫu — chưa nối máy chủ".
+
+| Màn hình | Dòng | Vì sao hoãn |
+|---|---:|---|
+| `TenantAdminAppointments` | 3.212 | Cổng lễ tân đã demo trọn nghiệp vụ lịch hẹn; màn này là bản xem của chủ tiệm |
+| `TenantDetailModal` phần nâng cao | 2.494 | Phần tạo và sửa tenant đã nối ở `TenantManagement`; các tab thống kê sâu thì chưa |
+| `Overview`, `SystemReports` | — | Bảng điều khiển tổng hợp của Superadmin, không nằm trong mạch demo |
+| `TenantAdminOverview` | — | Tương tự, phía chủ tiệm |
+| `SecurityAndLogs` phần thu hồi phiên và chính sách lưu trữ | 826 | Phần danh sách nhật ký **có nối**; hai phần này cần nghiệp vụ chưa định nghĩa |
+
+### 9.3 Mức C — không có API, giữ `localStorage` vĩnh viễn ở MVP
+
+Mười ba nhóm dưới đây **đã dựng xong giao diện và vẫn chạy được khi demo**, nhưng cố ý nằm ngoài phạm vi backend theo `README-BUSINESS-RULES.md` §2.2. Đây là quyết định thiết kế, không phải thiếu sót — khi báo cáo nên nói đúng như vậy.
+
+Đặt lịch online · Kho vật tư · Sổ Thu & Chi · Vệ sinh & an toàn · Thư viện màu và mẫu nail · Loyalty và điểm thưởng · Ghế và khu vực · Bản tin & thông báo · Trung tâm hỗ trợ · Cấu hình hệ thống · Sao lưu & khôi phục · Báo cáo nâng cao · **Vai trò Khách hàng**
+
+Ba điểm dễ bị hỏi:
+
+- **Sao lưu** — `DataBackup.tsx` là mô phỏng hoàn toàn, không có bảng và không có endpoint (BR-BAK-001/002). Ở MVP, sao lưu là copy tệp `salonsys.db`.
+- **Thông báo** — không có bảng `notifications`, không gửi email, SMS, Zalo hay push. Màn cấu hình SMTP là giao diện không có hành vi (BR-NOTI-001…003).
+- **Vai trò Khách hàng** — bỏ hoàn toàn. Hệ thống chỉ có 3 vai trò đăng nhập, và lịch hẹn `source = ONLINE` là do lễ tân chọn tay chứ không có ai tự đặt (BR-AUTH-003, BR-APT-007).
+
+### 9.4 Mức D — bỏ hẳn, không có ở cả frontend lẫn backend
+
+| Nhóm | Bỏ những gì |
+|---|---|
+| Tài khoản | Đổi mật khẩu · Quên mật khẩu · Kích hoạt qua email · Xác minh email và số điện thoại · MFA · Thu hồi phiên từ xa |
+| Khách hàng | Toàn bộ app khách: đăng nhập, chọn tiệm, tự đặt lịch, xem lịch sử |
+| Lịch hẹn | Giờ mở cửa chi nhánh · Ngày nghỉ lễ · Nhắc lịch tự động · Nhiều kỹ thuật viên cho một lịch · Ràng buộc kỹ năng |
+| Tiền | Cổng thanh toán thật · VAT · Hóa đơn điện tử Việt Nam · Luật hoàn cọc và mất cọc · Mã voucher · Module chi phí và lợi nhuận |
+| Nhân sự | Lịch làm việc theo tuần · Nghỉ phép · Chấm công · Bảng lương và hoa hồng có chốt kỳ |
+| Hệ thống | Hệ thống thông báo · Email/SMS/Zalo · Sao lưu thật · Upload tệp · Định tuyến theo URL · **Mọi job chạy nền** |
+
+> **Không có job chạy nền nào trong toàn hệ thống** (BR-TENANT-003). Mọi trạng thái phụ thuộc thời gian — tenant hết hạn, lịch hẹn quá giờ — đều tính lúc đọc dữ liệu. Đây là điểm nên chủ động nêu khi bảo vệ, vì nó giải thích luôn vì sao không cần hạ tầng chạy nền.
+
+### 9.5 Có làm, nhưng ở dạng đơn giản hóa
+
+Mười sáu chỗ ở `README-BUSINESS-RULES.md` §20 là **có chức năng nhưng rút gọn**, khác hẳn với "bỏ". Ba chỗ hay bị hiểu nhầm nhất:
+
+| Nghe như bỏ | Thực ra là |
+|---|---|
+| "Không có loyalty" | Vẫn có **hạng khách** `NEW`/`STANDARD`/`LOYAL`/`VIP`, suy ra từ tổng chi tiêu. Chỉ là không có điểm thưởng và hạng không ảnh hưởng giá |
+| "Không có hoa hồng" | Vẫn có `commission_rate` trên nhân viên và **vẫn hiện số tiền hoa hồng** trong báo cáo. Chỉ là không có bảng riêng, không chốt kỳ, không duyệt chi |
+| "Không có combo" | Vẫn bán được combo — nó là một bản ghi dịch vụ có giá riêng. Chỉ là không có cấu trúc dịch vụ con và không tự tính giá gộp |
+
+### 9.6 Nếu trễ thì mất thêm gì
+
+Theo đúng thứ tự ở §6: **gói đăng ký** (cả module) → **hoàn tiền và tip** → **Vitest đợt 2** và **hai chiều báo cáo** nhân viên + dịch vụ. Bốn thứ không bao giờ cắt: cách ly tenant, chặn ghi khi hết hạn, chống trùng lịch, công thức tiền.
+
+---
+
+## 10. Nhật ký thực hiện
+
+### Ngày 1 — xong
+
+| Hạng mục | Kết quả |
+|---|---|
+| Khung `server/` 4 tầng, 42 tệp TypeScript (domain 9 · application 12 · adapters 6 · infrastructure 12 · shared 2 · `main.ts`) | Xong |
+| Ranh giới tầng kiểm chứng bằng grep: `node:sqlite` chỉ ở 1 tệp, `express` chỉ ở `infrastructure/http/`, domain không import ra ngoài | Xong |
+| `POST /api/auth/login`, `GET /api/auth/session`, `POST /api/auth/logout` | Xong, 11/11 phép thử đạt |
+| Migration runner + `0001_auth.sql` (`app_users`, `app_sessions`) | Xong, chạy lại không nhân đôi |
+| Seed 3 tài khoản demo | Xong, chỉ nạp khi bảng trống |
+| Proxy Vite `/api` → cổng 4000 | Xong, đăng nhập qua giao diện thật chạy được |
+| Xóa code chết, bỏ `bun.lock`, khai `engines` | Xong |
+| `npm run lint:api` | Sạch |
+
+**Ba điều chệch khỏi kế hoạch ban đầu, có chủ đích:**
+
+1. **Băm mật khẩu đổi từ SHA-256 sang scrypt.** Backend cũ dùng SHA-256 vì Cloudflare Workers chỉ có WebCrypto. Trên Node thì scrypt nằm sẵn trong `node:crypto`, không phải cài gì, và cố ý chậm nên chống dò mật khẩu hàng loạt. Chưa có dữ liệu thật nên đổi bây giờ rẻ hơn đổi sau.
+2. **`PUT /api/auth/accounts` và `DELETE /api/auth/accounts/:id` dời sang ngày 3**, nơi quy tắc tạo tài khoản (BR-AUTH-010…014) được cài đặt.
+3. **Đăng xuất là thu hồi phiên (`revoked_at`), không xóa bản ghi** — nhất quán với BR-DEL-001.
+
+### Việc còn treo sau ngày 1
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Hồi quy:** gỡ `viteLocalAuth()` làm `/api/package-upgrade-requests` mất chỗ phục vụ → 404 ở mỗi lần tải trang. Frontend nuốt lỗi và lùi về `localStorage` nên không vỡ, nhưng console đầy 404. Ngày 17 đã bị cắt nên endpoint này sẽ không quay lại | **Cần quyết** |
+| 2 | `npm run lint:web` đang có **86 lỗi kiểu ở 5 tệp**, có từ trước ngày 1. Nặng nhất: `TenantAdminAnnouncements.tsx` bị lặp nguyên khối nội dung từ dòng 578; ba màn lễ tân dùng `PageHeader` và `Pagination` mà **quên import** — sẽ ném lỗi lúc chạy | **Cao** — ba màn lễ tân nằm đúng đường ngày 14–15 |
+| 3 | `Header.tsx:428` gắn cứng `alt="letruongthinhcr145@gmail.com"` thay vì email tài khoản đang đăng nhập | Thấp — sửa ở ngày 4 |

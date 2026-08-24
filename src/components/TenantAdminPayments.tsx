@@ -472,6 +472,10 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const [expensePage, setExpensePage] = useState(1);
   const [expensePageSize, setExpensePageSize] = useState(10);
 
+  useEffect(() => {
+    setInvoicePage(1);
+  }, [searchQuery, selectedBranch, methodFilter, tab, datePreset, dateFrom, dateTo]);
+
   const scoped = useMemo(() => records.filter((record) => selectedBranch === 'ALL' || record.branch === selectedBranch), [records, selectedBranch]);
   const periodScoped = useMemo(() => scoped.filter((record) => matchesPaymentDate(record, datePreset, dateFrom, dateTo)), [dateFrom, datePreset, dateTo, scoped]);
   const filtered = useMemo(() => { const query = searchQuery.trim().toLowerCase(); return periodScoped.filter((record) => tab === 'ALL' || record.status === tab).filter((record) => methodFilter === 'ALL' || record.method === methodFilter).filter((record) => !query || `${record.id} ${record.appointmentId || ''} ${record.customer} ${record.phone} ${record.reference || ''}`.toLowerCase().includes(query)); }, [methodFilter, periodScoped, searchQuery, tab]);
@@ -479,6 +483,27 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     const start = (invoicePage - 1) * invoicePageSize;
     return filtered.slice(start, start + invoicePageSize);
   }, [filtered, invoicePage, invoicePageSize]);
+
+  const scopedExpenses = useMemo(
+    () => expenses.filter((e) => selectedBranch === 'ALL' || e.branch === selectedBranch),
+    [expenses, selectedBranch]
+  );
+  const periodScopedExpenses = useMemo(
+    () => scopedExpenses.filter((e) => matchesPaymentDate(e as any, datePreset, dateFrom, dateTo)),
+    [dateFrom, datePreset, dateTo, scopedExpenses]
+  );
+  const totalPeriodExpense = useMemo(
+    () => periodScopedExpenses.reduce((sum, e) => sum + e.amount, 0),
+    [periodScopedExpenses]
+  );
+  const totalCashExpense = useMemo(
+    () => periodScopedExpenses.filter((e) => e.method === 'CASH').reduce((sum, e) => sum + e.amount, 0),
+    [periodScopedExpenses]
+  );
+  const ownerWithdrawalTotal = useMemo(
+    () => periodScopedExpenses.filter((e) => e.category === 'OWNER_WITHDRAW').reduce((sum, e) => sum + e.amount, 0),
+    [periodScopedExpenses]
+  );
 
   const collected = periodScoped.reduce((sum, record) => sum + record.paid, 0);
   const outstanding = periodScoped.reduce((sum, record) => sum + Math.max(0, record.total - record.paid), 0);
@@ -987,6 +1012,92 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     );
   };
 
+  const openCreateExpense = (defaultCategory?: ExpenseCategory) => {
+    if (!requireManage()) return;
+    const cat = defaultCategory || 'OWNER_WITHDRAW';
+    const meta = expenseCategoryMeta[cat];
+    setExpenseForm({
+      category: cat,
+      amount: '500000',
+      branch: (selectedBranch === 'Q1' ? 'Q1' : 'Q3') as BranchCode,
+      method: 'CASH',
+      recipient: meta.defaultRecipient,
+      reason: meta.placeholder.replace(/^Ví dụ:\s*/, ''),
+      reference: '',
+      note: ''
+    });
+    setFormError('');
+    setExpenseOpen(true);
+  };
+
+  const handleExpenseCategorySelect = (category: ExpenseCategory) => {
+    const meta = expenseCategoryMeta[category];
+    setExpenseForm((prev) => ({
+      ...prev,
+      category,
+      recipient: meta.defaultRecipient,
+      reason: meta.placeholder.replace(/^Ví dụ:\s*/, '')
+    }));
+  };
+
+  const submitExpense = (event: FormEvent) => {
+    event.preventDefault();
+    const amount = Number(expenseForm.amount);
+    if (!amount || amount <= 0) {
+      setFormError('Số tiền chi phải lớn hơn 0.');
+      return;
+    }
+    if (!expenseForm.recipient.trim() || !expenseForm.reason.trim()) {
+      setFormError('Vui lòng nhập người nhận tiền và lý do chi.');
+      return;
+    }
+    if (expenseForm.method !== 'CASH' && !expenseForm.reference.trim()) {
+      setFormError('Chi qua ngân hàng / ví điện tử bắt buộc có mã giao dịch đối soát.');
+      return;
+    }
+
+    const nextNumber = Math.max(...expenses.map((e) => Number(e.id.replace(/\D/g, '')) || 0), 1000) + 1;
+    const now = new Date();
+    const date = now.toLocaleDateString('vi-VN');
+    const time = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const createdAt = `${date} · ${time}`;
+    const meta = expenseCategoryMeta[expenseForm.category];
+
+    const newExpense: ExpenseRecord = {
+      id: `EXP-${nextNumber}`,
+      date,
+      time,
+      createdAt,
+      category: expenseForm.category,
+      categoryLabel: meta.label,
+      amount,
+      branch: expenseForm.branch,
+      method: expenseForm.method,
+      recipient: expenseForm.recipient.trim(),
+      reason: expenseForm.reason.trim(),
+      creator: roleLabel,
+      reference: expenseForm.reference.trim() || undefined,
+      note: expenseForm.note.trim() || undefined,
+      audit: [
+        `${time} · ${roleLabel} lập phiếu chi ${money(amount)} (${methodMeta[expenseForm.method].label}) cho ${expenseForm.recipient.trim()} — lý do: ${expenseForm.reason.trim()}`
+      ]
+    };
+
+    setExpenses((current) => [newExpense, ...current]);
+    setExpenseOpen(false);
+    setSelectedExpense(newExpense);
+    onNotify?.(`Đã lập phiếu chi ${newExpense.id} số tiền ${money(amount)} cho ${newExpense.recipient}.`);
+  };
+
+  const deleteExpense = (record: ExpenseRecord) => {
+    if (!requireManage()) return;
+    setExpenses((current) => current.filter((e) => e.id !== record.id));
+    if (selectedExpense?.id === record.id) {
+      setSelectedExpense(null);
+    }
+    onNotify?.(`Đã xóa phiếu chi ${record.id}.`);
+  };
+
   const invoiceInputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-semibold text-slate-800 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
 
   return <div className="tenant-admin-payments space-y-5">
@@ -1096,8 +1207,84 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
         Vì vậy bảng ăn trọn bề ngang, hai thẻ ca/việc cần xử lý xuống thành dải
         ngang bên dưới. */}
     <section className="tenant-admin-payment-ledger space-y-4"><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between"><div className="relative w-full xl:w-72"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Tìm hóa đơn, khách, mã giao dịch..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-caption font-medium outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" />{searchQuery && <button type="button" onClick={() => onSearchQueryChange('')} aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none"><X className="h-3.5 w-3.5" /></button>}</div><div className="flex flex-wrap gap-2"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">Tất cả chi nhánh</option><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option></BeautifulSelect><BeautifulSelect value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as 'ALL' | PaymentMethod)} className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">Mọi phương thức</option>{Object.entries(methodMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</BeautifulSelect></div></div><div className="flex gap-2 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 py-3">{(['ALL', 'PAID', 'PARTIAL', 'PENDING', 'REFUNDED', 'FAILED'] as const).map((value) => <button key={value} type="button" onClick={() => setTab(value)} className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${tab === value ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'}`}>{value === 'ALL' ? 'Tất cả giao dịch' : statusMeta[value].label}<span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">{value === 'ALL' ? periodScoped.length : periodScoped.filter((item) => item.status === value).length}</span></button>)}</div>
-      <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[930px] text-left"><thead><tr className="border-b border-slate-100 text-caption font-black uppercase tracking-wide text-slate-400"><th className="px-5 py-3">Hóa đơn</th><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Tổng tiền</th><th className="px-4 py-3">Đã thu / còn lại</th><th className="px-4 py-3">Phương thức</th><th className="px-5 py-3 text-right">Trạng thái</th></tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((record) => <tr key={record.id} onClick={() => setSelected(record)} className="cursor-pointer text-caption text-slate-600 hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{record.id}</p><p className="mt-1 text-caption text-slate-400">{record.createdAt}</p></td><td className="px-4 py-4"><p className="font-black text-slate-800">{record.customer}</p><p className="mt-1 text-caption text-slate-400">{record.phone} · {record.branch}</p></td><td className="px-4 py-4 font-black text-slate-900">{money(record.total)}{record.refunded > 0 && <p className="mt-1 text-caption font-bold text-rose-500">Đã hoàn {money(record.refunded)}</p>}</td><td className="px-4 py-4"><p className="font-black text-emerald-700">{money(record.paid)}</p><p className="mt-1 text-caption text-slate-400">Còn {money(Math.max(0, record.total - record.paid))}</p></td><td className="px-4 py-4"><MethodCell record={record} /></td><td className="px-5 py-4 text-right"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}><span className={`h-1.5 w-1.5 rounded-full ${statusMeta[record.status].dot}`} />{statusMeta[record.status].label}</span></td></tr>)}</tbody></table></div>
-      <div className="divide-y divide-slate-100 md:hidden">{filtered.map((record) => <button key={record.id} type="button" onClick={() => setSelected(record)} className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none"><span className="flex items-start justify-between gap-3"><span><span className="text-caption font-black text-slate-900">{record.id}</span><span className="mt-1 block text-caption text-slate-400">{record.customer} · {record.branch}</span></span><span className="text-body font-black text-slate-900">{money(record.total)}</span></span><span className="mt-3 flex items-center justify-between"><MethodBadge method={record.method} /><span className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}>{statusMeta[record.status].label}</span></span></button>)}</div>{!filtered.length && <div className="py-16 text-center"><ReceiptText className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-caption font-black text-slate-600">Không có giao dịch phù hợp</p></div>}<div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3"><p className="text-caption text-slate-400">Hiển thị <strong className="text-slate-600">{filtered.length}</strong> giao dịch</p><p className="text-caption font-semibold text-slate-400">Tổng theo bộ lọc: {money(filtered.reduce((sum, item) => sum + item.total, 0))}</p></div></div>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[930px] text-left">
+          <thead>
+            <tr className="border-b border-slate-100 text-caption font-black uppercase tracking-wide text-slate-400">
+              <th className="px-5 py-3">Hóa đơn</th>
+              <th className="px-4 py-3">Khách hàng</th>
+              <th className="px-4 py-3">Tổng tiền</th>
+              <th className="px-4 py-3">Đã thu / còn lại</th>
+              <th className="px-4 py-3">Phương thức</th>
+              <th className="px-5 py-3 text-right">Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {pagedInvoices.map((record) => (
+              <tr key={record.id} onClick={() => setSelected(record)} className="cursor-pointer text-caption text-slate-600 hover:bg-slate-50">
+                <td className="px-5 py-4"><p className="font-black text-slate-900">{record.id}</p><p className="mt-1 text-caption text-slate-400">{record.createdAt}</p></td>
+                <td className="px-4 py-4"><p className="font-black text-slate-800">{record.customer}</p><p className="mt-1 text-caption text-slate-400">{record.phone} · {record.branch}</p></td>
+                <td className="px-4 py-4 font-black text-slate-900">{money(record.total)}{record.refunded > 0 && <p className="mt-1 text-caption font-bold text-rose-500">Đã hoàn {money(record.refunded)}</p>}</td>
+                <td className="px-4 py-4"><p className="font-black text-emerald-700">{money(record.paid)}</p><p className="mt-1 text-caption text-slate-400">Còn {money(Math.max(0, record.total - record.paid))}</p></td>
+                <td className="px-4 py-4"><MethodCell record={record} /></td>
+                <td className="px-5 py-4 text-right"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}><span className={`h-1.5 w-1.5 rounded-full ${statusMeta[record.status].dot}`} />{statusMeta[record.status].label}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="divide-y divide-slate-100 md:hidden">
+        {pagedInvoices.map((record) => (
+          <button key={record.id} type="button" onClick={() => setSelected(record)} className="block h-auto w-full rounded-none border-0 bg-white p-4 text-left shadow-none">
+            <span className="flex items-start justify-between gap-3">
+              <span>
+                <span className="text-caption font-black text-slate-900">{record.id}</span>
+                <span className="mt-1 block text-caption text-slate-400">{record.customer} · {record.branch}</span>
+              </span>
+              <span className="text-body font-black text-slate-900">{money(record.total)}</span>
+            </span>
+            <span className="mt-3 flex items-center justify-between">
+              <MethodBadge method={record.method} />
+              <span className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${statusMeta[record.status].badge}`}>
+                {statusMeta[record.status].label}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {!filtered.length && (
+        <div className="py-16 text-center">
+          <ReceiptText className="mx-auto h-8 w-8 text-slate-300" />
+          <p className="mt-3 text-caption font-black text-slate-600">Không có giao dịch phù hợp</p>
+        </div>
+      )}
+      <div className="border-t border-slate-100 bg-slate-50/70 p-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-caption">
+          <p className="text-slate-400">
+            Tổng cộng: <strong className="text-slate-700">{filtered.length}</strong> giao dịch
+          </p>
+          <p className="font-semibold text-slate-600">
+            Tổng tiền theo bộ lọc: <strong className="font-black text-slate-900">{money(filtered.reduce((sum, item) => sum + item.total, 0))}</strong>
+          </p>
+        </div>
+        <Pagination
+          id="tenant-admin-payments-pagination"
+          currentPage={invoicePage}
+          totalPages={Math.ceil(filtered.length / invoicePageSize) || 1}
+          totalItems={filtered.length}
+          pageSize={invoicePageSize}
+          pageSizeOptions={[5, 10, 20, 50]}
+          onPageChange={setInvoicePage}
+          onPageSizeChange={(newSize) => {
+            setInvoicePageSize(newSize);
+            setInvoicePage(1);
+          }}
+          itemLabel="giao dịch"
+          totalUnfiltered={periodScoped.length}
+          variant="violet"
+        />
+      </div>
+    </div>
       {/* Dải ngang: nằm dọc thì hai thẻ này cao gấp đôi mức cần thiết, nên khi
           xuống dưới bảng chúng được xếp lại cho thấp — thẻ ca dồn số liệu và nút
           đóng ca về một hàng, việc cần xử lý đổi 3 dòng dọc thành 3 ô ngang. */}
