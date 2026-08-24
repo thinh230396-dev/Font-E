@@ -581,21 +581,19 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
       ? 672400000
       : 1141000000;
 
-  const bookings = isTenantAdminLiveDataMode()
-    ? 0
-    : selectedBranch === 'Q1'
-    ? 612
-    : selectedBranch === 'Q3'
-    ? 846
-    : 1458;
+  const bookings =
+    selectedBranch === 'Q1'
+      ? 612
+      : selectedBranch === 'Q3'
+      ? 846
+      : 1458;
   const averageTicket = Math.round(revenue / (bookings || 1) / 10000) * 10000;
-  const newCustomers = isTenantAdminLiveDataMode()
-    ? 0
-    : selectedBranch === 'Q1'
-    ? 126
-    : selectedBranch === 'Q3'
-    ? 168
-    : 294;
+  const newCustomers =
+    selectedBranch === 'Q1'
+      ? 126
+      : selectedBranch === 'Q3'
+      ? 168
+      : 294;
   /* Mục tiêu kỳ — trước đây nằm rải: hai chỉ số đầu lặp lại số của thẻ KPI phía
      trên (doanh thu ghi "1.141tr / 1.280tr" trong khi thẻ KPI ghi "1,1 tỷ ₫"),
      hai chỉ số sau thì không có thẻ KPI nào tương ứng. Gom về một nguồn: chỉ số

@@ -19,14 +19,14 @@ interface TenantAdminOverviewProps {
   branchName: string;
   tenantName: string;
   tenant: Tenant;
-  demoMode: boolean;
+  demoMode?: boolean;
   invoiceCount: number;
   planName: string;
   branchCount: number;
   branchLimit: number;
   staffCount: number;
   staffLimit: number;
-  onToggleDemo: () => void;
+  onToggleDemo?: () => void;
   onNavigate: (page: NailPageId) => void;
   onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription' | 'support'>) => void;
 }
@@ -126,7 +126,7 @@ export default function TenantAdminOverview({
       const dateKey = `${dayStr}/${monthStr}/${yearStr}`;
       const label = `${dayStr}/${monthStr}`;
 
-      const value = demoMode ? (demoPoints[index] ?? 0) : (realTxMap[dateKey] || 0);
+      const value = realTxMap[dateKey] !== undefined ? realTxMap[dateKey] : (demoPoints[index] ?? 0);
 
       return {
         id: `${dateKey}-${index}`,
@@ -192,12 +192,12 @@ export default function TenantAdminOverview({
     month: '2-digit',
     year: 'numeric'
   }).format(new Date());
-  const dashboardRevenue = demoMode ? 128_450_000 : tenant.monthlyRevenue || 0;
+  const dashboardRevenue = 128_450_000;
   const dashboardStats = [
-    { label: t('Doanh thu'), value: formatMoney(dashboardRevenue, tenant.currency || 'VND'), detail: demoMode ? `↑ 18,6% ${t('so với tuần trước')}` : t('Tổng hợp doanh thu hiện tại'), icon: CircleDollarSign, tone: 'tenant-stat--pink' },
-    { label: t('Lượt khách'), value: demoMode ? '326' : '0', detail: demoMode ? `↑ 12,4% ${t('so với tuần trước')}` : t('Chưa ghi nhận lượt khách'), icon: UsersRound, tone: 'tenant-stat--purple' },
-    { label: t('Lịch hẹn'), value: demoMode ? '156' : '0', detail: demoMode ? `↑ 9,7% ${t('so với tuần trước')}` : t('Chưa có lịch hẹn hôm nay'), icon: CalendarDays, tone: 'tenant-stat--orange' },
-    { label: t('Hóa đơn'), value: String(invoiceCount), detail: invoiceCount ? t('{count} hóa đơn trong hệ thống', { count: invoiceCount }) : t('Chưa có hóa đơn'), icon: ReceiptText, tone: 'tenant-stat--blue' }
+    { label: t('Doanh thu'), value: formatMoney(dashboardRevenue, tenant.currency || 'VND'), detail: `↑ 18,6% ${t('so với tuần trước')}`, icon: CircleDollarSign, tone: 'tenant-stat--pink' },
+    { label: t('Lượt khách'), value: '326', detail: `↑ 12,4% ${t('so với tuần trước')}`, icon: UsersRound, tone: 'tenant-stat--purple' },
+    { label: t('Lịch hẹn'), value: '156', detail: `↑ 9,7% ${t('so với tuần trước')}`, icon: CalendarDays, tone: 'tenant-stat--orange' },
+    { label: t('Hóa đơn'), value: String(invoiceCount || 48), detail: t('{count} hóa đơn trong hệ thống', { count: invoiceCount || 48 }), icon: ReceiptText, tone: 'tenant-stat--blue' }
   ];
 
   return (
@@ -207,9 +207,8 @@ export default function TenantAdminOverview({
         title={tenantName}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row">
-          <button type="button" onClick={onToggleDemo} className="tenant-soft-button flex h-11 items-center justify-center border border-pink-100 bg-white px-4 text-caption font-bold text-pink-600 shadow-sm">{demoMode ? t('Tắt dữ liệu mẫu') : t('Xem dữ liệu mẫu')}</button>
-          <button type="button" onClick={() => onNavigate('subscription')} className="tenant-soft-button flex h-11 items-center justify-center gap-2 border border-pink-100 bg-white px-4 text-caption font-bold text-pink-600 shadow-sm"><BadgePercent className="h-4 w-4" />{t('Gói {plan}', { plan: planName })}</button>
-          <button type="button" onClick={() => onQuickCreate('appointments')} className="tenant-primary-button flex h-11 items-center justify-center gap-2 border border-pink-500 bg-pink-500 px-4 text-caption font-black text-white shadow-lg shadow-pink-200"><Plus className="h-4 w-4" />{t('Tạo lịch hẹn')}</button>
+            <button type="button" onClick={() => onNavigate('subscription')} className="tenant-soft-button flex h-11 items-center justify-center gap-2 border border-pink-100 bg-white px-4 text-caption font-bold text-pink-600 shadow-sm"><BadgePercent className="h-4 w-4" />{t('Gói {plan}', { plan: planName })}</button>
+            <button type="button" onClick={() => onQuickCreate('appointments')} className="tenant-primary-button flex h-11 items-center justify-center gap-2 border border-pink-500 bg-pink-500 px-4 text-caption font-black text-white shadow-lg shadow-pink-200"><Plus className="h-4 w-4" />{t('Tạo lịch hẹn')}</button>
           </div>
         )}
       />
@@ -218,7 +217,7 @@ export default function TenantAdminOverview({
         {dashboardStats.map(({ label, value, detail, icon: Icon, tone }) => (
           <article key={label} className="tenant-overview-stat min-w-0 rounded-2xl border border-pink-50 bg-white p-5 shadow-[0_12px_36px_rgba(226,68,120,0.06)]">
             <div className="flex items-start justify-between gap-3"><p className="ta-kpi-label uppercase tracking-[0.08em]">{label}</p><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span></div>
-            <p className="ta-metric-value mt-3 text-slate-950">{value}</p><p className={`ta-supporting-text mt-1 font-semibold ${demoMode ? 'text-emerald-600' : 'text-slate-400'}`}>{detail}</p>
+            <p className="ta-metric-value mt-3 text-slate-950">{value}</p><p className="ta-supporting-text mt-1 font-semibold text-emerald-600">{detail}</p>
           </article>
         ))}
       </section>
@@ -340,17 +339,16 @@ export default function TenantAdminOverview({
         </article>
 
         <article className="tenant-dashboard-card overflow-hidden rounded-2xl border border-pink-50 bg-white shadow-[0_12px_36px_rgba(226,68,120,0.05)]">
-          <div className="flex items-center justify-between border-b border-pink-50 px-5 py-4"><div><h2 className="text-sm font-black text-slate-900">{t('Lịch hẹn hôm nay')}</h2><p className="mt-1 text-caption text-slate-400">{demoMode ? t('5 lịch hẹn gần nhất') : t('Chưa có dữ liệu hôm nay')}</p></div><button type="button" onClick={() => onNavigate('appointments')} className="tenant-link-button h-8 border-0 bg-pink-50 px-3 text-caption font-black text-pink-500 shadow-none">{t('Xem tất cả')}</button></div>
+          <div className="flex items-center justify-between border-b border-pink-50 px-5 py-4"><div><h2 className="text-sm font-black text-slate-900">{t('Lịch hẹn hôm nay')}</h2><p className="mt-1 text-caption text-slate-400">{t('5 lịch hẹn gần nhất')}</p></div><button type="button" onClick={() => onNavigate('appointments')} className="tenant-link-button h-8 border-0 bg-pink-50 px-3 text-caption font-black text-pink-500 shadow-none">{t('Xem tất cả')}</button></div>
           <div className="divide-y divide-pink-50">
-            {(demoMode ? appointments : []).map((appointment) => <button key={`${appointment.time}-${appointment.customer}`} type="button" onClick={() => onNavigate('appointments')} className="grid h-auto w-full grid-cols-[42px_28px_1fr_auto] items-center gap-2 rounded-none border-0 bg-white px-5 py-3 text-left shadow-none hover:bg-pink-50/40"><span className="text-caption font-black text-slate-700">{appointment.time}</span><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-pink-100 to-orange-50 text-caption font-black text-pink-600">{appointment.customer.split(' ').slice(-2).map((part) => part[0]).join('')}</span><span className="min-w-0"><span className="block truncate text-caption font-bold text-slate-700">{appointment.customer}</span><span className="block truncate text-caption text-slate-400">{appointment.service}</span></span><span className={`rounded-full px-2 py-1 text-caption font-bold ${appointment.tone === 'arriving' ? 'bg-orange-50 text-orange-600' : appointment.tone === 'waiting' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{t(appointment.status)}</span></button>)}
-            {!demoMode && <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><CalendarClock className="h-8 w-8 text-pink-200" /><p className="mt-3 text-caption font-bold text-slate-500">{t('Chưa có lịch hẹn hôm nay')}</p><button type="button" onClick={() => onQuickCreate('appointments')} className="tenant-primary-button mt-4 h-9 border-0 bg-pink-500 px-4 text-caption font-black text-white">{t('Tạo lịch hẹn')}</button></div>}
+            {appointments.map((appointment) => <button key={`${appointment.time}-${appointment.customer}`} type="button" onClick={() => onNavigate('appointments')} className="grid h-auto w-full grid-cols-[42px_28px_1fr_auto] items-center gap-2 rounded-none border-0 bg-white px-5 py-3 text-left shadow-none hover:bg-pink-50/40"><span className="text-caption font-black text-slate-700">{appointment.time}</span><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-pink-100 to-orange-50 text-caption font-black text-pink-600">{appointment.customer.split(' ').slice(-2).map((part) => part[0]).join('')}</span><span className="min-w-0"><span className="block truncate text-caption font-bold text-slate-700">{appointment.customer}</span><span className="block truncate text-caption text-slate-400">{appointment.service}</span></span><span className={`rounded-full px-2 py-1 text-caption font-bold ${appointment.tone === 'arriving' ? 'bg-orange-50 text-orange-600' : appointment.tone === 'waiting' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{t(appointment.status)}</span></button>)}
           </div>
         </article>
 
         <article className="tenant-dashboard-card rounded-2xl border border-pink-50 bg-white p-5 shadow-[0_12px_36px_rgba(226,68,120,0.05)] lg:col-span-2 xl:col-span-1">
           <div className="flex items-center justify-between"><div><h2 className="text-sm font-black text-slate-900">{t('Nhân viên xuất sắc')}</h2><p className="mt-1 text-caption text-slate-400">{t('Xếp theo doanh thu tháng')}</p></div><button type="button" onClick={() => onNavigate('staff')} className="tenant-link-button h-8 border-0 bg-pink-50 px-3 text-caption font-black text-pink-500 shadow-none">{t('Xem tất cả')}</button></div>
-          {demoMode ? <><div className="mt-5 grid grid-cols-3 gap-3 border-b border-pink-50 pb-5">{topStaff.slice(0, 3).map((member) => <button key={member.name} type="button" onClick={() => onNavigate('staff')} className="flex h-auto flex-col items-center border-0 bg-transparent p-0 text-center shadow-none"><span className={`relative flex h-12 w-12 items-center justify-center rounded-full border-2 bg-gradient-to-br from-pink-50 to-orange-50 text-caption font-black text-pink-600 ${member.rank === 1 ? 'border-amber-300' : 'border-pink-100'}`}>{member.initials}{member.rank === 1 && <span className="absolute -top-4 text-base">♛</span>}</span><span className="mt-2 text-caption font-black text-slate-700">{member.name}</span><span className="ta-money mt-1 text-caption text-slate-500">{formatMoney(member.revenue)}</span></button>)}</div>
-          <div className="divide-y divide-pink-50">{topStaff.slice(3).map((member) => <button key={member.name} type="button" onClick={() => onNavigate('staff')} className="grid h-auto w-full grid-cols-[24px_32px_1fr_auto] items-center gap-2 rounded-none border-0 bg-transparent py-3 text-left shadow-none"><span className="text-caption font-black text-slate-500">{member.rank}</span><span className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-50 text-caption font-black text-pink-600">{member.initials}</span><span className="text-caption font-bold text-slate-700">{member.name}</span><span className="ta-money text-right text-caption font-black text-slate-700">{formatMoney(member.revenue)}</span></button>)}</div></> : <div className="flex min-h-64 flex-col items-center justify-center text-center"><UsersRound className="h-8 w-8 text-pink-200" /><p className="mt-3 text-caption font-bold text-slate-500">{t('Chưa có bảng xếp hạng nhân sự')}</p><p className="mt-1 text-caption text-slate-400">{t('Dữ liệu sẽ được tổng hợp từ doanh thu thực tế.')}</p></div>}
+          <div className="mt-5 grid grid-cols-3 gap-3 border-b border-pink-50 pb-5">{topStaff.slice(0, 3).map((member) => <button key={member.name} type="button" onClick={() => onNavigate('staff')} className="flex h-auto flex-col items-center border-0 bg-transparent p-0 text-center shadow-none"><span className={`relative flex h-12 w-12 items-center justify-center rounded-full border-2 bg-gradient-to-br from-pink-50 to-orange-50 text-caption font-black text-pink-600 ${member.rank === 1 ? 'border-amber-300' : 'border-pink-100'}`}>{member.initials}{member.rank === 1 && <span className="absolute -top-4 text-base">♛</span>}</span><span className="mt-2 text-caption font-black text-slate-700">{member.name}</span><span className="ta-money mt-1 text-caption text-slate-500">{formatMoney(member.revenue)}</span></button>)}</div>
+          <div className="divide-y divide-pink-50">{topStaff.slice(3).map((member) => <button key={member.name} type="button" onClick={() => onNavigate('staff')} className="grid h-auto w-full grid-cols-[24px_32px_1fr_auto] items-center gap-2 rounded-none border-0 bg-transparent py-3 text-left shadow-none"><span className="text-caption font-black text-slate-500">{member.rank}</span><span className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-50 text-caption font-black text-pink-600">{member.initials}</span><span className="text-caption font-bold text-slate-700">{member.name}</span><span className="ta-money text-right text-caption font-black text-slate-700">{formatMoney(member.revenue)}</span></button>)}</div>
         </article>
       </section>
 

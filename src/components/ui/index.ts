@@ -24,5 +24,8 @@ export type { PageHeaderProps } from './PageHeader';
 export { default as Modal } from './Modal';
 export type { ModalProps, ModalSize } from './Modal';
 
+export { default as Pagination } from './Pagination';
+export type { PaginationProps } from './Pagination';
+
 export { ToastProvider, useToast } from './Toast';
 export type { ShowToast, ToastOptions, ToastTone } from './Toast';

@@ -928,15 +928,15 @@ export default function TenantAdminHelpAndSupport({
                           </span>
                         </div>
 
-                        <h4 className="mt-2 text-xs font-bold leading-snug text-slate-900 group-hover:text-violet-700 dark:text-white dark:group-hover:text-violet-300">
+                        <h4 className="mt-2 text-xs font-bold leading-snug text-slate-900 group-hover:text-violet-700 dark:text-slate-100 dark:group-hover:text-violet-300">
                           {ticket.subject}
                         </h4>
 
-                        <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400">
+                        <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-600 dark:text-slate-300">
                           {lastMsg ? lastMsg.body : ticket.description}
                         </p>
 
-                        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[10px] text-slate-400 dark:border-slate-800">
+                        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[10px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
                           <span className="flex items-center gap-1 truncate max-w-[180px]">
                             <Tag className="h-3 w-3 shrink-0" />
                             {ticket.category}
@@ -985,12 +985,12 @@ export default function TenantAdminHelpAndSupport({
                           {selectedTicket.subject}
                         </h2>
 
-                        <div className="mt-1 flex flex-wrap items-center gap-3 text-caption text-slate-400">
-                          <span>Danh mục: <strong className="text-slate-700 dark:text-slate-200">{selectedTicket.category}</strong></span>
+                        <div className="mt-1 flex flex-wrap items-center gap-3 text-caption text-slate-600 dark:text-slate-400">
+                          <span>Danh mục: <strong className="font-semibold text-slate-900 dark:text-slate-100">{selectedTicket.category}</strong></span>
                           <span>·</span>
-                          <span>Người tạo: <strong className="text-slate-700 dark:text-slate-200">{selectedTicket.requesterName}</strong></span>
+                          <span>Người tạo: <strong className="font-semibold text-slate-900 dark:text-slate-100">{selectedTicket.requesterName}</strong></span>
                           <span>·</span>
-                          <span>Chuyên viên: <strong className="text-violet-600 dark:text-violet-400">{selectedTicket.assignedTo?.name || 'Đội ngũ Superadmin'}</strong></span>
+                          <span>Chuyên viên: <strong className="font-semibold text-violet-700 dark:text-violet-300">{selectedTicket.assignedTo?.name || 'Đội ngũ Superadmin'}</strong></span>
                         </div>
                       </div>
 
@@ -1032,21 +1032,21 @@ export default function TenantAdminHelpAndSupport({
                   {/* Messages Feed Area */}
                   <div className="flex-1 space-y-4 overflow-y-auto p-5">
                     {/* Initial Description Card */}
-                    <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-4 dark:border-violet-900/30 dark:bg-violet-950/20">
+                    <div className="rounded-2xl border border-violet-200/80 bg-violet-50/70 p-4 dark:border-violet-900/30 dark:bg-violet-950/20">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-200 text-[10px] font-black text-violet-800 dark:bg-violet-800 dark:text-violet-200">
                             {selectedTicket.requesterName.slice(0, 2).toUpperCase()}
                           </span>
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
                             {selectedTicket.requesterName} (Khởi tạo yêu cầu)
                           </span>
                         </div>
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
                           {new Date(selectedTicket.createdAt).toLocaleString('vi-VN')}
                         </span>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700 dark:text-slate-300">
+                      <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-800 dark:text-slate-200">
                         {selectedTicket.description}
                       </p>
                     </div>
@@ -1059,7 +1059,7 @@ export default function TenantAdminHelpAndSupport({
                       if (isSystem) {
                         return (
                           <div key={msg.id} className="flex items-center justify-center py-1">
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                               ℹ️ {msg.body}
                             </span>
                           </div>
@@ -1085,15 +1085,15 @@ export default function TenantAdminHelpAndSupport({
                             }`}
                           >
                             <div className="flex items-center justify-between gap-4">
-                              <span className={`text-[11px] font-bold ${isSuperadmin ? 'text-emerald-700 dark:text-emerald-400' : 'text-violet-100'}`}>
+                              <span className={`text-[11px] font-bold ${isSuperadmin ? 'text-emerald-800 dark:text-emerald-300' : 'text-white'}`}>
                                 {isSuperadmin ? 'Kỹ thuật viên Superadmin' : 'Bạn (Quản trị tiệm)'}
                               </span>
-                              <time className={`text-[10px] ${isSuperadmin ? 'text-slate-400' : 'text-violet-200'}`}>
+                              <time className={`text-[10px] ${isSuperadmin ? 'text-slate-500 dark:text-slate-400' : 'text-violet-100'}`}>
                                 {new Date(msg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                               </time>
                             </div>
 
-                            <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5">
+                            <p className={`mt-1.5 whitespace-pre-wrap text-xs leading-5 ${isSuperadmin ? 'text-slate-900 dark:text-slate-100' : 'text-white font-normal'}`}>
                               {msg.body}
                             </p>
 
@@ -1174,11 +1174,11 @@ export default function TenantAdminHelpAndSupport({
                   {/* Canned Quick Replies */}
                   <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-2 dark:border-slate-800 dark:bg-slate-850">
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gợi ý phản hồi nhanh:</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Gợi ý phản hồi nhanh:</p>
                       <button
                         type="button"
                         onClick={() => setCannedRepliesCollapsed((v) => !v)}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-200/80 bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:border-violet-300 hover:bg-violet-50/60 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-violet-300 transition-colors shadow-2xs"
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-200/80 bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-violet-300 hover:bg-violet-50/60 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-violet-300 transition-colors shadow-2xs"
                         title={cannedRepliesCollapsed ? 'Mở rộng gợi ý' : 'Thu gọn gợi ý'}
                       >
                         <span>{cannedRepliesCollapsed ? 'Mở rộng' : 'Thu gọn'}</span>
@@ -1192,7 +1192,7 @@ export default function TenantAdminHelpAndSupport({
                             key={txt}
                             type="button"
                             onClick={() => setReplyBody(txt)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600 transition hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-violet-300"
+                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:border-violet-400 hover:bg-violet-50/50 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:text-violet-300"
                           >
                             {txt}
                           </button>

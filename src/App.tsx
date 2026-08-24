@@ -318,6 +318,11 @@ export default function App() {
     // không nổi. Tắt transition đúng trong khung hình đổi theme rồi bật lại.
     root.classList.add('theme-switching');
     root.dataset.theme = themeMode;
+    if (themeMode === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
     localStorage.setItem('salonsys_theme', themeMode);
     // Đọc layout để ép tính lại style ngay khi transition còn đang bị tắt.
     void root.offsetHeight;
@@ -1795,7 +1800,7 @@ export default function App() {
             onClearAllAlerts={handleClearAllAlerts}
             onToggleTenantStatus={handleToggleTenantStatusFromOverview}
             onViewTenant={handleViewTenantFromOverview}
-            onNavigateToTab={(tab) => setActiveTab(tab)}
+            onNavigateToTab={(tab) => setActiveTab(tab === 'tenants' ? 'salons' : tab)}
             searchQuery={searchQuery}
             reportCurrency={systemSettings.general.currency}
           />

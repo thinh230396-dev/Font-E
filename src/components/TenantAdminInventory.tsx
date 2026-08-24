@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { PageHeader } from './ui';
+import { PageHeader, Pagination } from './ui';
 import { getTenantAdminInitialData } from "../utils/mockDataReset";
 import {
   AlertTriangle,
@@ -803,6 +803,18 @@ export default function TenantAdminInventory({
         );
       });
   }, [category, health, scopedItems, searchQuery]);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const pagedItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredItems.slice(start, start + pageSize);
+  }, [filteredItems, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, selectedBranch, category, health]);
   const selectedItem = selectedKey
     ? items.find((item) => itemKey(item) === selectedKey) || null
     : null;
@@ -1639,7 +1651,7 @@ export default function TenantAdminInventory({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredItems.map((item) => {
+                {pagedItems.map((item) => {
                   const currentHealth = getHealth(item);
                   const percent = Math.min(
                     100,
@@ -1773,7 +1785,7 @@ export default function TenantAdminInventory({
           </div>
         ) : (
           <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredItems.map((item) => {
+            {pagedItems.map((item) => {
               const currentHealth = getHealth(item);
               return (
                 <button
@@ -1837,18 +1849,28 @@ export default function TenantAdminInventory({
             })}
           </div>
         )}
-        <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-caption text-slate-400">
-            Hiển thị{" "}
-            <strong className="text-slate-600">{filteredItems.length}</strong>{" "}
-            mã · Tồn kho tính theo giá vốn bình quân
-          </p>
-          <p className="flex items-center gap-1.5 text-caption text-slate-400">
-            <Store className="h-3.5 w-3.5" />
-            {selectedBranch === "ALL"
-              ? "Tất cả chi nhánh"
-              : `Chi nhánh ${branchLabels[selectedBranch as BranchCode]}`}
-          </p>
+        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+          <Pagination
+            id="inventory-pagination"
+            currentPage={page}
+            totalPages={Math.ceil(filteredItems.length / pageSize) || 1}
+            totalItems={filteredItems.length}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 50]}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="mã"
+            variant="violet"
+          />
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-caption text-slate-400">
+            <span>Tồn kho tính theo giá vốn bình quân</span>
+            <span className="flex items-center gap-1.5">
+              <Store className="h-3.5 w-3.5" />
+              {selectedBranch === "ALL"
+                ? "Tất cả chi nhánh"
+                : `Chi nhánh ${branchLabels[selectedBranch as BranchCode]}`}
+            </span>
+          </div>
         </div>
       </section>
 

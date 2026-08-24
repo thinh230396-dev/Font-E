@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
-import { Button, DataTable, Field, Modal, PageHeader, StatusBadge, getStatusDefinition } from './ui';
+import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
 type StationArea = 'MANICURE' | 'PEDICURE' | 'VIP';
@@ -412,7 +412,14 @@ export default function ReceptionistStations({
   const [areaFilter, setAreaFilter] = useState<'ALL' | StationArea>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | StationStatus>('ALL');
   const [viewMode, setViewMode] = useState<ViewMode>('MAP');
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(8);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
+
+  // Reset pagination when search or filters change
+  useEffect(() => {
+    setListPage(1);
+  }, [searchQuery, areaFilter, statusFilter, branch]);
   const [assignAppointment, setAssignAppointment] = useState<LinkedAppointment | null>(null);
   const [assignStationId, setAssignStationId] = useState('');
   const [cleaningStation, setCleaningStation] = useState<Station | null>(null);
@@ -523,6 +530,12 @@ export default function ReceptionistStations({
         );
       });
   }, [areaFilter, scopedStations, searchQuery, statusFilter, dayAppointments]);
+
+  const totalListPages = Math.ceil(filteredStations.length / listPageSize) || 1;
+  const pagedStations = useMemo(() => {
+    const start = (listPage - 1) * listPageSize;
+    return filteredStations.slice(start, start + listPageSize);
+  }, [filteredStations, listPage, listPageSize]);
 
   const waitingAppointments = dayAppointments
     .filter((appointment) => appointment.status === 'CHECKED_IN' && !appointment.station)
@@ -959,7 +972,7 @@ export default function ReceptionistStations({
           ) : (
             <div className="p-4 sm:p-5">
               <DataTable<Station>
-                rows={filteredStations}
+                rows={pagedStations}
                 rowKey={(station) => station.id}
                 loading={isSyncing}
                 error={dataError || undefined}
@@ -1077,6 +1090,22 @@ export default function ReceptionistStations({
                   },
                 ]}
               />
+              <div className="mt-4 border-t border-brand-outline pt-3">
+                <Pagination
+                  id="receptionist-stations-pagination"
+                  currentPage={listPage}
+                  totalPages={totalListPages}
+                  totalItems={filteredStations.length}
+                  pageSize={listPageSize}
+                  pageSizeOptions={[6, 8, 12, 24]}
+                  onPageChange={setListPage}
+                  onPageSizeChange={(newSize) => {
+                    setListPageSize(newSize);
+                    setListPage(1);
+                  }}
+                  itemLabel="vị trí"
+                />
+              </div>
             </div>
           )}
 

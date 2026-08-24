@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { PageHeader } from './ui';
+import { PageHeader, Pagination } from './ui';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertTriangle,
@@ -557,6 +557,9 @@ export default function TenantAdminCustomers({
     [appointments, selectedBranch],
   );
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const normalizedQuery = phoneDigits(query);
@@ -569,6 +572,15 @@ export default function TenantAdminCustomers({
         return searchable.includes(query) || (!!normalizedQuery && phoneDigits(customer.phone).includes(normalizedQuery));
       });
   }, [scoped, searchQuery, statusFilter, tierFilter]);
+
+  const pagedCustomers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, tierFilter, statusFilter, selectedBranch]);
 
   const todayAppointments = scopedAppointments.filter(
     (item) => item.date === today && !['CANCELLED', 'NO_SHOW'].includes(item.status),
@@ -965,7 +977,7 @@ export default function TenantAdminCustomers({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((customer) => {
+              {pagedCustomers.map((customer) => {
                 const customerPhone = phoneDigits(customer.phone);
                 const liveAppointment = scopedAppointments.find(
                   (item) =>
@@ -1086,7 +1098,7 @@ export default function TenantAdminCustomers({
         </div>
 
         <div className="divide-y divide-slate-100 md:hidden">
-          {filtered.map((customer) => (
+          {pagedCustomers.map((customer) => (
             <div
               key={customer.id}
               role="button"
@@ -1159,14 +1171,23 @@ export default function TenantAdminCustomers({
           </div>
         )}
 
-        <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-3">
-          <p className="text-caption text-slate-400">
-            Hiển thị <strong className="text-slate-600">{filtered.length}</strong> hồ sơ
-          </p>
-          <p className="flex items-center gap-1.5 text-caption font-semibold text-slate-400">
+        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+          <Pagination
+            id="customers-pagination"
+            currentPage={currentPage}
+            totalPages={Math.ceil(filtered.length / pageSize) || 1}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 50]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="hồ sơ"
+            variant="violet"
+          />
+          <div className="mt-2 flex items-center justify-end gap-1.5 text-caption font-semibold text-slate-400">
             <ShieldCheck className="h-3.5 w-3.5" />
             Dữ liệu riêng tư · {tenantName}
-          </p>
+          </div>
         </div>
       </section>
 

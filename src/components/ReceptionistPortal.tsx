@@ -496,31 +496,21 @@ export const getServiceTimerStatus = (appointment: ReceptionAppointment, nowTime
 };
 
 const seedAppointments = (): ReceptionAppointment[] => {
-  const now = new Date();
-  const currentDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const prevDateObj = new Date(now.getTime() - 86_400_000);
-  const previousDate = `${prevDateObj.getFullYear()}-${String(prevDateObj.getMonth() + 1).padStart(2, '0')}-${String(prevDateObj.getDate()).padStart(2, '0')}`;
-  const nextDateObj = new Date(now.getTime() + 86_400_000);
-  const nextDate = `${nextDateObj.getFullYear()}-${String(nextDateObj.getMonth() + 1).padStart(2, '0')}-${String(nextDateObj.getDate()).padStart(2, '0')}`;
+  const currentDate = today();
+  const previousDate = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const nextDate = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   const createdAt = new Date().toISOString();
 
-  // Create an active in-service appointment with an overrun service time for demonstration
-  const hourNow = now.getHours();
-  const minNow = now.getMinutes();
-  const serviceOverrunStartH = Math.max(8, hourNow - 1);
-  const serviceOverrunStart = `${String(serviceOverrunStartH).padStart(2, '0')}:${String(Math.max(0, minNow - 25)).padStart(2, '0')}`;
-  const serviceStartedOverrun = new Date(now.getTime() - 85 * 60000).toISOString();
-
   return [
-    { id: 'APT-2101', customerId: 'CUS-1842', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: currentDate, start: '08:15', duration: 90, service: 'Gel Manicure + Nail Art cơ bản', services: ['Gel Manicure', 'Nail Art cơ bản'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 850000, deposit: 300000, note: 'Khách VIP, đã dùng ưu đãi thành viên 50.000đ.', allergies: ['Khách VIP'], station: 'M-01', reminderSent: true, createdBy: 'Website', createdAt },
-    { id: 'APT-2102', customerId: 'CUS-1796', customer: 'Trần Thu Hà', phone: '0908 337 912', date: currentDate, start: '09:30', duration: 75, service: 'Pedicure Spa + Sơn gel Hàn Quốc', services: ['Pedicure Spa', 'Sơn gel Hàn Quốc'], staff: 'Minh Châu', branch: 'Q3', source: 'PHONE', status: 'CHECKED_IN', price: 1170000, deposit: 200000, note: 'Không dùng tinh dầu bạc hà. Đi cùng bạn Mai Đức Anh.', allergies: ['Không dùng tinh dầu / Bạc hà'], station: 'P-02', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
-    { id: 'APT-2103', customer: 'Lê Phương Anh', phone: '0901 486 320', date: currentDate, start: serviceOverrunStart, duration: 60, service: 'Nail Art Premium', services: ['Nail Art Premium'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ZALO', status: 'IN_SERVICE', price: 980000, deposit: 0, note: 'Mẫu chrome bạc, khách đã gửi ảnh tham khảo. Dị ứng axeton nhẹ.', allergies: ['Dị ứng Axeton / Cồn / Hóa chất'], serviceStartedAt: serviceStartedOverrun, station: 'M-04', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
+    { id: 'APT-2101', customerId: 'CUS-1842', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', date: currentDate, start: '08:15', duration: 90, service: 'Gel Manicure + Nail Art cơ bản', services: ['Gel Manicure', 'Nail Art cơ bản'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ONLINE', status: 'COMPLETED', price: 850000, deposit: 300000, note: 'Khách VIP, đã dùng ưu đãi thành viên 50.000đ.', station: 'M-01', reminderSent: true, createdBy: 'Website', createdAt },
+    { id: 'APT-2102', customerId: 'CUS-1796', customer: 'Trần Thu Hà', phone: '0908 337 912', date: currentDate, start: '09:30', duration: 75, service: 'Pedicure Spa + Sơn gel Hàn Quốc', services: ['Pedicure Spa', 'Sơn gel Hàn Quốc'], staff: 'Minh Châu', branch: 'Q3', source: 'PHONE', status: 'CHECKED_IN', price: 1170000, deposit: 200000, note: 'Không dùng tinh dầu bạc hà.', station: 'P-02', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
+    { id: 'APT-2103', customer: 'Lê Phương Anh', phone: '0901 486 320', date: currentDate, start: '10:30', duration: 120, service: 'Nail Art Premium', services: ['Nail Art Premium'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ZALO', status: 'IN_SERVICE', price: 980000, deposit: 0, note: 'Mẫu chrome bạc, khách đã gửi ảnh tham khảo.', station: 'M-04', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
     { id: 'APT-2104', customer: 'Mai Đức Anh', phone: '0939 772 618', date: currentDate, start: '11:45', duration: 60, service: 'Combo Manicure', services: ['Combo Manicure'], staff: 'Quốc Bảo', branch: 'Q3', source: 'RECEPTION', status: 'PENDING', price: 620000, deposit: 0, note: 'Khách vãng lai, cần xác nhận dịch vụ trước khi làm.', createdBy: 'Lê Hoàng Nam', firstVisit: true, createdAt },
-    { id: 'APT-2105', customer: 'Phạm Hoài Nam', phone: '0977 660 341', date: currentDate, start: '13:00', duration: 40, service: 'Tháo gel & phục hồi móng', services: ['Tháo gel & phục hồi móng'], staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'CONFIRMED', price: 280000, deposit: 0, note: 'Da tay nhạy cảm, dùng sản phẩm không mùi.', allergies: ['Da mỏng / Dễ rát / Chảy máu', 'Yêu cầu thợ làm nhẹ tay, sợ đau'], station: 'M-03', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
-    { id: 'APT-2106', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', date: currentDate, start: '14:00', duration: 90, service: 'Nối móng Tips + Đính đá nghệ thuật', services: ['Nối móng Tips', 'Đính đá nghệ thuật'], staff: 'Minh Châu', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1000000, deposit: 300000, note: 'Chuẩn bị mẫu đính đá tone champagne. Móng mỏng yếu.', allergies: ['Móng yếu / Mỏng / Dễ gãy nứt'], station: 'VIP-02', reminderSent: true, createdBy: 'Website', createdAt },
+    { id: 'APT-2105', customer: 'Phạm Hoài Nam', phone: '0977 660 341', date: currentDate, start: '13:00', duration: 40, service: 'Tháo gel & phục hồi móng', services: ['Tháo gel & phục hồi móng'], staff: 'Thuỳ Dương', branch: 'Q3', source: 'PHONE', status: 'CONFIRMED', price: 280000, deposit: 0, note: 'Da tay nhạy cảm, dùng sản phẩm không mùi.', station: 'M-03', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
+    { id: 'APT-2106', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', date: currentDate, start: '14:00', duration: 90, service: 'Nối móng Tips + Đính đá nghệ thuật', services: ['Nối móng Tips', 'Đính đá nghệ thuật'], staff: 'Minh Châu', branch: 'Q3', source: 'ONLINE', status: 'CONFIRMED', price: 1000000, deposit: 300000, note: 'Chuẩn bị mẫu đính đá tone champagne.', station: 'VIP-02', reminderSent: true, createdBy: 'Website', createdAt },
     { id: 'APT-2107', customer: 'Đỗ Tuấn Kiệt', phone: '0918 734 662', date: currentDate, start: '15:30', duration: 30, service: 'Waxing tay', services: ['Waxing tay'], staff: 'Quốc Bảo', branch: 'Q3', source: 'RECEPTION', status: 'CANCELLED', price: 320000, deposit: 0, note: 'Khách đổi sang ngày mai.', createdBy: 'Lê Hoàng Nam', createdAt },
     { id: 'APT-2108', customer: 'Tạ Mỹ Duyên', phone: '0933 112 800', date: currentDate, start: '16:15', duration: 90, service: 'Đắp bột', services: ['Đắp bột'], staff: 'Thảo Nguyễn', branch: 'Q3', source: 'ZALO', status: 'NO_SHOW', price: 850000, deposit: 0, note: 'Đã gọi 2 lần chưa nghe máy.', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
-    { id: 'APT-2111', customerId: 'CUS-2050', customer: 'Đinh Gia Hân', phone: '0902 826 114', date: currentDate, start: '09:00', duration: 120, service: 'Combo VIP', services: ['Combo VIP'], staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'CONFIRMED', price: 1650000, deposit: 500000, note: 'Chuẩn bị phòng VIP.', allergies: ['Khách VIP'], station: 'V-11', reminderSent: true, createdBy: 'Website', createdAt },
+    { id: 'APT-2111', customerId: 'CUS-2050', customer: 'Đinh Gia Hân', phone: '0902 826 114', date: currentDate, start: '09:00', duration: 120, service: 'Combo VIP', services: ['Combo VIP'], staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'CONFIRMED', price: 1650000, deposit: 500000, note: 'Chuẩn bị phòng VIP.', station: 'V-11', reminderSent: true, createdBy: 'Website', createdAt },
     { id: 'APT-2112', customer: 'Vũ Ngọc Linh', phone: '0934 128 906', date: currentDate, start: '10:45', duration: 60, service: 'Sơn gel Hàn Quốc', services: ['Sơn gel Hàn Quốc'], staff: 'Thuỳ Dương', branch: 'Q1', source: 'PHONE', status: 'CHECKED_IN', price: 620000, deposit: 0, note: 'Khách muốn màu đỏ rượu.', createdBy: 'Lê Hoàng Nam', createdAt },
     { id: 'APT-2113', customer: 'Ngô Minh Châu', phone: '0966 124 700', date: currentDate, start: '14:30', duration: 120, service: 'Nail Art Premium', services: ['Nail Art Premium'], staff: 'Hà My', branch: 'Q1', source: 'ONLINE', status: 'PENDING', price: 980000, deposit: 200000, note: 'Khách mới, cần tư vấn tình trạng móng.', firstVisit: true, createdBy: 'Website', createdAt },
     { id: 'APT-2098', customer: 'Hoàng Bảo Ngọc', phone: '0907 211 842', date: previousDate, start: '17:00', duration: 75, service: 'Combo Manicure', services: ['Combo Manicure'], staff: 'Minh Châu', branch: 'Q3', source: 'RECEPTION', status: 'COMPLETED', price: 620000, deposit: 0, note: 'Đã hoàn tất hôm qua.', station: 'M-02', reminderSent: true, createdBy: 'Lê Hoàng Nam', createdAt },
@@ -534,12 +524,206 @@ const seedPayments = (): ReceptionPayment[] => {
   const yesterdayLabel = new Date(Date.now() - 86_400_000).toLocaleDateString('vi-VN');
 
   return [
-    { id: 'INV-9001', appointmentId: 'APT-2101', customer: 'Nguyễn Minh Anh', phone: '0912 884 206', branch: 'Q3', createdAt: `${todayLabel} · 09:58`, subtotal: 1020000, discount: 50000, tip: 100000, deposit: 300000, total: 1070000, paid: 1070000, refunded: 0, status: 'PAID', method: 'MOMO', reference: 'MOMO-DEMO-9001', cashier: 'Lê Hoàng Nam', source: 'POS tại quầy', items: [{ name: 'Gel Manicure', quantity: 1, amount: 450000, staff: 'Thảo Nguyễn' }, { name: 'Nail Art cơ bản', quantity: 1, amount: 400000, staff: 'Thảo Nguyễn' }, { name: 'Dầu dưỡng móng', quantity: 1, amount: 170000, staff: 'Quầy bán lẻ' }], note: 'Áp dụng ưu đãi thành viên thân thiết.', audit: ['09:58 · Thu MoMo thành công', '09:55 · Áp dụng ưu đãi 50.000đ', '08:15 · Đối soát tiền cọc 300.000đ'] },
-    { id: 'INV-9002', appointmentId: 'APT-2102', customer: 'Trần Thu Hà', phone: '0908 337 912', branch: 'Q3', createdAt: `${todayLabel} · 10:08`, subtotal: 1170000, discount: 0, tip: 0, deposit: 200000, total: 1170000, paid: 200000, refunded: 0, status: 'PARTIAL', method: 'BANK', reference: 'DEP-DEMO-9002', cashier: 'Lê Hoàng Nam', source: 'Lịch hẹn tại quầy', items: [{ name: 'Pedicure Spa', quantity: 1, amount: 550000, staff: 'Minh Châu' }, { name: 'Sơn gel Hàn Quốc', quantity: 1, amount: 620000, staff: 'Minh Châu' }], note: 'Còn thu sau khi hoàn tất dịch vụ.', audit: ['10:08 · Ghi nhận tiền cọc chuyển khoản 200.000đ'] },
-    { id: 'INV-9003', appointmentId: 'APT-2098', customer: 'Hoàng Bảo Ngọc', phone: '0907 211 842', branch: 'Q3', createdAt: `${yesterdayLabel} · 17:52`, subtotal: 620000, discount: 0, tip: 50000, deposit: 0, total: 670000, paid: 670000, refunded: 0, status: 'PAID', method: 'CASH', cashier: 'Lê Hoàng Nam', source: 'POS tại quầy', items: [{ name: 'Combo Manicure', quantity: 1, amount: 620000, staff: 'Minh Châu' }], audit: ['17:52 · Thu tiền mặt 670.000đ', '17:51 · Khách thêm tip 50.000đ'] },
-    { id: 'INV-9004', customer: 'Bùi Thanh Trúc', phone: '0938 400 176', branch: 'Q3', createdAt: `${todayLabel} · 14:05`, subtotal: 1000000, discount: 100000, tip: 0, deposit: 300000, total: 900000, paid: 0, refunded: 0, status: 'PENDING', cashier: 'Lê Hoàng Nam', source: 'Hóa đơn chờ thu', items: [{ name: 'Nối móng Tips', quantity: 1, amount: 750000, staff: 'Minh Châu' }, { name: 'Đính đá nghệ thuật', quantity: 1, amount: 250000, staff: 'Minh Châu' }], note: 'Voucher sinh nhật 100.000đ.', audit: ['14:05 · Tạo hóa đơn chờ thu', '14:04 · Áp dụng voucher sinh nhật'] },
-    { id: 'INV-9005', customer: 'Đinh Gia Hân', phone: '0902 826 114', branch: 'Q1', createdAt: `${todayLabel} · 09:20`, subtotal: 1650000, discount: 0, tip: 0, deposit: 500000, total: 1650000, paid: 500000, refunded: 0, status: 'PARTIAL', method: 'CARD', reference: 'CARD-DEMO-9005', cashier: 'Lê Hoàng Nam', source: 'Lịch hẹn online', items: [{ name: 'Combo VIP', quantity: 1, amount: 1650000, staff: 'Hà My' }], audit: ['09:20 · Ghi nhận tiền cọc qua thẻ 500.000đ'] },
-    { id: 'INV-9006', customer: 'Tạ Mỹ Duyên', phone: '0933 112 800', branch: 'Q3', createdAt: `${todayLabel} · 16:22`, subtotal: 850000, discount: 0, tip: 0, deposit: 0, total: 850000, paid: 850000, refunded: 300000, status: 'REFUNDED', method: 'BANK', reference: 'RF-DEMO-9006', cashier: 'Lê Hoàng Nam', source: 'Điều chỉnh hóa đơn', items: [{ name: 'Đắp bột', quantity: 1, amount: 850000, staff: 'Thảo Nguyễn' }], note: 'Mock hoàn tiền để test luồng refund.', audit: ['16:22 · Duyệt hoàn 300.000đ', '16:10 · Thu chuyển khoản 850.000đ'] },
+    {
+      id: 'INV-9001',
+      appointmentId: 'APT-2101',
+      customer: 'Nguyễn Minh Anh',
+      phone: '0912 884 206',
+      branch: 'Q3',
+      createdAt: `${todayLabel} · 09:58`,
+      subtotal: 1020000,
+      discount: 50000,
+      tip: 100000,
+      deposit: 300000,
+      total: 1070000,
+      paid: 1070000,
+      refunded: 0,
+      status: 'PAID',
+      method: 'MOMO',
+      reference: 'MOMO-DEMO-9001',
+      cashier: 'Lê Hoàng Nam',
+      source: 'POS tại quầy',
+      items: [
+        { name: 'Gel Manicure', quantity: 1, amount: 450000, staff: 'Thảo Nguyễn' },
+        { name: 'Nail Art cơ bản', quantity: 1, amount: 400000, staff: 'Thảo Nguyễn' },
+        { name: 'Dầu dưỡng móng Keratin', quantity: 1, amount: 170000, staff: 'Quầy bán lẻ' },
+      ],
+      note: 'Áp dụng ưu đãi thành viên VIP Diamond (-50.000đ).',
+      audit: [
+        '09:58 · Thu MoMo QR thành công: 770.000đ (sau trừ cọc 300.000đ + tip 100.000đ)',
+        '09:55 · Áp dụng ưu đãi VIP Diamond 50.000đ',
+        '08:15 · Khấu trừ tiền cọc trực tuyến 300.000đ',
+      ],
+    },
+    {
+      id: 'INV-9002',
+      appointmentId: 'APT-2102',
+      customer: 'Trần Thu Hà',
+      phone: '0908 337 912',
+      branch: 'Q3',
+      createdAt: `${todayLabel} · 10:08`,
+      subtotal: 1170000,
+      discount: 0,
+      tip: 0,
+      deposit: 200000,
+      total: 1170000,
+      paid: 200000,
+      refunded: 0,
+      status: 'PARTIAL',
+      method: 'BANK',
+      reference: 'DEP-DEMO-9002',
+      cashier: 'Lê Hoàng Nam',
+      source: 'Lịch hẹn tại quầy',
+      items: [
+        { name: 'Pedicure Spa', quantity: 1, amount: 550000, staff: 'Minh Châu' },
+        { name: 'Sơn gel Hàn Quốc', quantity: 1, amount: 620000, staff: 'Minh Châu' },
+      ],
+      note: 'Đã nhận cọc 200.000đ qua QR chuyển khoản, còn thu 970.000đ sau khi hoàn tất.',
+      audit: ['10:08 · Ghi nhận tiền cọc chuyển khoản ngân hàng 200.000đ'],
+    },
+    {
+      id: 'INV-9003',
+      appointmentId: 'APT-2098',
+      customer: 'Hoàng Bảo Ngọc',
+      phone: '0907 211 842',
+      branch: 'Q3',
+      createdAt: `${yesterdayLabel} · 17:52`,
+      subtotal: 620000,
+      discount: 0,
+      tip: 50000,
+      deposit: 0,
+      total: 670000,
+      paid: 670000,
+      refunded: 0,
+      status: 'PAID',
+      method: 'CASH',
+      cashier: 'Lê Hoàng Nam',
+      source: 'POS tại quầy',
+      items: [
+        { name: 'Combo Manicure Thư Giãn', quantity: 1, amount: 620000, staff: 'Minh Châu' },
+      ],
+      audit: ['17:52 · Thu tiền mặt 670.000đ (bao gồm 50.000đ tiền tip thợ)', '17:51 · Khách thêm tip thợ Minh Châu'],
+    },
+    {
+      id: 'INV-9004',
+      customer: 'Bùi Thanh Trúc',
+      phone: '0938 400 176',
+      branch: 'Q3',
+      createdAt: `${todayLabel} · 14:05`,
+      subtotal: 1000000,
+      discount: 100000,
+      tip: 0,
+      deposit: 300000,
+      total: 900000,
+      paid: 300000,
+      refunded: 0,
+      status: 'PENDING',
+      cashier: 'Lê Hoàng Nam',
+      source: 'Hóa đơn chờ thu',
+      items: [
+        { name: 'Nối móng Tips', quantity: 1, amount: 750000, staff: 'Minh Châu' },
+        { name: 'Đính đá nghệ thuật Swarovski', quantity: 1, amount: 250000, staff: 'Minh Châu' },
+      ],
+      note: 'Áp dụng E-voucher sinh nhật (-100.000đ). Cần thu thêm 600.000đ.',
+      audit: ['14:05 · Tạo hóa đơn chờ thu tại quầy', '14:04 · Áp dụng voucher sinh nhật'],
+    },
+    {
+      id: 'INV-9005',
+      customer: 'Đinh Gia Hân',
+      phone: '0902 826 114',
+      branch: 'Q1',
+      createdAt: `${todayLabel} · 09:20`,
+      subtotal: 1650000,
+      discount: 0,
+      tip: 0,
+      deposit: 500000,
+      total: 1650000,
+      paid: 500000,
+      refunded: 0,
+      status: 'PARTIAL',
+      method: 'CARD',
+      reference: 'CARD-DEMO-9005',
+      cashier: 'Lê Hoàng Nam',
+      source: 'Lịch hẹn online',
+      items: [
+        { name: 'Combo VIP Toàn Diện', quantity: 1, amount: 1650000, staff: 'Hà My' },
+      ],
+      audit: ['09:20 · Ghi nhận tiền cọc cà thẻ POS 500.000đ'],
+    },
+    {
+      id: 'INV-9006',
+      customer: 'Tạ Mỹ Duyên',
+      phone: '0933 112 800',
+      branch: 'Q3',
+      createdAt: `${todayLabel} · 16:22`,
+      subtotal: 850000,
+      discount: 0,
+      tip: 0,
+      deposit: 0,
+      total: 850000,
+      paid: 850000,
+      refunded: 300000,
+      status: 'REFUNDED',
+      method: 'BANK',
+      reference: 'RF-DEMO-9006',
+      cashier: 'Lê Hoàng Nam',
+      source: 'Điều chỉnh hóa đơn',
+      items: [
+        { name: 'Đắp bột Baby Boomer', quantity: 1, amount: 850000, staff: 'Thảo Nguyễn' },
+      ],
+      note: 'Khách yêu cầu hoàn lại phần dịch vụ phát sinh chưa thực hiện.',
+      audit: ['16:22 · Duyệt hoàn tiền chuyển khoản 300.000đ', '16:10 · Thu chuyển khoản 850.000đ'],
+    },
+    {
+      id: 'INV-9007',
+      customer: 'Trịnh Cẩm Tú',
+      phone: '0903 771 204',
+      branch: 'Q3',
+      createdAt: `${yesterdayLabel} · 15:40`,
+      subtotal: 1100000,
+      discount: 0,
+      tip: 50000,
+      deposit: 200000,
+      total: 1150000,
+      paid: 1150000,
+      refunded: 0,
+      status: 'PAID',
+      method: 'ZALOPAY',
+      reference: 'ZP-DEMO-9007',
+      cashier: 'Lê Hoàng Nam',
+      source: 'POS tại quầy',
+      items: [
+        { name: 'Nối móng Tips', quantity: 1, amount: 750000, staff: 'Thảo Nguyễn' },
+        { name: 'Sơn gel Hàn Quốc', quantity: 1, amount: 350000, staff: 'Thảo Nguyễn' },
+      ],
+      audit: ['15:40 · Thu ví ZaloPay 950.000đ thành công', '14:00 · Trừ cọc 200.000đ'],
+    },
+    {
+      id: 'INV-9008',
+      customer: 'Lâm Thanh Hằng',
+      phone: '0988 554 991',
+      branch: 'Q3',
+      createdAt: `${todayLabel} · 11:15`,
+      subtotal: 650000,
+      discount: 0,
+      tip: 0,
+      deposit: 0,
+      total: 650000,
+      paid: 650000,
+      refunded: 0,
+      status: 'PAID',
+      method: 'BANK',
+      reference: 'QR-DEMO-9008',
+      cashier: 'Lê Hoàng Nam',
+      source: 'POS bán lẻ',
+      items: [
+        { name: 'Serum phục hồi móng Keratin', quantity: 1, amount: 290000, staff: 'Quầy bán lẻ' },
+        { name: 'Kem dưỡng tay Hạnh Nhân', quantity: 1, amount: 220000, staff: 'Quầy bán lẻ' },
+        { name: 'Dũa móng cao cấp OPI', quantity: 2, amount: 140000, staff: 'Quầy bán lẻ' },
+      ],
+      note: 'Khách mua sản phẩm chăm sóc tại nhà.',
+      audit: ['11:15 · Thu mã VietQR ngân hàng 650.000đ'],
+    },
   ];
 };
 
@@ -561,10 +745,10 @@ const appointmentStatusLabel: Record<AppointmentStatus, string> = {
 
 const methodMeta: Record<PaymentMethod, { label: string; icon: typeof Banknote }> = {
   CASH: { label: 'Tiền mặt', icon: Banknote },
-  BANK: { label: 'Chuyển khoản', icon: WalletCards },
-  CARD: { label: 'Thẻ', icon: CreditCard },
-  MOMO: { label: 'MoMo', icon: Smartphone },
-  ZALOPAY: { label: 'ZaloPay', icon: Smartphone },
+  BANK: { label: 'Chuyển khoản (VietQR)', icon: WalletCards },
+  CARD: { label: 'Thẻ POS', icon: CreditCard },
+  MOMO: { label: 'Ví MoMo', icon: Smartphone },
+  ZALOPAY: { label: 'Ví ZaloPay', icon: Smartphone },
 };
 
 const defaultServiceCatalog: CatalogItem[] = [
@@ -580,23 +764,26 @@ const defaultServiceCatalog: CatalogItem[] = [
   { name: 'Nối móng Tips', price: 750000, category: 'Nối móng', duration: 90 },
   { name: 'Đính đá nghệ thuật', price: 250000, category: 'Đính đá', duration: 30 },
   { name: 'Waxing tay', price: 320000, category: 'Waxing', duration: 30 },
+  { name: 'Sơn thạch Ombre', price: 520000, category: 'Sơn móng', duration: 60 },
+  { name: 'Chà gót chân & ngâm thảo mộc', price: 350000, category: 'Chăm sóc móng', duration: 45 },
 ];
 
 const productCatalog: CatalogItem[] = [
-  { name: 'Dầu dưỡng móng', price: 170000, category: 'Dưỡng móng', stock: 24 },
-  { name: 'Kem dưỡng tay', price: 220000, category: 'Chăm sóc tay', stock: 18 },
-  { name: 'Serum phục hồi móng', price: 290000, category: 'Dưỡng móng', stock: 12 },
-  { name: 'Sơn dưỡng tại nhà', price: 260000, category: 'Sơn bán lẻ', stock: 16 },
+  { name: 'Dầu dưỡng móng Keratin', price: 170000, category: 'Dưỡng móng', stock: 24 },
+  { name: 'Kem dưỡng tay Hạnh Nhân', price: 220000, category: 'Chăm sóc tay', stock: 18 },
+  { name: 'Serum phục hồi móng Keratin', price: 290000, category: 'Dưỡng móng', stock: 12 },
+  { name: 'Sơn dưỡng bóng tại nhà', price: 260000, category: 'Sơn bán lẻ', stock: 16 },
   { name: 'Bộ chăm sóc móng mini', price: 390000, category: 'Bộ sản phẩm', stock: 8 },
   { name: 'Nước rửa tay dưỡng ẩm', price: 145000, category: 'Chăm sóc tay', stock: 22 },
-  { name: 'Dũa móng cao cấp', price: 85000, category: 'Phụ kiện', stock: 35 },
-  { name: 'Sticker Nail Art', price: 95000, category: 'Phụ kiện', stock: 28 },
+  { name: 'Dũa móng cao cấp OPI', price: 85000, category: 'Phụ kiện', stock: 35 },
+  { name: 'Set Sticker Nail Art 3D', price: 95000, category: 'Phụ kiện', stock: 28 },
+  { name: 'Muối ngâm chân thảo mộc 500g', price: 180000, category: 'Chăm sóc chân', stock: 15 },
 ];
 
-const invoiceStaff = ['Thảo Nguyễn', 'Minh Châu', 'Hà My', 'Quốc Bảo', 'Thuỳ Dương', 'Chưa phân công'];
+const invoiceStaff = ['Thảo Nguyễn', 'Minh Châu', 'Hà My', 'Quốc Bảo', 'Thuỳ Dương', 'An Nhiên', 'Gia Huy', 'Chưa phân công'];
 const stationCatalog: Record<BranchCode, string[]> = {
-  Q3: ['M-01', 'M-02', 'M-03', 'M-04', 'P-01', 'P-02', 'VIP-01', 'VIP-02'],
-  Q1: ['M-11', 'M-12', 'M-13', 'P-11', 'P-12', 'V-11', 'V-12'],
+  Q3: ['M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-06', 'P-01', 'P-02', 'P-03', 'P-04', 'VIP-01', 'VIP-02'],
+  Q1: ['M-11', 'M-12', 'M-13', 'M-14', 'P-11', 'P-12', 'P-13', 'V-11', 'V-12'],
 };
 
 const technicianStatusMeta: Record<TechnicianStatus, { label: string; helper: string }> = {
@@ -617,13 +804,14 @@ const technicianShiftMeta: Record<TechnicianShift, string> = {
 
 const technicianSeed: ReceptionTechnician[] = [
   { id: 'TECH-001', name: 'Thảo Nguyễn', initials: 'TN', specialty: 'Nail Art Premium', skills: ['Nail Art Premium', 'Nail Art cơ bản', 'Gel Manicure', 'Đính đá nghệ thuật', 'Combo VIP'], shift: 'FULL_DAY', shiftLabel: technicianShiftMeta.FULL_DAY, status: 'SERVING', branch: 'Q3', checkIn: '07:52', avatarTone: 'from-brand-primary to-brand-primary' },
-  { id: 'TECH-002', name: 'Minh Châu', initials: 'MC', specialty: 'Pedicure Spa', skills: ['Pedicure Spa', 'Gel Manicure', 'Sơn gel Hàn Quốc', 'Combo Manicure'], shift: 'MORNING', shiftLabel: technicianShiftMeta.MORNING, status: 'PRESENT', branch: 'Q3', checkIn: '08:05', avatarTone: 'from-brand-primary to-brand-secondary' },
+  { id: 'TECH-002', name: 'Minh Châu', initials: 'MC', specialty: 'Pedicure Spa', skills: ['Pedicure Spa', 'Gel Manicure', 'Sơn gel Hàn Quốc', 'Combo Manicure', 'Chà gót chân & ngâm thảo mộc'], shift: 'MORNING', shiftLabel: technicianShiftMeta.MORNING, status: 'PRESENT', branch: 'Q3', checkIn: '08:05', avatarTone: 'from-brand-primary to-brand-secondary' },
   { id: 'TECH-003', name: 'Quốc Bảo', initials: 'QB', specialty: 'Manicure & Waxing', skills: ['Gel Manicure', 'Combo Manicure', 'Tháo gel & phục hồi móng', 'Waxing tay'], shift: 'MORNING', shiftLabel: technicianShiftMeta.MORNING, status: 'LATE', branch: 'Q3', checkIn: '08:34', avatarTone: 'from-brand-tertiary to-brand-tertiary' },
-  { id: 'TECH-004', name: 'Thuỳ Dương', initials: 'TD', specialty: 'Sơn gel Hàn Quốc', skills: ['Sơn gel Hàn Quốc', 'Gel Manicure', 'Tháo gel & phục hồi móng'], shift: 'AFTERNOON', shiftLabel: technicianShiftMeta.AFTERNOON, status: 'NOT_CHECKED_IN', branch: 'Q3', avatarTone: 'from-brand-secondary to-brand-secondary' },
-  { id: 'TECH-005', name: 'An Nhiên', initials: 'AN', specialty: 'Đính đá nghệ thuật', skills: ['Đính đá nghệ thuật', 'Nail Art cơ bản', 'Nail Art Premium', 'Nối móng Tips'], shift: 'AFTERNOON', shiftLabel: technicianShiftMeta.AFTERNOON, status: 'BREAK', branch: 'Q3', checkIn: '11:58', avatarTone: 'from-brand-primary to-brand-error' },
+  { id: 'TECH-004', name: 'Thuỳ Dương', initials: 'TD', specialty: 'Sơn gel Hàn Quốc', skills: ['Sơn gel Hàn Quốc', 'Gel Manicure', 'Tháo gel & phục hồi móng', 'Sơn thạch Ombre'], shift: 'AFTERNOON', shiftLabel: technicianShiftMeta.AFTERNOON, status: 'NOT_CHECKED_IN', branch: 'Q3', avatarTone: 'from-brand-secondary to-brand-secondary' },
+  { id: 'TECH-005', name: 'An Nhiên', initials: 'AN', specialty: 'Đính đá nghệ thuật', skills: ['Đính đá nghệ thuật', 'Nail Art cơ bản', 'Nail Art Premium', 'Nối móng Tips'], shift: 'AFTERNOON', shiftLabel: technicianShiftMeta.AFTERNOON, status: 'SERVING', branch: 'Q3', checkIn: '11:58', avatarTone: 'from-brand-primary to-brand-error' },
   { id: 'TECH-006', name: 'Khánh Vy', initials: 'KV', specialty: 'Đắp bột', skills: ['Đắp bột', 'Nối móng Tips', 'Combo VIP'], shift: 'FULL_DAY', shiftLabel: technicianShiftMeta.FULL_DAY, status: 'SICK_REPORTED', branch: 'Q3', leaveNote: 'Báo sốt lúc 07:10, quản lý đã xác nhận.', avatarTone: 'from-brand-secondary to-brand-secondary' },
   { id: 'TECH-011', name: 'Hà My', initials: 'HM', specialty: 'Combo VIP', skills: ['Combo VIP', 'Nail Art Premium', 'Gel Manicure', 'Đính đá nghệ thuật'], shift: 'FULL_DAY', shiftLabel: technicianShiftMeta.FULL_DAY, status: 'PRESENT', branch: 'Q1', checkIn: '07:56', avatarTone: 'from-brand-primary to-brand-primary' },
-  { id: 'TECH-012', name: 'Gia Huy', initials: 'GH', specialty: 'Manicure', skills: ['Gel Manicure', 'Combo Manicure', 'Tháo gel & phục hồi móng'], shift: 'MORNING', shiftLabel: technicianShiftMeta.MORNING, status: 'ON_LEAVE', branch: 'Q1', leaveNote: 'Nghỉ phép năm đã duyệt.', avatarTone: 'from-brand-secondary to-brand-primary' },
+  { id: 'TECH-012', name: 'Gia Huy', initials: 'GH', specialty: 'Manicure Nam & Dưỡng móng', skills: ['Gel Manicure', 'Combo Manicure', 'Tháo gel & phục hồi móng'], shift: 'MORNING', shiftLabel: technicianShiftMeta.MORNING, status: 'PRESENT', branch: 'Q1', checkIn: '08:10', avatarTone: 'from-brand-secondary to-brand-primary' },
+  { id: 'TECH-013', name: 'Mai Lan', initials: 'ML', specialty: 'Pedicure Spa & Nail Art', skills: ['Pedicure Spa', 'Sơn gel Hàn Quốc', 'Nail Art cơ bản'], shift: 'AFTERNOON', shiftLabel: technicianShiftMeta.AFTERNOON, status: 'NOT_CHECKED_IN', branch: 'Q1', avatarTone: 'from-brand-primary to-brand-secondary' },
 ];
 
 const normalizeTechnicians = (items: ReceptionTechnician[]) => items.map((technician) => {
@@ -3133,44 +3321,17 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
 
   return (
     <div className="role-shell role-shell--reception reception-workspace min-h-screen bg-brand-bg text-brand-text">
-      <aside className={`role-sidebar reception-sidebar fixed inset-y-0 left-0 z-[var(--z-sidebar)] flex flex-col bg-[#0f172a] text-white border-r border-white/10 shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-[var(--size-sidebar)]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        {/* Header */}
-        <div className={`flex h-16 shrink-0 items-center border-b border-white/10 px-3.5 ${sidebarCollapsed ? 'lg:justify-center lg:px-2' : 'justify-between'}`}>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 shadow-xs">
-              <Store className="h-4 w-4" />
-            </span>
-            <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-              <p className="truncate text-xs font-black text-white tracking-tight">{tenantName}</p>
-              <p className="mt-0.5 truncate text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Lễ tân · {branchCode === 'Q1' ? 'CN Quận 1' : 'CN Quận 3'}</p>
-            </div>
+      <aside className={`role-sidebar reception-sidebar fixed inset-y-0 left-0 z-[var(--z-sidebar)] flex w-[var(--size-sidebar)] flex-col transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex h-[var(--size-topbar)] shrink-0 items-center gap-3 border-b border-white/10 px-5">
+          <span className="flex h-11 w-11 items-center justify-center rounded-control bg-brand-secondary text-brand-on-primary"><Store className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <p className="truncate text-body font-bold">{tenantName}</p>
+            <p className="mt-0.5 text-caption font-bold uppercase tracking-wider opacity-60">Không gian lễ tân</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Đóng menu"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition lg:hidden"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={toggleSidebarCollapsed}
-            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
-            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
-            className={`hidden lg:flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer shrink-0 ${
-              sidebarCollapsed ? 'hidden' : ''
-            }`}
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
+          <Button variant="ghost" size="small" iconOnly aria-label="Đóng menu" onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden"><X /></Button>
         </div>
-
-        {/* Navigation Items */}
-        <nav className="flex-1 space-y-1 overflow-y-auto p-2.5" aria-label="Điều hướng Receptionist">
-          <p className={`px-2.5 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400/80 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-            Vận hành tại quầy
-          </p>
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Điều hướng Receptionist">
+          <p className="px-3 pb-2 pt-3 text-caption font-bold uppercase tracking-wider opacity-45">Vận hành tại quầy</p>
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;

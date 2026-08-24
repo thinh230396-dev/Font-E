@@ -32,7 +32,7 @@ import {
   isUnlimitedBranches,
   isUnlimitedStaff
 } from '../utils/subscriptions';
-import { Modal, useToast } from './ui';
+import { Modal, Pagination, useToast } from './ui';
 
 interface TenantAdminManagementProps {
   tenants: Tenant[];
@@ -239,6 +239,8 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
   const showToast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | AdminRole>('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<AdminUser | null>(null);
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
@@ -707,6 +709,10 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
     return matchesSearch && matchesRole;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredAdmins.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedAdmins = filteredAdmins.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   const selectedAdminTenants = selectedAdmin
     ? tenants.filter((tenant) => {
         if (selectedAdmin.source === 'TENANT') {
@@ -808,7 +814,10 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
             type="text"
             placeholder="Tìm theo tên, email, tiệm..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             className="w-full bg-brand-surface-lowest border border-brand-outline/45 rounded-lg pl-9 pr-4 py-1.5 text-xs text-brand-text focus:outline-none focus:border-brand-primary placeholder:text-brand-text-muted/60"
           />
         </div>
@@ -819,7 +828,10 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
             {(['ALL', 'Owner', 'Manager', 'Staff'] as const).map((role) => (
               <button
                 key={role}
-                onClick={() => setRoleFilter(role)}
+                onClick={() => {
+                  setRoleFilter(role);
+                  setPage(1);
+                }}
                 className={`
                   px-3 py-1 text-body font-medium transition-colors cursor-pointer
                   ${roleFilter === role
@@ -849,14 +861,14 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
               </tr>
             </thead>
             <tbody className="text-xs divide-y divide-brand-outline/25">
-              {filteredAdmins.length === 0 ? (
+              {pagedAdmins.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-16 text-center text-brand-text-muted">
                     Không tìm thấy tài khoản quản trị nào
                   </td>
                 </tr>
               ) : (
-                filteredAdmins.map((admin) => {
+                pagedAdmins.map((admin) => {
                   const isSuspended = admin.status === 'SUSPENDED';
                   return (
                   <tr
@@ -967,6 +979,21 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="border-t border-brand-outline/35 bg-brand-surface-lowest/20 px-4 py-2">
+          <Pagination
+            id="tenant-admin-pagination"
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredAdmins.length}
+            totalUnfiltered={admins.length}
+            pageSize={pageSize}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="quản trị viên"
+          />
         </div>
       </div>
 

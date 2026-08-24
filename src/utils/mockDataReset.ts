@@ -16,7 +16,7 @@ const SYSTEM_MOCK_STORAGE_KEYS = [
   'salonsys_system_settings',
 ];
 
-let tenantAdminDataMode: 'demo' | 'live' = 'live';
+let tenantAdminDataMode: 'demo' | 'live' = 'demo';
 
 export const setTenantAdminDataMode = (mode: 'demo' | 'live') => {
   tenantAdminDataMode = mode;
@@ -34,22 +34,15 @@ export const getTenantAdminInitialData = <T>(
   stored: T[] | null | undefined,
   mockSeed: T[]
 ): T[] => {
-  if (tenantAdminDataMode === 'demo') {
-    if (!stored?.length) return mockSeed;
-    const storedIdentities = new Set(stored.map(getRecordIdentity).filter(Boolean));
-    return [
-      ...mockSeed.filter((item) => {
-        const identity = getRecordIdentity(item);
-        return !identity || !storedIdentities.has(identity);
-      }),
-      ...stored
-    ];
-  }
-  if (!stored) return [];
-
-  const mockIdentities = new Set(mockSeed.map(getRecordIdentity).filter(Boolean));
-  if (mockIdentities.size === 0) return stored;
-  return stored.filter((item) => !mockIdentities.has(getRecordIdentity(item)));
+  if (!stored?.length) return mockSeed;
+  const storedIdentities = new Set(stored.map(getRecordIdentity).filter(Boolean));
+  return [
+    ...mockSeed.filter((item) => {
+      const identity = getRecordIdentity(item);
+      return !identity || !storedIdentities.has(identity);
+    }),
+    ...stored
+  ];
 };
 
 export const getTenantMockStorageKeys = (tenantName: string) => {

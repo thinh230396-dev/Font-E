@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { PageHeader } from './ui';
+import { PageHeader, Pagination } from './ui';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   syncColorsWithInventory,
@@ -402,6 +402,23 @@ export default function TenantAdminNailGallery({
       .filter((item) => !query || `${item.id} ${item.name} ${item.brand} ${item.code} ${item.finish} ${item.collection}`.toLocaleLowerCase('vi').includes(query))
       .sort((a, b) => sortBy === 'NEWEST' ? b.updatedAt.localeCompare(a.updatedAt) : sortBy === 'STOCK_LOW' ? a.stock - b.stock : sortBy === 'USAGE' || sortBy === 'POPULAR' ? b.monthlyUsage - a.monthlyUsage : a.name.localeCompare(b.name, 'vi'));
   }, [branchColors, searchQuery, sortBy, statusFilter, styleFilter]);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
+  const pagedDesigns = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredDesigns.slice(start, start + pageSize);
+  }, [filteredDesigns, page, pageSize]);
+
+  const pagedColors = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredColors.slice(start, start + pageSize);
+  }, [filteredColors, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, searchQuery, styleFilter, statusFilter, sortBy, selectedBranch]);
 
   const activeDesigns = branchDesigns.filter((item) => item.status === 'ACTIVE' || item.status === 'TRENDING').length;
   const unavailableColors = branchColors.filter((item) => item.status !== 'ACTIVE').length;
@@ -884,7 +901,7 @@ export default function TenantAdminNailGallery({
           {tab === 'DESIGNS' ? (
             viewMode === 'GRID' ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {filteredDesigns.map((design) => {
+                {pagedDesigns.map((design) => {
                   const baseSvc = findBaseService(design.baseServiceId);
                   const totalPrice = baseSvc.price + design.surcharge;
 
@@ -960,7 +977,7 @@ export default function TenantAdminNailGallery({
               </div>
             ) : (
               <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                {filteredDesigns.map((design) => {
+                {pagedDesigns.map((design) => {
                   const baseSvc = findBaseService(design.baseServiceId);
                   const totalPrice = baseSvc.price + design.surcharge;
 
@@ -1000,7 +1017,7 @@ export default function TenantAdminNailGallery({
             )
           ) : viewMode === 'GRID' ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredColors.map((color) => (
+              {pagedColors.map((color) => (
                 <button
                   key={color.id}
                   type="button"
@@ -1031,7 +1048,7 @@ export default function TenantAdminNailGallery({
             </div>
           ) : (
             <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              {filteredColors.map((color) => (
+              {pagedColors.map((color) => (
                 <button
                   key={color.id}
                   type="button"
@@ -1063,6 +1080,23 @@ export default function TenantAdminNailGallery({
             </div>
           )}
         </div>
+
+        {((tab === 'DESIGNS' && filteredDesigns.length > 0) || (tab === 'COLORS' && filteredColors.length > 0)) && (
+          <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+            <Pagination
+              id="nail-gallery-pagination"
+              currentPage={page}
+              totalPages={Math.ceil((tab === 'DESIGNS' ? filteredDesigns.length : filteredColors.length) / pageSize) || 1}
+              totalItems={tab === 'DESIGNS' ? filteredDesigns.length : filteredColors.length}
+              pageSize={pageSize}
+              pageSizeOptions={[12, 24, 48]}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              itemLabel={tab === 'DESIGNS' ? 'mẫu' : 'màu'}
+              variant="violet"
+            />
+          </div>
+        )}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">

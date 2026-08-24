@@ -1,5 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
-import { PageHeader } from './ui';
+import { PageHeader, Pagination } from './ui';
 import {
   AlertTriangle,
   ArrowRight,
@@ -1084,10 +1084,22 @@ export default function TenantAdminOnlineBooking({
     });
   }, [bookings, selectedBranch, statusFilter, depositFilter, serviceFilter, techFilter, dateFilter, searchQuery]);
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
+  const pagedBookings = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredBookings.slice(start, start + pageSize);
+  }, [filteredBookings, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedBranch, statusFilter, depositFilter, serviceFilter, techFilter, dateFilter, searchQuery]);
+
   // Group filtered bookings by date for main view grouping
   const groupedByDate = useMemo(() => {
     const groups: Record<string, MobileAppBooking[]> = {};
-    filteredBookings.forEach((b) => {
+    pagedBookings.forEach((b) => {
       const d = b.date || 'Khác';
       if (!groups[d]) groups[d] = [];
       groups[d].push(b);
@@ -1122,12 +1134,12 @@ export default function TenantAdminOnlineBooking({
         items: groups[dateStr],
       };
     });
-  }, [filteredBookings]);
+  }, [pagedBookings]);
 
   // Group filtered bookings by time slot for timeline view
   const groupedByTime = useMemo(() => {
     const groups: Record<string, MobileAppBooking[]> = {};
-    filteredBookings.forEach((b) => {
+    pagedBookings.forEach((b) => {
       const timeKey = b.time || 'Chưa xếp giờ';
       if (!groups[timeKey]) groups[timeKey] = [];
       groups[timeKey].push(b);
@@ -1138,7 +1150,7 @@ export default function TenantAdminOnlineBooking({
         time: timeKey,
         items: groups[timeKey],
       }));
-  }, [filteredBookings]);
+  }, [pagedBookings]);
 
   // Stats calculation
   const stats = useMemo(() => {
@@ -2330,6 +2342,22 @@ export default function TenantAdminOnlineBooking({
         </div>
       )}
 
+      {filteredBookings.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <Pagination
+            id="online-booking-pagination"
+            currentPage={page}
+            totalPages={Math.ceil(filteredBookings.length / pageSize) || 1}
+            totalItems={filteredBookings.length}
+            pageSize={pageSize}
+            pageSizeOptions={[6, 12, 24, 48]}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="lịch hẹn"
+            variant="pink"
+          />
+        </div>
+      )}
 
       {/* SECTION 4: Processing & Detail Modal */}
       {selectedBooking && (

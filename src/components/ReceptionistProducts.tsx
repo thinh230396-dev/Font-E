@@ -22,7 +22,6 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
-import { PageHeader } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
 type ProductCategory = 'POLISH' | 'CHEMICAL' | 'CARE' | 'DISPOSABLE' | 'ACCESSORY';
@@ -201,11 +200,12 @@ const movement = (
 ): StockMovement => ({ id, time, type, quantity, actor, note });
 
 const productSeed = (): ReceptionProduct[] => [
+  // --- CHI NHÁNH QUẬN 3 (Q3) ---
   {
     id: 'PRD-001',
     sku: 'GEL-NUDE-014',
-    name: 'Sơn gel HEMA Free',
-    variant: 'Nude Rose 14',
+    name: 'Sơn gel HEMA Free Nude Rose',
+    variant: 'Nude Rose 14 · 15ml',
     category: 'POLISH',
     unit: 'chai',
     branch: 'Q3',
@@ -226,7 +226,7 @@ const productSeed = (): ReceptionProduct[] => [
   {
     id: 'PRD-002',
     sku: 'CHEM-ACE-500',
-    name: 'Acetone chuyên dụng',
+    name: 'Acetone chuyên dụng tháo sơn',
     variant: 'Can 500ml',
     category: 'CHEMICAL',
     unit: 'can',
@@ -248,7 +248,7 @@ const productSeed = (): ReceptionProduct[] => [
   {
     id: 'PRD-003',
     sku: 'CARE-OIL-030',
-    name: 'Dầu dưỡng biểu bì',
+    name: 'Dầu dưỡng biểu bì Keratin',
     variant: 'Hương hoa hồng · 30ml',
     category: 'CARE',
     unit: 'chai',
@@ -267,7 +267,7 @@ const productSeed = (): ReceptionProduct[] => [
   {
     id: 'PRD-004',
     sku: 'DIS-GLOVE-M',
-    name: 'Găng tay Nitrile',
+    name: 'Găng tay Nitrile không bột',
     variant: 'Size M · Hộp 100 chiếc',
     category: 'DISPOSABLE',
     unit: 'hộp',
@@ -286,8 +286,8 @@ const productSeed = (): ReceptionProduct[] => [
   {
     id: 'PRD-005',
     sku: 'ACC-STONE-S',
-    name: 'Đá đính Nail Crystal',
-    variant: 'Mix size · Silver',
+    name: 'Đá đính Nail Crystal Swarovski',
+    variant: 'Mix size · Silver/AB',
     category: 'ACCESSORY',
     unit: 'hộp',
     branch: 'Q3',
@@ -305,8 +305,8 @@ const productSeed = (): ReceptionProduct[] => [
   {
     id: 'PRD-006',
     sku: 'CHEM-PRIMER-015',
-    name: 'Primer không acid',
-    variant: '15ml',
+    name: 'Primer kiềm dầu không acid',
+    variant: 'Chai 15ml',
     category: 'CHEMICAL',
     unit: 'chai',
     branch: 'Q3',
@@ -319,12 +319,12 @@ const productSeed = (): ReceptionProduct[] => [
     lot: 'PRI-2510',
     expiry: dateOffset(18),
     lastCounted: '21/07/2026 · 18:03',
-    movements: [movement('MOV-106', '21/07 · 18:03', 'COUNT', 0, 'Lê Hoàng Nam', 'Phát hiện lô sắp hết hạn')],
+    movements: [movement('MOV-106', '21/07 · 18:03', 'COUNT', 0, 'Lê Hoàng Nam', 'Phát hiện lô sắp hết hạn (còn 18 ngày)')],
   },
   {
     id: 'PRD-007',
     sku: 'GEL-TOP-015',
-    name: 'Top Coat No Wipe',
+    name: 'Top Coat No Wipe Kim Cương',
     variant: 'Bóng cao · 15ml',
     category: 'POLISH',
     unit: 'chai',
@@ -343,8 +343,8 @@ const productSeed = (): ReceptionProduct[] => [
   {
     id: 'PRD-008',
     sku: 'DIS-FILE-180',
-    name: 'Dũa móng dùng một lần',
-    variant: '180/240 grit',
+    name: 'Dũa móng dùng một lần OPI',
+    variant: '180/240 grit · Gói 50 cây',
     category: 'DISPOSABLE',
     unit: 'gói',
     branch: 'Q3',
@@ -360,10 +360,50 @@ const productSeed = (): ReceptionProduct[] => [
     movements: [movement('MOV-108', '22/07 · 18:18', 'COUNT', 0, 'Lê Hoàng Nam', 'Khớp hệ thống')],
   },
   {
+    id: 'PRD-009',
+    sku: 'CARE-SCRUB-500',
+    name: 'Muối tẩy tế bào chết Oải Hương',
+    variant: 'Hũ 500g',
+    category: 'CARE',
+    unit: 'hũ',
+    branch: 'Q3',
+    location: 'Khu Pedicure · Kệ P1',
+    stock: 5,
+    reserved: 1,
+    minimum: 3,
+    target: 10,
+    monthlyUse: 6,
+    lot: 'SCR-2602',
+    expiry: dateOffset(310),
+    lastCounted: '22/07/2026 · 18:20',
+    movements: [movement('MOV-109', '22/07 · 18:20', 'COUNT', 0, 'Minh Châu', 'Sử dụng cho khách dịch vụ Spa')],
+  },
+  {
+    id: 'PRD-010',
+    sku: 'ACC-CHARM-BOW',
+    name: 'Charm Nơ Bướm 3D Ánh Ngọc',
+    variant: 'Hộp 20 cái · Mix màu',
+    category: 'ACCESSORY',
+    unit: 'hộp',
+    branch: 'Q3',
+    location: 'Tủ phụ kiện · Khay 02',
+    stock: 9,
+    reserved: 3,
+    minimum: 4,
+    target: 15,
+    monthlyUse: 8,
+    lot: 'CHM-2608',
+    expiry: '',
+    lastCounted: '22/07/2026 · 18:22',
+    movements: [movement('MOV-110', '22/07 · 18:22', 'COUNT', 0, 'Thảo Nguyễn', 'Khách chuộng đính charm nơ')],
+  },
+
+  // --- CHI NHÁNH QUẬN 1 (Q1) ---
+  {
     id: 'PRD-011',
     sku: 'GEL-RED-021',
-    name: 'Sơn gel Hàn Quốc',
-    variant: 'Wine Red 21',
+    name: 'Sơn gel Hàn Quốc Wine Red',
+    variant: 'Wine Red 21 · 15ml',
     category: 'POLISH',
     unit: 'chai',
     branch: 'Q1',
@@ -381,7 +421,7 @@ const productSeed = (): ReceptionProduct[] => [
   {
     id: 'PRD-012',
     sku: 'CARE-CREAM-100',
-    name: 'Kem dưỡng tay',
+    name: 'Kem dưỡng tay Hạnh Nhân L’Occitane',
     variant: 'Không hương liệu · 100ml',
     category: 'CARE',
     unit: 'tuýp',
@@ -397,6 +437,44 @@ const productSeed = (): ReceptionProduct[] => [
     lastCounted: '22/07/2026 · 18:25',
     movements: [movement('MOV-112', '22/07 · 18:25', 'COUNT', -1, 'Mai Lan', 'Xác nhận hết hàng')],
   },
+  {
+    id: 'PRD-013',
+    sku: 'CHEM-ALC-70',
+    name: 'Cồn y tế 70 độ sát khuẩn',
+    variant: 'Chai xịt 500ml',
+    category: 'CHEMICAL',
+    unit: 'chai',
+    branch: 'Q1',
+    location: 'Khu vệ sinh · Kệ S1',
+    stock: 8,
+    reserved: 1,
+    minimum: 4,
+    target: 12,
+    monthlyUse: 6,
+    lot: 'ALC-2606',
+    expiry: dateOffset(400),
+    lastCounted: '22/07/2026 · 18:28',
+    movements: [movement('MOV-113', '22/07 · 18:28', 'COUNT', 0, 'Gia Huy', 'Tồn kho đầy đủ')],
+  },
+  {
+    id: 'PRD-014',
+    sku: 'DIS-COTTON-500',
+    name: 'Bông lau gel không xơ sợi',
+    variant: 'Bịch 500 miếng',
+    category: 'DISPOSABLE',
+    unit: 'bịch',
+    branch: 'Q1',
+    location: 'Kho tiêu hao · Kệ D1',
+    stock: 3,
+    reserved: 1,
+    minimum: 4,
+    target: 15,
+    monthlyUse: 12,
+    lot: 'COT-2603',
+    expiry: '',
+    lastCounted: '22/07/2026 · 18:30',
+    movements: [movement('MOV-114', '22/07 · 18:30', 'COUNT', 0, 'Gia Huy', 'Sắp hết, cần đề xuất bổ sung')],
+  },
 ];
 
 const reportSeed = (): RestockReport[] => [
@@ -407,10 +485,24 @@ const reportSeed = (): RestockReport[] => [
     branch: 'Q3',
     urgency: 'HIGH',
     status: 'APPROVED',
-    note: 'Ưu tiên bổ sung trước ca chiều ngày mai.',
+    note: 'Ưu tiên bổ sung Acetone và Găng tay trước ca chiều ngày mai để phục vụ khách cuối tuần.',
     items: [
-      { productId: 'PRD-002', name: 'Acetone chuyên dụng', stock: 2, minimum: 4, requested: 10, unit: 'can' },
-      { productId: 'PRD-004', name: 'Găng tay Nitrile', stock: 1, minimum: 3, requested: 9, unit: 'hộp' },
+      { productId: 'PRD-001', name: 'Sơn gel HEMA Free Nude Rose', stock: 0, minimum: 3, requested: 10, unit: 'chai' },
+      { productId: 'PRD-002', name: 'Acetone chuyên dụng tháo sơn', stock: 2, minimum: 4, requested: 10, unit: 'can' },
+      { productId: 'PRD-004', name: 'Găng tay Nitrile không bột', stock: 1, minimum: 3, requested: 9, unit: 'hộp' },
+    ],
+  },
+  {
+    id: 'RPT-260721-02',
+    createdAt: '21/07/2026 · 17:15',
+    createdBy: 'Mai Lan',
+    branch: 'Q1',
+    urgency: 'NORMAL',
+    status: 'SENT',
+    note: 'Yêu cầu nhập bổ sung kem dưỡng tay và bông lau gel phục vụ quầy chăm sóc.',
+    items: [
+      { productId: 'PRD-012', name: 'Kem dưỡng tay Hạnh Nhân L’Occitane', stock: 0, minimum: 2, requested: 8, unit: 'tuýp' },
+      { productId: 'PRD-014', name: 'Bông lau gel không xơ sợi', stock: 3, minimum: 4, requested: 12, unit: 'bịch' },
     ],
   },
 ];
@@ -448,6 +540,8 @@ export default function ReceptionistProducts({
   });
   const [healthFilter, setHealthFilter] = useState<StockHealth>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | ProductCategory>('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [selected, setSelected] = useState<ReceptionProduct | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reportOpen, setReportOpen] = useState(false);
@@ -458,6 +552,11 @@ export default function ReceptionistProducts({
   const [countProduct, setCountProduct] = useState<ReceptionProduct | null>(null);
   const [countForm, setCountForm] = useState({ actual: '', reason: '' });
   const [formError, setFormError] = useState('');
+
+  // Reset pagination when filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, healthFilter, categoryFilter, selectedBranch]);
 
   useEffect(() => {
     localStorage.setItem(productStorageKey, JSON.stringify(products));
@@ -512,6 +611,12 @@ export default function ReceptionistProducts({
         return priority[getHealth(a)] - priority[getHealth(b)] || a.name.localeCompare(b.name, 'vi');
       });
   }, [categoryFilter, healthFilter, scoped, searchQuery]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const pagedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   const branchReports = reports.filter((report) => report.branch === assignedBranch);
   const outProducts = scoped.filter((product) => product.stock <= 0);
@@ -816,7 +921,7 @@ export default function ReceptionistProducts({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((product) => {
+              {pagedProducts.map((product) => {
                 const health = getHealth(product);
                 const checked = selectedIds.includes(product.id);
                 return (
@@ -841,7 +946,7 @@ export default function ReceptionistProducts({
                             : 'border-slate-300 bg-white text-transparent'
                         }`}
                       >
-                        <Check className="h-3 w-3" />
+                        <Check className="h-3.5 w-3.5" />
                       </button>
                     </td>
                     <td className="px-3 py-4">
@@ -959,7 +1064,7 @@ export default function ReceptionistProducts({
         </div>
 
         <div className="divide-y divide-slate-100 md:hidden">
-          {filtered.map((product) => {
+          {pagedProducts.map((product) => {
             const health = getHealth(product);
             const checked = selectedIds.includes(product.id);
             return (
@@ -1026,20 +1131,35 @@ export default function ReceptionistProducts({
           </div>
         )}
 
-        <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[8px] text-slate-400">
-            Hiển thị <strong className="text-slate-600">{filtered.length}</strong> sản phẩm · Đã chọn{' '}
-            <strong className="text-blue-600">{selectedIds.length}</strong>
-          </p>
+        <div className="border-t border-slate-100 bg-slate-50/70 p-4">
+          <Pagination
+            id="receptionist-products-pagination"
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+            itemLabel="sản phẩm"
+          />
           {selectedIds.length > 0 && (
-            <button
-              type="button"
-              onClick={() => openReport()}
-              className="flex w-fit items-center gap-2 border border-blue-600 bg-blue-600 px-3 text-[8px] font-black text-white shadow-sm"
-            >
-              <FileBarChart className="h-3.5 w-3.5" />
-              Báo cáo {selectedIds.length} sản phẩm
-            </button>
+            <div className="mt-3 flex items-center justify-between border-t border-slate-200/60 pt-3">
+              <p className="text-[11px] font-semibold text-slate-500">
+                Đang chọn <strong className="text-blue-600">{selectedIds.length}</strong> sản phẩm cần báo cáo
+              </p>
+              <button
+                type="button"
+                onClick={() => openReport()}
+                className="flex items-center gap-2 border border-blue-600 bg-blue-600 px-3.5 py-1.5 text-xs font-black text-white shadow-sm cursor-pointer hover:bg-blue-700"
+              >
+                <FileBarChart className="h-3.5 w-3.5" />
+                Tạo báo cáo ({selectedIds.length})
+              </button>
+            </div>
           )}
         </div>
       </section>

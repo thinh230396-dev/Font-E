@@ -1,1101 +1,583 @@
-# Quy chuẩn và quy tắc thiết kế UI/UX Frontend
+# SalonSys — Hệ thống quản lý tiệm Nail
 
-> Tài liệu này là nguồn tham chiếu chung khi thiết kế, phát triển và kiểm thử giao diện. Nội dung ưu tiên cho phần mềm quản lý tiệm Nail, nhưng có thể áp dụng cho phần lớn dashboard, trang quản trị và ứng dụng frontend khác.
+Tài liệu này mô tả **đúng hiện trạng source code** của repo. Mọi mục đều dẫn tới file/dòng cụ thể để kiểm chứng. Phần nào chưa suy ra được từ code sẽ được đánh dấu `NEED_CONFIRMATION`.
 
-## Bắt đầu nhanh
+---
 
-Cài đặt và chạy dự án ở chế độ phát triển:
+## 1. Tổng quan project
+
+**SalonSys** là console quản trị SaaS đa tenant (multi-tenant) cho chuỗi tiệm Nail / salon làm đẹp. Đây là một **ứng dụng lấy frontend làm trọng tâm, kèm một backend tối thiểu đã tồn tại** (*frontend-centric application with a minimal existing backend*), khởi nguồn từ một bản export của Google AI Studio (xem `metadata.json`).
+
+Cần phân biệt rõ **ba lớp** đang cùng tồn tại — chúng không giống nhau và không nên gộp khi nói về trạng thái dự án:
+
+| Lớp | Nội dung | Nơi chạy |
+|---|---|---|
+| **Frontend nghiệp vụ** | Toàn bộ 3 cổng, ~76.000 dòng TS/TSX | Trình duyệt |
+| **Mock data + `localStorage`** | Hầu hết dữ liệu nghiệp vụ: tenant, gói, hóa đơn, lịch hẹn, khách hàng, kho, thu chi… | Trình duyệt |
+| **Backend tối thiểu hiện có** | Xác thực, phiên đăng nhập, quản lý một phần tài khoản, yêu cầu nâng cấp gói — trên Cloudflare Worker + D1 | Máy chủ |
+
+> **Backend tối thiểu này không phải là backend chính thức của hệ thống.** Nó phủ đúng 2 nhóm endpoint (xem §11.1). Backend nghiệp vụ đầy đủ vẫn còn phải xây — lộ trình ở [README-MIGRATION.md](README-MIGRATION.md).
+
+Ứng dụng có **3 cổng (portal) theo vai trò** trong cùng một bundle:
+
+| Cổng | Người dùng | Điểm vào |
+|---|---|---|
+| Superadmin | Nhà cung cấp nền tảng SalonSys | `src/App.tsx` (render trực tiếp) |
+| Tenant Admin | Chủ / quản lý chuỗi salon | `src/components/NailTenantAdminPortal.tsx` |
+| Receptionist | Lễ tân tại một chi nhánh | `src/components/ReceptionistPortal.tsx` |
+
+Vai trò được quyết định bởi `sessionAccount.role` trả về từ API xác thực, tại [src/App.tsx:1988](src/App.tsx#L1988) và [src/App.tsx:2018](src/App.tsx#L2018).
+
+**Trạng thái dữ liệu:** hầu hết nghiệp vụ đang chạy trên **mock data + `localStorage`**. Chỉ có **xác thực** và **yêu cầu nâng cấp gói** là gọi API thật. Xem §10 và §11.
+
+Ngôn ngữ giao diện: **tiếng Việt** là gốc, có lớp dịch sang tiếng Anh (`src/i18n/`), chưa dịch đủ (chuỗi thiếu sẽ rơi về tiếng Việt và cảnh báo trong dev — [src/i18n/translate.ts:43](src/i18n/translate.ts#L43)).
+
+---
+
+## 2. Mục tiêu của hệ thống
+
+Suy ra từ các màn hình và model dữ liệu đang tồn tại trong code:
+
+**Ở tầng nền tảng (Superadmin)** — vận hành một SaaS bán theo gói đăng ký:
+- Quản lý vòng đời tenant: tạo, cấu hình, tạm ngưng, xóa ([src/App.tsx:669](src/App.tsx#L669) trở đi).
+- Quản lý catalog gói dịch vụ: giá theo tháng/năm, quyền tính năng (`capabilities`), hạn mức (`limits`), versioning giá, lịch ngừng bán gói kèm chuyển tenant tự động ([src/App.tsx:1197](src/App.tsx#L1197) trở đi).
+- Quản lý hóa đơn đăng ký: phát hành, đối soát, thu tiền, hoàn tiền, theo dõi nợ ([src/types.ts](src/types.ts) — `Invoice`).
+- Duyệt yêu cầu nâng cấp gói từ Tenant Admin ([src/App.tsx:1549](src/App.tsx#L1549)).
+- Bản tin hệ thống, hỗ trợ (ticket), nhật ký kiểm toán, sao lưu.
+
+**Ở tầng salon (Tenant Admin)** — điều hành chuỗi tiệm:
+- Chi nhánh, lịch hẹn, ghế/khu vực, POS, khách hàng, loyalty, nhân sự, dịch vụ & giá, kho vật tư, thư viện màu & mẫu nail, đặt lịch online, thu chi, vệ sinh & an toàn, báo cáo.
+
+**Ở tầng quầy (Receptionist)** — tác nghiệp trong ca:
+- Bàn lễ tân, lịch hẹn, khách hàng, sản phẩm quầy, ghế & phòng, kỹ thuật viên, thanh toán & POS.
+
+---
+
+## 3. Tech stack frontend
+
+| Thành phần | Phiên bản (package.json) | Ghi chú |
+|---|---|---|
+| React | `^19.0.1` | Dùng `lazy` + `Suspense` để chia code theo màn hình |
+| React DOM | `^19.0.1` | |
+| TypeScript | `~5.8.2` | `noEmit`, `strict` **không** bật (xem `tsconfig.json`) |
+| Vite | `^6.2.3` | Bundler + dev server |
+| Tailwind CSS | `^4.1.14` | Qua plugin `@tailwindcss/vite`, **không** có `tailwind.config.js` |
+| lucide-react | `^0.546.0` | Toàn bộ icon |
+| recharts | `^3.10.1` | Biểu đồ trong các màn hình báo cáo |
+| @vitejs/plugin-react | `^5.0.4` | |
+| tsx | `^4.21.0` (dev) | Cho phép Vite nạp plugin auth viết bằng TS |
+| autoprefixer, esbuild | (dev) | |
+
+**Không có trong project:** react-router, thư viện state management (Redux/Zustand/Jotai), thư viện form, thư viện data-fetching (React Query/SWR), ORM đang hoạt động, test runner, ESLint.
+
+Design system nằm trong **`src/index.css` (~5.600 dòng)** dùng khối `@theme static` của Tailwind v4 — token typography, spacing, radius, shadow, z-index, motion, và một `--accent` cho từng cổng.
+
+---
+
+## 4. Cài đặt dependencies
+
+**Môi trường phát triển khuyến nghị: Node.js 20.19+ hoặc 22.12+.**
+
+Đây là **khuyến nghị**, không phải requirement do project khai báo. Project **không** khai `engines` trong `package.json`, cũng không có `.nvmrc` hay `.node-version`. Con số trên suy ra từ `engines` của các dependency đang cài:
+
+| Dependency (bản đang cài) | `engines.node` |
+|---|---|
+| `@vitejs/plugin-react` 5.2.0 | `^20.19.0 \|\| >=22.12.0` ← **ràng buộc chặt nhất** |
+| `vite` 6.4.3 | `^18.0.0 \|\| ^20.0.0 \|\| >=22.0.0` |
+| `esbuild` 0.25.12, `tsx` 4.23.1 | `>=18` |
+| `typescript` 5.8.3 | `>=14.17` |
+| `react` 19.2.8 | `>=0.10.0` |
+| `tailwindcss` 4.3.3 | (không khai) |
+
+Lưu ý: `package.json` chỉ ghi `@vitejs/plugin-react: ^5.0.4`, nên bản thực cài có thể đổi và kéo theo ràng buộc Node đổi. Đây thêm một lý do nên chốt lockfile (xem bên dưới).
+
+`NEED_CONFIRMATION`: **phiên bản Node tối thiểu chính thức** của project chưa được chốt. Khi chốt, nên khai vào `engines` của `package.json` và thêm `.nvmrc` để CI và máy dev dùng chung một mốc.
 
 ```bash
 npm install
+```
+
+**Lưu ý về lockfile:** repo hiện có `bun.lock` nhưng file **rỗng (0 byte)** và **chưa được commit** (đang ở trạng thái untracked). **Không có `package-lock.json`.** Nghĩa là hiện tại **project không có lockfile hợp lệ nào** — mỗi lần cài lại có thể ra cây phụ thuộc khác nhau. Nên chọn một trình quản lý gói và commit lockfile của nó.
+
+---
+
+## 5. Cách chạy project local
+
+```bash
 npm run dev
 ```
 
-Ứng dụng mặc định chạy tại `http://localhost:3000` (cấu hình trong `package.json` và `.env.example`).
+- Mở `http://localhost:3000` (Vite bind `0.0.0.0`, `allowedHosts: true` — xem `vite.config.ts`).
+- Dev server đồng thời phục vụ **API auth giả lập** qua plugin `scripts/vite-local-auth.ts` (chi tiết §11).
 
-Các lệnh khác:
+### Tài khoản đăng nhập khi chạy local
 
-| Lệnh | Mục đích |
-|---|---|
-| `npm run build` | Build bản production vào thư mục `dist/` |
-| `npm run preview` | Xem trước bản build production |
-| `npm run lint` | Kiểm tra kiểu dữ liệu TypeScript (`tsc --noEmit`) |
+Hard-code trong [scripts/vite-local-auth.ts:19](scripts/vite-local-auth.ts#L19):
 
-## Mục lục
+| Vai trò | Email / username | Mật khẩu |
+|---|---|---|
+| Superadmin | `superadmin@salonsys.vn` / `superadmin` | `Super@2026` |
+| Tenant Admin | `tenantadmin@lumierehair.vn` / `nguyenvanboss` | `Lumiere@2026` |
+| Receptionist | `receptionist@nailestudio.vn` / `receptionist` | `Reception@2026` |
 
-1. [Mục tiêu và phạm vi](#1-mục-tiêu-và-phạm-vi)
-2. [Nguyên tắc chung](#2-nguyên-tắc-chung)
-3. [Design token](#3-design-token)
-4. [Typography](#4-typography)
-5. [Màu sắc](#5-màu-sắc)
-6. [Spacing system](#6-spacing-system)
-7. [Layout và grid](#7-layout-và-grid)
-8. [Cấu trúc module và trang](#8-cấu-trúc-module-và-trang)
-9. [Card](#9-card)
-10. [Button](#10-button)
-11. [Form, input và validation](#11-form-input-và-validation)
-12. [Table](#12-table)
-13. [Modal và drawer](#13-modal-và-drawer)
-14. [Icon](#14-icon)
-15. [Trạng thái và badge](#15-trạng-thái-và-badge)
-16. [Navigation, sidebar và header](#16-navigation-sidebar-và-header)
-17. [Responsive](#17-responsive)
-18. [Dark mode](#18-dark-mode)
-19. [Accessibility](#19-accessibility)
-20. [Các trạng thái UX](#20-các-trạng-thái-ux)
-21. [Quy ước đặt tên CSS và component](#21-quy-ước-đặt-tên-css-và-component)
-22. [Tái sử dụng component](#22-tái-sử-dụng-component)
-23. [Những điều không nên làm](#23-những-điều-không-nên-làm)
-24. [Checklist hoàn thành màn hình](#24-checklist-hoàn-thành-màn-hình)
-25. [Ví dụ CSS variables](#25-ví-dụ-css-variables)
-26. [Cấu trúc thư mục frontend](#26-cấu-trúc-thư-mục-frontend)
+> Đây là tài khoản demo dùng cho phát triển, không phải bí mật production.
+
+### Cửa đăng nhập nhanh (tắt mặc định)
+
+Nếu đặt `SALONSYS_DEV_LOGIN=1`, dev server mở thêm `GET /api/auth/dev-login?role=SUPERADMIN|TENANT_ADMIN|RECEPTIONIST` để cấp phiên **không cần mật khẩu** ([scripts/vite-local-auth.ts:229](scripts/vite-local-auth.ts#L229)). Plugin khai `apply: 'serve'` nên không tồn tại trong bản build.
+
+### Xem thư viện component riêng lẻ
+
+```bash
+npm run dev
+# rồi mở http://localhost:3000/ui-preview.html
+```
+
+Entry `src/ui-preview.tsx`, không cần đăng nhập. Vite chỉ build `index.html` mặc định nên trang này **không** vào bundle production.
 
 ---
 
-## 1. Mục tiêu và phạm vi
+## 6. Các script trong `package.json`
 
-Tài liệu nhằm bảo đảm:
+| Script | Lệnh | Mục đích |
+|---|---|---|
+| `dev` | `vite --port=3000 --host=0.0.0.0` | Dev server + API auth local |
+| `build` | `vite build && node scripts/prepare-sites-build.mjs` | Build SPA, rồi copy `scripts/sites-worker.js` → `dist/server/index.js` và `.openai/hosting.json` → `dist/.openai/hosting.json` |
+| `preview` | `vite preview` | Phục vụ bản build tĩnh (**không có API** — worker không chạy ở đây) |
+| `lint` | `tsc --noEmit` | **Bước kiểm tra duy nhất** của project. Hiện đang **pass** (exit 0) |
+| `clean` | `rm -rf dist server.js` | Lệnh Unix; trên Windows cần Git Bash |
 
-- Giao diện nhất quán giữa các module như Lịch hẹn, Khách hàng, Kỹ thuật viên, Dịch vụ, Sản phẩm, Hóa đơn và Báo cáo.
-- Người dùng hoàn thành công việc nhanh, ít nhầm lẫn và luôn hiểu trạng thái của hệ thống.
-- Component dễ tái sử dụng, bảo trì, kiểm thử và mở rộng.
-- Giao diện hoạt động tốt trên desktop, tablet, mobile, chế độ sáng và tối.
-- Sản phẩm đáp ứng các yêu cầu accessibility cơ bản.
+**Không có test runner** (không Jest, không Vitest, không script `test`). Cách xác minh thay đổi: chạy `npm run lint` và chạy thử app.
 
-Mọi ngoại lệ so với quy chuẩn cần có lý do về nghiệp vụ hoặc trải nghiệm người dùng, được ghi lại trong tài liệu thiết kế hoặc pull request.
+---
 
-## 2. Nguyên tắc chung
+## 7. Cấu trúc thư mục chính
 
-### 2.1. Nhất quán
-
-Một thành phần có cùng vai trò phải có cùng hình thức và hành vi trên mọi màn hình. Ví dụ, `Tạo lịch hẹn`, `Thêm khách hàng` và `Tạo hóa đơn` đều là hành động chính nên dùng cùng một kiểu Primary Button.
-
-### 2.2. Phân cấp thị giác rõ ràng
-
-- Mỗi màn hình chỉ nên có một tiêu đề trang rõ ràng.
-- Mỗi khu vực chỉ nên có một hành động chính nổi bật.
-- Dùng kích thước chữ, độ đậm, màu sắc và khoảng cách để thể hiện mức độ quan trọng.
-- Nội dung quan trọng xuất hiện trước; chi tiết phụ có thể đặt trong trang chi tiết, tooltip, popover hoặc drawer.
-
-### 2.3. Ưu tiên công việc của người dùng
-
-- Thiết kế theo luồng công việc, không theo cấu trúc dữ liệu nội bộ.
-- Hạn chế số bước để hoàn thành tác vụ thường xuyên.
-- Giữ lại ngữ cảnh khi người dùng quay lại danh sách: bộ lọc, từ khóa, trang hiện tại và vị trí cuộn nếu phù hợp.
-- Dùng ngôn ngữ gần với nghiệp vụ tiệm Nail, ví dụ `Lịch hẹn`, `Kỹ thuật viên`, `Ghế`, `Dịch vụ`, `Tiền tip`.
-
-### 2.4. Có phản hồi cho mọi thao tác
-
-Sau khi người dùng thao tác, hệ thống phải thể hiện ít nhất một trong các trạng thái: đang xử lý, thành công, thất bại hoặc cần bổ sung thông tin. Không để nút bấm “im lặng”.
-
-### 2.5. Phòng tránh lỗi trước khi báo lỗi
-
-- Vô hiệu hóa hành động khi chưa đủ điều kiện và giải thích lý do nếu không hiển nhiên.
-- Cảnh báo xung đột lịch hẹn trước khi lưu.
-- Xác nhận các thao tác phá hủy hoặc khó hoàn tác.
-- Không xóa dữ liệu chỉ bằng một thao tác vô tình; ưu tiên soft delete hoặc cho phép hoàn tác nếu nghiệp vụ hỗ trợ.
-
-### 2.6. Nội dung dễ hiểu
-
-- Dùng câu ngắn, động từ rõ: `Lưu thay đổi`, `Xác nhận thanh toán`, `Hủy lịch hẹn`.
-- Tránh thuật ngữ kỹ thuật, viết tắt không phổ biến và thông báo lỗi chung chung.
-- Định dạng ngày, giờ, tiền tệ và số điện thoại nhất quán theo locale của sản phẩm.
-
-## 3. Design token
-
-Design token là tên có ý nghĩa đại diện cho màu, kích thước, khoảng cách, bo góc, bóng đổ, typography và chuyển động. Không dùng giá trị rời rạc trực tiếp trong component nếu giá trị đó đã có token.
-
-### 3.1. Các nhóm token tối thiểu
-
-- `color`: brand, background, surface, text, border, trạng thái.
-- `font`: family, size, weight, line-height.
-- `space`: khoảng cách theo thang đo.
-- `radius`: bo góc.
-- `shadow`: độ nổi.
-- `size`: chiều cao control, sidebar, header.
-- `z-index`: lớp hiển thị.
-- `motion`: thời lượng và easing.
-- `breakpoint`: mốc responsive.
-
-### 3.2. Token gốc và token ngữ nghĩa
-
-Ưu tiên token ngữ nghĩa trong component:
-
-```css
-/* Token gốc */
---violet-600: #7c3aed;
---gray-900: #111827;
-
-/* Token ngữ nghĩa */
---color-primary: var(--violet-600);
---color-text-primary: var(--gray-900);
+```
+.
+├── index.html                    # Entry SPA chính
+├── ui-preview.html               # Entry harness xem component (chỉ dev)
+├── vite.config.ts                # Vite + plugin auth local + alias @ → gốc repo
+├── tsconfig.json                 # target ES2022, alias "@/*": ["./*"], noEmit
+├── metadata.json                 # Metadata bản export AI Studio
+├── .openai/hosting.json          # Cấu hình binding D1 khi deploy
+│
+├── src/
+│   ├── main.tsx                  # createRoot + LanguageProvider + ToastProvider
+│   ├── App.tsx                   # ~2.100 dòng — state tree + business logic toàn hệ thống
+│   ├── types.ts                  # Model dữ liệu tầng nền tảng (Tenant, Invoice, Package…)
+│   ├── data.ts                   # Mock seed cấp hệ thống + helper localStorage
+│   ├── index.css                 # ~5.600 dòng — toàn bộ design token & class
+│   │
+│   ├── auth/demoAccounts.ts      # PortalRole + danh sách account demo phía client
+│   ├── mockData/supportTickets.ts# Seed ticket hỗ trợ
+│   ├── hooks/useGlobalModalGuard.ts
+│   ├── i18n/                     # LanguageProvider, translate, bảng dịch EN
+│   │
+│   ├── components/
+│   │   ├── ui/                   # Thư viện dùng chung: Button, Field, Switch,
+│   │   │                         # StatusBadge, DataTable, PageHeader, Modal,
+│   │   │                         # Pagination, Toast
+│   │   ├── (Superadmin)          # Overview, TenantManagement, TenantAdminManagement,
+│   │   │                         # SubscriptionPackages, BillingAndInvoices,
+│   │   │                         # SystemReports, SystemSettings,
+│   │   │                         # SuperAdminAnnouncements, SecurityAndLogs,
+│   │   │                         # HelpAndSupport, DataBackup, AccountPreferences
+│   │   ├── (Tenant Admin)        # NailTenantAdminPortal + TenantAdmin*.tsx
+│   │   ├── (Receptionist)        # ReceptionistPortal + Receptionist*.tsx
+│   │   └── nailAdminData.ts      # Cấu hình + dữ liệu demo cho các trang Tenant Admin
+│   │
+│   └── utils/                    # Lớp logic thuần & truy cập dữ liệu (xem §11)
+│
+├── scripts/
+│   ├── vite-local-auth.ts        # API auth giả lập cho `npm run dev`
+│   ├── sites-worker.js           # Cloudflare Worker + D1 cho production
+│   └── prepare-sites-build.mjs   # Hậu xử lý sau `vite build`
+│
+├── db/schema.ts                  # SQL schema dạng chuỗi (tài liệu, không chạy)
+└── drizzle/*.sql                 # Migration SQL (tài liệu, không chạy)
 ```
 
-Component dùng `--color-primary`, không dùng trực tiếp `#7c3aed`. Cách này giúp thay thương hiệu và hỗ trợ dark mode dễ hơn.
+### Ba file cần biết trước tiên
 
-## 4. Typography
+1. **`src/App.tsx`** — nguồn sự thật duy nhất cho gần như toàn bộ state cấp hệ thống: `tenants`, `packages`, `alerts`, `invoices`, `tenantAdmins`, `upgradeRequests`, `tickets`, `announcements`. Kèm rất nhiều `useEffect` vừa đồng bộ xuống `localStorage`, vừa **chạy nghiệp vụ đáng lẽ thuộc backend** (tự hết hạn subscription, tự sinh hóa đơn, migrate schema bản ghi cũ, ghi audit log).
+2. **`src/types.ts`** — model dữ liệu tầng nền tảng.
+3. **`src/index.css`** — mọi token thiết kế.
 
-### 4.1. Font chữ
+---
 
-- Dùng tối đa 1–2 font trong toàn hệ thống.
-- Khuyến nghị: `Inter`, `Be Vietnam Pro`, `Roboto` hoặc font hệ thống.
-- Luôn có fallback:
+## 8. Các role đang tồn tại
 
-```css
-font-family: "Inter", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
-```
-
-### 4.2. Thang chữ đề xuất
-
-| Vai trò | Kích thước | Line-height | Độ đậm |
-|---|---:|---:|---:|
-| Display/Số liệu lớn | 32px | 40px | 700 |
-| Tiêu đề trang | 28px | 36px | 700 |
-| Tiêu đề khu vực | 22–24px | 30–32px | 600–700 |
-| Tiêu đề card | 16–18px | 24–26px | 600 |
-| Nội dung chính | 14–16px | 20–24px | 400 |
-| Label/Button | 14px | 20px | 500–600 |
-| Chú thích | 12–13px | 16–18px | 400–500 |
-
-### 4.3. Quy tắc
-
-- Cỡ chữ nội dung mặc định không nhỏ hơn `14px`; nội dung đọc dài ưu tiên `16px`.
-- Không tạo kích thước tùy ý như `15px`, `17px`, `19px` nếu không có trong token.
-- Không dùng màu sắc là cách duy nhất để phân cấp nội dung.
-- Văn bản dài nên có chiều rộng tối đa khoảng `65–75` ký tự mỗi dòng.
-- Dùng tabular numbers cho cột tiền hoặc số liệu cần so sánh:
-
-```css
-.numeric {
-  font-variant-numeric: tabular-nums;
-}
-```
-
-## 5. Màu sắc
-
-### 5.1. Nhóm màu
-
-- `Primary`: thương hiệu và hành động chính.
-- `Success`: hoàn thành, thanh toán thành công, đang hoạt động.
-- `Warning`: chờ xử lý, cần chú ý.
-- `Danger`: lỗi, hủy, quá hạn, thao tác phá hủy.
-- `Info`: thông tin hoặc tiến trình trung tính.
-- `Neutral`: nền, chữ, border và trạng thái không hoạt động.
-
-### 5.2. Quy tắc sử dụng
-
-- Mỗi màu phải có vai trò nhất quán.
-- Không dùng màu trạng thái cho mục đích trang trí.
-- Luôn kiểm tra độ tương phản giữa chữ và nền.
-- Trạng thái không chỉ dựa vào màu; kết hợp icon, nhãn hoặc hình dạng.
-- Primary Button không nên xuất hiện quá nhiều trong cùng một vùng nhìn.
-- Dùng nền màu nhạt và chữ màu đậm cho badge để bảo đảm dễ đọc.
-
-### 5.3. Ánh xạ trạng thái tham khảo
-
-| Trạng thái | Màu ngữ nghĩa |
-|---|---|
-| Đã hoàn thành / Đã thanh toán | Success |
-| Đã xác nhận / Đang phục vụ | Info hoặc Primary |
-| Chờ xác nhận / Sắp đến hạn | Warning |
-| Đã hủy / Thất bại / Quá hạn | Danger |
-| Không hoạt động / Bản nháp | Neutral |
-
-## 6. Spacing system
-
-Dùng hệ khoảng cách theo bội số của `4px`, ưu tiên các giá trị:
-
-| Token | Giá trị | Cách dùng phổ biến |
-|---|---:|---|
-| `space-1` | 4px | Khoảng cách rất nhỏ |
-| `space-2` | 8px | Icon và chữ |
-| `space-3` | 12px | Thành phần trong control |
-| `space-4` | 16px | Khoảng cách tiêu chuẩn |
-| `space-5` | 20px | Padding nhỏ của card |
-| `space-6` | 24px | Nhóm nội dung/card |
-| `space-8` | 32px | Khu vực lớn |
-| `space-10` | 40px | Phân tách section |
-| `space-12` | 48px | Phân tách lớn |
-
-Quy tắc:
-
-- Không dùng khoảng cách ngẫu nhiên như `17px`, `21px`, `29px`.
-- Khoảng cách bên trong một nhóm phải nhỏ hơn khoảng cách giữa các nhóm.
-- Mobile có thể giảm page padding từ `24–32px` xuống `16px`.
-- Dùng `gap` cho flex/grid thay vì margin rời rạc giữa các phần tử con.
-
-## 7. Layout và grid
-
-### 7.1. Khung trang quản trị
-
-- Sidebar mở rộng: `240–280px`; khuyến nghị `260px`.
-- Sidebar thu gọn: `64–80px`.
-- Header: `64–72px`; khuyến nghị `68px`.
-- Page padding desktop: `24–32px`.
-- Chiều rộng nội dung tối đa: `1440–1600px` tùy mật độ dữ liệu.
-
-### 7.2. Grid
-
-- Dùng grid 12 cột cho layout phức tạp.
-- Khoảng cách cột: `16–24px`.
-- Card thống kê: 4 cột ở desktop lớn, 2 cột ở tablet, 1 cột ở mobile.
-- Tránh đặt chiều rộng cố định cho nội dung cần co giãn.
-
-```css
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-6);
-}
-```
-
-### 7.3. Căn chỉnh
-
-- Nội dung và tiêu đề trong cùng khu vực cần chung trục căn.
-- Văn bản căn trái; số và tiền tệ trong bảng căn phải.
-- Không căn giữa đoạn văn dài hoặc form.
-- Dùng vùng trắng có chủ đích; không lấp đầy mọi khoảng trống.
-
-## 8. Cấu trúc module và trang
-
-### 8.1. Cấu trúc module chuẩn
-
-Mỗi module nên có:
-
-1. Tên module và mô tả ngắn.
-2. Hành động chính.
-3. Tìm kiếm và bộ lọc.
-4. Nội dung chính: danh sách, bảng, lịch, biểu đồ hoặc chi tiết.
-5. Phân trang hoặc cơ chế tải thêm.
-6. Các trạng thái loading, empty, error và success.
-
-Ví dụ module Khách hàng:
-
-```text
-Khách hàng                              [+ Thêm khách hàng]
-Quản lý hồ sơ và lịch sử sử dụng dịch vụ
-
-[Tìm theo tên hoặc số điện thoại] [Trạng thái ▾] [Bộ lọc]
-
-[Bảng danh sách khách hàng]
-[Thông tin phân trang]
-```
-
-### 8.2. Cấu trúc trang chuẩn
-
-```text
-App shell
-├── Sidebar
-├── Header
-└── Main
-    ├── Breadcrumb (khi cần)
-    ├── Page header
-    ├── Toolbar / Filter
-    ├── Main content
-    └── Pagination / Footer actions
-```
-
-### 8.3. Quy tắc hành động
-
-- Hành động chính đặt ở góc trên bên phải trên desktop, dễ tiếp cận trên mobile.
-- Các hành động phụ nằm cạnh hành động chính hoặc trong menu `Thêm`.
-- Hành động theo từng dòng đặt ở cuối dòng; khi có hơn 2–3 hành động, dùng overflow menu.
-- Breadcrumb chỉ dùng khi hệ thống có phân cấp sâu; không thay thế nút quay lại trong luồng tác vụ.
-
-## 9. Card
-
-Card dùng để nhóm nội dung liên quan, không dùng để bọc mọi phần tử.
-
-### 9.1. Thông số đề xuất
-
-```css
-.card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-6);
-  box-shadow: var(--shadow-sm);
-}
-```
-
-- Padding: `20–24px`.
-- Border radius: `12px`.
-- Gap nội bộ: `12–16px`.
-- Bóng đổ nhẹ; ưu tiên border để phân tách trong dashboard dày dữ liệu.
-
-### 9.2. Cấu trúc
-
-- Header: tiêu đề, mô tả ngắn, thao tác tùy chọn.
-- Body: nội dung chính.
-- Footer: metadata hoặc hành động nếu cần.
-
-### 9.3. Quy tắc
-
-- Card cùng hàng nên có cấu trúc và chiều cao thị giác tương đương.
-- Toàn card chỉ được click khi người dùng có thể nhận biết rõ nó tương tác được.
-- Không lồng quá nhiều lớp card.
-- Không nhồi quá nhiều dữ liệu; chuyển chi tiết sang trang chi tiết hoặc drawer.
-
-## 10. Button
-
-### 10.1. Các biến thể
-
-- `Primary`: hành động quan trọng nhất.
-- `Secondary`: hành động phụ.
-- `Tertiary/Ghost`: thao tác nhẹ, ít ưu tiên.
-- `Danger`: hành động phá hủy.
-- `Link`: điều hướng trong nội dung.
-- `Icon Button`: hành động quen thuộc, phải có accessible name.
-
-### 10.2. Kích thước
-
-| Size | Chiều cao | Padding ngang | Icon |
-|---|---:|---:|---:|
-| Small | 32–36px | 12px | 16px |
-| Medium | 40–44px | 16px | 18–20px |
-| Large | 48px | 20px | 20px |
-
-### 10.3. Quy tắc
-
-- Mặc định dùng Medium, bán kính `8px`, font `14px/600`.
-- Vùng bấm cảm ứng tối thiểu khoảng `44 × 44px`.
-- Nút phải có trạng thái default, hover, active, focus-visible, disabled và loading.
-- Khi loading, giữ nguyên chiều rộng nút để tránh layout shift.
-- Nút chỉ có icon phải có tooltip khi ý nghĩa không hiển nhiên và luôn có `aria-label`.
-- Không dùng disabled để che giấu lý do; hiển thị hướng dẫn khi cần.
-- Thứ tự nút phải nhất quán. Với giao diện trái sang phải, hành động chính thường ở phía phải trong footer modal.
-
-## 11. Form, input và validation
-
-### 11.1. Cấu trúc field
-
-```text
-Label *
-[Control]
-Helper text hoặc thông báo lỗi
-```
-
-- Label luôn hiển thị; không dùng placeholder thay cho label.
-- Dấu `*` cần đi kèm chú thích `Bắt buộc` hoặc quy ước rõ ràng.
-- Helper text giải thích định dạng hoặc tác động của dữ liệu.
-
-### 11.2. Thông số
-
-- Input/select mặc định cao `40–44px`.
-- Textarea có chiều cao phù hợp, cho phép resize dọc nếu cần.
-- Border radius `8px`.
-- Padding ngang `12px`.
-- Khoảng cách label–control `6–8px`; control–message `4–6px`.
-
-### 11.3. Chọn control đúng
-
-- Checkbox: chọn nhiều lựa chọn độc lập.
-- Radio: chọn một trong ít lựa chọn hiển thị đồng thời.
-- Select: danh sách lựa chọn dài hoặc cần tiết kiệm diện tích.
-- Switch: thay đổi có hiệu lực gần như ngay lập tức; không dùng cho lựa chọn cần bấm Lưu.
-- Date/time picker: hỗ trợ nhập bàn phím và định dạng locale.
-- Autocomplete: khách hàng, dịch vụ hoặc kỹ thuật viên có danh sách lớn.
-
-### 11.4. Validation
-
-- Kiểm tra phía client để phản hồi nhanh, nhưng server vẫn là nguồn xác thực cuối cùng.
-- Validate khi blur hoặc submit; tránh báo lỗi khi người dùng vừa bắt đầu nhập.
-- Sau submit thất bại, tập trung vào lỗi đầu tiên và hiển thị tổng hợp lỗi nếu form dài.
-- Thông báo nêu rõ vấn đề và cách sửa:
-  - Tốt: `Số điện thoại phải có 10 chữ số.`
-  - Không tốt: `Dữ liệu không hợp lệ.`
-- Không xóa dữ liệu người dùng đã nhập khi lỗi.
-- Đối chiếu lỗi server với đúng field; lỗi toàn cục đặt ở đầu form.
-- Dữ liệu phụ thuộc cần được kiểm tra theo nghiệp vụ, ví dụ:
-  - Giờ kết thúc phải sau giờ bắt đầu.
-  - Kỹ thuật viên không được trùng lịch.
-  - Số tiền giảm không vượt quá tổng hóa đơn.
-
-## 12. Table
-
-Table phù hợp với dữ liệu cần so sánh theo cột. Với nội dung thiên về đọc hoặc hành động trên mobile, cân nhắc list/card.
-
-### 12.1. Quy chuẩn
-
-- Chiều cao dòng: `44–56px`.
-- Header phải dễ phân biệt và có nhãn rõ.
-- Văn bản căn trái; số, tiền và phần trăm căn phải.
-- Cột thao tác nằm bên phải.
-- Giới hạn khoảng `8–10` cột hiển thị; thông tin phụ đưa vào trang chi tiết hoặc drawer.
-- Cột quan trọng có thể sticky khi cuộn ngang.
-- Header sticky khi bảng dài, nếu không che khuất nội dung.
-- Cho biết rõ cột đang sắp xếp và chiều sắp xếp.
-
-### 12.2. Tương tác
-
-- Chọn nhiều dòng phải hiển thị số lượng đã chọn và bulk actions.
-- Không vừa click toàn dòng vừa đặt nhiều control tương tác mà không phân biệt rõ.
-- Phân trang hiển thị tổng số bản ghi, phạm vi đang xem và kích thước trang khi cần.
-- Giữ bộ lọc và trang hiện tại khi xem chi tiết rồi quay lại.
-- Cung cấp trạng thái loading, empty và error ngay trong vùng bảng.
-
-### 12.3. Dữ liệu
-
-- Tiền tệ: nhất quán, ví dụ `450.000 ₫`.
-- Ngày giờ: nhất quán và đủ ngữ cảnh, ví dụ `27/07/2026, 09:30`.
-- Giá trị thiếu dùng `—`, không dùng chuỗi `null` hoặc ô trống khó hiểu.
-- Nội dung bị cắt cần cách xem đầy đủ, chẳng hạn tooltip hoặc trang chi tiết.
-
-## 13. Modal và drawer
-
-### 13.1. Khi nào sử dụng
-
-- Modal: xác nhận hoặc tác vụ ngắn, cần tập trung.
-- Drawer: xem/chỉnh sửa thông tin phụ mà vẫn giữ ngữ cảnh trang hiện tại.
-- Trang riêng: form dài, nhiều bước, nội dung phức tạp hoặc cần URL riêng.
-
-### 13.2. Kích thước modal tham khảo
-
-- Small: `400–480px`.
-- Medium: `560–720px`.
-- Large: `800–960px`.
-- Trên mobile: gần toàn màn hình, giữ khoảng cách an toàn.
-
-### 13.3. Quy tắc
-
-- Có tiêu đề rõ, nút đóng có accessible name và footer hành động nhất quán.
-- Focus được đưa vào modal khi mở, giữ trong modal và trả về phần tử kích hoạt khi đóng.
-- `Escape` đóng modal nếu không làm mất dữ liệu nguy hiểm.
-- Click backdrop chỉ đóng khi không có nguy cơ mất dữ liệu.
-- Nội dung dài cuộn trong body; header/footer có thể sticky.
-- Không mở modal chồng modal. Thay bằng cập nhật nội dung, drawer hoặc trang riêng.
-- Cảnh báo trước khi đóng form có thay đổi chưa lưu.
-
-## 14. Icon
-
-- Chỉ dùng một hệ icon chính, ví dụ Lucide, Material Symbols hoặc Heroicons.
-- Kích thước phổ biến:
-  - `16px`: input, badge, nút nhỏ.
-  - `18–20px`: nút tiêu chuẩn.
-  - `20–24px`: navigation.
-  - `24–32px`: minh họa nhỏ hoặc card thống kê.
-- Giữ cùng stroke width và phong cách.
-- Icon trang trí dùng `aria-hidden="true"`.
-- Icon truyền đạt thông tin phải có text hoặc accessible name.
-- Không dùng icon mơ hồ thay cho nhãn ở tác vụ quan trọng.
-
-## 15. Trạng thái và badge
-
-### 15.1. Badge
-
-- Dùng để thể hiện trạng thái hoặc phân loại ngắn.
-- Nội dung nên từ 1–3 từ.
-- Không dùng badge như nút nếu nó không tương tác.
-- Không chỉ dùng màu để phân biệt trạng thái.
-- Bán kính có thể là pill; padding và chiều cao thống nhất.
-
-### 15.2. Trạng thái nghiệp vụ mẫu
+Định nghĩa tại [src/auth/demoAccounts.ts:1](src/auth/demoAccounts.ts#L1):
 
 ```ts
-type AppointmentStatus =
-  | "pending"
-  | "confirmed"
-  | "in_service"
-  | "completed"
-  | "cancelled"
-  | "no_show";
+export type PortalRole = 'SUPERADMIN' | 'TENANT_ADMIN' | 'RECEPTIONIST';
 ```
 
-Ánh xạ nhãn, màu và icon tại một nơi dùng chung, không lặp lại trong từng màn hình.
+Ba vai trò này được **backend công nhận** trong `scripts/sites-worker.js` (cột `app_users.role`) và dùng để phân quyền endpoint:
+- `PUT /api/auth/accounts`, `DELETE /api/auth/accounts/:id` → chỉ `SUPERADMIN`.
+- `POST /api/package-upgrade-requests` → chỉ `TENANT_ADMIN`.
+- `PATCH|DELETE /api/package-upgrade-requests/:id` → chỉ `SUPERADMIN`.
+- `GET /api/package-upgrade-requests` → `SUPERADMIN` thấy tất cả; `TENANT_ADMIN` chỉ thấy của tenant mình.
 
-### 15.3. Trạng thái tương tác
+### Các "vai trò" khác chỉ tồn tại như dữ liệu, chưa gắn vào phân quyền
 
-Mọi control phải định nghĩa:
+- `TenantAdminRole = 'Owner' | 'Manager' | 'Staff'` ([src/types.ts:159](src/types.ts#L159)) — chỉ là trường hiển thị trên màn hình Tenant Admin, **không** ảnh hưởng quyền truy cập.
+- `SystemLog.actorRole` có thêm `'SUPPORT'`, `AdminSession.role` có `'SUPERADMIN' | 'SUPPORT'` — vai trò SUPPORT xuất hiện trong dữ liệu nhật ký nhưng **không có** trong `PortalRole`, tức chưa đăng nhập được. `NEED_CONFIRMATION`: SUPPORT có phải một vai trò đăng nhập thật trong kế hoạch không?
+- `StaffRole = 'RECEPTIONIST' | 'TECHNICIAN'` trong `TenantAdminStaff.tsx` là **dữ liệu nhân sự của tiệm**, không phải tài khoản đăng nhập.
 
-- Default
-- Hover
-- Active/Pressed
-- Focus-visible
-- Selected
-- Disabled
-- Read-only nếu có
-- Loading nếu có
-- Error nếu có
+### Quan hệ tài khoản ↔ tenant: **một Tenant Admin quản lý được nhiều tenant** (đã chốt)
 
-## 16. Navigation, sidebar và header
+Đây là quyết định nghiệp vụ đã được chốt. Frontend hiện đang đi đúng hướng này, backend thì chưa:
 
-### 16.1. Sidebar
+| Nơi | Hiện trạng |
+|---|---|
+| `TenantAdminAccount.tenantIds: string[]` + `tenantCount` — [src/types.ts:170](src/types.ts#L170) | Hỗ trợ nhiều tenant ✅ |
+| Màn hình gán tiệm "Tiệm đang quản lí" — [TenantAdminManagement.tsx:410](src/components/TenantAdminManagement.tsx#L410) | Cho phép gán nhiều tenant cho một admin ✅ |
+| `app_users.tenant_id TEXT` — [db/schema.ts:41](db/schema.ts#L41) | **Chỉ chứa được một tenant** ❌ |
 
-- Nhóm menu theo nghiệp vụ và tần suất sử dụng.
-- Active item phải rõ bằng nhiều tín hiệu: nền, màu chữ và/hoặc indicator.
-- Icon không thay thế hoàn toàn label ở trạng thái mở rộng.
-- Khi thu gọn, cung cấp tooltip cho icon.
-- Không đặt quá nhiều cấp lồng; tối đa khoảng 2 cấp nếu có thể.
-- Ghi nhớ trạng thái mở/thu gọn khi phù hợp.
+**Hệ quả đang là lỗi thật trong code:** khi đồng bộ tài khoản đăng nhập, [App.tsx:660](src/App.tsx#L660) chỉ gửi `admin.tenantIds[0]` lên backend — các tenant còn lại bị rơi mất. Và vì `sites-worker.js` lọc dữ liệu bằng `tenant_id = session.tenantId`, một admin được gán 3 tiệm khi đăng nhập **chỉ thấy được tiệm đầu tiên**.
 
-### 16.2. Header
+**Hướng xử lý đã chốt** (chi tiết ở [README-MIGRATION.md](README-MIGRATION.md) §11):
+- Backend cần **bảng nối** giữa tài khoản và tenant, thay cho cột `app_users.tenant_id` đơn lẻ.
+- **Tiệm đang làm việc được lưu trong phiên đăng nhập** (`active_tenant_id` trong session), đổi tiệm bằng một lời gọi API đổi session — chứ không phải frontend đính kèm tenant vào từng request.
+- Frontend cần thêm **bộ chuyển tiệm** cho tài khoản quản lý nhiều tenant (hiện chưa có).
 
-Header thường chứa:
+### Phân quyền theo gói (entitlement), không phải theo vai trò
 
-- Nút mở menu trên mobile.
-- Tên chi nhánh hoặc bộ chọn chi nhánh.
-- Tìm kiếm toàn cục nếu cần.
-- Thông báo.
-- Hồ sơ và menu tài khoản.
-
-Không đưa mọi chức năng lên header. Ưu tiên các thao tác toàn cục và thường xuyên.
-
-### 16.3. Navigation
-
-- Tên menu dùng danh từ rõ ràng: `Lịch hẹn`, `Khách hàng`, `Hóa đơn`.
-- URL phải ổn định, có thể bookmark cho trang quan trọng.
-- Nút Back của trình duyệt phải hoạt động đúng.
-- Không thay đổi vị trí navigation giữa các trang tương đương.
-
-## 17. Responsive
-
-### 17.1. Breakpoint tham khảo
-
-```css
-/* Mobile: < 768px */
-/* Tablet: 768px–1023px */
-/* Desktop: >= 1024px */
-/* Large desktop: >= 1440px */
-```
-
-Breakpoint nên xuất phát từ thời điểm nội dung bị vỡ, không phụ thuộc tuyệt đối vào tên thiết bị.
-
-### 17.2. Quy tắc thích ứng
-
-- Desktop: sidebar cố định hoặc thu gọn.
-- Tablet: sidebar thu gọn hoặc drawer.
-- Mobile: sidebar thành navigation drawer; page padding khoảng `16px`.
-- Grid chuyển từ 4 → 2 → 1 cột.
-- Filter phức tạp chuyển vào drawer/bottom sheet nhưng vẫn hiển thị số bộ lọc đang áp dụng.
-- Table có thể cuộn ngang, cố định cột quan trọng hoặc chuyển sang list/card.
-- Hành động chính phải dễ tiếp cận và không bị bàn phím ảo che.
-- Không ẩn chức năng cốt lõi chỉ vì màn hình nhỏ.
-- Kiểm tra ở độ rộng hẹp và khi zoom `200%`, không chỉ tại vài thiết bị mẫu.
-
-```css
-@media (max-width: 1023px) {
-  .dashboard-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 767px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
-  }
-}
-```
-
-## 18. Dark mode
-
-Dark mode phải dùng token ngữ nghĩa, không đảo màu cơ học.
-
-### 18.1. Thành phần cần kiểm tra
-
-- Nền trang, surface và elevated surface.
-- Chữ chính, chữ phụ và chữ disabled.
-- Border, divider và focus ring.
-- Input, dropdown, table, tooltip, modal và drawer.
-- Hover, active, selected.
-- Badge và màu trạng thái.
-- Biểu đồ, logo, ảnh và scrollbar nếu tùy biến.
-
-### 18.2. Quy tắc
-
-- Không dùng trắng tinh cho toàn bộ chữ; dùng độ sáng theo phân cấp.
-- Không dùng đen tuyệt đối cho mọi nền; tạo các lớp surface rõ ràng.
-- Màu trạng thái có thể cần giảm saturation hoặc đổi độ sáng.
-- Tôn trọng `prefers-color-scheme`, đồng thời cho phép người dùng chọn `Sáng`, `Tối` hoặc `Theo hệ thống`.
-- Lưu lựa chọn nhưng tránh flash sai theme khi tải trang.
-
-## 19. Accessibility
-
-Mục tiêu tối thiểu: đáp ứng WCAG 2.2 mức AA cho các luồng chính.
-
-### 19.1. Semantic HTML
-
-- Dùng đúng `button`, `a`, `label`, `input`, `table`, `nav`, `main`, `header`.
-- Không dùng `div` giả làm button khi có thể dùng phần tử chuẩn.
-- Heading theo thứ tự logic, không chọn cấp heading chỉ vì kích thước.
-- Mỗi trang chỉ có một vùng `main`.
-
-### 19.2. Bàn phím và focus
-
-- Mọi thao tác phải thực hiện được bằng bàn phím.
-- Focus order theo thứ tự thị giác và nghiệp vụ.
-- Focus indicator rõ, không xóa `outline` nếu chưa có thay thế.
-- Có cơ chế skip link cho trang có navigation dài.
-- Không tạo keyboard trap, ngoại trừ focus trap có chủ đích trong modal.
-
-### 19.3. Màu và nội dung
-
-- Độ tương phản chữ thường tối thiểu `4.5:1`; chữ lớn tối thiểu `3:1`.
-- Thành phần UI và focus indicator cần độ tương phản phù hợp.
-- Không truyền đạt thông tin chỉ bằng màu.
-- Alt text mô tả mục đích ảnh; ảnh trang trí dùng alt rỗng.
-- Link phải có tên mô tả, tránh `Bấm vào đây`.
-
-### 19.4. Form và thông báo
-
-- Mỗi control có label được liên kết.
-- Lỗi được liên kết bằng `aria-describedby` và thể hiện bằng chữ.
-- Thông báo động quan trọng dùng live region phù hợp, tránh đọc lặp.
-- Trường bắt buộc và hướng dẫn định dạng phải được screen reader nhận biết.
-
-### 19.5. Chuyển động
-
-- Tôn trọng `prefers-reduced-motion`.
-- Tránh animation nhấp nháy hoặc chuyển động không cần thiết.
-- Animation phục vụ định hướng, phản hồi hoặc quan hệ không gian; thường dùng `150–250ms`.
-
-## 20. Các trạng thái UX
-
-Mỗi màn hình lấy dữ liệu phải thiết kế tối thiểu các trạng thái sau.
-
-### 20.1. Loading
-
-- Dùng skeleton khi biết trước cấu trúc nội dung.
-- Dùng spinner cho thao tác ngắn hoặc vùng nhỏ.
-- Giữ layout ổn định, tránh nội dung nhảy.
-- Với hành động submit, khóa submit lặp nhưng không khóa những phần không liên quan.
-- Nếu tải lâu, hiển thị thông điệp và lựa chọn thử lại/hủy khi phù hợp.
-
-### 20.2. Empty
-
-Phân biệt:
-
-- Chưa có dữ liệu: giải thích và đưa CTA tạo dữ liệu.
-- Không có kết quả tìm kiếm: gợi ý đổi từ khóa hoặc xóa bộ lọc.
-- Không có quyền: giải thích phạm vi quyền và cách liên hệ hỗ trợ.
-
-Ví dụ:
-
-```text
-Chưa có lịch hẹn hôm nay
-Tạo lịch hẹn mới để bắt đầu sắp xếp công việc.
-[+ Tạo lịch hẹn]
-```
-
-### 20.3. Error
-
-- Nói rõ điều gì thất bại và người dùng có thể làm gì.
-- Giữ dữ liệu đã nhập.
-- Có nút `Thử lại` cho lỗi có thể phục hồi.
-- Không hiển thị stack trace, mã kỹ thuật hoặc dữ liệu nhạy cảm.
-- Lỗi toàn trang, lỗi vùng và lỗi field cần có cách trình bày khác nhau.
-
-### 20.4. Success
-
-- Xác nhận ngắn gọn kết quả và đối tượng bị tác động.
-- Toast dùng cho xác nhận không cần phản hồi.
-- Thay đổi quan trọng có thể hiển thị inline confirmation hoặc chuyển đến trang kết quả.
-- Nếu có thể hoàn tác, cung cấp `Hoàn tác` trong thời gian hợp lý.
-- Không dùng modal success cho thao tác nhỏ, thường xuyên.
-
-## 21. Quy ước đặt tên CSS và component
-
-### 21.1. Component
-
-- React/Vue component: `PascalCase`, ví dụ `AppointmentCard`, `CustomerTable`.
-- Hook/composable: `use` + mục đích, ví dụ `useAppointmentFilters`.
-- Props và biến: `camelCase`.
-- Boolean bắt đầu bằng `is`, `has`, `can`, `should`, ví dụ `isLoading`, `canEdit`.
-- Event handler: `handle` bên trong component; callback prop dùng `on`, ví dụ `handleSubmit`, `onSubmit`.
-- Constant toàn cục: `UPPER_SNAKE_CASE`.
-- Type/interface: `PascalCase`; tránh tiền tố mơ hồ.
-
-### 21.2. CSS
-
-Chọn một chiến lược và dùng nhất quán: CSS Modules, BEM, utility classes hoặc CSS-in-JS. Không trộn tùy tiện trong cùng phạm vi.
-
-Ví dụ BEM:
-
-```css
-.appointment-card {}
-.appointment-card__header {}
-.appointment-card__time {}
-.appointment-card--cancelled {}
-```
-
-Ví dụ CSS Modules:
-
-```text
-AppointmentCard.tsx
-AppointmentCard.module.css
-AppointmentCard.test.tsx
-```
-
-Quy tắc:
-
-- Tên theo vai trò, không theo hình thức: `formError` tốt hơn `redText`.
-- Tránh selector phụ thuộc sâu vào DOM.
-- Tránh `!important`, trừ trường hợp tích hợp bên thứ ba có tài liệu giải thích.
-- Không đặt class chung chung như `.box`, `.item`, `.left` ở phạm vi toàn cục.
-- Dùng token thay cho màu/kích thước hard-code.
-
-### 21.3. File và route
-
-- Component: `PascalCase.tsx` hoặc theo chuẩn framework đã chọn.
-- Utility/service: `camelCase.ts`.
-- Route URL: chữ thường, dùng dấu gạch ngang, ví dụ `/appointment-history`.
-- Feature folder: nhất quán `kebab-case` hoặc `camelCase`, không trộn.
-
-## 22. Tái sử dụng component
-
-### 22.1. Phân lớp
-
-- Primitive: Button, Input, Text, Icon, Stack.
-- Composite: FormField, SearchBox, StatusBadge, DataTable.
-- Domain: AppointmentCard, TechnicianSelector, InvoiceSummary.
-- Page: ghép domain component và xử lý luồng trang.
-
-### 22.2. Quy tắc
-
-- Trước khi tạo component mới, kiểm tra thư viện dùng chung.
-- Tách component khi có hành vi hoặc cấu trúc lặp lại, không chỉ vì vài dòng JSX dài.
-- Component dùng chung không chứa logic nghiệp vụ cụ thể nếu không được thiết kế là domain component.
-- Dùng props/variant có giới hạn rõ, tránh hàng loạt boolean gây tổ hợp khó kiểm soát.
-- Không “tổng quát hóa sớm”; chỉ trừu tượng khi đã hiểu điểm chung ổn định.
-- Component phải có API rõ, trạng thái tương tác đầy đủ và tài liệu ví dụ.
-- Các thay đổi design system cần kiểm tra ảnh hưởng đến mọi nơi sử dụng.
-
-Ví dụ ưu tiên:
-
-```tsx
-<Button variant="primary" size="medium" loading={isSaving}>
-  Lưu thay đổi
-</Button>
-```
-
-Thay vì:
-
-```tsx
-<Button purple rounded shadow compact bold />
-```
-
-## 23. Những điều không nên làm
-
-- Không dùng quá nhiều font, cỡ chữ, màu, bo góc hoặc bóng đổ.
-- Không hard-code màu và spacing lặp lại trong từng component.
-- Không có nhiều Primary Button cạnh tranh trong cùng một khu vực.
-- Không dùng placeholder thay cho label.
-- Không dùng chỉ màu sắc để biểu thị lỗi hoặc trạng thái.
-- Không ẩn focus outline mà không có focus style thay thế.
-- Không dùng icon không nhãn cho hành động khó đoán.
-- Không đặt form dài hoặc quy trình nhiều bước trong modal nhỏ.
-- Không mở modal chồng modal.
-- Không làm toàn bộ card có thể click khi bên trong có nhiều thao tác không rõ ràng.
-- Không đưa quá nhiều cột vào bảng; không ép chữ nhỏ để “nhét” dữ liệu.
-- Không xóa dữ liệu ngay lập tức mà thiếu xác nhận/hoàn tác phù hợp.
-- Không làm mất dữ liệu form sau lỗi mạng hoặc validation.
-- Không vô hiệu hóa nút mà không cho biết điều kiện cần hoàn thành.
-- Không hiển thị loading toàn trang cho một thay đổi nhỏ cục bộ.
-- Không dùng animation dài, gây cản trở hoặc bỏ qua reduced motion.
-- Không thiết kế chỉ cho màn hình mẫu; phải thử nội dung dài, dữ liệu rỗng và màn hình hẹp.
-- Không trộn nhiều hệ icon hoặc nhiều chiến lược CSS trong cùng phạm vi.
-- Không sao chép component rồi sửa nhẹ nếu có thể mở rộng API dùng chung hợp lý.
-- Không dùng thông báo kỹ thuật như `500`, `null`, stack trace cho người dùng cuối.
-
-## 24. Checklist hoàn thành màn hình
-
-### Nội dung và nghiệp vụ
-
-- [ ] Tiêu đề trang, mô tả và CTA chính rõ ràng.
-- [ ] Nội dung dùng thuật ngữ đúng nghiệp vụ và nhất quán.
-- [ ] Ngày, giờ, tiền tệ, số điện thoại và số liệu đúng locale.
-- [ ] Quyền xem/sửa/xóa được xử lý đúng.
-- [ ] Tác vụ nguy hiểm có xác nhận hoặc hoàn tác phù hợp.
-
-### Thiết kế
-
-- [ ] Dùng đúng typography, màu, spacing, radius, shadow và design token.
-- [ ] Phân cấp thị giác rõ; không có nhiều hành động chính cạnh tranh.
-- [ ] Căn chỉnh và khoảng cách nhất quán với các màn hình khác.
-- [ ] Component có đủ hover, active, focus, disabled, selected và loading.
-- [ ] Nội dung dài, thiếu dữ liệu và dữ liệu cực trị không làm vỡ layout.
-
-### Form và dữ liệu
-
-- [ ] Mọi input có label và hướng dẫn cần thiết.
-- [ ] Validation client và lỗi server được hiển thị đúng vị trí.
-- [ ] Thông báo lỗi nêu rõ cách khắc phục.
-- [ ] Dữ liệu người dùng không bị mất sau lỗi.
-- [ ] Chống submit lặp và xử lý xung đột nghiệp vụ.
-
-### UX states
-
-- [ ] Có trạng thái initial/loading.
-- [ ] Có empty state cho chưa có dữ liệu.
-- [ ] Có trạng thái không có kết quả do tìm kiếm/bộ lọc.
-- [ ] Có trạng thái error và cách thử lại.
-- [ ] Có phản hồi success phù hợp.
-
-### Responsive
-
-- [ ] Kiểm tra mobile, tablet, desktop và màn hình lớn.
-- [ ] Không có cuộn ngang ngoài ý muốn.
-- [ ] Table/filter/navigation có phương án trên mobile.
-- [ ] Vùng bấm đủ lớn và không bị bàn phím ảo che.
-- [ ] Hoạt động khi zoom `200%`.
-
-### Accessibility
-
-- [ ] Dùng semantic HTML và heading đúng thứ tự.
-- [ ] Mọi thao tác dùng được bằng bàn phím.
-- [ ] Focus indicator rõ và focus order hợp lý.
-- [ ] Label, alt text, accessible name và ARIA dùng đúng.
-- [ ] Độ tương phản đạt mục tiêu AA.
-- [ ] Trạng thái không chỉ dựa vào màu.
-- [ ] Modal quản lý focus đúng; animation hỗ trợ reduced motion.
-
-### Chất lượng kỹ thuật
-
-- [ ] Không tạo component trùng chức năng đã có.
-- [ ] Không có giá trị style hard-code trái design token.
-- [ ] Naming tuân theo quy ước.
-- [ ] Có test phù hợp cho logic và luồng quan trọng.
-- [ ] Không có lỗi console, request thừa hoặc layout shift đáng kể.
-- [ ] Đã kiểm tra light mode và dark mode.
-- [ ] Đã review trên dữ liệu thật hoặc dữ liệu sát thực tế.
-
-## 25. Ví dụ CSS variables
-
-```css
-:root {
-  /* Typography */
-  --font-sans: "Inter", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
-  --font-size-xs: 0.75rem;   /* 12px */
-  --font-size-sm: 0.875rem;  /* 14px */
-  --font-size-md: 1rem;      /* 16px */
-  --font-size-lg: 1.125rem;  /* 18px */
-  --font-size-xl: 1.5rem;    /* 24px */
-  --font-size-2xl: 1.75rem;  /* 28px */
-
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-
-  /* Spacing */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-
-  /* Primitive colors */
-  --violet-50: #f5f3ff;
-  --violet-100: #ede9fe;
-  --violet-600: #7c3aed;
-  --violet-700: #6d28d9;
-  --green-50: #f0fdf4;
-  --green-700: #15803d;
-  --amber-50: #fffbeb;
-  --amber-700: #b45309;
-  --red-50: #fef2f2;
-  --red-700: #b91c1c;
-  --blue-50: #eff6ff;
-  --blue-700: #1d4ed8;
-
-  /* Semantic colors — light */
-  --color-primary: var(--violet-600);
-  --color-primary-hover: var(--violet-700);
-  --color-primary-subtle: var(--violet-50);
-  --color-background: #f8fafc;
-  --color-surface: #ffffff;
-  --color-surface-hover: #f9fafb;
-  --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-disabled: #9ca3af;
-  --color-border: #e5e7eb;
-  --color-border-strong: #d1d5db;
-  --color-focus: #8b5cf6;
-
-  --color-success-bg: var(--green-50);
-  --color-success-text: var(--green-700);
-  --color-warning-bg: var(--amber-50);
-  --color-warning-text: var(--amber-700);
-  --color-danger-bg: var(--red-50);
-  --color-danger-text: var(--red-700);
-  --color-info-bg: var(--blue-50);
-  --color-info-text: var(--blue-700);
-
-  /* Shape and elevation */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-full: 9999px;
-  --shadow-sm: 0 1px 3px rgb(15 23 42 / 0.08);
-  --shadow-md: 0 8px 24px rgb(15 23 42 / 0.12);
-
-  /* Component sizes */
-  --control-height-sm: 2.25rem;
-  --control-height-md: 2.625rem;
-  --control-height-lg: 3rem;
-  --sidebar-width: 16.25rem;
-  --sidebar-collapsed-width: 4.5rem;
-  --header-height: 4.25rem;
-
-  /* Motion */
-  --duration-fast: 120ms;
-  --duration-normal: 200ms;
-  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
-
-  /* Layering */
-  --z-dropdown: 1000;
-  --z-sticky: 1100;
-  --z-overlay: 1200;
-  --z-modal: 1300;
-  --z-toast: 1400;
-}
-
-[data-theme="dark"] {
-  --color-primary: #a78bfa;
-  --color-primary-hover: #c4b5fd;
-  --color-primary-subtle: #2e1065;
-  --color-background: #0f172a;
-  --color-surface: #1e293b;
-  --color-surface-hover: #263449;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-text-disabled: #64748b;
-  --color-border: #334155;
-  --color-border-strong: #475569;
-  --color-focus: #c4b5fd;
-
-  --color-success-bg: #052e16;
-  --color-success-text: #86efac;
-  --color-warning-bg: #451a03;
-  --color-warning-text: #fcd34d;
-  --color-danger-bg: #450a0a;
-  --color-danger-text: #fca5a5;
-  --color-info-bg: #172554;
-  --color-info-text: #93c5fd;
-
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.3);
-  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.4);
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  color: var(--color-text-primary);
-  background: var(--color-background);
-  font-family: var(--font-sans);
-  font-size: var(--font-size-sm);
-  line-height: 1.5;
-}
-
-:focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-```
-
-## 26. Cấu trúc thư mục frontend
-
-Ví dụ dưới đây phù hợp với React/TypeScript theo hướng feature-based. Có thể điều chỉnh cho Vue, Angular, Svelte hoặc framework khác nhưng nên giữ nguyên nguyên tắc phân tách trách nhiệm.
-
-```text
-src/
-├── app/
-│   ├── App.tsx
-│   ├── router.tsx
-│   ├── providers/
-│   └── layouts/
-│       ├── AppLayout.tsx
-│       └── AuthLayout.tsx
-├── assets/
-│   ├── icons/
-│   ├── images/
-│   └── fonts/
-├── components/
-│   ├── ui/
-│   │   ├── Button/
-│   │   ├── Input/
-│   │   ├── Modal/
-│   │   ├── Badge/
-│   │   └── DataTable/
-│   └── common/
-│       ├── EmptyState/
-│       ├── ErrorState/
-│       └── PageHeader/
-├── features/
-│   ├── appointments/
-│   │   ├── api/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── pages/
-│   │   ├── schemas/
-│   │   ├── types/
-│   │   └── utils/
-│   ├── customers/
-│   ├── technicians/
-│   ├── services/
-│   ├── products/
-│   ├── invoices/
-│   └── reports/
-├── hooks/
-├── lib/
-│   ├── httpClient.ts
-│   ├── queryClient.ts
-│   └── dateTime.ts
-├── services/
-├── styles/
-│   ├── globals.css
-│   ├── tokens.css
-│   ├── themes.css
-│   └── utilities.css
-├── types/
-├── utils/
-├── config/
-├── tests/
-│   ├── fixtures/
-│   ├── mocks/
-│   └── setup.ts
-└── main.tsx
-```
-
-### Quy tắc phụ thuộc
-
-- `components/ui` không phụ thuộc vào feature.
-- Feature có thể dùng component dùng chung, nhưng không import trực tiếp nội bộ của feature khác nếu chưa có API công khai.
-- API, schema, type và logic nghiệp vụ đặt gần feature sử dụng.
-- Chỉ đưa utility lên cấp dùng chung khi có từ hai nơi dùng độc lập và ý nghĩa thực sự tổng quát.
-- Tránh file `utils.ts` hoặc `helpers.ts` quá lớn; đặt tên theo trách nhiệm cụ thể.
+`src/utils/tenantAdminEntitlements.ts` khóa từng trang Tenant Admin theo `capabilities` của gói đăng ký. Bảng ánh xạ trang → quyền ở [src/utils/tenantAdminEntitlements.ts:22](src/utils/tenantAdminEntitlements.ts#L22). Các trang **luôn mở với mọi gói**: `overview`, `branches`, `pos`, `staff`, `services`, `settings`, `subscription`.
 
 ---
 
-## Kết luận
+## 9. Module / màn hình chính theo từng role
 
-Quy chuẩn tốt không nhằm làm mọi màn hình giống hệt nhau, mà tạo ra một ngôn ngữ chung để đội ngũ đưa ra quyết định nhất quán. Khi có tình huống mới, ưu tiên theo thứ tự:
+### 9.1 Superadmin
 
-1. Nhu cầu và khả năng hoàn thành công việc của người dùng.
-2. Accessibility và an toàn dữ liệu.
-3. Tính nhất quán với design system.
-4. Khả năng tái sử dụng và bảo trì.
-5. Tính thẩm mỹ và hiệu ứng trang trí.
+Điều hướng: `activeTab` trong `App.tsx`, sidebar tại `src/components/Sidebar.tsx`.
 
-Mọi component mới nên trả lời được ba câu hỏi: người dùng cần nó để làm gì, nó phản hồi ra sao ở mọi trạng thái, và vì sao component hiện có chưa đáp ứng được nhu cầu đó.
+| Tab | Component | Nội dung |
+|---|---|---|
+| `overview` | `Overview.tsx` | Bảng điều khiển: tenant, hóa đơn, cảnh báo, ticket |
+| `salons` | `TenantManagement.tsx` (+ `TenantDetailModal.tsx`, `PackageUpgradeRequests.tsx`) | CRUD tenant, chi nhánh, gói, yêu cầu nâng cấp |
+| `admins` | `TenantAdminManagement.tsx` | Tài khoản Tenant Admin, mời/liên kết tenant |
+| `packages` | `SubscriptionPackages.tsx` | Catalog gói, giá, quyền, hạn mức, ngừng bán |
+| `billing` | `BillingAndInvoices.tsx` | Hóa đơn, thanh toán, đối soát, hoàn tiền |
+| `reports` | `SystemReports.tsx` | Báo cáo doanh thu / tenant / gói toàn hệ thống |
+| `announcements` | `SuperAdminAnnouncements.tsx` | Soạn & phát bản tin tới tenant |
+| `settings` | `SystemSettings.tsx` | Cấu hình hệ thống (general/billing/email/security) |
+| `security` | `SecurityAndLogs.tsx` | Nhật ký kiểm toán, phiên quản trị |
+| `support` | `HelpAndSupport.tsx` | Ticket hỗ trợ |
+| `backup` | `DataBackup.tsx` | Snapshot sao lưu, chính sách, restore job |
+| `account-preferences` | `AccountPreferences.tsx` | Theme + ngôn ngữ (mở từ Header, không có trên sidebar) |
+
+### 9.2 Tenant Admin
+
+Điều hướng: `activePage: NailPageId` trong `NailTenantAdminPortal.tsx`; nhóm menu tại [src/components/NailTenantAdminPortal.tsx:155](src/components/NailTenantAdminPortal.tsx#L155).
+
+| Nhóm | Trang | Component |
+|---|---|---|
+| Vận hành | Tổng quan | `TenantAdminOverview.tsx` |
+| | Chi nhánh | render nội bộ trong portal (dữ liệu từ `tenant.branches`) |
+| | Lịch hẹn | `TenantAdminAppointments.tsx` |
+| | Ghế & khu vực | `TenantAdminStations.tsx` |
+| | POS & thanh toán | `TenantAdminPayments.tsx` |
+| Khách hàng | Hồ sơ khách hàng | `TenantAdminCustomers.tsx` |
+| | Thành viên & ưu đãi | `TenantAdminLoyalty.tsx` |
+| Danh mục | Nhân sự | `TenantAdminStaff.tsx` |
+| | Dịch vụ & giá | `TenantAdminServices.tsx` |
+| | Kho vật tư | `TenantAdminInventory.tsx` |
+| | Màu & mẫu Nail | `TenantAdminNailGallery.tsx` |
+| Quản trị | Bản tin hệ thống | `TenantAdminAnnouncements.tsx` |
+| | Đặt lịch online | `TenantAdminOnlineBooking.tsx` |
+| | Thu & Chi | `TenantAdminFinanceCompact.tsx` |
+| | Vệ sinh & an toàn | `TenantAdminSanitation.tsx` |
+| | Báo cáo | `TenantAdminReports.tsx` |
+| | Gói đăng ký | `TenantAdminSubscription.tsx` |
+| | Trung tâm trợ giúp | `TenantAdminHelpAndSupport.tsx` |
+| | Cài đặt tiệm | `TenantAdminSettings.tsx` |
+
+### 9.3 Receptionist
+
+Điều hướng: `page: ReceptionPage`, `navItems` tại [src/components/ReceptionistPortal.tsx:855](src/components/ReceptionistPortal.tsx#L855).
+
+| Trang | Component |
+|---|---|
+| Bàn lễ tân (`desk`) | trong `ReceptionistPortal.tsx` |
+| Lịch hẹn | trong `ReceptionistPortal.tsx` |
+| Khách hàng | trong `ReceptionistPortal.tsx` |
+| Sản phẩm quầy | `ReceptionistProducts.tsx` |
+| Ghế & phòng | `ReceptionistStations.tsx` |
+| Kỹ thuật viên | `ReceptionistTechnicians.tsx` |
+| Thanh toán & POS | trong `ReceptionistPortal.tsx` |
+
+---
+
+## 10. Cách project đang quản lý mock data
+
+Có **ba cơ chế khác nhau** cùng tồn tại. Cần nắm rõ cả ba.
+
+### Cơ chế 1 — Seed cấp hệ thống, "gieo một lần" (Superadmin)
+
+Seed nằm trong `src/data.ts`: `INITIAL_TENANTS`, `INITIAL_PACKAGES`, `INITIAL_ALERTS`, `INITIAL_INVOICES`, `INITIAL_BACKUPS`, `INITIAL_BACKUP_POLICY`, `INITIAL_RESTORE_JOBS`. Thêm `INITIAL_ANNOUNCEMENTS` trong `src/utils/systemAnnouncements.ts` và `SUPPORT_MOCK_TICKETS` trong `src/mockData/supportTickets.ts`.
+
+Đọc/ghi qua hai helper tại [src/data.ts:377](src/data.ts#L377) — chúng tự thêm tiền tố `salonsys_`:
+
+```ts
+loadLocalStorageData<T>(key, defaultValue)  // đọc localStorage[`salonsys_${key}`]
+saveLocalStorageData<T>(key, value)         // ghi localStorage[`salonsys_${key}`]
+```
+
+Với `tenants` và `alerts`, có thêm **cờ gieo một lần** để mock chỉ được trộn vào đúng một lần rồi thôi (nếu người dùng xóa hết tenant, mock không mọc lại):
+- `loadTenantsWithOneTimeMocks()` — [src/App.tsx:111](src/App.tsx#L111), cờ `salonsys_tenants_mock_seed_v1`
+- `loadAlertsWithOneTimeMocks()` — [src/App.tsx:87](src/App.tsx#L87), cờ `salonsys_alerts_mock_seed_v2`
+
+Ngoài ra `App.tsx` còn lọc bỏ một danh sách **ID mock cũ** đã bị khai tử (`LEGACY_MOCK_SUPPORT_TICKET_IDS` tại [src/App.tsx:157](src/App.tsx#L157); tương tự trong `utils/auditLogs.ts` và `SecurityAndLogs.tsx`).
+
+### Cơ chế 2 — Seed theo tenant, có công tắc demo/live (Tenant Admin & Receptionist)
+
+Mỗi màn hình Tenant Admin tự chứa mảng seed của mình rồi trộn với dữ liệu đã lưu qua `getTenantAdminInitialData()` ([src/utils/mockDataReset.ts:33](src/utils/mockDataReset.ts#L33)) — hàm này giữ lại bản ghi người dùng đã tạo và **chỉ thêm những seed chưa có ID trùng**.
+
+Khóa `localStorage` gắn theo **tên tenant**, dạng `<module>-v<N>:<tenantName>` (danh sách đầy đủ ở §10.4).
+
+Có một **cờ toàn cục demo/live**: `setTenantAdminDataMode('demo' | 'live')` trong cùng file, được bật/tắt từ `NailTenantAdminPortal` ([src/components/NailTenantAdminPortal.tsx:1441](src/components/NailTenantAdminPortal.tsx#L1441)). Nút "nạp dữ liệu demo" / "tắt chế độ kiểm thử" nằm trong portal; trạng thái lưu ở `tenant-admin-demo-mode:<tenantName>`.
+
+Khi Superadmin xóa một tenant, `resetTenantMockStorage(tenantName)` xóa toàn bộ khóa của tenant đó ([src/App.tsx:911](src/App.tsx#L911)).
+
+### Cơ chế 3 — Mock cấu hình trang (không phải bản ghi)
+
+`src/components/nailAdminData.ts` (730 dòng) chứa `nailModuleConfigs` — cấu hình *và* dữ liệu hiển thị mẫu (`stats`, `rows`, `insights`, `checklist`, `formFields`) cho từng trang Tenant Admin. Đây vừa là **cấu trúc UI** vừa là **dữ liệu demo**, hai thứ trộn vào nhau.
+
+### 10.4 Toàn bộ khóa `localStorage` đang dùng
+
+**Cấp hệ thống (tiền tố `salonsys_`):**
+
+| Khóa | Nội dung | Nơi ghi |
+|---|---|---|
+| `salonsys_tenants` | Danh sách tenant | `App.tsx` |
+| `salonsys_tenants_mock_seed_v1` | Cờ đã gieo mock tenant | `App.tsx` |
+| `salonsys_packages` | Gói dịch vụ | `App.tsx` |
+| `salonsys_alerts` | Cảnh báo hệ thống | `App.tsx` |
+| `salonsys_alerts_mock_seed_v2` | Cờ đã gieo mock cảnh báo | `App.tsx` |
+| `salonsys_invoices`, `salonsys_invoices_v2` | Hóa đơn (ghi trùng vào cả hai) | `App.tsx` |
+| `salonsys_tenant_admins` | Tài khoản Tenant Admin | `App.tsx` |
+| `salonsys_support_tickets` | Ticket hỗ trợ | `App.tsx` |
+| `salonsys_package_upgrade_requests` | Yêu cầu nâng cấp gói (cache của API) | `utils/packageUpgradeRequests.ts` |
+| `salonsys_audit_logs` | Nhật ký kiểm toán (giới hạn 2.000 bản ghi) | `utils/auditLogs.ts` |
+| `salonsys_system_settings` | Cấu hình hệ thống | `utils/systemSettings.ts` |
+| `salonsys_admin_sessions` | Phiên quản trị | `SecurityAndLogs.tsx` |
+| `salonsys_backups_v2`, `salonsys_backup_policy_v2`, `salonsys_restore_jobs_v2` | Sao lưu | `DataBackup.tsx` |
+| `salonsys_theme` | light / dark | `App.tsx` |
+| `salonsys_interface_language` | vi / en | `i18n/LanguageProvider.tsx` |
+
+**Bản tin (không có tiền tố `salonsys_`):** `system_announcements_v1`, và bốn khóa gắn tenantId: `dismissed_announcement_banners_v1_<tenantId>`, `read_announcements_by_tenant_v1_<tenantId>`, `archived_announcements_by_tenant_v1_<tenantId>`, `deleted_announcements_by_tenant_v1_<tenantId>`.
+
+**Theo tenant (`<khóa>:<tenantName>`):**
+
+`tenant-admin-appointments-v2`, `tenant-admin-payments-v1`, `tenant-admin-customers-v1`, `tenant-admin-stations-v2`, `tenant-admin-station-areas-v1`, `tenant-admin-staff-v2`, `tenant-admin-services-v2`, `tenant-admin-services-v1`, `tenant-admin-inventory-v1`, `tenant-admin-loyalty-v1`, `tenant-admin-tiers-v1`, `tenant-admin-customer-care-v1`, `tenant-admin-expenses-v1`, `tenant-admin-nail-designs-v1`, `tenant-admin-nail-colors-v1`, `tenant-admin-demo-mode`, `mobile-app-bookings-v2`, `receptionist-technicians-v1`, `receptionist-products-v1`, `receptionist-product-reports-v1`, `receptionist-stations-v1`.
+
+Có khóa nhiều tầng: `tenant-admin-finance-v1:<tenant>:transactions|cashbooks|debts|budgets`, `tenant-admin-online-booking-v1:<tenant>:channels|services`, `tenant-admin-sanitation-v1:<tenant>:checklists|batches|incidents|certificates`, `receptionist-invoice-drafts-v1:<tenant>:<branchCode>`.
+
+Khóa gắn theo tài khoản: `receptionist-shift-v1:<email>`.
+
+**Giao diện:** `sidebar_collapsed`, `tenant-admin-sidebar-collapsed`, `receptionist_sidebar_collapsed`, `dismissed_tasks_<tenantId>`.
+
+**Bất nhất đã tồn tại (cần dọn khi migrate):**
+- `TenantAdminPayments.tsx:401` dùng `` `${tenantName}_nail_colors` `` trong khi mọi nơi khác dùng `tenant-admin-nail-colors-v1:<tenant>`.
+- Tồn tại song song cả `tenant-admin-services-v1` và `-v2`.
+- Danh sách reset trong `mockDataReset.ts` **không đầy đủ**: thiếu `tenant-admin-tiers-v1`, `tenant-admin-station-areas-v1`, `tenant-admin-expenses-v1`, `mobile-app-bookings-v2`, `receptionist-invoice-drafts-v1`, `receptionist-shift-v1` — nên "reset dữ liệu tenant" hiện chưa xóa hết.
+
+---
+
+## 11. Service / API abstraction hiện có
+
+### 11.1 Hai backend đã tồn tại, nhưng chỉ phủ auth + một endpoint nghiệp vụ
+
+| Môi trường | File | Cơ chế |
+|---|---|---|
+| Dev (`npm run dev`) | `scripts/vite-local-auth.ts` | Vite plugin (`apply: 'serve'`), tài khoản hard-code, session lưu trong RAM (mất khi restart) |
+| Production | `scripts/sites-worker.js` | Cloudflare Worker + D1 (SQLite): hash mật khẩu SHA-256 + salt, session cookie HttpOnly/SameSite=Strict, khóa tài khoản sau 5 lần sai trong 15 phút, phân quyền theo role |
+
+Endpoint có thật:
+
+```
+POST   /api/auth/login
+GET    /api/auth/session
+POST   /api/auth/logout
+PUT    /api/auth/accounts              (chỉ SUPERADMIN)
+DELETE /api/auth/accounts/:identifier  (chỉ SUPERADMIN)
+GET    /api/package-upgrade-requests
+POST   /api/package-upgrade-requests   (chỉ TENANT_ADMIN)
+PATCH  /api/package-upgrade-requests/:id  (chỉ SUPERADMIN)
+DELETE /api/package-upgrade-requests/:id  (chỉ SUPERADMIN)
+GET    /api/auth/dev-login             (chỉ dev, mặc định tắt)
+```
+
+Worker tự tạo bảng và seed 3 tài khoản demo ở lần gọi đầu (`ensureSchema` — [scripts/sites-worker.js:157](scripts/sites-worker.js#L157)), sau đó phục vụ tệp tĩnh với fallback SPA.
+
+### 11.2 Lớp gọi API ở frontend
+
+Chỉ có **hai module** thực sự gọi `fetch`:
+
+**`src/utils/authApi.ts`** — `fetchAuthenticatedAccount()`, `loginAccount()`, `logoutAccount()`, `persistManagedAuthAccount()`, `deleteManagedAuthAccount()`.
+
+**`src/utils/packageUpgradeRequests.ts`** — `fetchPackageUpgradeRequests()`, `persistPackageUpgradeRequest()`, `persistPackageUpgradeReview()`, `deletePackageUpgradeRequest()`, cộng hai hàm cache `loadPackageUpgradeRequests()` / `savePackageUpgradeRequests()`.
+
+**Phần đáng học từ khuôn mẫu này:** gom `fetch` vào một module riêng, khai kiểu trả về rõ ràng, giữ component sạch khỏi chi tiết `fetch`, dùng `credentials: 'same-origin'`.
+
+**Phần KHÔNG được chép lại:** cách hai module này xử lý lỗi. Chúng nuốt lỗi — `catch` rồi trả `null` / `false` / mảng rỗng, khiến tầng gọi không phân biệt được "không có dữ liệu" với "gọi thất bại". Nặng hơn, `persistPackageUpgradeRequest` và `persistPackageUpgradeReview` `return true` **ngay trong nhánh `catch`**, tức **báo thành công kể cả khi server lỗi**.
+
+Cần tách bạch hai việc khác nhau:
+
+| Đúng | Sai |
+|---|---|
+| Không để lỗi kỹ thuật thô (stack trace, `TypeError: Failed to fetch`) hiện lên UI | Giấu luôn việc thao tác đã thất bại và coi như thành công |
+
+**Hướng dẫn cho service mới:** trả về một contract nói rõ kết quả — về mặt ý tưởng là `{ data, error }` hoặc một Result type tương đương — sao cho tầng gọi phân biệt được ít nhất các trường hợp sau, vì mỗi trường hợp cần một cách hiển thị khác nhau:
+
+| Trường hợp | UI nên làm gì |
+|---|---|
+| Thành công | Cập nhật dữ liệu |
+| Lỗi validation | Gắn thông báo vào đúng ô nhập sai |
+| Chưa đăng nhập (401) | Đưa về màn hình đăng nhập |
+| Không đủ quyền (403) | Báo không có quyền, **không** đưa về đăng nhập |
+| Lỗi mạng | Báo mất kết nối, cho thử lại |
+| Lỗi máy chủ (5xx) | Báo lỗi hệ thống, cho thử lại |
+
+Chi tiết và checklist ở [README-MIGRATION.md](README-MIGRATION.md) §12.2 và Giai đoạn 7.
+
+### 11.3 Các module `utils/` khác (logic thuần, không gọi mạng)
+
+| File | Vai trò |
+|---|---|
+| `subscriptions.ts` | Catalog quyền (`SUBSCRIPTION_CAPABILITY_CATALOG`), bậc gói chuẩn (`STANDARD_PLAN_CAPABILITY_TIERS`), tính giá, chuẩn hóa gói |
+| `tenantAdminEntitlements.ts` | Ánh xạ trang → quyền gói; tính hạn mức chi nhánh/nhân sự |
+| `tenantValidation.ts` | Validate biểu mẫu tenant, điều kiện xóa tenant |
+| `branches.ts` | Validate & chuẩn hóa chi nhánh, sinh mã chi nhánh |
+| `money.ts` | Định dạng & quy đổi tiền. **Tỷ giá USD→VND cứng = 25.000** |
+| `invoicePayments.ts` | Suy ra cổng thanh toán, chuẩn hóa dữ liệu thanh toán hóa đơn |
+| `auditLogs.ts` | Ghi/đọc nhật ký kiểm toán trong `localStorage` |
+| `systemSettings.ts` | Load/save/validate cấu hình hệ thống, phát `CustomEvent` cho các tab khác |
+| `systemAnnouncements.ts` | Bản tin + trạng thái đọc/ẩn/lưu trữ theo tenant |
+| `mockDataReset.ts` | Cờ demo/live, trộn seed, reset khóa localStorage |
+| `tenantCustomers.ts` | Model + seed khách hàng của tenant |
+| `inventorySync.ts` | Đồng bộ màu sơn ↔ kho vật tư |
+| `promotionUtils.ts` | Model chương trình khuyến mãi + tính giảm giá |
+| `alerts.ts` | Định dạng thời gian cảnh báo |
+
+### 11.4 `db/` và `drizzle/` chưa được nối vào công cụ nào
+
+`db/schema.ts` và `drizzle/0001_*.sql`, `drizzle/0002_*.sql` mô tả **đúng các bảng** mà `sites-worker.js` tạo, nhưng project **không cài `drizzle-orm` hay `drizzle-kit`**. Đây là tài liệu chép tay giữ đồng bộ thủ công, **không phải đường migration đang chạy**.
+
+---
+
+## 12. Cấu hình environment
+
+`.env.example`:
+
+```
+HOST=
+SALONSYS_DEV_LOGIN=
+```
+
+| Biến | Đọc ở đâu | Ý nghĩa |
+|---|---|---|
+| `SALONSYS_DEV_LOGIN` | [scripts/vite-local-auth.ts:128](scripts/vite-local-auth.ts#L128) | `1`/`true` → bật `/api/auth/dev-login`. Mặc định tắt |
+| `DISABLE_HMR` | [vite.config.ts:21](vite.config.ts#L21) | `true` → tắt HMR và tắt file watching (dùng khi agent sửa file) |
+| `HOST` | — | Có trong `.env.example` nhưng **không được đọc ở bất kỳ đâu trong code**. Vite đã hard-code `host: '0.0.0.0'` |
+
+**Không có biến `VITE_*` nào** — frontend hiện không nhận cấu hình runtime qua env. API base URL là đường dẫn tương đối (`/api/...`), tức backend phải cùng origin.
+
+`.gitignore` bỏ qua mọi `.env*` trừ `.env.example`.
+
+**Cấu hình deploy:** `.openai/hosting.json` khai `project_id` và binding D1 tên `DB`. Worker đọc `env.DB` và `env.ASSETS`.
+
+---
+
+## 13. Các dependency quan trọng
+
+- **React 19** — dùng `lazy`/`Suspense`. Chưa dùng các API mới của 19 (Actions, `use`).
+- **Tailwind v4 qua `@tailwindcss/vite`** — cấu hình nằm trong CSS (`@theme static` ở `src/index.css`), **không có** `tailwind.config.js`. Đừng tạo file config JS; sửa token trong `index.css`.
+- **lucide-react** — icon set duy nhất, đừng thêm bộ icon khác.
+- **recharts** — biểu đồ.
+- **tsx** — cần thiết để `vite.config.ts` import được `scripts/vite-local-auth.ts`.
+
+---
+
+## 14. Trạng thái hiện tại của project
+
+### 14.1 Đã hoàn thiện
+
+- **Toàn bộ 3 cổng giao diện dựng xong** với ~76.000 dòng TypeScript/TSX.
+- **Xác thực thật, hai môi trường** — session cookie HttpOnly, hash mật khẩu, khóa tài khoản sau nhiều lần sai, phân quyền theo role ở server.
+- **Một endpoint nghiệp vụ hoàn chỉnh đầu-cuối** — yêu cầu nâng cấp gói (`package_upgrade_requests`) có DB, RBAC, và giao diện cả hai phía.
+- **Design system** — token đầy đủ trong `index.css`, thư viện component dùng chung `src/components/ui/` (Button, Field, Switch, StatusBadge, DataTable, PageHeader, Modal, Pagination, Toast) kèm harness xem trước `/ui-preview.html`.
+- **Nghiệp vụ subscription mô phỏng khá sâu** — khóa giá theo phiên bản gói, đổi gói hiệu lực ngay hoặc từ chu kỳ sau, tự chuyển tenant khi gói bị ngừng bán, tự sinh hóa đơn.
+- **Lớp i18n** vi/en có fallback an toàn.
+- **Dark mode** hoạt động.
+- `npm run lint` (`tsc --noEmit`) **đang pass**.
+
+### 14.2 Chưa triển khai
+
+**Backend nghiệp vụ — phần lớn nhất.** Backend tối thiểu hiện có chỉ phủ xác thực, phiên, một phần quản lý tài khoản và yêu cầu nâng cấp gói. **Ngoài bốn thứ đó, không có API nào cho nghiệp vụ.** Tenant, gói, hóa đơn, lịch hẹn, khách hàng, nhân sự, kho, thu chi, báo cáo… đều sống trong `localStorage` của trình duyệt. Cụ thể:
+- Không có persistence server-side → xóa cache trình duyệt là mất sạch dữ liệu.
+- Không đa người dùng → hai máy khác nhau thấy hai bộ dữ liệu khác nhau.
+- Không có cách ly tenant thật → `localStorage` phân tách bằng **tên tenant trong chuỗi khóa**, không phải bằng ràng buộc bảo mật.
+- Nghiệp vụ nằm ở client → mọi luật (hết hạn, sinh hóa đơn, hạn mức gói) đều có thể bị bỏ qua bằng DevTools.
+
+**Chưa có ở backend tối thiểu hiện tại** (dù đã có phần auth):
+- Bảng nối tài khoản ↔ nhiều tenant, và `active_tenant_id` trong phiên — xem §8.
+- Đổi mật khẩu, quên mật khẩu, kích hoạt tài khoản, xác minh email/SĐT.
+- Áp `security.sessionTimeout` / `maxLoginAttempts` / `passwordMinLength` từ cấu hình hệ thống (worker đang dùng hằng số riêng).
+- Metadata phiên (`ip`, `user_agent`, `last_active`) để màn hình "Bảo mật & nhật ký" có dữ liệu thật.
+
+**Chưa có, ở cả frontend lẫn backend:**
+- Gửi email / SMS / Zalo (chỉ có màn hình cấu hình SMTP, không có hành vi gửi).
+- Sao lưu & khôi phục thật (`DataBackup.tsx` mô phỏng hoàn toàn).
+- MFA / thu hồi phiên từ xa (`SecurityAndLogs.tsx` chỉ thao tác trên dữ liệu cục bộ).
+- Upload tệp thật (logo, chứng từ thanh toán, ảnh mẫu nail).
+- Cổng thanh toán thật (MoMo/VNPay/Stripe chỉ là nhãn dữ liệu).
+- Hóa đơn điện tử / thuế theo quy định Việt Nam.
+- Deep-link / URL routing.
+- Test tự động.
+
+**Chưa xong ở frontend:**
+- Bản dịch tiếng Anh còn thiếu nhiều (`src/i18n/translations.ts` chỉ 303 dòng cho toàn bộ app).
+- Một số màn hình còn dùng dữ liệu demo cứng thay vì dữ liệu tenant thật (xem cờ demo/live §10.2).
+
+### 14.3 Vấn đề cấu trúc đã biết
+
+- **Component quá lớn, không tách UI khỏi dữ liệu:** `ReceptionistPortal.tsx` 5.493 dòng, `TenantAdminOnlineBooking.tsx` 3.920, `TenantAdminInventory.tsx` 3.328, `TenantAdminAppointments.tsx` 3.212, `TenantAdminFinanceCompact.tsx` 2.837, `TenantAdminStaff.tsx` 2.686, `TenantAdminPayments.tsx` 2.595, `TenantDetailModal.tsx` 2.494.
+- **Code chết đã xác nhận** (không file nào import):
+  - `src/components/TenantAdminPortal.tsx` (393 dòng) — `App.tsx` dùng `NailTenantAdminPortal`.
+  - `src/components/TenantAdminCustomerCare.tsx` (1.859 dòng).
+  - `src/components/TenantAdminFinance.tsx` (4 dòng, shim re-export `TenantAdminFinanceCompact`).
+- **Không có lockfile hợp lệ** — `bun.lock` rỗng và chưa commit, không có `package-lock.json`.
+- **`settings-naile-studio.csv` ở thư mục gốc** là tệp do chính app xuất ra (hàm export CSV của Tenant Admin, [src/components/NailTenantAdminPortal.tsx:1430](src/components/NailTenantAdminPortal.tsx#L1430)), bị commit nhầm.
+- **`skills/` ở thư mục gốc là một git repo riêng biệt**, không thuộc ứng dụng.
+- Model dữ liệu rải rác: `types.ts` giữ model tầng nền tảng, còn model tầng salon (`StaffMember`, `TenantStation`, `TenantAppointment`, `InventoryItem`, `SalonService`…) nằm rải trong các component và `utils/`.
+
+---
+
+## 15. Lưu ý quan trọng cho developer tiếp tục phát triển
+
+1. **Nghiệp vụ nằm trong `App.tsx`, không nằm trong màn hình.** Muốn sửa luật tenant/gói/hóa đơn, tìm trong các `useEffect` của `App.tsx` trước, đừng tìm trong component đang render màn hình đó.
+
+2. **Không có router.** `activeTab` là state. Nút Back của trình duyệt và bookmark không hoạt động như SPA thông thường. Nếu thêm routing, đây là thay đổi kiến trúc lớn chạm vào cả ba portal.
+
+3. **Alias `@/*` trỏ tới gốc repo**, không phải `src/` (xem `tsconfig.json` và `vite.config.ts`).
+
+4. **Sửa design token trong `src/index.css`**, không tạo `tailwind.config.js`. Kiểm tra `src/components/ui/` trước khi viết primitive mới. `StatusBadge`'s `STATUS_MAP` là **nơi duy nhất** ánh xạ status → nhãn/tone/icon; đừng tạo bảng ánh xạ thứ hai trong màn hình.
+
+5. **Khi thêm domain gọi API thật**, chép **cách tổ chức** của `src/utils/authApi.ts` (gom `fetch` vào một module, kiểu trả về rõ ràng, component sạch khỏi `fetch`) nhưng **đừng chép cách xử lý lỗi** của nó. Service mới phải trả về kết quả nói rõ thành công hay thất bại và thất bại vì lý do gì — xem §11.2.
+
+6. **Đổi `tenant.name` sẽ làm mất dữ liệu.** Khóa `localStorage` của Tenant Admin nhúng **tên tenant**, không phải ID. Đổi tên tenant = mọi màn hình đọc sang khóa mới và thấy trống. Đây là lý do phải chuyển sang khóa theo `tenantId` khi migrate (xem `README-MIGRATION.md`).
+
+7. **Chạy `npm run lint` trước khi commit.** Đây là cổng kiểm tra duy nhất và hiện đang xanh — đừng để nó đỏ.
+
+8. **Hai backend phải sửa song song.** Thêm endpoint thì phải cập nhật cả `scripts/vite-local-auth.ts` (dev) và `scripts/sites-worker.js` (production), cộng `db/schema.ts` + `drizzle/*.sql` cho khớp. Không có công cụ nào ép ba chỗ này đồng bộ.
+
+9. **Một tài khoản Tenant Admin quản lý được nhiều tiệm** (đã chốt) — nhưng backend hiện chỉ lưu được một. Đừng dựa vào `session.tenantId` như nguồn sự thật khi viết code mới; xem §8.
+
+10. **Dữ liệu trong `localStorage` hiện tại là mock/demo, bỏ được** (đã chốt). Không cần giữ gìn nó khi migrate — cứ xóa và seed lại từ fixture.
+
+11. **Trước khi bắt tay nối backend, đọc `README-MIGRATION.md`** — nó liệt kê chi tiết mock data đang ở đâu, cái gì cần API thật, và thứ tự migrate đề xuất.

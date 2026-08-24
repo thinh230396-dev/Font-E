@@ -462,13 +462,7 @@ export default function TenantAdminSettings({
   const isIntegrationTab = activeGroup === INTEGRATION_TAB;
   const isSecurityTab = activeGroup === SECURITY_TAB;
 
-  /**
-   * Danh sách cổng thanh toán đến từ dữ liệu mẫu trong `nailAdminData`, không
-   * phải từ cấu hình thật của tenant. Ở chế độ dữ liệu thật, tenant chưa nối
-   * cổng nào thì nhóm Thanh toán và Tích hợp phải hiện trạng thái trống chứ
-   * không phải hiện một tài khoản ngân hàng và một máy POS không tồn tại.
-   */
-  const paymentMethods = demoMode ? paymentSettings.methods : [];
+  const paymentMethods = paymentSettings.methods;
   const enabledMethodCount = paymentMethods.filter((method) => method.enabled).length;
   const attentionMethods = paymentMethods.filter((method) => method.needsAttention);
   const categoryRows = categorizedRows.filter((item) => item.category === activeGroup).map((item) => item.row);
@@ -969,8 +963,7 @@ export default function TenantAdminSettings({
   } else if (isIntegrationTab) {
     groupBody = (
       <div className={sectionStack}>
-        {/* Chỉ số kết nối là dữ liệu mẫu, nên chỉ hiện ở chế độ dữ liệu mẫu. */}
-        {demoMode && <SettingsSection
+        <SettingsSection
           title={config.insightTitle}
           description="Tình trạng đồng bộ của các kênh và cổng đang nối với tenant."
         >
@@ -994,7 +987,7 @@ export default function TenantAdminSettings({
               );
             })}
           </dl>
-        </SettingsSection>}
+        </SettingsSection>
 
         <SettingsSection
           title="Cổng thanh toán đã kết nối"

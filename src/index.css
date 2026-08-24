@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
+
 /* ==========================================================================
    SalonSys — hệ design token duy nhất
    Nguồn chuẩn: README.md. Khi README và CSS xung đột, README thắng.
@@ -5625,22 +5627,45 @@ html[data-theme="dark"] .sa-chart-summary strong {
 
 .sa-chart {
   position: relative;
-  height: 15rem;
-  padding: 1rem 1.25rem 0.85rem;
-  border-top: 1px solid #edf0f5;
+  height: 18rem;
+  padding: 1.5rem 1.5rem 1.25rem 3.25rem;
+  border-top: 1px solid var(--color-brand-outline);
+  display: flex;
+  flex-direction: column;
 }
 
-/* Chỗ đứng của biểu đồ khi trong kỳ chưa thu được hóa đơn nào. Giữ đúng chiều
-   cao của biểu đồ để bố cục trang không nhảy khi đổi khoảng thời gian. */
+/* Cột trục Y bên trái */
+.sa-chart-yaxis {
+  position: absolute;
+  top: 1.5rem;
+  bottom: 3.25rem;
+  left: 0.75rem;
+  width: 2.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sa-chart-ytick {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--color-brand-text-muted);
+  line-height: 1;
+}
+
+/* Chỗ đứng của biểu đồ khi trong kỳ chưa thu được hóa đơn nào */
 .sa-chart-empty {
   display: flex;
-  height: 15rem;
+  height: 18rem;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
   padding: 1rem 1.25rem;
-  border-top: 1px solid #edf0f5;
+  border-top: 1px solid var(--color-brand-outline);
   text-align: center;
 }
 
@@ -5657,7 +5682,10 @@ html[data-theme="dark"] .sa-chart-summary strong {
 
 .sa-chart-grid {
   position: absolute;
-  inset: 1.25rem 1.25rem 2.5rem;
+  top: 1.5rem;
+  bottom: 3.25rem;
+  left: 3.25rem;
+  right: 1.5rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -5666,88 +5694,241 @@ html[data-theme="dark"] .sa-chart-summary strong {
 
 .sa-chart-grid span {
   width: 100%;
-  border-top: 1px dashed #e8ebf2;
+  border-top: 1px dashed var(--color-brand-outline);
+  opacity: 0.8;
 }
 
 .sa-chart-bars {
   position: relative;
   z-index: 1;
   display: flex;
+  flex: 1;
   height: 100%;
   align-items: stretch;
   justify-content: space-around;
-  gap: clamp(0.65rem, 4vw, 2.4rem);
+  gap: clamp(0.5rem, 2.5vw, 2rem);
+  padding-bottom: 1.5rem;
 }
 
 .role-shell--superadmin .sa-chart-column {
   position: relative;
   display: flex;
-  width: min(11%, 3.5rem);
-  min-width: 1.75rem;
-  min-height: 0;
+  flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 0 1.45rem;
+  flex: 1;
+  max-width: 3.75rem;
+  min-width: 1.75rem;
+  height: 100%;
+  padding: 0;
   color: var(--color-brand-text-muted);
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Số liệu hiển thị trực tiếp trên đầu cột */
+.sa-chart-val-pill {
+  position: relative;
+  margin-bottom: 0.4rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  color: var(--color-brand-text);
+  background: var(--color-brand-surface-high);
+  border: 1px solid var(--color-brand-outline);
+  border-radius: 0.375rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: all 180ms ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.role-shell--superadmin .sa-chart-column.is-active .sa-chart-val-pill,
+.role-shell--superadmin .sa-chart-column:hover .sa-chart-val-pill {
+  color: #ffffff;
+  background: #7c3aed;
+  border-color: #7c3aed;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(124, 58, 237, 0.35);
+}
+
+html[data-theme="dark"] .sa-chart-val-pill {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-chart-column.is-active .sa-chart-val-pill,
+html[data-theme="dark"] .role-shell--superadmin .sa-chart-column:hover .sa-chart-val-pill {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
+  color: #ffffff;
 }
 
 .role-shell--superadmin .sa-chart-column:hover,
 .role-shell--superadmin .sa-chart-column:focus-visible {
-  color: var(--accent-text);
+  color: var(--color-brand-primary);
   background: transparent;
   box-shadow: none;
   transform: none;
 }
 
-.sa-chart-bar {
+.sa-chart-track {
+  position: relative;
   width: 100%;
-  min-height: 1.5rem;
-  border-radius: 0.65rem 0.65rem 0.28rem 0.28rem;
-  background: linear-gradient(180deg, rgb(112 97 232 / 0.44), rgb(112 97 232 / 0.12));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.36);
-  transition: height 320ms ease, background 180ms ease, box-shadow 180ms ease;
+  flex: 1;
+  max-height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 0.625rem;
+  background: rgba(124, 58, 237, 0.04);
+  overflow: hidden;
+  transition: background 180ms ease;
+}
+
+.role-shell--superadmin .sa-chart-column:hover .sa-chart-track,
+.role-shell--superadmin .sa-chart-column.is-active .sa-chart-track {
+  background: rgba(124, 58, 237, 0.1);
+}
+
+html[data-theme="dark"] .sa-chart-track {
+  background: rgba(139, 92, 246, 0.06);
+}
+
+html[data-theme="dark"] .role-shell--superadmin .sa-chart-column:hover .sa-chart-track,
+html[data-theme="dark"] .role-shell--superadmin .sa-chart-column.is-active .sa-chart-track {
+  background: rgba(139, 92, 246, 0.14);
+}
+
+.sa-chart-bar {
+  position: relative;
+  width: 100%;
+  border-radius: 0.625rem 0.625rem 0.25rem 0.25rem;
+  background: linear-gradient(180deg, #9333ea 0%, #7c3aed 100%);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+  transition: height 360ms cubic-bezier(0.34, 1.2, 0.64, 1), background 180ms ease, box-shadow 180ms ease;
+}
+
+.sa-chart-bar-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 0.625rem 0.625rem 0 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
+  opacity: 0.8;
 }
 
 .sa-chart-column.is-active .sa-chart-bar {
-  background: linear-gradient(180deg, #8577ef 0%, #6556dc 100%);
-  box-shadow: 0 9px 22px rgb(99 82 218 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.32);
+  background: linear-gradient(180deg, #a855f7 0%, #6d28d9 100%);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
 }
 
 .sa-chart-label {
   position: absolute;
-  bottom: 0;
+  bottom: -0.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
   font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-brand-text-muted);
+  transition: color 180ms ease, font-weight 180ms ease;
+}
+
+.sa-chart-column.is-active .sa-chart-label,
+.sa-chart-column:hover .sa-chart-label {
+  color: var(--color-brand-primary);
   font-weight: 700;
+}
+
+html[data-theme="dark"] .sa-chart-column.is-active .sa-chart-label,
+html[data-theme="dark"] .sa-chart-column:hover .sa-chart-label {
+  color: #a78bfa;
 }
 
 .sa-chart-tooltip {
   position: absolute;
-  z-index: 5;
-  top: -0.75rem;
+  z-index: 30;
+  bottom: calc(100% + 0.35rem);
   left: 50%;
   width: max-content;
-  max-width: 8rem;
-  padding: 0.38rem 0.5rem;
-  color: #fff;
-  border-radius: 0.45rem;
-  background: #26283e;
-  box-shadow: 0 8px 18px rgb(20 22 38 / 0.18);
-  font-size: var(--text-caption);
-  font-weight: 700;
+  min-width: 9.5rem;
+  padding: 0.5rem 0.75rem;
+  color: #ffffff;
+  border-radius: 0.5rem;
+  background: #0f172a;
+  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.4);
+  font-size: 0.75rem;
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 4px);
-  transition: opacity 150ms ease, transform 150ms ease;
+  transform: translate(-50%, 8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sa-chart-tooltip::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px 5px 0 5px;
+  border-style: solid;
+  border-color: #0f172a transparent transparent transparent;
+}
+
+.sa-chart-tooltip-header {
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-bottom: 0.15rem;
+}
+
+.sa-chart-tooltip-amount {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0.25rem;
+}
+
+.sa-chart-tooltip-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  color: #cbd5e1;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 0.25rem;
+}
+
+.sa-chart-tooltip-growth {
+  font-weight: 600;
 }
 
 .sa-chart-column:hover .sa-chart-tooltip,
-.sa-chart-column:focus .sa-chart-tooltip {
+.sa-chart-column:focus .sa-chart-tooltip,
+.sa-chart-column:focus-visible .sa-chart-tooltip {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+html[data-theme="dark"] .sa-chart-tooltip {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 14px 34px -4px rgba(0, 0, 0, 0.6);
+}
+
+html[data-theme="dark"] .sa-chart-tooltip::after {
+  border-color: #1e293b transparent transparent transparent;
 }
 
 .sa-icon-chip {
@@ -5819,24 +6000,22 @@ html[data-theme="dark"] .sa-chart-summary strong {
 .role-shell--superadmin .sa-status-row {
   display: flex;
   width: 100%;
-  min-height: 2rem;
+  min-height: 1.85rem;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.28rem 0.45rem;
+  padding: 0.3rem 0.5rem;
   color: var(--color-brand-text-muted);
   border: 0;
+  border-radius: 0.375rem;
   background: transparent;
   box-shadow: none;
   font-size: var(--text-caption);
+  transition: background 150ms ease;
 }
 
-.role-shell--superadmin .sa-status-row:hover,
-.role-shell--superadmin .sa-status-row.is-active {
-  color: var(--color-brand-text);
-  background: #f5f6fa;
-  box-shadow: none;
-  transform: none;
+.role-shell--superadmin .sa-status-row:hover {
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .sa-status-name {
@@ -6224,9 +6403,8 @@ html[data-theme="dark"] .role-shell--superadmin .sa-donut::after {
   background: #15192b;
 }
 
-html[data-theme="dark"] .role-shell--superadmin .sa-status-row:hover,
-html[data-theme="dark"] .role-shell--superadmin .sa-status-row.is-active {
-  background: #1e2338;
+html[data-theme="dark"] .role-shell--superadmin .sa-status-row:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 html[data-theme="dark"] .role-shell--superadmin .sa-tenant-table thead {

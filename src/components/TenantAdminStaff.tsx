@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { PageHeader } from './ui';
+import { PageHeader, Pagination } from './ui';
 import { getTenantAdminInitialData } from "../utils/mockDataReset";
 import {
   Archive,
@@ -708,6 +708,18 @@ export default function TenantAdminStaff({
     statusFilter,
   ]);
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const pagedStaff = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredStaff.slice(start, start + pageSize);
+  }, [filteredStaff, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, selectedBranch, roleFilter, statusFilter, employmentFilter, sortBy]);
+
   const workingCount = activeBranchStaff.filter(
     (member) => member.status === "WORKING",
   ).length;
@@ -1341,7 +1353,7 @@ export default function TenantAdminStaff({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredStaff.map((member) => (
+                {pagedStaff.map((member) => (
                   <tr
                     key={member.id}
                     className="text-caption text-slate-600 hover:bg-slate-50/70"
@@ -1454,7 +1466,7 @@ export default function TenantAdminStaff({
           </div>
         ) : (
           <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredStaff.map((member) => (
+            {pagedStaff.map((member) => (
               <button
                 key={member.id}
                 type="button"
@@ -1530,20 +1542,28 @@ export default function TenantAdminStaff({
             ))}
           </div>
         )}
-        <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-caption text-slate-400">
-            Hiển thị{" "}
-            <span className="font-black text-slate-600">
-              {filteredStaff.length}
-            </span>{" "}
-            hồ sơ đang hoạt động · Kỳ hiệu suất tháng 07/2026
-          </p>
-          <p className="flex items-center gap-1.5 text-caption text-slate-400">
-            <MapPin className="h-3.5 w-3.5" />
-            {selectedBranch === "ALL"
-              ? "Tất cả chi nhánh"
-              : branchLabels[selectedBranch as BranchCode]}
-          </p>
+        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+          <Pagination
+            id="staff-pagination"
+            currentPage={page}
+            totalPages={Math.ceil(filteredStaff.length / pageSize) || 1}
+            totalItems={filteredStaff.length}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 50]}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="hồ sơ"
+            variant="violet"
+          />
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-caption text-slate-400">
+            <span>Kỳ hiệu suất tháng 07/2026</span>
+            <span className="flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5" />
+              {selectedBranch === "ALL"
+                ? "Tất cả chi nhánh"
+                : branchLabels[selectedBranch as BranchCode]}
+            </span>
+          </div>
         </div>
       </section>
 

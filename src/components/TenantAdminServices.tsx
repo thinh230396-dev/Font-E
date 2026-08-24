@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { PageHeader, Switch } from './ui';
+import { PageHeader, Pagination, Switch } from './ui';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   ArrowRight,
@@ -618,6 +618,18 @@ export default function TenantAdminServices({
       .sort((a, b) => sortBy === 'BOOKINGS' ? b.bookings - a.bookings : sortBy === 'PRICE_HIGH' ? b.price - a.price : sortBy === 'PRICE_LOW' ? a.price - b.price : sortBy === 'NAME' ? a.name.localeCompare(b.name, 'vi') : b.revenue - a.revenue);
   }, [bookingFilter, branchServices, categoryFilter, searchQuery, sortBy, statusFilter]);
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const pagedServices = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredServices.slice(start, start + pageSize);
+  }, [filteredServices, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, selectedBranch, categoryFilter, statusFilter, bookingFilter, sortBy]);
+
   const activeFilterCount = [categoryFilter !== 'ALL', statusFilter !== 'ALL', bookingFilter !== 'ALL'].filter(Boolean).length;
   const activeCount = branchServices.filter((service) => service.status === 'ACTIVE').length;
   const totalRevenue = branchServices.reduce((sum, service) => sum + service.revenue, 0);
@@ -787,7 +799,7 @@ export default function TenantAdminServices({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredServices.map((service) => {
+                {pagedServices.map((service) => {
                   const CategoryIcon = categoryMeta[service.category].icon;
                   return (
                     <tr
@@ -959,7 +971,7 @@ export default function TenantAdminServices({
           </div>
         ) : (
           <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredServices.map((service) => {
+            {pagedServices.map((service) => {
               const CategoryIcon = categoryMeta[service.category].icon;
               return (
                 <button
@@ -1064,7 +1076,28 @@ export default function TenantAdminServices({
             })}
           </div>
         )}
-        <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-caption text-slate-400">Hiển thị <span className="font-black text-slate-600">{filteredServices.length}</span> dịch vụ · Giá đã bao gồm VAT</p><p className="flex items-center gap-1.5 text-caption text-slate-400"><Store className="h-3.5 w-3.5" />{selectedBranch === 'ALL' ? 'Tất cả chi nhánh' : `Chi nhánh ${branchLabels[selectedBranch as BranchCode]}`}</p></div></section>
+        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+          <Pagination
+            id="services-pagination"
+            currentPage={page}
+            totalPages={Math.ceil(filteredServices.length / pageSize) || 1}
+            totalItems={filteredServices.length}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 50]}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="dịch vụ"
+            variant="violet"
+          />
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-caption text-slate-400">
+            <span>Giá đã bao gồm VAT</span>
+            <span className="flex items-center gap-1.5">
+              <Store className="h-3.5 w-3.5" />
+              {selectedBranch === 'ALL' ? 'Tất cả chi nhánh' : `Chi nhánh ${branchLabels[selectedBranch as BranchCode]}`}
+            </span>
+          </div>
+        </div>
+      </section>
 
       <section className="grid gap-5 lg:grid-cols-3"><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Dịch vụ bán chạy</h2><p className="mt-1 text-caption text-slate-400">Theo lượt đặt tháng 07/2026</p></div><TrendingUp className="h-4.5 w-4.5 text-emerald-500" /></div><div className="mt-3 space-y-1">{[...branchServices].sort((a, b) => b.bookings - a.bookings).slice(0, 4).map((service, index) => <button key={service.id} type="button" onClick={() => setSelectedService(service)} className="flex h-auto w-full items-center gap-3 border-0 bg-transparent px-0 py-2.5 text-left shadow-none"><span className={`flex h-7 w-7 items-center justify-center rounded-lg text-caption font-black ${index === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><span className="min-w-0 flex-1"><span className="block truncate text-caption font-black text-slate-700">{service.name}</span><span className="ta-money mt-1 block text-caption text-slate-400">{service.bookings} lượt · {formatCurrency(service.price)}</span></span><span className="ta-money text-right text-caption font-black text-slate-800">{formatCompactMoney(service.revenue)}</span></button>)}</div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Hiệu quả đặt online</h2><p className="mt-1 text-caption text-slate-400">Tỷ lệ chuyển đổi trang đặt lịch</p></div><CalendarCheck2 className="h-4.5 w-4.5 text-violet-500" /></div><div className="mt-4 grid grid-cols-3 gap-3"><div><p className="text-caption text-slate-400">Hiển thị</p><p className="mt-1 text-lg font-black text-slate-900">{branchServices.filter((service) => service.onlineBooking).length}</p></div><div><p className="text-caption text-slate-400">Chuyển đổi</p><p className="mt-1 text-lg font-black text-slate-900">18,6%</p></div><div><p className="text-caption text-slate-400">Doanh thu</p><p className="mt-1 text-lg font-black text-emerald-600">42%</p></div></div><div className="mt-4 rounded-xl bg-violet-50 p-3"><p className="text-caption font-black text-violet-800">Gợi ý</p><p className="mt-1 text-caption leading-4 text-violet-600">Mở đặt online cho “Nail Art cô dâu” sau bước tư vấn có thể tăng 4–6 lịch mỗi tháng.</p></div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"><div className="flex items-start justify-between"><div><h2 className="text-xs font-black text-slate-900">Cấu trúc giá</h2><p className="mt-1 text-caption text-slate-400">Chính sách chung đang áp dụng</p></div><WalletCards className="h-4.5 w-4.5 text-amber-500" /></div><div className="mt-4 space-y-3">{[{ label: 'Ưu đãi thành viên', value: '10%', detail: 'Trên giá niêm yết' }, { label: 'Hoa hồng trung bình', value: '15,8%', detail: 'Theo doanh thu dịch vụ' }, { label: 'Tỷ lệ đặt cọc', value: '28%', detail: 'Trên giá dịch vụ TB' }].map((item) => <div key={item.label} className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><div><p className="text-caption font-black text-slate-700">{item.label}</p><p className="mt-1 text-caption text-slate-400">{item.detail}</p></div><span className="text-body font-black text-violet-700">{item.value}</span></div>)}</div></article></section>
 

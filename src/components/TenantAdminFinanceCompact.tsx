@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
-import { PageHeader } from './ui';
+import { PageHeader, Pagination } from './ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertCircle,
@@ -870,6 +870,7 @@ export default function TenantAdminFinanceCompact({
   // Bulk selection & pagination
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Modal states
   const [formOpen, setFormOpen] = useState(false);
@@ -1333,11 +1334,11 @@ export default function TenantAdminFinanceCompact({
     [filteredTransactions]
   );
 
-  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / FINANCE_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize));
   const currentPage = Math.min(Math.max(1, page), totalPages);
   const pagedTransactions = useMemo(
-    () => filteredTransactions.slice((currentPage - 1) * FINANCE_PAGE_SIZE, currentPage * FINANCE_PAGE_SIZE),
-    [filteredTransactions, currentPage]
+    () => filteredTransactions.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filteredTransactions, currentPage, pageSize]
   );
   const pageSelectableIds = useMemo(
     () => pagedTransactions.filter((t) => t.status !== 'POSTED').map((t) => t.id),
@@ -2077,7 +2078,22 @@ export default function TenantAdminFinanceCompact({
         )}
 
         {/* Table Pagination */}
-        <FinanceTablePager page={currentPage} totalPages={totalPages} onChange={setPage} />
+        {filteredTransactions.length > 0 && (
+          <div className="border-t border-pink-100/80 bg-white px-4 py-3">
+            <Pagination
+              id="finance-transactions-pagination"
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredTransactions.length}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 20, 50, 100]}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              itemLabel="phiếu giao dịch"
+              variant="pink"
+            />
+          </div>
+        )}
       </section>
 
       {/* CREATE / EDIT TRANSACTION MODAL */}

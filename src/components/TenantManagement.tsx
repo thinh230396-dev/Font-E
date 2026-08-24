@@ -37,7 +37,7 @@ import { normalizeBranch } from '../utils/branches';
 import TenantDetailModal from './TenantDetailModal';
 import PackageUpgradeRequests from './PackageUpgradeRequests';
 import { convertMoney, formatMoney } from '../utils/money';
-import { Button, DataTable, Field, Modal, StatusBadge, Switch, useToast } from './ui';
+import { Button, DataTable, Field, Modal, Pagination, StatusBadge, Switch, useToast } from './ui';
 import {
   getSellablePackages,
   getSubscriptionBranchLimit,
@@ -231,6 +231,7 @@ export default function TenantManagement({
   const [sortBy, setSortBy] = useState<TenantSortColumn>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [managementView, setManagementView] = useState<'tenants' | 'upgrade_requests'>('tenants');
 
   // Modal / Drawer state
@@ -636,10 +637,10 @@ export default function TenantManagement({
     return a.name.localeCompare(b.name, 'vi') * direction;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / TENANT_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   // Bộ lọc đổi làm số trang co lại; kẹp về trang cuối thay vì hiện bảng rỗng.
   const currentPage = Math.min(page, totalPages);
-  const pagedTenants = filtered.slice((currentPage - 1) * TENANT_PAGE_SIZE, currentPage * TENANT_PAGE_SIZE);
+  const pagedTenants = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const resetFilters = () => {
     setInternalSearch('');
@@ -1114,35 +1115,18 @@ export default function TenantManagement({
           ? <Button variant="secondary" size="small" onClick={resetFilters}>Xóa bộ lọc</Button>
           : <Button variant="primary" size="small" iconLeading={<Plus />} onClick={() => setShowAddForm(true)}>Thêm tenant mới</Button>}
         footer={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-brand-text-muted">
-              {filtered.length === 0
-                ? 'Không có kết quả'
-                : `Hiển thị ${(currentPage - 1) * TENANT_PAGE_SIZE + 1}–${(currentPage - 1) * TENANT_PAGE_SIZE + pagedTenants.length} trên ${filtered.length} tenant`}
-              {filtered.length !== tenants.length && ` (lọc từ ${tenants.length})`}
-            </span>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="small"
-                  disabled={currentPage <= 1}
-                  onClick={() => setPage(currentPage - 1)}
-                >
-                  Trước
-                </Button>
-                <span className="text-brand-text-muted">Trang {currentPage}/{totalPages}</span>
-                <Button
-                  variant="secondary"
-                  size="small"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setPage(currentPage + 1)}
-                >
-                  Sau
-                </Button>
-              </div>
-            )}
-          </div>
+          <Pagination
+            id="tenant-management-pagination"
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            totalUnfiltered={tenants.length}
+            pageSize={pageSize}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="tenant"
+          />
         }
         columns={[
           {

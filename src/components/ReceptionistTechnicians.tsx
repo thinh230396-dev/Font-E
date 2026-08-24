@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -26,7 +26,6 @@ import {
   X,
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
-import { PageHeader } from './ui';
 
 type BranchCode = 'Q1' | 'Q3';
 type TechnicianStatus =
@@ -184,6 +183,15 @@ const profiles: Record<string, ProfileMeta> = {
     experience: '2 năm',
     preferredArea: 'Manicure',
     color: 'from-cyan-500 to-blue-500',
+  },
+  'Mai Lan': {
+    phone: '0909 334 112',
+    employeeCode: 'NV-013',
+    rating: 4.8,
+    reviews: 95,
+    experience: '3 năm',
+    preferredArea: 'Pedicure · Nail Art',
+    color: 'from-pink-500 to-rose-500',
   },
 };
 
@@ -356,7 +364,14 @@ export default function ReceptionistTechnicians({
   const [shiftFilter, setShiftFilter] = useState<'ALL' | TechnicianShift>('ALL');
   const [skillFilter, setSkillFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState<ViewMode>('CARDS');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
   const [selectedTechnician, setSelectedTechnician] = useState<Technician | null>(null);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, statusFilter, shiftFilter, skillFilter, selectedBranch]);
   const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null);
   const [assigningAppointment, setAssigningAppointment] = useState<Appointment | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState('');
@@ -417,6 +432,12 @@ export default function ReceptionistTechnicians({
             .includes(normalizedQuery),
       );
   }, [branchTechnicians, query, shiftFilter, skillFilter, statusFilter]);
+
+  const totalPages = Math.ceil(filteredTechnicians.length / pageSize) || 1;
+  const pagedTechnicians = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTechnicians.slice(start, start + pageSize);
+  }, [filteredTechnicians, currentPage, pageSize]);
 
   const unassignedAppointments = todayAppointments.filter(
     (appointment) =>
@@ -752,7 +773,7 @@ export default function ReceptionistTechnicians({
 
           {viewMode === 'CARDS' ? (
             <section className="grid gap-3 xl:grid-cols-2">
-              {filteredTechnicians.map((technician) => {
+              {pagedTechnicians.map((technician) => {
                 const meta = statusMeta[technician.status];
                 const profile = profileFor(technician);
                 const load = workload(technician);
@@ -917,7 +938,7 @@ export default function ReceptionistTechnicians({
                       ))}
                     </div>
                   </div>
-                  {filteredTechnicians.map((technician) => {
+                  {pagedTechnicians.map((technician) => {
                     const meta = statusMeta[technician.status];
                     const profile = profileFor(technician);
                     const items = technicianAppointments(technician.name);
@@ -992,6 +1013,25 @@ export default function ReceptionistTechnicians({
                 </div>
               </div>
             </section>
+          )}
+
+          {filteredTechnicians.length > 0 && (
+            <div className="rounded-2xl border border-brand-outline bg-brand-surface p-3.5 shadow-sm">
+              <Pagination
+                id="receptionist-technicians-pagination"
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={filteredTechnicians.length}
+                pageSize={pageSize}
+                pageSizeOptions={[4, 6, 8, 12]}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setCurrentPage(1);
+                }}
+                itemLabel="kỹ thuật viên"
+              />
+            </div>
           )}
 
           {!filteredTechnicians.length && (

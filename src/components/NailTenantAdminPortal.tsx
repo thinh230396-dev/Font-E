@@ -1051,11 +1051,7 @@ export default function NailTenantAdminPortal({
   const t = useT();
   const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
   const demoStorageKey = `tenant-admin-demo-mode:${tenantName}`;
-  const [demoMode, setDemoMode] = useState(() => {
-    if (typeof window === 'undefined' || !tenant) return true;
-    const stored = window.localStorage.getItem(demoStorageKey);
-    return stored === 'true';
-  });
+  const [demoMode, setDemoMode] = useState(true);
   const [dataModeReady, setDataModeReady] = useState(false);
   const [demoRevision, setDemoRevision] = useState(0);
   const pendingUpgradeRequest = tenant
@@ -2145,48 +2141,6 @@ export default function NailTenantAdminPortal({
         </header>
 
         <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" data-page={activePage} data-compact-access={['stations', 'pos', 'customers', 'loyalty', 'staff', 'services', 'inventory'].includes(activePage) ? 'true' : undefined} tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
-          {emergencyBannerAnnouncement && (
-            <div className={`mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border p-4 shadow-sm transition-all ${
-              emergencyBannerAnnouncement.priority === 'URGENT'
-                ? 'border-rose-300 bg-rose-50/90 text-rose-950 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-200'
-                : 'border-amber-300 bg-amber-50/90 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-200'
-            }`}>
-              <div className="flex items-start gap-3 min-w-0">
-                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold shadow-xs ${
-                  emergencyBannerAnnouncement.priority === 'URGENT' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white'
-                }`}>
-                  <Megaphone className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/80 dark:bg-black/40 border border-current/20 shadow-xs">
-                      {emergencyBannerAnnouncement.priority === 'URGENT' ? 'Phát sóng khẩn cấp từ Superadmin' : 'Thông báo hệ thống'}
-                    </span>
-                    <span className="text-xs font-black truncate">{emergencyBannerAnnouncement.title}</span>
-                  </div>
-                  <p className="mt-1 text-xs opacity-90 line-clamp-2 leading-relaxed">{emergencyBannerAnnouncement.summary}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                <Button
-                  size="small"
-                  variant="primary"
-                  onClick={() => {
-                    navigate('announcements');
-                  }}
-                >
-                  Xem chi tiết
-                </Button>
-                <Button
-                  size="small"
-                  variant="ghost"
-                  onClick={() => handleDismissEmergencyBanner(emergencyBannerAnnouncement.id)}
-                >
-                  Đã hiểu & Ẩn
-                </Button>
-              </div>
-            </div>
-          )}
           {/* Trạng thái nguồn dữ liệu: một dải gọn, rộng theo nội dung để không
               cạnh tranh với tiêu đề trang. Hành động phá hủy đứng sau và nhẹ hơn. */}
           {activePage !== 'overview' && demoMode && <section role="status" className="tenant-demo-strip mb-4 flex w-full flex-col gap-2 rounded-control border sm:w-fit sm:flex-row sm:items-center">
