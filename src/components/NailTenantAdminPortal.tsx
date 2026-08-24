@@ -1,5 +1,6 @@
 import { FormEvent, Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import BranchSelectionModal, { type BranchSelectionItem } from './BranchSelectionModal';
 import {
   AlertTriangle,
   Activity,
@@ -1108,7 +1109,19 @@ export default function NailTenantAdminPortal({
   ));
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [branch, setBranch] = useState('ALL');
+  const [branch, setBranch] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.sessionStorage.getItem('tenant-admin-chosen-branch');
+      if (saved) return saved;
+    }
+    return 'Q3';
+  });
+  const [showBranchModal, setShowBranchModal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !window.sessionStorage.getItem('tenant-admin-chosen-branch');
+    }
+    return true;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('');
   const [selectedRow, setSelectedRow] = useState<NailRow | null>(null);
@@ -1231,6 +1244,56 @@ export default function NailTenantAdminPortal({
   const branchLimit = currentPackage.maxSalons;
   const staffLimit = currentPackage.maxStaff;
   const branchRows = rowsByPage.branches || (tenant ? [] : nailModuleConfigs.branches.rows);
+
+  const branchSelectionList: BranchSelectionItem[] = useMemo(() => {
+    return branchRows.map((row) => {
+      const code = row.branchCode || row.id.replace(/^BR-/, '');
+      const addressDetail = row.details.find((d) => d.label.includes('Địa chỉ'))?.value || row.subtitle;
+      const phoneDetail = row.details.find((d) => d.label.includes('Điện thoại'))?.value;
+      const managerDetail = row.cells[1] || '';
+      const staffDetail = row.cells[2] || '';
+      const revenueDetail = row.cells[3] || '';
+      const hoursDetail = row.cells[0] || '';
+      const stationsDetail = row.details.find((d) => d.label.includes('Số ghế'))?.value;
+
+      return {
+        code,
+        id: row.id,
+        name: row.title,
+        subtitle: row.subtitle,
+        address: addressDetail,
+        phone: phoneDetail,
+        manager: managerDetail,
+        staff: staffDetail,
+        revenue: revenueDetail,
+        hours: hoursDetail,
+        stations: stationsDetail,
+        status: row.badge,
+        badgeTone: row.badgeTone,
+        note: row.note,
+      };
+    });
+  }, [branchRows]);
+
+  const handleSelectBranch = (selectedCode: string) => {
+    setBranch(selectedCode);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem('tenant-admin-chosen-branch', selectedCode);
+    }
+    setSearchQuery('');
+    setSelectedRow(null);
+    const chosenName = selectedCode === 'ALL'
+      ? 'Toàn hệ thống (Tất cả chi nhánh)'
+      : branchSelectionList.find((b) => b.code === selectedCode)?.name || `Chi nhánh ${selectedCode}`;
+    setToast(`Đã chọn: ${chosenName}. Đang hiển thị dữ liệu chi nhánh.`);
+  };
+
+  const currentActiveBranchTitle = useMemo(() => {
+    if (branch === 'ALL') return 'Tất cả chi nhánh';
+    const found = branchSelectionList.find((b) => b.code === branch);
+    return found ? found.name : `Chi nhánh ${branch}`;
+  }, [branch, branchSelectionList]);
+
   const currentConfig = activePage === 'overview' || activePage === 'subscription' || activePage === 'support' ? null : (nailModuleConfigs[activePage] || null);
   const currentRows = activePage === 'overview' || activePage === 'subscription' || activePage === 'support'
     ? []
@@ -1825,17 +1888,6 @@ export default function NailTenantAdminPortal({
             <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}><p className="truncate text-sm font-black tracking-tight">{tenantName}</p><p className="mt-0.5 truncate text-caption font-semibold uppercase tracking-[0.18em] text-slate-400">Nail · Beauty · Care</p></div>
           </div>
           <button type="button" onClick={() => setSidebarOpen(false)} aria-label="Đóng menu" className="ml-auto flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-slate-400 shadow-none lg:hidden"><X className="h-4 w-4" /></button>
-          <button
-            type="button"
-            onClick={toggleSidebarCollapsed}
-            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
-            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
-            className={`hidden lg:flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer shrink-0 ${
-              sidebarCollapsed ? 'hidden' : ''
-            }`}
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-4">
@@ -1882,21 +1934,26 @@ export default function NailTenantAdminPortal({
       <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[272px]'}`}>
         <header className="role-topbar sticky top-0 z-40 flex h-[68px] items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] sm:px-6 lg:px-8">
           <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm lg:hidden"><Menu className="h-5 w-5" /></button>
-          <button
-            type="button"
-            onClick={toggleSidebarCollapsed}
-            title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
-            aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
-            className="hidden lg:flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-600 shadow-sm hover:bg-slate-50 transition cursor-pointer"
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </button>
           <div className="relative max-w-md flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={`Tìm trong ${formatModuleLabel(activePage).toLocaleLowerCase('vi')}...`} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-caption font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></div>
-          <div className="hidden sm:block"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label={t('Chọn phạm vi chi nhánh')} className="h-10 w-52 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">{t('Tất cả chi nhánh')}</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
+          <div className="hidden sm:block">
+            <button
+              type="button"
+              onClick={() => setShowBranchModal(true)}
+              title="Bấm để đổi chi nhánh làm việc"
+              aria-label={`Đang chọn ${currentActiveBranchTitle}. Bấm để đổi chi nhánh làm việc.`}
+              className="group flex h-10 items-center gap-2 rounded-xl border border-violet-200 bg-violet-50/80 px-3.5 text-caption font-bold text-violet-900 shadow-xs transition hover:border-violet-300 hover:bg-violet-100/90 active:scale-[0.99] cursor-pointer"
+            >
+              <Store className="h-4 w-4 text-violet-600 group-hover:scale-110 transition-transform" />
+              <span className="text-slate-600 font-medium">Chi nhánh:</span>
+              <span className="font-extrabold text-violet-950 max-w-[160px] truncate">{currentActiveBranchTitle}</span>
+              {branch !== 'ALL' && (
+                <span className="rounded-md bg-violet-200/80 px-1.5 py-0.5 text-[10px] font-black text-violet-800 uppercase">
+                  {branch}
+                </span>
+              )}
+              <ChevronDown className="h-3.5 w-3.5 text-violet-500 group-hover:translate-y-0.5 transition-transform" />
+            </button>
+          </div>
           <div className="ml-auto flex items-center gap-2">
             <div className="relative">
               <button
@@ -2141,21 +2198,25 @@ export default function NailTenantAdminPortal({
         </header>
 
         <main key={`${demoMode ? 'demo' : 'live'}-${demoRevision}`} id="tenant-admin-main" data-page={activePage} data-compact-access={['stations', 'pos', 'customers', 'loyalty', 'staff', 'services', 'inventory'].includes(activePage) ? 'true' : undefined} tabIndex={-1} className="role-main tenant-admin-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
-          {/* Trạng thái nguồn dữ liệu: một dải gọn, rộng theo nội dung để không
-              cạnh tranh với tiêu đề trang. Hành động phá hủy đứng sau và nhẹ hơn. */}
-          {activePage !== 'overview' && demoMode && <section role="status" className="tenant-demo-strip mb-4 flex w-full flex-col gap-2 rounded-control border sm:w-fit sm:flex-row sm:items-center">
-            <span className="flex items-center gap-2 text-body font-semibold text-brand-text">
-              <Database aria-hidden="true" className="h-4 w-4 shrink-0 text-[color:var(--accent)]" />
-              Đang hiển thị dữ liệu mẫu
-            </span>
-            <span aria-hidden="true" className="hidden h-4 w-px bg-brand-outline sm:block" />
-            <div className="flex gap-1">
-              <Button size="small" variant="secondary" onClick={loadDemoData} iconLeading={<RotateCcw />}>Nạp lại</Button>
-              {tenant && <Button size="small" variant="ghost" onClick={clearDemoData} iconLeading={<Trash2 />}>Tắt dữ liệu mẫu</Button>}
-            </div>
-          </section>}
           {readOnlyReason && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100"><LockKeyhole className="h-4 w-4" /></span><div><p className="text-caption font-black">Chế độ chỉ đọc đang được áp dụng</p><p className="mt-1 text-caption leading-5">{readOnlyReason}</p></div></div>}
-          <div className="mb-4 sm:hidden"><BeautifulSelect value={branch} onChange={(event) => { setBranch(event.target.value); setSearchQuery(''); setSelectedRow(null); }} aria-label="Chọn phạm vi chi nhánh trên di động" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"><option value="ALL">{t('Tất cả chi nhánh')}</option>{branchRows.map((row) => <option key={row.id} value={row.branchCode}>{row.title}</option>)}</BeautifulSelect></div>
+          <div className="mb-4 sm:hidden">
+            <button
+              type="button"
+              onClick={() => setShowBranchModal(true)}
+              className="flex h-11 w-full items-center justify-between rounded-xl border border-violet-200 bg-violet-50/90 px-3.5 text-caption font-bold text-violet-950 shadow-xs active:bg-violet-100 cursor-pointer"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Store className="h-4 w-4 shrink-0 text-violet-600" />
+                <span className="truncate">Chi nhánh: <strong className="font-extrabold text-violet-900">{currentActiveBranchTitle}</strong></span>
+                {branch !== 'ALL' && (
+                  <span className="rounded-md bg-violet-200/80 px-1.5 py-0.5 text-[10px] font-black text-violet-800 uppercase">
+                    {branch}
+                  </span>
+                )}
+              </div>
+              <span className="shrink-0 text-xs font-bold text-violet-700 underline ml-2">Đổi chi nhánh</span>
+            </button>
+          </div>
           {activePage === 'overview' ? (
             <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} tenant={tenant} demoMode={demoMode} invoiceCount={visibleInvoices.length} onToggleDemo={demoMode ? clearDemoData : loadDemoData} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
           ) : activePage === 'subscription' ? (
@@ -2465,6 +2526,17 @@ export default function NailTenantAdminPortal({
           </div>
         </section>
       </div>}
+
+      <BranchSelectionModal
+        open={showBranchModal}
+        onClose={() => setShowBranchModal(false)}
+        selectedBranch={branch}
+        onSelectBranch={handleSelectBranch}
+        branches={branchSelectionList}
+        tenantName={tenantName}
+        accountName={account.displayName}
+        canCloseWithoutSelecting={Boolean(branch)}
+      />
       {selectedRow && currentConfig?.id === 'branches' && <BranchDetailDrawer row={selectedRow} tenantName={tenantName} onClose={() => setSelectedRow(null)} onEdit={openEdit} onUpdate={updateSelectedRowStatus} />}
 
       {createOpen && currentConfig && currentConfig.id !== 'settings' && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"><button type="button" aria-label="Đóng biểu mẫu" onClick={() => setCreateOpen(false)} className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none" /><form onSubmit={submitCreate} className={`relative max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-3xl bg-white shadow-2xl ${currentConfig.id === 'branches' ? 'max-w-4xl' : 'max-w-2xl'}`}><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6"><div><p className="text-caption font-black uppercase tracking-wide text-violet-600">{currentConfig.title}</p><h2 className="mt-1 text-lg font-black text-slate-900">{editingRowId && currentConfig.id === 'branches' ? 'Chỉnh sửa hồ sơ chi nhánh' : currentConfig.formTitle}</h2><p className="mt-1 text-xs text-slate-500">{currentConfig.id === 'branches' ? 'Hoàn thiện thông tin theo từng nhóm. Mã chi nhánh được tạo tự động và dữ liệu chỉ được lưu sau bước xác nhận.' : 'Nhập thông tin cần thiết; bạn có thể bổ sung chi tiết sau khi lưu.'}</p></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Đóng" className="flex h-9 w-9 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"><X className="h-4 w-4" /></button></div>{currentConfig.id === 'branches' && <div className="mx-5 mt-5 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:mx-6 sm:grid-cols-3"><div className="rounded-xl bg-white p-3"><p className="text-caption font-black text-violet-600">1 · Nhận diện</p><p className="mt-1 text-caption text-slate-500">Tên, vai trò và mô hình</p></div><div className="rounded-xl bg-white p-3"><p className="text-caption font-black text-violet-600">2 · Vận hành</p><p className="mt-1 text-caption text-slate-500">Địa điểm, quản lý, nguồn lực</p></div><div className="rounded-xl bg-white p-3"><p className="text-caption font-black text-violet-600">3 · Xác nhận</p><p className="mt-1 text-caption text-slate-500">Kiểm tra hạn mức và đồng bộ</p></div></div>}<div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">{currentConfig.formFields.map((field) => <Fragment key={field.key}>{currentConfig.id === 'branches' && field.key === 'name' && <div className="sm:col-span-2"><p className="text-xs font-black text-slate-900">Thông tin nhận diện</p><p className="mt-1 text-caption text-slate-500">Mã chi nhánh được sinh tự động từ tên và không trùng trong tenant.</p></div>}{currentConfig.id === 'branches' && field.key === 'province' && <div className="mt-2 border-t border-slate-200 pt-5 sm:col-span-2"><p className="text-xs font-black text-slate-900">Địa điểm & người phụ trách</p></div>}{currentConfig.id === 'branches' && field.key === 'openingHours' && <div className="mt-2 border-t border-slate-200 pt-5 sm:col-span-2"><p className="text-xs font-black text-slate-900">Vận hành & nguồn lực</p></div>}{currentConfig.id === 'branches' && field.key === 'monthlyRevenue' && <div className="mt-2 border-t border-slate-200 pt-5 sm:col-span-2"><p className="text-xs font-black text-slate-900">Chỉ số ban đầu & dịch vụ</p></div>}<label className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-caption font-bold text-slate-600">{field.label}{currentConfig.id === 'branches' && ['name', 'address', 'manager', 'openingHours', 'stations', 'services'].includes(field.key) && <span className="text-rose-500"> *</span>}</span>{field.type === 'select' ? <BeautifulSelect value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium"><option value="">Chọn {field.label.toLocaleLowerCase('vi')}</option>{field.options?.map((option) => <option key={option} value={option}>{option}</option>)}</BeautifulSelect> : field.type === 'textarea' ? <textarea value={formValues[field.key] || ''} onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder} className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /> : <input type={field.type} value={formValues[field.key] || ''} readOnly={currentConfig.id === 'branches' && field.key === 'code'} aria-readonly={currentConfig.id === 'branches' && field.key === 'code'} onChange={(event) => { const value = event.target.value; setFormValues((current) => ({ ...current, [field.key]: value, ...(currentConfig.id === 'branches' && field.key === 'name' && !editingRowId ? { code: generateBranchCode(value, tenantName, tenant ? normalizeTenantBranches(tenant) : []) } : {}) })); }} placeholder={field.placeholder} required={field === currentConfig.formFields[0]} className={`h-11 w-full rounded-xl border px-3 text-xs font-medium outline-none ${currentConfig.id === 'branches' && field.key === 'code' ? 'cursor-not-allowed border-violet-200 bg-violet-50 font-black text-violet-700' : 'border-slate-200 bg-slate-50 focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100'}`} />}{currentConfig.id === 'branches' && liveTenantBranchValidation.errors[field.key] && <span className="mt-1.5 block text-caption font-semibold text-rose-600">{liveTenantBranchValidation.errors[field.key]}</span>}{currentConfig.id === 'branches' && field.key === 'code' && <span className="mt-1.5 block text-caption text-slate-400">Tự động tạo; không thể chỉnh sửa thủ công.</span>}</label></Fragment>)}</div>{currentConfig.id === 'branches' && <div className={`mx-5 mb-5 rounded-2xl border p-4 sm:mx-6 ${liveTenantBranchValidation.isValid ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}><p className={`text-xs font-black ${liveTenantBranchValidation.isValid ? 'text-emerald-700' : 'text-amber-800'}`}>{liveTenantBranchValidation.isValid ? 'Đã đáp ứng đầy đủ điều kiện thêm chi nhánh' : `Cần hoàn thiện ${Object.keys(liveTenantBranchValidation.errors).length} điều kiện trước khi xác nhận`}</p>{!liveTenantBranchValidation.isValid && <ul className="mt-2 grid gap-1 text-caption leading-5 text-amber-800 sm:grid-cols-2">{Object.values(liveTenantBranchValidation.errors).map((error) => <li key={error}>• {error}</li>)}</ul>}</div>}<div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setCreateOpen(false)} className="border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm">Hủy</button><button type="submit" disabled={currentConfig.id === 'branches' && !liveTenantBranchValidation.isValid} className={`flex items-center gap-2 px-5 text-xs font-black text-white shadow-lg ${currentConfig.id === 'branches' && !liveTenantBranchValidation.isValid ? 'cursor-not-allowed border border-slate-300 bg-slate-300 shadow-none' : 'border border-violet-700 bg-violet-600 shadow-violet-200'}`}><Check className="h-4 w-4" />{currentConfig.id === 'branches' ? 'Kiểm tra & xác nhận' : 'Lưu thông tin'}</button></div></form></div>}

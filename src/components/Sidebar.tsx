@@ -157,23 +157,6 @@ export default function Sidebar({
               <small>Superadmin Console</small>
             </span>
           </button>
-
-          {/* Quick header collapse button on desktop */}
-          <button
-            type="button"
-            onClick={toggleCollapse}
-            title={isCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
-            aria-label={isCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
-            className={`hidden lg:flex items-center justify-center h-8 w-8 rounded-lg text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high transition-colors cursor-pointer shrink-0 ${
-              isCollapsed ? 'mx-auto' : 'mr-1'
-            }`}
-          >
-            {isCollapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </button>
         </div>
 
         <nav className="sa-sidebar-nav" aria-label="Điều hướng quản trị">

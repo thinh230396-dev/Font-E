@@ -3321,17 +3321,16 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
 
   return (
     <div className="role-shell role-shell--reception reception-workspace min-h-screen bg-brand-bg text-brand-text">
-      <aside className={`role-sidebar reception-sidebar fixed inset-y-0 left-0 z-[var(--z-sidebar)] flex w-[var(--size-sidebar)] flex-col transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-[var(--size-topbar)] shrink-0 items-center gap-3 border-b border-white/10 px-5">
-          <span className="flex h-11 w-11 items-center justify-center rounded-control bg-brand-secondary text-brand-on-primary"><Store className="h-5 w-5" /></span>
-          <div className="min-w-0">
-            <p className="truncate text-body font-bold">{tenantName}</p>
-            <p className="mt-0.5 text-caption font-bold uppercase tracking-wider opacity-60">Không gian lễ tân</p>
+      <aside className={`role-sidebar reception-sidebar fixed inset-y-0 left-0 z-[var(--z-sidebar)] flex w-[260px] flex-col bg-[#111625] text-white shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-[260px]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className={`flex h-[var(--size-topbar)] shrink-0 items-center gap-3 border-b border-white/10 ${sidebarCollapsed ? 'lg:justify-center lg:px-2' : 'px-4'}`}>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-secondary text-white font-black shadow-md shadow-brand-secondary/20"><Store className="h-5 w-5" /></span>
+          <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+            <p className="truncate text-body font-bold text-white">{tenantName}</p>
+            <p className="mt-0.5 text-caption font-semibold uppercase tracking-wider text-slate-400">Không gian lễ tân</p>
           </div>
-          <Button variant="ghost" size="small" iconOnly aria-label="Đóng menu" onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden"><X /></Button>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Điều hướng Receptionist">
-          <p className="px-3 pb-2 pt-3 text-caption font-bold uppercase tracking-wider opacity-45">Vận hành tại quầy</p>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Điều hướng Receptionist">
+          <p className={`mb-2 px-3 text-caption font-bold uppercase tracking-[0.16em] text-slate-500 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>Vận hành tại quầy</p>
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
@@ -3342,12 +3341,12 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                 onClick={() => navigate(item.id)}
                 aria-current={active ? 'page' : undefined}
                 title={sidebarCollapsed ? item.label : undefined}
-                className={`group flex w-full items-center gap-3 rounded-xl transition-all cursor-pointer ${
-                  sidebarCollapsed ? 'lg:justify-center lg:h-10 lg:px-0' : 'h-10 px-3'
+                className={`group flex h-10 w-full items-center gap-3 rounded-xl transition-all cursor-pointer ${
+                  sidebarCollapsed ? 'lg:justify-center lg:px-0' : 'px-3'
                 } ${
                   active
-                    ? 'bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/25 shadow-xs'
-                    : 'text-slate-300 hover:text-white hover:bg-white/5 font-medium'
+                    ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 shadow-xs'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium'
                 }`}
               >
                 <Icon
@@ -3423,18 +3422,25 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
           </div>
         </div>
       </aside>
-      {/* Lớp phủ khi mở menu trên mobile: không phải nút bấm nên không lọt vào
-          thứ tự Tab. Menu đã có nút Đóng riêng và đóng được bằng Escape. */}
+      {/* Lớp phủ khi mở menu trên mobile */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
-          className="fixed inset-0 z-40 bg-[var(--backdrop-color)] lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs lg:hidden cursor-pointer"
         />
       )}
 
-      <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[var(--size-sidebar)]'}`}>
-        <header className="role-topbar sticky top-0 z-[var(--z-sticky)] flex h-[var(--size-topbar)] items-center gap-3 border-b border-brand-outline px-4 sm:px-6">
+      <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[260px]'}`}>
+        <header className="role-topbar sticky top-0 z-[var(--z-sticky)] flex h-[var(--size-topbar)] items-center gap-3 border-b border-brand-outline bg-brand-surface px-4 sm:px-6">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Mở menu"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface p-0 text-brand-text shadow-xs hover:bg-brand-surface-high transition lg:hidden cursor-pointer"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <div className="hidden min-w-0 sm:block"><p className="text-caption font-bold uppercase tracking-wider text-brand-text-muted">{new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</p><p className="mt-0.5 text-body font-bold text-brand-text">{navItems.find((item) => item.id === page)?.label}</p></div>
           <div className="relative ml-auto hidden w-full max-w-sm md:block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={page === 'products' ? 'Tìm tên, SKU, lô sản phẩm...' : page === 'stations' ? 'Tìm mã ghế, khách, kỹ thuật viên...' : 'Tìm tên, số điện thoại, dịch vụ...'} className="h-[var(--size-control)] w-full rounded-control border border-brand-outline bg-brand-surface-lowest pl-10 pr-4 text-body outline-none focus:border-brand-secondary" /></div>
           <span className="hidden sm:flex" title="Tài khoản chỉ được điều phối chi nhánh này"><StatusBadge status="ACTIVE" label={branchCode === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3'} /></span>
