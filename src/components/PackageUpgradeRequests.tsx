@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import type { PackageUpgradeRequest, PackageUpgradeRequestStatus } from '../types';
 import BeautifulSelect from './BeautifulSelect';
-import { Modal } from './ui';
+import { MockDataNotice, Modal } from './ui';
 
 interface PackageUpgradeRequestsProps {
   requests: PackageUpgradeRequest[];
@@ -95,6 +95,8 @@ export default function PackageUpgradeRequests({ requests, onReview }: PackageUp
 
   return (
     <div className="space-y-5">
+      <MockDataNotice reason="Module gói đăng ký nằm ngoài phạm vi backend MVP, nên yêu cầu nâng cấp chỉ lưu trên trình duyệt này." />
+
       <section className="grid gap-3 sm:grid-cols-3">
         {[
           { label: 'Chờ Super Admin duyệt', value: pendingCount, icon: Clock3, tone: 'bg-amber-50 text-amber-700' },

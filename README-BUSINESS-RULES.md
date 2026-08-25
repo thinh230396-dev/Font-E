@@ -534,7 +534,9 @@ Gói mới kích hoạt, expires_at gia hạn
 
 **BR-BAK-002** — Màn hình `DataBackup.tsx` giữ nguyên là **mô phỏng hoàn toàn**, không có bảng và không có endpoint nào phía sau. *(Q6A)*
 
-**BR-BAK-003** — Vì SQLite là một tệp, việc sao lưu ở MVP thực hiện bằng **copy tệp database thủ công**, nằm ngoài phần mềm. *(hệ quả của Q1A + Q6A)*
+**BR-BAK-003** — Việc sao lưu ở MVP thực hiện **thủ công, nằm ngoài phần mềm**: sao lưu database `NailManagement` trên SQL Server LocalDB bằng câu lệnh `BACKUP DATABASE`, hoặc bằng chức năng Backup có sẵn trong SQL Server Object Explorer của Visual Studio. *(hệ quả của Q6A + quyết định chọn LocalDB ngày 24/08)*
+
+> Bản trước của rule này ghi "copy tệp SQLite thủ công". Nó đã sai kể từ khi backend chuyển sang **ASP.NET Core + SQL Server LocalDB** — LocalDB không phải một tệp đơn để copy khi database đang được gắn. Xem `README-BACKEND-ROADMAP.md` §0 quyết định 11′.
 
 ---
 

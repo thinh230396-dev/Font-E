@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Repo git riêng được clone vào đây, không thuộc mã nguồn đồ án.
+claude-skills/

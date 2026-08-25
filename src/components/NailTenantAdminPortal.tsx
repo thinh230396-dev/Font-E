@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { FormEvent, Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import BranchSelectionModal, { type BranchSelectionItem } from './BranchSelectionModal';
 import {
@@ -114,6 +114,14 @@ const TenantAdminSettings = lazy(() => import('./TenantAdminSettings'));
 interface NailTenantAdminPortalProps {
   account: DemoAccount;
   onLogout: () => void;
+  /**
+   * Bộ đổi tiệm đặt trên thanh trên cùng — BR-AUTH-025.
+   *
+   * Nhận vào dưới dạng nội dung dựng sẵn thay vì danh sách tiệm và hàm gọi lại:
+   * việc đổi tiệm là thao tác trên PHIÊN đăng nhập, thuộc về `App.tsx`, còn cổng
+   * này chỉ cần biết chỗ để đặt nó. Rỗng khi tài khoản chỉ quản lý một tiệm.
+   */
+  tenantSwitcher?: ReactNode;
   onUpdateTenant?: (id: string, updated: Partial<Tenant>) => void;
   tenant?: Tenant;
   subscriptionPackage?: SubscriptionPackage;
@@ -1040,6 +1048,7 @@ export default function NailTenantAdminPortal({
   onSubmitInvoicePaymentProof,
   onUpdateTenant,
   onLogout,
+  tenantSwitcher,
   themeMode = 'light',
   onThemeChange,
   interfaceLanguage = 'vi',
@@ -1935,6 +1944,7 @@ export default function NailTenantAdminPortal({
         <header className="role-topbar sticky top-0 z-40 flex h-[68px] items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] sm:px-6 lg:px-8">
           <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu" className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm lg:hidden"><Menu className="h-5 w-5" /></button>
           <div className="relative max-w-md flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={`Tìm trong ${formatModuleLabel(activePage).toLocaleLowerCase('vi')}...`} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-caption font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100" /></div>
+          {tenantSwitcher}
           <div className="hidden sm:block">
             <button
               type="button"

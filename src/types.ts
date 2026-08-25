@@ -391,6 +391,15 @@ export interface SystemLog {
   metadata?: Record<string, string | number | boolean>;
 }
 
+/**
+ * Phiên đăng nhập hiển thị ở màn Bảo mật & Nhật ký.
+ *
+ * Bốn trường `location`, `trusted`, `suspicious`, `mfaVerified` đã được gỡ ở
+ * ngày 4. Lý do: bảng phiên phía máy chủ cố ý không có chúng — hệ thống không
+ * tra cứu vị trí theo IP, không có khái niệm thiết bị tin cậy, không chấm điểm
+ * phiên đáng ngờ, và MFA nằm ngoài phạm vi MVP. Giữ lại thì màn hình phải bịa ra
+ * giá trị cho chúng, mà một màn hình bảo mật nói sai thì tệ hơn là không nói.
+ */
 export interface AdminSession {
   id: string;
   user: string;
@@ -399,14 +408,10 @@ export interface AdminSession {
   browser: string;
   os: string;
   ip: string;
-  location: string;
   createdAt: string;
   lastActive: string;
   expiresAt: string;
   isCurrent: boolean;
-  trusted: boolean;
-  suspicious: boolean;
-  mfaVerified: boolean;
   status: 'active' | 'revoked';
 }
 

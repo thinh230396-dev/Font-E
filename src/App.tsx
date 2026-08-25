@@ -31,7 +31,6 @@ import useGlobalModalGuard from './hooks/useGlobalModalGuard';
 import { Button, Modal as UiModal, useToast } from './components/ui';
 import {
   deletePackageUpgradeRequest,
-  fetchPackageUpgradeRequests,
   loadPackageUpgradeRequests,
   persistPackageUpgradeRequest,
   persistPackageUpgradeReview,
@@ -40,16 +39,25 @@ import {
 import { resetTenantMockStorage } from './utils/mockDataReset';
 import {
   deleteManagedAuthAccount,
-  fetchAuthenticatedAccount,
-  loginAccount,
-  logoutAccount,
   persistManagedAuthAccount
 } from './utils/authApi';
+import { describeApiError } from './services/apiClient';
+import {
+  getSession,
+  listMyTenants,
+  login as loginRequest,
+  logout as logoutRequest,
+  selectTenant as selectTenantRequest,
+  type SessionState,
+  type TenantSummary
+} from './services/auth';
 
 // Import subcomponents
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import LoginPage from './components/LoginPage';
+import TenantPicker from './components/TenantPicker';
+import TenantSwitcher from './components/TenantSwitcher';
 import TenantAdminPortal from './components/NailTenantAdminPortal';
 import ReceptionistPortal from './components/ReceptionistPortal';
 import { useLanguage } from './i18n';
@@ -235,10 +243,47 @@ export default function App() {
   useGlobalModalGuard();
   const showToast = useToast();
 
-  const [sessionAccount, setSessionAccount] = useState<DemoAccount | null>(null);
+  /**
+   * Phiên đăng nhập thật, do máy chủ trả về ở `GET /api/auth/session`.
+   *
+   * Nguồn duy nhất cho việc "ai đang đăng nhập" và "đang làm việc cho tiệm nào".
+   * Tiệm đang làm việc nằm trong phiên ở phía máy chủ (BR-AUTH-024) chứ không
+   * phải trong state này — đây chỉ là bản đọc về để hiển thị.
+   */
+  const [session, setSession] = useState<SessionState | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const isAuthenticated = Boolean(sessionAccount);
-  const portalRole: PortalRole = sessionAccount?.role || 'SUPERADMIN';
+  const [myTenants, setMyTenants] = useState<TenantSummary[]>([]);
+  const [tenantsLoading, setTenantsLoading] = useState(false);
+  const [tenantsError, setTenantsError] = useState<string | null>(null);
+  const [pendingTenantId, setPendingTenantId] = useState<string | null>(null);
+  /** Tăng lên một để buộc tải lại danh sách tiệm sau khi người dùng bấm "Thử lại". */
+  const [tenantsReloadToken, setTenantsReloadToken] = useState(0);
+
+  /**
+   * Bản chuyển đổi sang hình dạng `DemoAccount` mà các portal đang nhận.
+   *
+   * Từ ngày 4, máy chủ không còn chép tiệm và chi nhánh lên bảng tài khoản nữa
+   * (BR-AUTH-024, BR-EMP-004) — chúng thuộc về phiên. Lớp chuyển đổi này giữ
+   * cho hai portal hơn 5.000 dòng không phải sửa trong hôm nay; chúng sẽ đọc
+   * thẳng từ phiên khi được nối API ở ngày 14–15.
+   */
+  const sessionAccount: DemoAccount | null = session
+    ? {
+        email: session.account.email,
+        role: session.account.role,
+        displayName: session.account.displayName,
+        tenantId: session.tenant?.id,
+        tenantName: session.tenant?.name,
+        // Mã chi nhánh nay đến từ database nên không còn giới hạn ở hai giá trị
+        // Q1/Q3 mà kiểu cũ khai báo. Ép kiểu ở đúng ranh giới này thay vì nới
+        // kiểu, để không kéo theo sửa đổi vào cổng lễ tân trong hôm nay.
+        branchCode: session.branch?.code as DemoAccount['branchCode'],
+        branchName: session.branch?.name
+      }
+    : null;
+
+  const isAuthenticated = Boolean(session);
+  const portalRole: PortalRole = session?.account.role || 'SUPERADMIN';
   // Mobile sidebar visibility state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
@@ -300,15 +345,64 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    void fetchAuthenticatedAccount().then((account) => {
-      if (active) setSessionAccount(account);
+
+    void getSession().then((result) => {
+      if (!active) return;
+
+      if (result.status === 'ok') {
+        setSession(result.data);
+        return;
+      }
+
+      // Chưa đăng nhập là trạng thái BÌNH THƯỜNG, không phải sự cố — im lặng đưa
+      // về màn đăng nhập. Mọi lý do khác (mất mạng, máy chủ lỗi) thì phải nói ra,
+      // vì im lặng ở đó khiến người dùng tưởng mình gõ sai mật khẩu.
+      if (result.error.kind !== 'unauthenticated') {
+        const { message, tone } = describeApiError(result.error);
+        showToast(message, tone);
+      }
+
+      setSession(null);
     }).finally(() => {
       if (active) setAuthChecked(true);
     });
+
     return () => {
       active = false;
     };
-  }, []);
+  }, [showToast]);
+
+  /**
+   * Tải danh sách tiệm của tài khoản — BR-AUTH-023.
+   *
+   * Chỉ chạy với chủ tiệm: Superadmin không thuộc tiệm nào, còn lễ tân chỉ có
+   * đúng một tiệm và đã được máy chủ đặt sẵn, nên cả hai không cần danh sách này.
+   * Dữ liệu dùng cho cả màn chọn tiệm lẫn bộ đổi tiệm ở thanh trên cùng.
+   */
+  useEffect(() => {
+    if (session?.account.role !== 'TENANT_ADMIN') return;
+
+    let active = true;
+    setTenantsLoading(true);
+    setTenantsError(null);
+
+    void listMyTenants().then((result) => {
+      if (!active) return;
+
+      if (result.status === 'ok') {
+        setMyTenants(result.data);
+      } else {
+        setMyTenants([]);
+        setTenantsError(result.error.message);
+      }
+    }).finally(() => {
+      if (active) setTenantsLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [session?.account.role, tenantsReloadToken]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -355,15 +449,62 @@ export default function App() {
   }, [interfaceLanguage, isAuthenticated, systemSettings.general.systemName, systemSettings.general.timezone]);
 
   const handleLogin = async (identifier: string, password: string, remember: boolean): Promise<string | null> => {
-    const result = await loginAccount(identifier, password, remember);
-    if (!result.account) return result.error || 'Không thể đăng nhập vào hệ thống.';
-    setSessionAccount(result.account);
+    const result = await loginRequest(identifier, password, remember);
+
+    // Trả về chuỗi lỗi để `LoginPage` hiện ngay tại form. Đăng nhập là chỗ duy
+    // nhất mà lỗi phải nằm cạnh ô nhập chứ không phải ở góc màn hình: người dùng
+    // đang nhìn vào form, và họ cần biết sửa cái gì.
+    if (result.status === 'error') return result.error.message;
+
+    // Đọc lại phiên thay vì tự dựng từ phản hồi đăng nhập: phạm vi làm việc —
+    // tiệm, chi nhánh, quyền của gói — do máy chủ tính, và chỉ có một chỗ trả lời
+    // câu đó. Hai nguồn cho cùng một sự thật là hai chỗ để lệch nhau.
+    const sessionResult = await getSession();
+    if (sessionResult.status === 'error') return sessionResult.error.message;
+
+    setSession(sessionResult.data);
     return null;
   };
 
   const handleLogout = () => {
-    setSessionAccount(null);
-    void logoutAccount();
+    setSession(null);
+    setMyTenants([]);
+    setTenantsError(null);
+
+    void logoutRequest().then((result) => {
+      // Đăng xuất hỏng thì phiên phía máy chủ vẫn còn sống. Nói ra, đừng im lặng:
+      // người dùng đang tưởng mình đã thoát, nhất là khi dùng máy chung.
+      if (result.status === 'error') {
+        showToast('Không gọi được lệnh đăng xuất trên máy chủ. Phiên có thể vẫn còn hiệu lực.', 'warning');
+      }
+    });
+  };
+
+  /** BR-AUTH-025 — chọn hoặc đổi tiệm đang làm việc. */
+  const handleSelectTenant = async (tenantId: string) => {
+    setPendingTenantId(tenantId);
+
+    const result = await selectTenantRequest(tenantId);
+
+    if (result.status === 'error') {
+      const { message, tone } = describeApiError(result.error);
+      showToast(message, tone);
+      setPendingTenantId(null);
+      return;
+    }
+
+    // Đọc lại phiên để lấy đúng những gì máy chủ đã ghi nhận, gồm cả chi nhánh
+    // và cờ "còn phải chọn tiệm nữa không".
+    const sessionResult = await getSession();
+    if (sessionResult.status === 'ok') {
+      setSession(sessionResult.data);
+      showToast(`Đang làm việc cho ${result.data.name}.`, 'success');
+    } else {
+      const { message, tone } = describeApiError(sessionResult.error);
+      showToast(message, tone);
+    }
+
+    setPendingTenantId(null);
   };
 
   // Sync state changes to LocalStorage
@@ -396,19 +537,11 @@ export default function App() {
     saveSystemAnnouncements(announcements);
   }, [announcements]);
 
-  useEffect(() => {
-    let active = true;
-    void fetchPackageUpgradeRequests().then((remoteRequests) => {
-      if (!active || remoteRequests === null) return;
-      setUpgradeRequests((current) => {
-        if (remoteRequests.length === 0 && current.length > 0) {
-          return current;
-        }
-        return remoteRequests;
-      });
-    });
-    return () => { active = false; };
-  }, [isAuthenticated]);
+  // Trước đây ở đây có một effect nạp yêu cầu nâng gói từ `/api/package-upgrade-requests`.
+  // Endpoint đó mất chỗ phục vụ khi plugin `vite-local-auth` bị gỡ ở ngày 1, và module gói
+  // đăng ký đã bị cắt khỏi MVP nên nó không quay lại. Effect được bỏ theo quyết định 20:
+  // giữ lại chỉ để lại một lỗi 404 ở mỗi lần tải trang. Nguồn dữ liệu nay là `localStorage`,
+  // và màn hình nói rõ điều đó bằng dải nhãn `MockDataNotice`.
 
   useEffect(() => {
     saveLocalStorageData('support_tickets', tickets);
@@ -910,7 +1043,7 @@ export default function App() {
     }));
     resetTenantMockStorage(deletedTenant.name);
     deletedRequests.forEach((request) => {
-      void deletePackageUpgradeRequest(request.id);
+      deletePackageUpgradeRequest(request.id);
     });
     if (!adminStillUsed) {
       void deleteManagedAuthAccount(deletedTenant.tenantAdminId || deletedTenant.adminEmail).catch(() => {
@@ -1124,7 +1257,7 @@ export default function App() {
             reviewNote: 'Đã xác nhận thanh toán và tự động kích hoạt gói.',
             invoiceId: id
           };
-          void persistPackageUpgradeReview(reviewed);
+          persistPackageUpgradeReview(reviewed);
           return reviewed;
         }
         return req;
@@ -1520,7 +1653,7 @@ export default function App() {
       return t;
     }));
 
-    void persistPackageUpgradeRequest(request);
+    persistPackageUpgradeRequest(request);
     setAlerts((current) => [{
       id: `ALT-${request.id}`,
       title: `Yêu cầu nâng cấp: ${tenant.name}`,
@@ -1608,15 +1741,11 @@ export default function App() {
       reviewNote: reviewNote || (decision === 'APPROVED' ? 'Đã xác nhận giá và quyền gói mới.' : 'Yêu cầu chưa được chấp thuận.'),
       invoiceId
     };
-    const persisted = await persistPackageUpgradeReview(reviewedRequest);
-    if (!persisted) {
-      showToast(
-        'Chưa thể lưu phê duyệt',
-        'error',
-        { description: 'Máy chủ chưa xác nhận thao tác. Tenant và hóa đơn chưa bị thay đổi; vui lòng thử lại.' }
-      );
-      return false;
-    }
+    // Nhánh "máy chủ chưa xác nhận" từng đứng ở đây đã được bỏ cùng quyết định 20. Nó không
+    // bao giờ chạy: hàm ghi cũ `return true` ngay trong `catch`, nên nó báo thành công cả
+    // khi lời gọi hỏng. Nay việc lưu chỉ còn là ghi vào `localStorage` nên không có gì để
+    // chờ xác nhận, và màn hình đã nói rõ đây là dữ liệu mẫu.
+    persistPackageUpgradeReview(reviewedRequest);
 
     if (decision === 'APPROVED' && pricing) {
       if (effectiveDate === 'immediate') {
@@ -1651,7 +1780,7 @@ export default function App() {
     }
 
     setUpgradeRequests((current) => current.map((item) => item.id === requestId ? reviewedRequest : item));
-    void persistPackageUpgradeReview(reviewedRequest);
+    persistPackageUpgradeReview(reviewedRequest);
     if (decision === 'REJECTED') {
       setTenants((prevTenants) => prevTenants.map((t) => (t.id === tenant.id ? { ...t, pendingSubscriptionChange: undefined } : t)));
     }
@@ -1699,7 +1828,7 @@ export default function App() {
     setUpgradeRequests((current) =>
       current.map((item) => (item.id === requestId ? updatedRequest : item))
     );
-    void persistPackageUpgradeReview(updatedRequest);
+    persistPackageUpgradeReview(updatedRequest);
 
     setTenants((prevTenants) =>
       prevTenants.map((t) => (t.id === request.tenantId ? { ...t, pendingSubscriptionChange: undefined } : t))
@@ -1947,6 +2076,25 @@ export default function App() {
     return <LoginPage systemName={systemSettings.general.systemName} onLogin={handleLogin} />;
   }
 
+  // BR-AUTH-024/025 — chưa chọn tiệm thì chưa vào portal được. Máy chủ cũng từ
+  // chối mọi endpoint nghiệp vụ ở trạng thái này, nên cho vào portal chỉ tạo ra
+  // một màn hình trống rỗng đầy lỗi 403.
+  if (session?.mustSelectTenant) {
+    return (
+      <TenantPicker
+        accountName={session.account.displayName}
+        accountEmail={session.account.email}
+        tenants={myTenants}
+        loading={tenantsLoading}
+        error={tenantsError}
+        pendingTenantId={pendingTenantId}
+        onSelect={handleSelectTenant}
+        onRetry={() => setTenantsReloadToken((token) => token + 1)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   const defaultTenantAccount = getDemoAccountByRole('TENANT_ADMIN');
   const targetOwnerIdentity = normalizeAccountIdentity('NguyenVanBoss');
   const storedTenantId = sessionAccount?.tenantId || '';
@@ -1989,6 +2137,15 @@ export default function App() {
     return (
       <TenantAdminPortal
         account={tenantPortalAccount}
+        tenantSwitcher={session?.tenant ? (
+          <TenantSwitcher
+            currentTenantId={session.tenant.id}
+            currentTenantName={session.tenant.name}
+            tenants={myTenants}
+            pendingTenantId={pendingTenantId}
+            onSelect={handleSelectTenant}
+          />
+        ) : undefined}
         tenant={targetTenant}
         subscriptionPackage={tenantPortalPackage}
         availablePackages={packages}

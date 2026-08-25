@@ -5,7 +5,7 @@ Tài liệu này biến `README-BUSINESS-RULES.md` thành **lịch làm việc t
 | | |
 |---|---|
 | **Ngân sách** | 20 ngày × 8 giờ = **160 giờ** code. Báo cáo và slide viết ngoài 8 giờ này |
-| **Backend** | Node + Express + `node:sqlite`, đặt ở `server/` trong cùng repo |
+| **Backend** | **ASP.NET Core 10 + EF Core + SQL Server LocalDB**, solution riêng tại `C:\Users\letru\source\repos\NailManagement` |
 | **Đầu ra bắt buộc** | Chạy trọn mạch demo ở `README-BUSINESS-RULES.md` §1 bằng dữ liệu thật trong database |
 | **Đọc trước** | [README-BUSINESS-RULES.md](README-BUSINESS-RULES.md) — nguồn sự thật nghiệp vụ · [README-MIGRATION.md](README-MIGRATION.md) §8, §12 — hiện trạng frontend |
 
@@ -35,8 +35,17 @@ Mười hai quyết định này chốt trong phiên lập lộ trình, bổ sun
 | 10 | **Bỏ USD, toàn hệ thống VND số nguyên** | Đúng BR-VAL-003. Bỏ `convertMoney` và tỷ giá cứng 25000 ở `src/utils/money.ts:5` |
 | 11 | Phiên là **cookie + bảng `app_sessions`**, không JWT | BR-AUTH-022 bắt kiểm tra trạng thái tài khoản mỗi request; JWT không thu hồi được giữa chừng |
 | 12 | **Chốt npm**, xóa `bun.lock` | Nợ kỹ thuật §21.3 |
-| 13 | **Clean Architecture 4 tầng đầy đủ**: use case là class có `execute()`, có DTO vào/ra, có mapper và presenter riêng | Tốn thêm 3–4 ngày → **bỏ lát cắt gói đăng ký (ngày 17)** và **rút báo cáo doanh thu còn 2 chiều** (ngày, chi nhánh) |
-| 14 | Backend viết bằng **TypeScript**, chạy bằng `tsx` | `tsx` và `typescript` đã có sẵn trong `devDependencies`. Clean Architecture sống bằng port — trong JS thuần thì port chỉ là chú thích, không có gì cưỡng chế |
+| 13 | **Clean Architecture 4 tầng đầy đủ**: use case là class có `ExecuteAsync()`, có DTO vào/ra, có mapper và presenter riêng | Tốn thêm 3–4 ngày → **bỏ lát cắt gói đăng ký (ngày 17)** và **rút báo cáo doanh thu còn 2 chiều** (ngày, chi nhánh) |
+
+> ⚠️ **Các quyết định 2, 3, 11, 12 ở trên đã bị thay ngày 24/08.** "vs insider" trong yêu cầu ban đầu là **Visual Studio Insiders**, không phải VS Code Insiders — tôi hiểu nhầm và đã dựng nhầm một backend Node trước khi phát hiện. Bảng dưới là quyết định thật.
+
+| # | Quyết định (bản thay thế) | Hệ quả |
+|---|---|---|
+| 2′ | Backend là **solution ASP.NET Core riêng** ở `C:\Users\letru\source\repos\NailManagement`, ngoài repo frontend. Bốn project `Domain` · `Application` · `Infrastructure` · `API`, target `net10.0` | Frontend nối sang qua proxy Vite tới `http://localhost:5282` |
+| 3′ | **EF Core + Migrations**, không SQL thuần | `dotnet ef migrations add` thay cho bộ chạy migration viết tay |
+| 11′ | **SQL Server LocalDB**, không SQLite | ⚠️ Làm **BR-BAK-003 sai** — quy tắc đó ghi "sao lưu bằng copy tệp SQLite", nay không còn tệp để copy. Cần sửa `README-BUSINESS-RULES.md` §14. Đánh đổi đã biết: máy người chấm phải có LocalDB |
+| 12′ | **Cookie auth + bảng phiên tự quản**, không dùng ASP.NET Core Identity | Giữ nguyên được BR-AUTH-013/020/022/024 mà không phải uốn theo lược đồ của Identity |
+| 14′ | Băm mật khẩu bằng **PBKDF2-HMAC-SHA256, 210.000 vòng** (`Rfc2898DeriveBytes`) | Có sẵn trong .NET, không thêm gói. Thay cho SHA-256 một vòng của backend cũ — SHA-256 quá nhanh nên thuận lợi cho việc dò mật khẩu |
 
 > Quyết định 11 suy ra từ source, không phải lựa chọn: `scripts/sites-worker.js:191-258` đã làm đúng mô hình cookie + bảng phiên, chuyển sang Express gần như bê nguyên.
 
@@ -119,7 +128,51 @@ server/
 
 > ⚠️ **Sơ đồ trên đã lỗi thời từ ngày 1.** Sau khi chốt Clean Architecture 4 tầng đầy đủ (§0 mục 13) và TypeScript (§0 mục 14), cấu trúc thật là sơ đồ bên dưới. Giữ lại sơ đồ cũ để thấy vì sao đổi.
 
-### 3.1 Cấu trúc thật — bốn tầng Clean Architecture
+### 3.1 Cấu trúc thật — bốn project ASP.NET Core
+
+> Sơ đồ ở §3.2 bên dưới là bản Node đã bị bỏ. Giữ lại vì các nguyên tắc tầng vẫn đúng nguyên vẹn.
+
+```
+NailManagement.slnx
+  NailManagement.Domain/          ◄── Enterprise Business Rules — không tham chiếu project nào
+    Entities/                       AppUser, AppSession
+    ValueObjects/                   Email, RawPassword
+    Enums/                          UserRole, AccountStatus
+    Policies/                       AuthPolicy (5 lần sai, khóa 15 phút, phiên 8h/30 ngày)
+    Repositories/                   ★ PORT: IUserRepository, ISessionRepository
+    Common/                         ErrorCode, AppException, DomainException
+
+  NailManagement.Application/     ◄── tham chiếu Domain
+    UseCases/Auth/                  LoginUseCase, GetCurrentAccountUseCase, LogoutUseCase
+    DTOs/                           AccountDto, LoginCommand, LoginResult…
+    Mappings/                       AccountMapper — chặn PasswordHash lọt ra ngoài
+    Abstractions/                   IPasswordHasher, IClock, IIdGenerator
+    Common/Exceptions/              InvalidCredentials, AccountLocked, Unauthenticated…
+    DependencyInjection.cs          AddApplication()
+
+  NailManagement.Infrastructure/  ◄── tham chiếu Application + Domain
+    Persistence/                    NailDbContext, Configurations/, Repositories/,
+                                    Migrations/, Seed/
+    Security/                       Pbkdf2PasswordHasher
+    SystemServices/                 SystemClock, GuidIdGenerator
+    DependencyInjection.cs          AddInfrastructure() — nơi cắm cổng vào bản cài đặt
+
+  NailManagement.API/             ◄── Frameworks & Drivers, tham chiếu Application + Infrastructure
+    Controllers/AuthController.cs   mỏng: đọc HTTP, gọi use case, đặt cookie
+    Common/ApiExceptionHandler.cs   ★ nơi DUY NHẤT ánh xạ mã lỗi sang HTTP status
+    Common/ErrorResponse.cs
+    Program.cs                      composition root + áp migration + seed
+```
+
+**Ba chỗ then chốt, để tra nhanh khi viết báo cáo:**
+
+| Nguyên tắc | Chứng minh bằng đâu |
+|---|---|
+| Đảo ngược phụ thuộc | `Domain/Repositories/IUserRepository.cs` đặt ra interface; `Infrastructure/Persistence/Repositories/UserRepository.cs` cài đặt; `Infrastructure/DependencyInjection.cs` ráp lại |
+| Domain sạch khỏi công nghệ | `NailManagement.Domain.csproj` **không có `PackageReference` nào** và không tham chiếu project nào. EF Core chỉ xuất hiện ở Infrastructure |
+| Domain không biết HTTP | `AppException` không có thuộc tính status; toàn bộ ánh xạ nằm ở `API/Common/ApiExceptionHandler.cs` |
+
+### 3.2 Bản Node đã bỏ — giữ để đối chiếu nguyên tắc tầng
 
 Bốn thư mục dưới `server/src/` ứng đúng bốn vòng tròn. **Chiều phụ thuộc chỉ đi vào trong**: `infrastructure → adapters → application → domain`. Không mũi tên nào đi ngược.
 
@@ -513,7 +566,32 @@ Theo đúng thứ tự ở §6: **gói đăng ký** (cả module) → **hoàn ti
 
 ## 10. Nhật ký thực hiện
 
-### Ngày 1 — xong
+### Ngày 1 — xong (làm hai lần)
+
+Lần đầu tôi dựng bằng Node + Express vì hiểu nhầm "vs insider" là VS Code Insiders. Sau khi
+biết là Visual Studio và backend là ASP.NET Core, toàn bộ đã được dựng lại bằng C#. Thư mục
+`server/` trong repo frontend **đã bị xóa**. Bảng dưới là kết quả bản .NET.
+
+| Hạng mục | Kết quả |
+|---|---|
+| 4 project Clean Architecture, 40 tệp C# (Domain 12 · Application 11 · Infrastructure 13 · API 4; trong đó 3 tệp do EF sinh) | Xong, `dotnet build` 0 lỗi |
+| Ranh giới tầng kiểm chứng bằng grep: `Domain.csproj` không có tham chiếu nào · `EntityFrameworkCore` vắng mặt ở Domain và Application · `Microsoft.AspNetCore` chỉ có ở project API | Xong |
+| `POST /api/auth/login`, `GET /api/auth/session`, `POST /api/auth/logout`, `GET /api/health` | Xong, **11/11 phép thử đạt** |
+| Migration `InitialAuth` — bảng `AppUsers`, `AppSessions` + 5 index | Xong, tự áp lúc khởi động |
+| Seed 3 tài khoản demo | Xong, chỉ nạp khi bảng trống — khởi động lần 2 không nạp lại |
+| Proxy Vite `/api` → `http://localhost:5282` | Xong, đăng nhập qua giao diện thật vào được cổng Tenant Admin |
+| Cookie `HttpOnly; SameSite=Strict; Max-Age=28800` | Xong, `document.cookie` không đọc được |
+
+Chạy backend:
+
+```
+dotnet run --project NailManagement.API --launch-profile http
+```
+
+<details>
+<summary>Kết quả bản Node đã bỏ (giữ để tra lại quyết định)</summary>
+
+### Ngày 1 — bản Node, đã xóa
 
 | Hạng mục | Kết quả |
 |---|---|
@@ -532,6 +610,8 @@ Theo đúng thứ tự ở §6: **gói đăng ký** (cả module) → **hoàn ti
 2. **`PUT /api/auth/accounts` và `DELETE /api/auth/accounts/:id` dời sang ngày 3**, nơi quy tắc tạo tài khoản (BR-AUTH-010…014) được cài đặt.
 3. **Đăng xuất là thu hồi phiên (`revoked_at`), không xóa bản ghi** — nhất quán với BR-DEL-001.
 
+</details>
+
 ### Việc còn treo sau ngày 1
 
 | # | Việc | Mức |
@@ -539,3 +619,285 @@ Theo đúng thứ tự ở §6: **gói đăng ký** (cả module) → **hoàn ti
 | 1 | **Hồi quy:** gỡ `viteLocalAuth()` làm `/api/package-upgrade-requests` mất chỗ phục vụ → 404 ở mỗi lần tải trang. Frontend nuốt lỗi và lùi về `localStorage` nên không vỡ, nhưng console đầy 404. Ngày 17 đã bị cắt nên endpoint này sẽ không quay lại | **Cần quyết** |
 | 2 | `npm run lint:web` đang có **86 lỗi kiểu ở 5 tệp**, có từ trước ngày 1. Nặng nhất: `TenantAdminAnnouncements.tsx` bị lặp nguyên khối nội dung từ dòng 578; ba màn lễ tân dùng `PageHeader` và `Pagination` mà **quên import** — sẽ ném lỗi lúc chạy | **Cao** — ba màn lễ tân nằm đúng đường ngày 14–15 |
 | 3 | `Header.tsx:428` gắn cứng `alt="letruongthinhcr145@gmail.com"` thay vì email tài khoản đang đăng nhập | Thấp — sửa ở ngày 4 |
+
+### Ngày 2 — xong
+
+Ba quyết định chốt đầu ngày, đều theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 15 | Cách ly tenant cài bằng **bộ lọc toàn cục của EF Core**, không phải lớp repository cơ sở | Điều kiện lọc khai báo một lần trên `NailDbContext`; endpoint không viết được và cũng không quên được |
+| 16 | Entity viết **đầy đủ ràng buộc BR-VAL-001 ngay** | Ngày 5–13 chỉ còn ráp use case |
+| 17 | Seed **6 tiệm** thay vì 2, đủ bốn trạng thái hiển thị | Chứng minh được BR-TENANT-002 tính lúc đọc mà không cần job nền |
+
+| Hạng mục | Kết quả |
+|---|---|
+| **16 bảng mới** trong migration `SalonSchema` — tổng 18 bảng nghiệp vụ + `__EFMigrationsHistory` | Xong, `dotnet ef database update` chạy sạch |
+| 16 entity giàu hành vi + 17 enum + value object `PhoneNumber` + 5 policy thuần (`ValidationPolicy`, `CustomerTierPolicy`, `AppointmentSchedulePolicy`, `AppointmentLifecyclePolicy`, `InvoiceMoneyPolicy`) | Xong, `dotnet build` 0 lỗi 0 cảnh báo |
+| **Lớp truy vấn dùng chung** (BR-ISO-002): `NailDbContext` duyệt mọi entity mang `ITenantOwned` và gắn bộ lọc theo `ITenantContext.ActiveTenantId` | Xong |
+| Bộ lọc **đóng khi không rõ phạm vi** — chưa đặt tiệm thì đọc được 0 dòng, thay vì đọc được tất cả | Đã kiểm chứng: `customers=0, appointments=0, invoices=0, staff=0` |
+| Khóa ngoại còn treo từ ngày 1: `AppUsers.StaffId → Staff` (BR-AUTH-013), `AppSessions.ActiveTenantId → Tenants` (BR-AUTH-024) | Xong |
+| Seed: 3 gói · 6 tiệm · 7 tài khoản · 3 chi nhánh · 8 nhân viên · 11 dịch vụ · 23 khách · **176 lịch hẹn · 151 hóa đơn · 207 dòng thu tiền** · 5 hóa đơn đăng ký · 1 yêu cầu nâng gói · 6 dòng nhật ký | Xong, hạt giống ngẫu nhiên cố định nên hai máy ra cùng số liệu |
+
+**Kiểm chứng bằng truy vấn thẳng vào database** — sáu phép đếm, tất cả bằng 0:
+
+| Phép kiểm tra | Kết quả |
+|---|:--:|
+| BR-APT-011 — hai lịch hẹn chồng giờ của cùng kỹ thuật viên | 0 |
+| BR-APT-010 — giờ kết thúc lệch tổng thời lượng cộng thời gian dọn dẹp | 0 |
+| BR-INV-020 — tổng tiền lệch so với các dòng hóa đơn | 0 |
+| BR-PAY-003 — trạng thái hóa đơn lệch so với tổng đã thu | 0 |
+| BR-INV-016 — số hóa đơn sai định dạng `HD-yyyyMMdd-nnn` | 0 |
+| BR-ISO-001 — bảng nghiệp vụ thiếu `TenantId` | 0 |
+
+Cách ly tenant kiểm chứng riêng bằng một chương trình dùng thẳng `NailDbContext`:
+
+| Phạm vi phiên | Khách | Lịch hẹn | Hóa đơn | Nhân viên |
+|---|--:|--:|--:|--:|
+| Chưa đặt tiệm | 0 | 0 | 0 | 0 |
+| `TEN-LUMIERE` | 20 | 169 | 145 | 6 |
+| `TEN-MUSE` | 3 | 7 | 6 | 2 |
+| Tiệm không tồn tại | 0 | 0 | 0 | 0 |
+
+Tài khoản `tenantadmin@lumierehair.vn` nối với **hai tiệm** trong `UserTenants` (BR-AUTH-023), và số điện thoại `0911000001` tồn tại ở **cả hai tiệm, mỗi tiệm một bản ghi** (BR-CUS-002).
+
+**Bốn điều chệch khỏi kế hoạch, có chủ đích:**
+
+1. **Không có tệp `db/query.js` và `db/seed.js`** như bảng ngày 2 mô tả — đó là tên của bản Node đã bỏ. Vai trò của chúng nay do `NailDbContext` (lọc theo tiệm) và `DemoDataSeeder` đảm nhiệm.
+2. **Bảng `schema_migrations` không tồn tại**; EF Core tự quản bằng `__EFMigrationsHistory`.
+3. **Bộ lọc dùng chung chỉ lọc theo tiệm**, không lọc `status != 'INACTIVE'`. BR-DEL-003 bắt bản ghi đã ngừng hoạt động vẫn hiện đúng tên trong lịch hẹn và hóa đơn cũ, nên điều kiện đó phụ thuộc ngữ cảnh và thuộc về từng use case.
+4. **Ba cảnh báo EF Core 10622 bị tắt có chủ đích** trong `DependencyInjection.cs`: `SubscriptionInvoices`, `PackageUpgradeRequests`, `UserTenants` trỏ tới tiệm có thể đã xóa mềm. BR-TENANT-022 muốn đúng như vậy, và đó cũng là lý do các bảng này chép sẵn tên tiệm thành cột riêng.
+
+### Việc còn treo sau ngày 2
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | `Packages.Name` đang có ràng buộc **duy nhất** dù BR-SUB không yêu cầu. Lý do: `getStandardTenantPlanRank` ở frontend tra bậc gói theo tên, hai gói trùng tên sẽ làm quyền tính năng nhảy lung tung. Gỡ ràng buộc này nếu về sau cần gói riêng trùng tên | Thấp |
+| 2 | Không truy vấn được value object trong LINQ bằng `customer.Phone.Value` — EF Core không dịch được sang SQL. Phải dựng `PhoneNumber.FromPersistence(...)` trước rồi so sánh cả đối tượng, y như `UserRepository` đang làm với `Email`. Nhớ điều này khi viết tra cứu khách theo số điện thoại ở **ngày 10** | Trung bình |
+| 3 | Bốn cột tạm `TenantId`, `TenantName`, `BranchCode`, `BranchName` trên `AppUsers` vẫn còn. Bảng `UserTenants` đã sẵn sàng thay thế; gỡ ở **ngày 3** đúng kế hoạch | ⏩ **Dời sang ngày 4** — xem quyết định 18 |
+
+### Ngày 3 — xong
+
+Hai quyết định chốt đầu ngày:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 18 | **Giữ bốn cột tạm trên `AppUsers` tới ngày 4**, gỡ cùng lúc nối frontend | Đăng nhập qua giao diện chạy suốt ngày 3; dừng lúc nào cũng có bản demo được |
+| 19 | **Chỉ chủ tiệm qua màn chọn tiệm**; lễ tân được máy chủ đặt tiệm ngay lúc đăng nhập | Lễ tân — người dùng thường xuyên nhất — đỡ một lần bấm vô nghĩa mỗi ca làm |
+
+| Hạng mục | Kết quả |
+|---|---|
+| `SessionMiddleware` đọc phiên ở **mỗi request**, gọi lại `GetCurrentAccountUseCase` chứ không chép lại phép kiểm tra (BR-AUTH-022) | Xong |
+| `GET /api/auth/my-tenants`, `POST /api/auth/session/tenant` — bắt buộc kiểm tra `UserTenants` trước khi đổi tiệm (BR-AUTH-026) | Xong |
+| Ma trận mục 3.4 viết thành **bảng dữ liệu** `PermissionMatrix` — 16 nhóm chức năng × 3 vai trò, không rải `if` theo endpoint | Xong |
+| `FeatureCapabilityPolicy` — khóa tính năng theo gói (BR-SUB-007) | Xong |
+| `TenantWriteGuardMiddleware` — chặn ghi khi tiệm hết hạn ở **một chỗ duy nhất** (BR-TENANT-012) | Xong |
+| `IAuditLogger` + `AuditLogger` + `GET /api/audit-logs` — nhật ký ghi ở **máy chủ** (BR-AUD-001), phạm vi đọc theo vai trò (BR-AUD-005) | Xong |
+| Thứ tự 4 bước BR-TENANT-013 ráp ở `Program.cs`, mỗi bước một chỗ | Xong |
+
+**Chuỗi kiểm tra quyền, đúng thứ tự không đảo:**
+
+| Bước | Câu hỏi | Cài đặt ở đâu |
+|:--:|---|---|
+| 1 | Tiệm còn hạn không? | `TenantWriteGuardMiddleware` |
+| 2 | Gói có mở tính năng này? | `RequirePermissionAttribute` → `FeatureCapabilityPolicy` |
+| 3 | Vai trò có quyền không? | `RequirePermissionAttribute` → `PermissionMatrix` |
+| 4 | Dữ liệu có thuộc tiệm? | Bộ lọc toàn cục ở `NailDbContext` |
+
+**Kiểm chứng qua HTTP thật** — 12 phép thử, tất cả đạt:
+
+| # | Phép thử | Kết quả |
+|---|---|---|
+| 1 | Chủ tiệm quản 2 tiệm đăng nhập → `mustSelectTenant: true` | Đạt |
+| 2 | `GET /api/auth/my-tenants` trả đúng 2 tiệm kèm trạng thái tính lúc đọc | Đạt |
+| 3 | Chọn tiệm **không** được giao (`TEN-AURORA`) | `403 FORBIDDEN` |
+| 4 | Chọn tiệm được giao → phiên mang tiệm và 10 quyền của gói Premium | Đạt |
+| 5 | Lễ tân đăng nhập → máy chủ tự đặt `TEN-LUMIERE`, không phải chọn | Đạt |
+| 6 | Chọn tiệm quá hạn → `displayStatus: OVERDUE`, `isReadOnly: true` | Đạt |
+| 7 | Ghi khi tiệm quá hạn (endpoint không miễn trừ) | `403 TENANT_READONLY` |
+| 8 | Đọc khi tiệm quá hạn | `200` — BR-TENANT-010 giữ nguyên quyền xem |
+| 9 | Lễ tân đọc nhật ký kiểm toán | `403 FORBIDDEN` |
+| 10 | Chủ tiệm chưa chọn tiệm đọc nhật ký | `403` kèm thông điệp mời chọn tiệm |
+| 11 | Chủ tiệm đã chọn tiệm → nhật ký **chỉ có tiệm mình** | Đạt |
+| 12 | Sai mật khẩu 5 lần → khóa tạm; lần 6 dù đúng mật khẩu vẫn `ACCOUNT_LOCKED` | Đạt |
+
+**BR-AUTH-022 kiểm riêng:** đang có phiên hợp lệ, chuyển tài khoản sang `Suspended` thẳng trong database → request kế tiếp trả `401` kèm đúng câu *"Tài khoản đã bị khóa hoặc vô hiệu hóa."*; mở lại thì phiên cũ dùng tiếp được ngay.
+
+**Ma trận quyền và khóa gói kiểm bằng chương trình riêng** — 12 mệnh đề, tất cả đạt: Superadmin không chạm được vào 7 nhóm dữ liệu trong tiệm (BR-AUTH-030); lễ tân không hoàn tiền, không đóng lịch khi chưa thu đủ, không xem nhật ký; chủ tiệm chỉ *xem* nhật ký; chi nhánh/nhân viên/dịch vụ không khóa theo gói mà theo hạn mức số lượng.
+
+**Ba điều chệch khỏi kế hoạch, có chủ đích:**
+
+1. **Nhật ký chưa đủ 8 loại sự kiện.** Ba loại đã ghi thật: `LOGIN`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`. Bảy loại còn lại — `TENANT_*`, `ACCOUNT_CREATED`, `PAYMENT_RECEIVED`, `REFUND_ISSUED`, `PACKAGE_CHANGED` — là sự kiện **nghiệp vụ**, không phải sự kiện HTTP, nên middleware không biết chúng xảy ra. Chúng sẽ được gọi từ chính use case tương ứng ở ngày 5–13. Cổng `IAuditLogger` đã sẵn sàng.
+2. **Hai nhóm endpoint miễn trừ ở BR-TENANT-011 chưa tồn tại** (yêu cầu nâng gói, nộp chứng từ hóa đơn đăng ký — thuộc module đã cắt ở ngày 17). Thuộc tính `AllowWhenTenantReadonly` hiện gắn cho ba endpoint thao tác trên *phiên*: đăng nhập, đăng xuất, đổi tiệm.
+3. **Bước 2 (khóa tính năng theo gói) chưa có endpoint nào chạy qua**, vì `GET /api/audit-logs` không khóa theo gói. Nó được kiểm bằng hàm thuần, và sẽ chạy thật từ ngày 10–11 khi có endpoint khách hàng và lịch hẹn.
+
+**Một lỗi bắt được lúc thử tay:** lệnh chặn ghi ban đầu chặn luôn `POST /api/auth/login` và `POST /api/auth/logout`. Hậu quả thật: người dùng còn cookie trỏ vào tiệm hết hạn sẽ **không đăng nhập lại được và cũng không đăng xuất được** — kẹt cứng. Đã tách phép miễn trừ thành thuộc tính riêng và gắn cho ba endpoint thao tác trên phiên.
+
+### Việc còn treo sau ngày 3
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | Bốn cột tạm trên `AppUsers` — gỡ ở **ngày 4** cùng lúc nối frontend (quyết định 18) | Đã có lịch |
+| 2 | `sqlcmd` cần `SET QUOTED_IDENTIFIER ON` mới `UPDATE` được `AppUsers`, vì bảng có filtered index trên `Username`. Thiếu dòng đó thì lệnh **im lặng thất bại** và tưởng nhầm là code sai — đã mất một lượt vì chuyện này | Thấp — nhớ khi sửa dữ liệu tay |
+| 3 | Bảy loại sự kiện nhật ký còn lại, nối dần theo từng use case ở ngày 5–13 | Đã có lịch |
+
+### Ngày 4 — xong → **Mốc ① đạt**
+
+| Hạng mục | Kết quả |
+|---|---|
+| **Backend** — `BranchScopeDto` đọc chi nhánh qua hồ sơ nhân viên (BR-EMP-004), thay cho hai cột chép sẵn | Xong |
+| **Backend** — migration `DropLegacyAccountScope` gỡ bốn cột `TenantId`, `TenantName`, `BranchCode`, `BranchName` khỏi `AppUsers` | Xong, bảng còn 13 cột |
+| `src/services/apiClient.ts` — kiểu kết quả phân biệt đủ **sáu trường hợp** ở §12.4, cộng 404 và 409 | Xong |
+| `src/services/auth.ts` thay `src/utils/authApi.ts` cho phần phiên đăng nhập — **không hàm nào `catch` rồi trả `null`** | Xong |
+| `src/components/TenantPicker.tsx` — màn chọn tiệm, có đủ trạng thái tải / lỗi / trống | Xong |
+| `src/components/TenantSwitcher.tsx` + chỗ đặt trên thanh trên cùng của cổng chủ tiệm | Xong, chỉ hiện khi quản từ 2 tiệm |
+| `App.tsx` — phiên thật, gác cổng bằng màn chọn tiệm, đổi tiệm nạp lại dữ liệu | Xong |
+| `AdminSession` — gỡ `location`, `trusted`, `suspicious`, `mfaVerified` | Xong |
+| `npx tsc --noEmit` trên mã của ứng dụng | **0 lỗi** |
+
+**Hợp đồng phiên sau ngày 4** — `GET /api/auth/session`:
+
+```
+{ account: { id, email, role, displayName },
+  activeTenantId, tenant: { … capabilities[] }, branch: { id, code, name },
+  mustSelectTenant }
+```
+
+Tài khoản nay chỉ còn **danh tính**; phạm vi làm việc thuộc về phiên. Đó là hệ quả trực tiếp của BR-AUTH-023: cùng một tài khoản chủ tiệm làm việc cho tiệm nào là chuyện của từng phiên, không phải thuộc tính của con người đó.
+
+**Kiểm chứng trên trình duyệt thật** (Vite proxy → ASP.NET Core), cả năm mục của Mốc ①:
+
+| # | Kịch bản | Kết quả |
+|---|---|---|
+| 1 | Superadmin đăng nhập | Vào thẳng trung tâm điều hành, không qua màn chọn tiệm |
+| 2 | Chủ tiệm đăng nhập | Ra màn chọn tiệm, hiện 2 tiệm thật kèm mã, hạn dùng và trạng thái |
+| 3 | Chọn *Nailé Studio* | Vào cổng chủ tiệm, gói hiện đúng **Premium** |
+| 4 | Đổi sang *Muse Nail Lab* bằng bộ đổi tiệm | Portal nạp lại, gói đổi đúng thành **Basic** |
+| 5 | Lễ tân đăng nhập | Vào thẳng bàn tiếp tân, chi nhánh hiện *Chi nhánh Quận 3* — đọc từ hồ sơ nhân viên |
+| 6 | Khóa tài khoản trong database rồi tải lại trang | Bị đưa về màn đăng nhập ngay |
+
+**Hai điều chệch khỏi kế hoạch, có chủ đích:**
+
+1. **Kiểu kết quả dùng khóa phân biệt dạng chuỗi `status: 'ok' | 'error'`**, không phải `ok: boolean` như §12.4 gợi ý. Lý do là ràng buộc kỹ thuật chứ không phải sở thích: `tsconfig.json` của dự án **không bật `strictNullChecks`**, và ở chế độ đó TypeScript không thu hẹp được kiểu theo khóa phân biệt kiểu boolean — viết `if (!result.ok)` rồi đọc `result.error` sẽ báo lỗi biên dịch. Đã kiểm chứng bằng một tệp thử riêng: cùng đoạn mã, bật `strictNullChecks` thì hết lỗi. §12.4 vốn nói rõ "điểm cốt lõi không phải là hình dạng cụ thể".
+2. **Cổng chủ tiệm và cổng lễ tân vẫn nhận `DemoAccount`** như cũ, qua một lớp chuyển đổi nhỏ trong `App.tsx`. Sửa thẳng hai tệp hơn 5.000 dòng trong hôm nay là rủi ro không cần thiết; chúng sẽ đọc trực tiếp từ phiên khi được nối API ở ngày 14–15.
+
+### Việc còn treo sau ngày 4
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | `/api/package-upgrade-requests` vẫn **404 ở mỗi lần tải trang** — endpoint thuộc module gói đăng ký đã bị cắt ở ngày 17. Frontend nuốt lỗi và lùi về `localStorage` nên không vỡ, nhưng console đầy lỗi lúc demo. Cách rẻ nhất: bỏ lời gọi ở `src/utils/packageUpgradeRequests.ts` và gắn dải nhãn "Dữ liệu mẫu" theo quyết định 8 | **Cần quyết** |
+| 2 | Số liệu trên bảng điều khiển của cả hai cổng vẫn là dữ liệu `localStorage`. Đúng kế hoạch — tenant và chi nhánh lên API ở ngày 5–6, lịch hẹn và hóa đơn ở ngày 11–16 | Đã có lịch |
+| 3 | `src/utils/authApi.ts` chỉ còn hai hàm quản lý tài khoản (`persistManagedAuthAccount`, `deleteManagedAuthAccount`) gọi vào `/api/auth/accounts` — endpoint chưa tồn tại. Sẽ viết ở **ngày 7** cùng phần cấp tài khoản lễ tân | Đã có lịch |
+
+### Ngày 5 — xong (phần backend)
+
+Ba quyết định chốt đầu ngày, đều theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 20 | `/api/package-upgrade-requests` — **bỏ lời gọi** ở frontend và gắn dải nhãn "Dữ liệu mẫu" | Gỡ được việc treo số 1 sau ngày 4. Màn yêu cầu nâng gói ở lại mức C vĩnh viễn trong MVP |
+| 21 | Danh sách tiệm của Superadmin **chỉ hiện số đếm, bỏ doanh thu tiệm** | `staffCount` và `branchCount` đếm thật từ database để cưỡng chế `max_staff` / `max_salons` (BR-SUB-005); `monthlyRevenue` bị gỡ khỏi API và khỏi form tạo tiệm vì BR-AUTH-030 |
+| 22 | Mật khẩu tạm của chủ tiệm mới do **máy chủ sinh, trả về đúng một lần** | Giữ nguyên được form hiện tại. Hệ thống không gửi email nên không trả về nghĩa là tài khoản vừa tạo không ai đăng nhập được |
+
+| Hạng mục | Kết quả |
+|---|---|
+| **12 endpoint** — 7 tiệm, 4 chi nhánh, 1 bảng giá | Xong, `dotnet build` 0 lỗi 0 cảnh báo |
+| 11 use case mới + `TenantReadService` dùng chung cho sáu use case của module tiệm | Xong |
+| 4 cổng mới ở tầng Domain: `IBranchRepository`, `IPackageRepository`, `ISubscriptionInvoiceRepository`, `IUnitOfWork` | Xong |
+| **Giao dịch tạo tiệm** — BR-TENANT-004/005, năm bảng trong một lần: tiệm, chi nhánh chính, tài khoản chủ tiệm, dòng `UserTenants`, hóa đơn đăng ký | Xong, đã kiểm chứng cuộn ngược |
+| BR-BRANCH-005 — hạn mức `max_salons` đếm lúc tạo | Xong, trả `LIMIT_EXCEEDED` / HTTP 409 |
+| BR-TENANT-020/021 — xóa mềm tiệm, gỡ liên kết `UserTenants`, tài khoản vẫn đăng nhập được | Xong |
+| Bốn loại sự kiện nhật ký còn treo từ ngày 3 nay ghi thật: `TENANT_CREATED`, `TENANT_UPDATED`, `TENANT_DELETED`, `ACCOUNT_CREATED` | Xong, còn 3 loại thuộc ngày 13 |
+
+**Kiểm chứng qua HTTP thật — 35 phép thử, tất cả đạt:**
+
+| # | Phép thử | Kết quả |
+|---|---|---|
+| 1 | `GET /api/tenants` — 6 tiệm mẫu kèm số đếm thật, **không có trường doanh thu** | Đạt |
+| 2 | Số đếm khớp dữ liệu ngày 2: `TEN-MUSE` có 1 chi nhánh, 2 nhân viên | Đạt |
+| 3 | `GET /api/packages` — 3 gói, quyền tính năng đọc đúng từ cột JSON | Đạt |
+| 4 | Tạo tiệm kèm chủ tiệm mới → tiệm + chi nhánh chính (`activeBranches: 1`) + hóa đơn đăng ký | Đạt |
+| 5 | Mật khẩu máy chủ sinh trả về một lần, **đăng nhập được ngay bằng nó** | Đạt |
+| 6 | Chủ tiệm mới ra màn chọn tiệm và thấy đúng tiệm vừa lập | Đạt |
+| 7 | Mã tiệm trùng (nhập chữ thường) | `422` kèm `fields.code` |
+| 8 | Email đã có người dùng | `422` kèm `fields.adminEmail` |
+| 9 | Hạn dùng đặt vào quá khứ | `422` kèm `fields.expiresAt` |
+| 10 | Tạo tiệm gán chủ tiệm **đã có** (`mode: existing`) | Đạt |
+| 11–13 | Sửa hồ sơ · gia hạn (tắt luôn cờ dùng thử) · gia hạn về quá khứ bị từ chối | Đạt |
+| 14–16 | Khóa tiệm → `SUSPENDED` + `isReadOnly` · đặt `OVERDUE` bằng tay bị từ chối · mở lại | Đạt |
+| 17 | Tiệm không tồn tại | `404` |
+| 18–19 | Chủ tiệm chọn `TEN-MUSE` (gói Basic) → đọc được 1 chi nhánh | Đạt |
+| 20 | Thêm chi nhánh thứ 2 trên gói Basic (`max_salons = 1`) | `409 LIMIT_EXCEEDED` |
+| 21–22 | Đổi sang `TEN-LUMIERE` (Premium, `max_salons = 3`) → thêm chi nhánh thứ 3 thành công | Đạt |
+| 23 | Thêm chi nhánh thứ 4 | `409 LIMIT_EXCEEDED` |
+| 24 | Trùng tên chi nhánh trong cùng tiệm | `422` kèm `fields.name` |
+| 25–26 | Sửa chi nhánh · ngừng hoạt động chi nhánh phụ | Đạt |
+| 27 | **BR-BRANCH-002** — ngừng chi nhánh chính | `422`, chặn ở entity |
+| 28 | **BR-TENANT-013 bước 4** — sửa chi nhánh của tiệm khác | `404`, không phải `403` |
+| 29 | **BR-AUTH-030** — Superadmin gọi `/api/branches` | `403` |
+| 30 | Lễ tân đọc chi nhánh `200`, ghi chi nhánh `403` | Đạt |
+| 31 | Lễ tân gọi `/api/tenants` | `403` |
+| 32 | **BR-TENANT-010** — tiệm bị khóa: đọc `200`, ghi `403 TENANT_READONLY`, đổi tiệm vẫn `200` | Đạt |
+| 33 | **BR-TENANT-020** — xóa mềm: tiệm biến khỏi danh sách nhưng **mã tiệm vẫn bị chiếm** | Đạt |
+| 34 | **BR-TENANT-021** — chủ tiệm mất hết tiệm **vẫn đăng nhập được**, danh sách tiệm rỗng | Đạt |
+| 35 | Nhật ký ghi ở máy chủ đủ `TENANT_CREATED` / `TENANT_UPDATED` / `TENANT_DELETED` / `ACCOUNT_CREATED` | Đạt |
+| 36 | **BR-BRANCH-005 ở đường bật lại** — hạn mức đầy (3/3) rồi bật lại một chi nhánh đã ngừng | `409 LIMIT_EXCEEDED` |
+| 37 | Ngừng một chi nhánh khác rồi bật lại chi nhánh kia | Đạt |
+| 38 | Gửi `ACTIVE` cho chi nhánh vốn đã hoạt động — không được từ chối oan | `200` |
+
+Ba phép thử cuối cùng là hệ quả của một lỗ hổng phát hiện khi rà soát — xem [Rà soát ngày 5](#rà-soát-ngày-5--một-lỗ-hổng-đã-vá) bên dưới.
+
+**Một lỗi bắt được lúc thử tay:** số hóa đơn đăng ký ban đầu đếm theo **từng tiệm**, nhưng cột `Code` mang chỉ số duy nhất **toàn hệ thống** — nên tiệm mới đầu tiên đã đụng số `DK-202608-001` của dữ liệu mẫu và cả giao dịch bị cuộn lại với lỗi 500. Đã đổi sang một dãy số chung, đúng bản chất: hóa đơn đăng ký do SalonSys phát hành với tư cách người bán, khác hẳn số hóa đơn *bán hàng* ở BR-INV-016 vốn đếm theo từng tiệm và reset mỗi ngày. Lần hỏng này cũng là phép kiểm chứng không định trước cho `IUnitOfWork`: sau khi lỗi, database **không** còn lại tiệm mồ côi nào.
+
+**Bốn điều chệch khỏi kế hoạch, có chủ đích:**
+
+1. **12 endpoint thay vì 11.** Thêm `GET /api/packages` chỉ đọc. Không có nó thì màn tạo tiệm vẫn phải chọn gói từ dữ liệu mẫu, và tiệm mới sẽ trỏ tới một mã gói không tồn tại trong database. Phần quản lý gói (tạo, sửa giá, ngừng bán) vẫn nằm ngoài phạm vi như đã cắt.
+2. **`IUnitOfWork` chỉ mở ranh giới giao dịch, không gom lệnh lưu.** Các repository vẫn tự gọi `SaveChangesAsync` như từ ngày 1; cổng mới chỉ bọc một giao dịch quanh chúng. Nhờ vậy không phải viết lại tầng lưu trữ, và những lệnh ghi cần độc lập — bản ghi nhật ký khi thao tác nghiệp vụ thất bại — vẫn giữ được tính độc lập ấy.
+3. **`ReadUsageAsync` là chỗ thứ hai trong hệ thống dùng `IgnoreQueryFilters`.** Bắt buộc, vì Superadmin không thuộc tiệm nào nên bộ lọc luôn đóng và mọi phép đếm sẽ ra 0. Phép cách ly được giữ bằng hai cách: chỉ **con số** rời khỏi hàm đó, và danh sách tiệm cần đếm do người gọi truyền vào nên không có đường quét cả database.
+4. **Nhật ký ghi SAU khi giao dịch chốt**, không nằm trong giao dịch. Nằm trong thì nó bị cuộn ngược theo khi có lỗi, và một dòng "đã tạo tiệm" cho tiệm chưa từng tồn tại còn tệ hơn là không có dòng nào.
+
+**Một chỗ sửa nằm ngoài phạm vi ngày 5, làm luôn vì phát hiện lúc thử:** thông điệp của `TENANT_READONLY` trước đây luôn nói *"Tiệm đã hết hạn sử dụng… Gia hạn gói để tiếp tục."* Nhưng BR-TENANT-010 gộp hai tình huống vào cùng chế độ chỉ đọc — quá hạn, và bị Superadmin khóa tay — nên một tiệm bị khóa tay sẽ được mời đi chuyển khoản, rồi phát hiện tiền không mở lại được gì. Endpoint khóa tiệm viết hôm nay chính là thứ tạo ra tình huống đó, nên câu chữ được sửa lại để không đoán nguyên nhân.
+
+### Việc còn treo sau ngày 5
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Frontend chưa nối** — 12 endpoint đã chạy nhưng `TenantManagement.tsx` vẫn đọc `localStorage`. Đó là nội dung **ngày 6**, kèm việc gỡ `BranchCode = 'Q1' \| 'Q3'` ở 7 tệp và bỏ hai ô nhập tay `monthlyRevenue` / `staffCount` theo quyết định 21 | Đã có lịch |
+| 2 | ~~Quyết định 20 chưa thi hành~~ — **đã xong**: gỡ 4 lời gọi `fetch` khỏi `src/utils/packageUpgradeRequests.ts`, bỏ effect nạp từ máy chủ ở `App.tsx`, và thêm component dùng chung `src/components/ui/MockDataNotice.tsx` gắn lên màn yêu cầu nâng gói. Kiểm chứng trên trình duyệt: không còn lời gọi `/api/package-upgrade-requests` nào, console sạch | Xong |
+| 3 | Superadmin gọi một endpoint thuộc phạm vi tiệm nhận `403` **kèm thông điệp "Chưa chọn tiệm để làm việc"**, trong khi họ không bao giờ chọn được tiệm nào (BR-AUTH-031). Mã trạng thái đúng, câu chữ sai. Sửa được bằng cách để `RequirePermissionAttribute` từ chối sớm khi vai trò không có ô nào trong ma trận — nhưng đó là đảo thứ tự bước 2 và bước 3 của BR-TENANT-013, nên **cần quyết** trước khi động vào | **Cần quyết** |
+| 4 | Database demo đang lẫn dữ liệu thử: `TEN-VELVET`, `TEN-ORCHID` (phiên viết ngày 5) và `TEN-RVNEW`, `TEN-RVOLD` (phiên rà soát) — tất cả đã xóa mềm. Còn lại hai chi nhánh ngừng hoạt động của Nailé Studio và một tài khoản `chu@ravsoat.vn` đã vô hiệu hóa. Bộ nạp dữ liệu mẫu chỉ chạy khi bảng trống, nên muốn sạch phải xóa database rồi khởi động lại | Trung bình |
+| 5 | Ba loại sự kiện nhật ký còn lại — `PAYMENT_RECEIVED`, `REFUND_ISSUED`, `PACKAGE_CHANGED` — nối ở ngày 13 | Đã có lịch |
+
+### Rà soát ngày 5 — một lỗ hổng đã vá
+
+Rà lại toàn bộ 12 use case và 3 controller, đối chiếu BR-TENANT-004/005/010, BR-BRANCH-001/002/005 và BR-SUB-005, rồi thử **16 kịch bản qua HTTP thật**. Mười lăm kịch bản đạt ngay. Một kịch bản lộ ra lỗ hổng dưới đây.
+
+#### 🔴 BR-BRANCH-005 — bật lại chi nhánh vượt được hạn mức
+
+`ChangeBranchStatusUseCase` bản đầu **cố ý** không kiểm hạn mức khi bật lại một chi nhánh đã ngừng, với lý do ghi trong chú thích: sợ tiệm vừa hạ gói bị kẹt.
+
+Hậu quả tái hiện được: Nailé Studio (gói Premium, hạn mức 3) chạy được **4 chi nhánh hoạt động** chỉ bằng cách ngừng rồi bật lại. Rule viết rõ vế đầu là một bất biến — *"Số chi nhánh ACTIVE của tenant **không được vượt** `package.max_salons`"* — nên đây là vi phạm, không phải cách hiểu khác.
+
+Lý do biện hộ ban đầu cũng không đứng vững: kiểm hạn mức **lúc bật lại** không làm kẹt ai, vì những chi nhánh *đang* hoạt động không bị đụng tới; tiệm chỉ không bật thêm được cái mới — đúng như khi họ muốn tạo mới.
+
+**Đã vá:** dùng lại chính `CountActiveAsync` mà `CreateBranchUseCase` dùng, để hai đường vào cùng một hạn mức không cho ra hai kết quả khác nhau. Phép kiểm chỉ chạy khi đây thật sự là một lần bật lại — gửi `ACTIVE` cho chi nhánh vốn đã hoạt động thì bỏ qua, nếu không tiệm dùng vừa đủ hạn mức sẽ bị từ chối một việc họ không hề làm.
+
+| Sau khi vá | Kết quả |
+|---|---|
+| Bật lại khi còn chỗ (2/3) | `200` |
+| Bật lại khi đã đủ (3/3) | `409 LIMIT_EXCEEDED` |
+| Gửi `ACTIVE` cho chi nhánh đã hoạt động, đang ở 3/3 | `200` — không chặn oan |
+
+#### ⚠️ Một bẫy khiến phép thử nói dối
+
+Lần chạy đầu, phép thử hạn mức **báo hỏng oan**: tiến trình `NailManagement.API` đang chạy là bản build **cũ hơn code trên đĩa**. Truy vấn trong repository đúng, nhưng máy chủ trả về kết quả của bản cũ.
+
+`dotnet run` **không** tự nạp lại khi mã nguồn đổi. Từ nay, mỗi lần sửa backend rồi thử qua HTTP:
+
+```
+taskkill /F /IM NailManagement.API.exe ; dotnet run --project NailManagement.API --launch-profile http
+```
+
+#### Chỗ thiếu cần biết trước khi làm ngày 6
+
+**Chưa có endpoint liệt kê tài khoản chủ tiệm.** Chế độ `owner.mode = "existing"` của BR-TENANT-004 đòi `existingUserId`, nhưng không API nào trả về danh sách tài khoản chủ tiệm để màn hình Superadmin cho chọn. Ngày 6 hoặc chỉ nối được nhánh "tạo tài khoản mới", hoặc phải kéo phần liệt kê tài khoản của ngày 7 lên sớm.

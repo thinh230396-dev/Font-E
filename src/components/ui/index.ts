@@ -29,3 +29,6 @@ export type { PaginationProps } from './Pagination';
 
 export { ToastProvider, useToast } from './Toast';
 export type { ShowToast, ToastOptions, ToastTone } from './Toast';
+
+export { default as MockDataNotice } from './MockDataNotice';
+export type { MockDataNoticeProps } from './MockDataNotice';

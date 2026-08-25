@@ -18,7 +18,6 @@ import {
   KeyRound,
   Laptop,
   LockKeyhole,
-  MapPin,
   MonitorSmartphone,
   RefreshCw,
   Search,
@@ -362,7 +361,7 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
     if (session.isCurrent || session.status === 'revoked') return;
     showConfirm(
       'Thu hồi phiên đăng nhập?',
-      `Phiên trên ${session.device} tại ${session.location} sẽ bị vô hiệu ngay. Người dùng phải xác thực lại để tiếp tục truy cập.`,
+      `Phiên trên ${session.device} (IP ${session.ip}) sẽ bị vô hiệu ngay. Người dùng phải đăng nhập lại để tiếp tục truy cập.`,
       () => {
         const next = sessions.map((item) => item.id === session.id ? { ...item, status: 'revoked' as const } : item);
         setSessions(next);
@@ -371,12 +370,12 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
           eventCode: 'SECURITY.SESSION.REVOKED',
           event: 'Thu hồi phiên đăng nhập',
           description: `Đã thu hồi phiên ${session.id} trên ${session.device}.`,
-          severity: session.suspicious ? 'high' : 'medium',
+          severity: 'medium',
           status: 'success',
           category: 'SECURITY',
           resource: 'Phiên quản trị',
           resourceId: session.id,
-          metadata: { targetIp: session.ip, suspicious: session.suspicious }
+          metadata: { targetIp: session.ip }
         });
         showToast('Đã thu hồi phiên đăng nhập.');
       }
@@ -477,7 +476,7 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard icon={<ShieldCheck className="h-5 w-5" />} label="Điểm bảo mật" value={`${securityScore}/100`} detail={`${passedChecks}/${securityChecks.length} kiểm soát đạt yêu cầu`} tone={securityScore >= 80 ? 'success' : securityScore >= 60 ? 'warning' : 'danger'} />
             <MetricCard icon={<AlertTriangle className="h-5 w-5" />} label="Rủi ro 24 giờ" value={riskyLogs24h.length} detail={`${failedAuth24h} yêu cầu xác thực thất bại/đã chặn`} tone={riskyLogs24h.length ? 'danger' : 'success'} />
-            <MetricCard icon={<MonitorSmartphone className="h-5 w-5" />} label="Phiên đang hoạt động" value={activeSessions.length} detail={`${activeSessions.filter((session) => session.suspicious).length} phiên cần kiểm tra`} tone={activeSessions.some((session) => session.suspicious) ? 'warning' : 'primary'} />
+            <MetricCard icon={<MonitorSmartphone className="h-5 w-5" />} label="Phiên đang hoạt động" value={activeSessions.length} detail={`${sessions.length - activeSessions.length} phiên đã thu hồi`} tone="primary" />
             <MetricCard icon={<Database className="h-5 w-5" />} label="Thời gian lưu log" value={`${settings.security.auditRetentionDays} ngày`} detail={`${logs.length} bản ghi đang được lưu trên trình duyệt`} />
           </div>
 
@@ -712,27 +711,27 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
             ) : sessions.map((session) => {
               const isMobile = session.os.toLowerCase().includes('android') || session.os.toLowerCase().includes('ios');
               return (
-                <article key={session.id} className={`rounded-xl border bg-brand-surface p-5 shadow-sm ${session.suspicious && session.status === 'active' ? 'border-amber-500/35' : 'border-brand-outline/40'} ${session.status === 'revoked' ? 'opacity-60' : ''}`}>
+                <article key={session.id} className={`rounded-xl border border-brand-outline/40 bg-brand-surface p-5 shadow-sm ${session.status === 'revoked' ? 'opacity-60' : ''}`}>
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
-                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${session.suspicious ? 'bg-amber-500/10 text-amber-500' : session.isCurrent ? 'bg-emerald-500/10 text-emerald-500' : 'bg-brand-primary/10 text-brand-primary'}`}>
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${session.isCurrent ? 'bg-emerald-500/10 text-emerald-500' : 'bg-brand-primary/10 text-brand-primary'}`}>
                         {isMobile ? <Smartphone className="h-5 w-5" /> : <Laptop className="h-5 w-5" />}
                       </div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-sm font-bold text-brand-text">{session.device}</h3>
                           {session.isCurrent && <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-500">Phiên hiện tại</span>}
-                          {session.suspicious && session.status === 'active' && <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold text-amber-500">Cần kiểm tra</span>}
                           {session.status === 'revoked' && <span className="rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[9px] font-bold text-red-500">Đã thu hồi</span>}
                         </div>
                         <p className="mt-1 text-[10px] text-brand-text-muted">{session.browser} · {session.os} · {session.user}</p>
                       </div>
                     </div>
-                    <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-4">
+                    {/* Chỉ còn hai ô, và cả hai đều là dữ liệu máy chủ thật sự có. Hai ô cũ
+                        "Vị trí" và "Xác thực" đã gỡ ở ngày 4: hệ thống không tra vị trí theo
+                        IP và không có MFA, nên chúng chỉ hiển thị được bằng cách bịa. */}
+                    <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:max-w-md xl:grid-cols-2">
                       <div className="flex items-start gap-2"><Globe2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-text-muted" /><div><p className="text-[9px] font-bold uppercase tracking-wide text-brand-text-muted">Địa chỉ IP</p><p className="mt-1 text-[11px] font-mono text-brand-text">{session.ip}</p></div></div>
-                      <div className="flex items-start gap-2"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-text-muted" /><div><p className="text-[9px] font-bold uppercase tracking-wide text-brand-text-muted">Vị trí</p><p className="mt-1 text-[11px] text-brand-text">{session.location}</p></div></div>
                       <div className="flex items-start gap-2"><Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-text-muted" /><div><p className="text-[9px] font-bold uppercase tracking-wide text-brand-text-muted">Hoạt động cuối</p><p className="mt-1 text-[11px] text-brand-text">{formatRelativeTime(session.lastActive)}</p></div></div>
-                      <div className="flex items-start gap-2"><Fingerprint className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-text-muted" /><div><p className="text-[9px] font-bold uppercase tracking-wide text-brand-text-muted">Xác thực</p><p className={`mt-1 text-[11px] font-semibold ${session.mfaVerified ? 'text-emerald-500' : 'text-red-500'}`}>{session.mfaVerified ? 'MFA đã xác minh' : 'Chưa xác minh MFA'}</p></div></div>
                     </div>
                     <button type="button" onClick={() => revokeSession(session)} disabled={session.isCurrent || session.status === 'revoked'} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-outline/45 bg-brand-surface-high px-3 py-2 text-xs font-bold text-brand-text cursor-pointer disabled:cursor-not-allowed xl:ml-3">
                       <Ban className="h-3.5 w-3.5" /> {session.isCurrent ? 'Đang sử dụng' : session.status === 'revoked' ? 'Đã thu hồi' : 'Thu hồi phiên'}
@@ -742,7 +741,6 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
                     <span>Mã phiên: <code className="font-mono text-brand-text">{session.id}</code></span>
                     <span>Bắt đầu: {formatDateTime(session.createdAt)}</span>
                     <span>Hết hạn dự kiến: {formatDateTime(session.expiresAt)}</span>
-                    <span className={session.trusted ? 'text-emerald-500' : 'text-amber-500'}>{session.trusted ? 'Thiết bị tin cậy' : 'Thiết bị chưa tin cậy'}</span>
                   </div>
                 </article>
               );
