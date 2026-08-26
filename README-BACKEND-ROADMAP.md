@@ -1032,3 +1032,76 @@ Bản cũ còn nói sai bản chất: hộp thoại ghi *"loại bỏ hoàn toà
 | 3 | Cấp, sửa, khóa tài khoản chủ tiệm chưa có endpoint. `GET /api/accounts` mới chỉ đọc | Đã có lịch |
 | 4 | `TenantDetailModal` còn ~600 dòng biểu mẫu chi nhánh không có đường gọi tới. Dùng lại được ở ngày 8, nhưng tới đó mà không dùng thì nên xóa | Thấp |
 | 5 | Database demo lẫn thêm hai tài khoản chủ tiệm mồ côi từ phiên thử: `chu@velvetnail.vn` (ngày 5) và `chu@velvetnailbar.vn` (ngày 6). Đúng theo BR-TENANT-021 — xóa tiệm không xóa tài khoản — nhưng vẫn nên dọn trước khi bảo vệ | Thấp |
+
+### Ngày 7 — xong
+
+Ba quyết định chốt đầu ngày, tất cả theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 31 | Chi nhánh của người thao tác đi qua **`ActorContext.BranchId`**, không nhét vào `ITenantContext` | Cổng mà tầng lưu trữ dùng để cách ly tiệm vẫn chỉ nói về một việc. Kéo theo: `RequestScope.ToActor()` là chỗ duy nhất dựng người thao tác, và `TenantsController` dùng lại nó |
+| 32 | Nhân viên nghỉ việc thì **vô hiệu hóa luôn tài khoản đăng nhập** trong cùng giao dịch | Bịt lỗ hổng lễ tân đã nghỉ vẫn vào được quầy. Chiều ngược lại cố ý không đối xứng: nhận lại người cũ **không** tự cấp lại quyền đăng nhập |
+| 33 | Giữ đúng **9 endpoint**, không tách endpoint khóa tài khoản lễ tân | Một hồ sơ một trạng thái. Không có tình trạng hồ sơ đang làm việc mà tài khoản bị khóa để giao diện phải giải thích |
+
+Ba điểm nhỏ hơn kết luận thẳng từ source, không hỏi:
+
+- **Danh sách trả cả bản ghi `INACTIVE`.** BR-DEL-002 để ngỏ ("tùy ngữ cảnh"), nhưng ngày 5 đã chốt hướng ở `IBranchRepository.ListAsync`. Không trả về thì màn quản lý không có đường bật lại một bản ghi đã ngừng.
+- **`category` của dịch vụ là chuỗi tự do** — `Service.Create` dùng `Guard.Optional(…, 80)` và dữ liệu mẫu ghi "Sơn gel", "Combo". Sáu giá trị cố định ở `TenantAdminServices.tsx:40` là quy ước của giao diện cũ, xử lý ở ngày 8.
+- **`StaffDto` mang theo thông tin tài khoản.** Không có nó thì màn nhân viên không biết nút "Cấp tài khoản đăng nhập" nên hiện ở hồ sơ nào.
+
+**9 endpoint, đúng ngân sách §9.1:**
+
+| Endpoint | Nhóm quyền | Ghi chú |
+|---|---|---|
+| `GET /api/services` | `Services` | Chủ tiệm và lễ tân cùng thấy một bảng giá — BR-SVC-001 |
+| `POST /api/services` | `Services` ghi | |
+| `PUT /api/services/{id}` | `Services` ghi | Đổi giá không đụng hóa đơn đã lập — BR-SVC-006 |
+| `PATCH /api/services/{id}/status` | `Services` ghi | Không có động từ `DELETE`, BR-DEL-001 |
+| `GET /api/staff` | `Staff` | Lễ tân chỉ thấy chi nhánh mình |
+| `POST /api/staff` | `Staff` ghi | Cưỡng chế `max_staff` |
+| `PUT /api/staff/{id}` | `Staff` ghi | Gồm cả chuyển chi nhánh |
+| `PATCH /api/staff/{id}/status` | `Staff` ghi | Nghỉ việc kéo theo vô hiệu tài khoản |
+| `POST /api/staff/{id}/account` | `ReceptionistAccounts` ghi | Đường **duy nhất** sinh ra tài khoản lễ tân |
+
+**Mã nguồn — 16 tệp mới, 8 tệp sửa:**
+
+| Tầng | Hạng mục |
+|---|---|
+| Domain | `IServiceRepository` mới; `IStaffRepository` mở rộng 5 hàm; `IUserRepository` thêm `ListByStaffIdsAsync` và `FindByStaffIdAsync`; `AppUser.Deactivate`; `Staff.ChangeRole` |
+| Application | `ServiceDtos`, `StaffDtos`, `ServiceMapper`, `StaffMapper`; lát cắt `UseCases/Services/` (4 use case) và `UseCases/Staff/` (5 use case + `StaffQuotaGuard`); `ActorContext` thêm `BranchId` |
+| Infrastructure | `ServiceRepository` mới; `StaffRepository` mở rộng; `UserRepository` thêm hai phép tra theo hồ sơ nhân viên |
+| API | `ServicesController`, `StaffController`; `RequestScope.ToActor()` — chỗ duy nhất dựng người thao tác |
+| Build | `dotnet build` — **0 lỗi, 0 cảnh báo**. Không có migration mới: hai bảng `Services` và `Staff` đã dựng đủ từ ngày 2 |
+
+**Kiểm chứng qua HTTP thật — 49 phép thử, tất cả đạt:**
+
+| Nhóm | Phép thử tiêu biểu | Kết quả |
+|---|---|---|
+| Dịch vụ | 8 dịch vụ mẫu; tạo mới; trùng tên (kể cả sau khi cắt khoảng trắng); thời lượng 999 phút; giá âm; đổi giá; ngừng bán rồi vẫn còn trong danh sách ở cuối | `201` / `422` đúng ô nhập / `200` |
+| Nhân viên | 6 hồ sơ Lumiere, chỉ `STF-LUM-05` có tài khoản; ca kết thúc trước ca bắt đầu; giờ sai định dạng; hoa hồng 1,5; chi nhánh của tiệm khác | `422` gắn đúng `shiftEnd`, `shiftStart`, `commissionRate`, `branchId` |
+| Phạm vi lễ tân | Lễ tân Q3 thấy đúng 3 người của Q3; tài khoản vừa cấp ở Q1 thấy đúng 4 người của Q1 | Đạt |
+| Phân quyền | Lễ tân đọc được dịch vụ và nhân viên, ghi thì `403`; lễ tân cấp tài khoản `403`; **Superadmin đọc dịch vụ và nhân viên đều `403`** (BR-AUTH-030) | Đạt |
+| Cách ly tiệm | Sửa dịch vụ của tiệm khác trả `404` chứ không `403` (BR-TENANT-013 bước 4); đổi tiệm sang Muse thì thấy đúng 3 dịch vụ và 2 nhân viên | Đạt |
+| Hạn mức | Muse gói Basic: người thứ 6 bị `409 LIMIT_EXCEEDED`; cho một người nghỉ rồi thêm được; **nhận lại người cũ khi đã đủ 5/5 cũng bị `409`**; gửi `WORKING` cho người vốn đang làm thì `200`, không chặn oan | Đạt |
+| Cấp tài khoản | Kỹ thuật viên `422`; lễ tân `201` kèm mật khẩu hiện đúng một lần; đăng nhập ngay được; cấp lần hai `422`; phiên tự nhận tiệm và đọc chi nhánh qua hồ sơ | Đạt |
+| Quyết định 32 | Cho nghỉ việc → tài khoản `INACTIVE`; **phiên đang mở chết ngay request kế tiếp** (`401`); đăng nhập lại `403 ACCOUNT_NOT_ACTIVE`; nhận lại hồ sơ thì tài khoản **vẫn** `INACTIVE` | Đạt |
+| Chặn ghi | Superadmin khóa tiệm Muse → chủ tiệm ghi `403 TENANT_READONLY`, đọc vẫn `200` | Đạt |
+| Nhật ký | `ACCOUNT_CREATED` và `ACCOUNT_LOCKED` ghi đủ người thao tác, vai trò, IP, kèm `staffId` và `staffName` | Đạt |
+
+#### Bốn điều chệch khỏi kế hoạch, có chủ đích
+
+1. **Thêm `Staff.ChangeRole` và chặn đổi vai trò khi hồ sơ đã có tài khoản.** Kế hoạch không nhắc tới đổi vai trò, nhưng lệnh sửa hồ sơ phải nhận trường `role` thì mới là một `PUT` trọn vẹn. Để trống phép chặn thì một lễ tân có tài khoản đổi thành kỹ thuật viên sẽ để lại một tài khoản trỏ tới hồ sơ mà BR-AUTH-002 nói không được có tài khoản — đúng thứ `AppUser.AttachStaff` đã từ chối ngay từ lúc cấp.
+2. **`StaffQuotaGuard` là một lớp riêng, không phải một hàm trong use case.** Hạn mức `max_staff` có hai đường vào — thêm mới và nhận lại người cũ — và ngày 5 đã trả giá cho việc để hai đường vào tự đếm lấy. Tách ra thì không có cách nào để chúng cho hai kết quả khác nhau.
+3. **`RequestScope.ToActor()` thay cho hàm `Actor()` riêng của từng controller.** Chi nhánh của người thao tác nay quyết định lễ tân nhìn thấy ai, nên một controller quên gắn nó vào sẽ lặng lẽ nới quyền. Gom về một chỗ thì không còn chỗ để quên.
+4. **`ListStaffUseCase` từ chối thẳng khi lễ tân không có chi nhánh**, thay vì mặc định cho xem cả tiệm. Đó là trạng thái dữ liệu hỏng — hồ sơ bị gỡ hoặc thuộc tiệm khác — và một lỗi dữ liệu không được biến thành một lần nới quyền.
+
+### Việc còn treo sau ngày 7
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | Ba việc treo sau ngày 6 chưa đụng tới: biểu đồ "Doanh thu đã thu" còn số bịa (**cần sửa**), `BranchCode` cứng ở 12 tệp (ngày 8), `TenantDetailModal` còn ~600 dòng biểu mẫu chết | Giữ nguyên |
+| 2 | **Cấp, sửa, khóa tài khoản *chủ tiệm* vẫn chưa có endpoint.** Ngày 7 chỉ làm tài khoản *lễ tân*; `GET /api/accounts` vẫn chỉ đọc. Cấp tài khoản chủ tiệm hiện chỉ xảy ra bên trong giao dịch tạo tiệm | Chưa có lịch |
+| 3 | `src/utils/authApi.ts` nay **không còn tệp nào import** — `src/services/auth.ts` đã thay thế trọn vẹn. Xóa được, chỉ cần gỡ hai dòng chú thích nhắc tên nó ở `apiClient.ts` và `auth.ts` | Thấp |
+| 4 | Database demo lẫn thêm rác của phiên thử ngày 7: hồ sơ `Ngô Thị Kiểm Thử` (Lumiere) kèm tài khoản `kiemthu.ngay7@lumierehair.vn` đã vô hiệu, và bốn hồ sơ "Nhân viên hạn mức" ở Muse — tất cả đã chuyển `INACTIVE` nên không chiếm hạn mức, nhưng vẫn nên xóa database dựng lại trước khi bảo vệ | Thấp |
+| 5 | §3.1 ghi "`DTOs/` chỉ có bảy tệp" — nay là chín. Vẫn dưới ngưỡng phải chia thư mục, nhưng con số trong tài liệu đã cũ | Thấp |
+| 6 | `PUT /api/staff/{id}` là phép thay trọn hồ sơ: bỏ trống `email` trong thân request thì email trên hồ sơ bị xóa. Đúng ngữ nghĩa của `PUT` và giống hệt `PUT /api/branches/{id}`, nhưng ngày 9 phải nhớ gửi đủ trường | Ghi chú cho ngày 9 |
