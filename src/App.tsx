@@ -1,11 +1,9 @@
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { lazy, Suspense, useMemo, useState, useEffect } from 'react';
 import { AlertTriangle, Info } from 'lucide-react';
-import { 
-  loadLocalStorageData, 
-  saveLocalStorageData, 
-  INITIAL_TENANTS, 
-  INITIAL_PACKAGES, 
-  INITIAL_ALERTS, 
+import {
+  loadLocalStorageData,
+  saveLocalStorageData,
+  INITIAL_ALERTS,
   INITIAL_INVOICES
 } from './data';
 import { Tenant, SubscriptionPackage, SystemAlert, Invoice, TenantStatus, TenantAdminAccount, Ticket, PackageUpgradeRequest, SystemAnnouncement } from './types';
@@ -37,11 +35,9 @@ import {
   savePackageUpgradeRequests
 } from './utils/packageUpgradeRequests';
 import { resetTenantMockStorage } from './utils/mockDataReset';
-import {
-  deleteManagedAuthAccount,
-  persistManagedAuthAccount
-} from './utils/authApi';
 import { describeApiError } from './services/apiClient';
+import useTenants from './hooks/useTenants';
+import type { CreateTenantInput, UpdateTenantInput } from './services/tenants';
 import {
   getSession,
   listMyTenants,
@@ -64,7 +60,15 @@ import { useLanguage } from './i18n';
 import { getDemoAccountByRole, type DemoAccount, type PortalRole } from './auth/demoAccounts';
 
 const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v2';
-const TENANTS_MOCK_SEED_KEY = 'tenants_mock_seed_v1';
+
+/**
+ * Ngưỡng "sắp hết hạn" của giao diện, tính bằng ngày.
+ *
+ * BR-TENANT-001 chỉ có bốn trạng thái và không có `EXPIRING`, nên đây thuần túy là một lời
+ * nhắc trên thanh điều hướng chứ không phải một trạng thái của tiệm: nó không đổi quyền, không
+ * chặn ghi, và không xuất hiện ở bất kỳ phép kiểm nào phía máy chủ.
+ */
+const EXPIRING_SOON_DAYS = 7;
 
 const normalizeAccountIdentity = (value?: string) => (
   (value || '')
@@ -103,27 +107,11 @@ const loadAlertsWithOneTimeMocks = (): SystemAlert[] => {
   return [...INITIAL_ALERTS, ...savedAlerts.filter((alert) => !mockIds.has(alert.id))];
 };
 
-const normalizeTenantStatusSync = (tenant: Tenant): Tenant => {
-  if (tenant.status === 'SUSPENDED' && tenant.adminStatus !== 'SUSPENDED') {
-    return { ...tenant, adminStatus: 'SUSPENDED' };
-  }
-  if (tenant.adminStatus === 'SUSPENDED' && tenant.status !== 'SUSPENDED') {
-    return { ...tenant, status: 'SUSPENDED' };
-  }
-  if (!tenant.adminStatus) {
-    return { ...tenant, adminStatus: tenant.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE' };
-  }
-  return tenant;
-};
-
-const loadTenantsWithOneTimeMocks = (): Tenant[] => {
-  const savedTenants = loadLocalStorageData<Tenant[]>('tenants', []);
-  const mocksWereSeeded = loadLocalStorageData<boolean>(TENANTS_MOCK_SEED_KEY, false);
-  if (mocksWereSeeded) return savedTenants.map(normalizeTenantStatusSync);
-  saveLocalStorageData(TENANTS_MOCK_SEED_KEY, true);
-  const savedIds = new Set(savedTenants.map((tenant) => tenant.id));
-  return [...INITIAL_TENANTS.filter((tenant) => !savedIds.has(tenant.id)), ...savedTenants].map(normalizeTenantStatusSync);
-};
+// `loadTenantsWithOneTimeMocks` và `normalizeTenantStatusSync` từng nằm ở đây. Cả hai đã
+// hết việc từ ngày 6: danh sách tiệm nay do `GET /api/tenants` trả về, còn phép đồng bộ
+// trạng thái tiệm với trạng thái tài khoản chủ tiệm là một quy tắc của thời dữ liệu mẫu —
+// ở database thật hai thứ đó độc lập, vì một tài khoản chủ tiệm có thể giữ nhiều tiệm
+// (BR-AUTH-023) nên khóa một tiệm không thể kéo theo khóa cả con người đó.
 
 const Overview = lazy(() => import('./components/Overview'));
 const TenantManagement = lazy(() => import('./components/TenantManagement'));
@@ -274,10 +262,9 @@ export default function App() {
         displayName: session.account.displayName,
         tenantId: session.tenant?.id,
         tenantName: session.tenant?.name,
-        // Mã chi nhánh nay đến từ database nên không còn giới hạn ở hai giá trị
-        // Q1/Q3 mà kiểu cũ khai báo. Ép kiểu ở đúng ranh giới này thay vì nới
-        // kiểu, để không kéo theo sửa đổi vào cổng lễ tân trong hôm nay.
-        branchCode: session.branch?.code as DemoAccount['branchCode'],
+        // Chỗ ép kiểu ở đây đã bỏ được từ ngày 6: `DemoAccount.branchCode` nay là `string`,
+        // đúng với việc mã chi nhánh do người dùng tự đặt và có tập giá trị mở.
+        branchCode: session.branch?.code,
         branchName: session.branch?.name
       }
     : null;
@@ -298,10 +285,29 @@ export default function App() {
   // Navigation active tab state
   const [activeTab, setActiveTab] = useState('overview');
 
-  // Core application states loaded from localStorage
-  const [tenants, setTenants] = useState<Tenant[]>(loadTenantsWithOneTimeMocks);
-  const [packages, setPackages] = useState<SubscriptionPackage[]>(() => 
-    loadLocalStorageData<SubscriptionPackage[]>('packages', INITIAL_PACKAGES).map(normalizeSubscriptionPackage)
+  /**
+   * Tiệm, gói và tài khoản chủ tiệm — cả ba đọc thẳng từ máy chủ (ngày 6).
+   *
+   * Chỉ chạy với Superadmin: hai vai trò còn lại không có quyền với ba endpoint
+   * này (BR-AUTH-010, BR-AUTH-030), nên gọi bằng vai trò khác chỉ để nhận về một
+   * lỗi 403 đã biết trước.
+   */
+  const directory = useTenants(session?.account.role === 'SUPERADMIN');
+  const { tenants, packages: apiPackages, tenantAdmins } = directory;
+
+  /**
+   * Số tiệm đang dùng mỗi gói, đếm từ chính danh sách tiệm.
+   *
+   * Máy chủ không gửi con số này kèm bảng giá, và cũng không nên: nó là một phép
+   * đếm trên danh sách mà màn hình đã cầm sẵn trong tay. Gửi thêm một bản sao là
+   * tạo thêm một chỗ để lệch với danh sách tiệm đang hiển thị ngay bên cạnh.
+   */
+  const packages = useMemo(
+    () => apiPackages.map((pkg) => ({
+      ...pkg,
+      activeTenants: tenants.filter((tenant) => tenant.subscriptionPackageId === pkg.id).length
+    })),
+    [apiPackages, tenants]
   );
   const [alerts, setAlerts] = useState<SystemAlert[]>(loadAlertsWithOneTimeMocks);
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
@@ -311,9 +317,6 @@ export default function App() {
       : loadLocalStorageData<Invoice[]>('invoices_v2', INITIAL_INVOICES);
     return dedupeInvoices(sourceInvoices.map((invoice) => normalizeInvoicePaymentData(normalizeInvoiceDueDate(invoice))));
   });
-  const [tenantAdmins, setTenantAdmins] = useState<TenantAdminAccount[]>(() =>
-    loadLocalStorageData<TenantAdminAccount[]>('tenant_admins', [])
-  );
   const [upgradeRequests, setUpgradeRequests] = useState<PackageUpgradeRequest[]>(loadPackageUpgradeRequests);
   const [tickets, setTickets] = useState<Ticket[]>(() => {
     const storedTickets = loadLocalStorageData<Ticket[]>('support_tickets', [])
@@ -507,15 +510,11 @@ export default function App() {
     setPendingTenantId(null);
   };
 
-  // Sync state changes to LocalStorage
-  useEffect(() => {
-    saveLocalStorageData('tenants', tenants);
-  }, [tenants]);
-
-  useEffect(() => {
-    saveLocalStorageData('packages', packages);
-  }, [packages]);
-
+  // Ghi state xuống localStorage.
+  //
+  // Ba khóa `tenants`, `packages` và `tenant_admins` đã rời khỏi đây ở ngày 6: cả ba nay do
+  // máy chủ giữ, và ghi thêm một bản sao xuống trình duyệt chỉ tạo ra một sự thật thứ hai
+  // để có ngày lệch với sự thật thứ nhất.
   useEffect(() => {
     saveLocalStorageData('alerts', alerts);
   }, [alerts]);
@@ -524,10 +523,6 @@ export default function App() {
     saveLocalStorageData('invoices', invoices);
     saveLocalStorageData('invoices_v2', invoices);
   }, [invoices]);
-
-  useEffect(() => {
-    saveLocalStorageData('tenant_admins', tenantAdmins);
-  }, [tenantAdmins]);
 
   useEffect(() => {
     savePackageUpgradeRequests(upgradeRequests);
@@ -547,40 +542,17 @@ export default function App() {
     saveLocalStorageData('support_tickets', tickets);
   }, [tickets]);
 
-  // Migrate legacy tenant data from a package-name link to a stable package-id link.
-  // Locked pricing is only filled once, so future package price changes do not silently
-  // alter the commercial agreement of existing tenants.
-  useEffect(() => {
-    setTenants((currentTenants) => {
-      let hasChanges = false;
-      const migrated = currentTenants.map((tenant) => {
-        const pkg = packages.find((item) => item.id === tenant.subscriptionPackageId)
-          || getSubscriptionPackage(packages, tenant.packageName);
-        if (!pkg) return tenant;
-
-        const cycle = tenant.billingCycle || 'monthly';
-        const pricing = getSubscriptionPrice(packages, pkg.name, cycle);
-        const nextFields: Partial<Tenant> = {};
-        if (tenant.subscriptionPackageId !== pkg.id) nextFields.subscriptionPackageId = pkg.id;
-        if (tenant.packageName !== pkg.name) {
-          nextFields.packageName = pkg.name;
-          nextFields.plan = pkg.name;
-          nextFields.subscriptionPlan = pkg.name;
-        }
-        if (!tenant.subscriptionPackageVersion) nextFields.subscriptionPackageVersion = pkg.version || 1;
-        if (tenant.subscriptionPrice === undefined) nextFields.subscriptionPrice = pricing.price;
-        if (!tenant.subscriptionCurrency) nextFields.subscriptionCurrency = pricing.currency;
-        if (!tenant.subscriptionStartedAt) nextFields.subscriptionStartedAt = tenant.planStartDate || tenant.createdAt;
-        if (!tenant.subscriptionRenewsAt) nextFields.subscriptionRenewsAt = getTenantSubscriptionRenewalDate(tenant);
-
-        if (Object.keys(nextFields).length === 0) return tenant;
-        hasChanges = true;
-        return { ...tenant, ...nextFields };
-      });
-
-      return hasChanges ? migrated : currentTenants;
-    });
-  }, [packages]);
+  // Ở đây từng có ba effect nữa, tất cả đều sửa mảng `tenants` tại chỗ:
+  //
+  //   1. Di trú liên kết gói từ tên gói sang mã gói, và điền giá đã khóa lần đầu.
+  //   2. Áp dụng thay đổi gói đã duyệt khi tới ngày hiệu lực.
+  //   3. Chuyển tiệm sang gói thay thế khi gói cũ ngừng bán và subscription hết hạn.
+  //
+  // Cả ba là quy tắc nghiệp vụ chạy trong trình duyệt vì hồi đó chưa có máy chủ. Nay tiệm
+  // do máy chủ giữ: liên kết gói được chốt ngay trong giao dịch tạo tiệm cùng giá và số
+  // phiên bản tại thời điểm đó (BR-SUB-004), nên không còn gì để di trú. Hai quy tắc còn
+  // lại thuộc module gói đăng ký — module đã bị cắt khỏi MVP — nên giữ chúng chỉ để sửa một
+  // bản sao trong bộ nhớ rồi mất khi tải lại trang, tức nói dối người dùng rằng đã đổi gói.
 
   useEffect(() => {
     setInvoices((currentInvoices) => {
@@ -604,481 +576,108 @@ export default function App() {
     });
   }, [packages, tenants]);
 
-  useEffect(() => {
-    setPackages((currentPackages) => {
-      let hasChanges = false;
-      const synchronized = currentPackages.map((pkg) => {
-        const activeTenants = tenants.filter((tenant) => (
-          tenant.subscriptionPackageId === pkg.id || tenant.packageName === pkg.name
-        )).length;
-        if (pkg.activeTenants === activeTenants) return pkg;
-        hasChanges = true;
-        return { ...pkg, activeTenants };
+  /**
+   * Tạo tiệm — BR-TENANT-004/005.
+   *
+   * Máy chủ làm cả năm việc trong một giao dịch: tiệm, chi nhánh chính, tài khoản chủ tiệm,
+   * dòng liên kết tài khoản–tiệm, và hóa đơn đăng ký đầu tiên. Frontend không được tự sinh
+   * hóa đơn nữa — bản cũ tạo một hóa đơn giả ở `localStorage` song song với hóa đơn thật ở
+   * máy chủ, và hai bên không bao giờ khớp số.
+   *
+   * Trả kết quả về cho màn hình thay vì tự hiện thông báo: lỗi nhập liệu phải nằm cạnh đúng
+   * ô nhập sai, và chỉ màn hình mới biết ô nào ở đâu.
+   */
+  const handleAddTenant = async (input: CreateTenantInput) => {
+    const result = await directory.createTenant(input);
+
+    if (result.status === 'ok') {
+      showToast(`Đã tạo tiệm "${result.data.tenant.name}".`, 'success', {
+        description: 'Tiệm, chi nhánh chính và hóa đơn đăng ký đầu tiên đã được ghi cùng lúc.'
       });
-      return hasChanges ? synchronized : currentPackages;
-    });
-  }, [tenants]);
-
-  // Approved changes scheduled for the next cycle remain pending until their
-  // effective date. This prevents tenants from receiving new entitlements early.
-  useEffect(() => {
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const dueTenantIds = tenants
-      .filter((tenant) => tenant.pendingSubscriptionChange?.effectiveAt
-        && tenant.pendingSubscriptionChange.effectiveAt <= todayIso)
-      .map((tenant) => tenant.id);
-    if (dueTenantIds.length === 0) return;
-
-    setTenants((current) => current.map((tenant) => {
-      const pending = tenant.pendingSubscriptionChange;
-      if (!pending || !dueTenantIds.includes(tenant.id)) return tenant;
-      const cycleDays = getBillingCycleDays(pending.billingCycle);
-      const activity = {
-        date: new Date().toISOString().replace('T', ' ').slice(0, 16),
-        user: 'Hệ thống',
-        type: 'subscription',
-        description: `Đã áp dụng thay đổi theo lịch sang gói ${pending.packageName}.`
-      };
-      return {
-        ...tenant,
-        packageName: pending.packageName,
-        plan: pending.packageName,
-        subscriptionPlan: pending.packageName,
-        subscriptionPackageId: pending.packageId,
-        subscriptionPackageVersion: pending.packageVersion,
-        subscriptionPrice: pending.price,
-        subscriptionCurrency: pending.currency,
-        billingCycle: pending.billingCycle,
-        planStartDate: pending.effectiveAt,
-        subscriptionStartedAt: pending.effectiveAt,
-        subscriptionRenewsAt: getIsoDateAfterDaysFrom(pending.effectiveAt, cycleDays),
-        daysRemaining: cycleDays,
-        effectiveDate: 'immediate',
-        pendingSubscriptionChange: undefined,
-        customActivities: [activity, ...(tenant.customActivities || [])],
-        lastSync: new Date().toISOString()
-      };
-    }));
-  }, [tenants]);
-
-  // A deprecated package stops accepting new tenants immediately. Existing tenants
-  // are migrated only after their own subscription reaches its expiry date.
-  useEffect(() => {
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const pendingRetirements = packages.filter((pkg) => pkg.retirementRequest);
-    if (pendingRetirements.length === 0) return;
-
-    const migrations = tenants.flatMap((tenant) => {
-      const sourcePackage = pendingRetirements.find((pkg) => (
-        tenant.subscriptionPackageId === pkg.id || tenant.packageName === pkg.name
-      ));
-      if (!sourcePackage?.retirementRequest || !isTenantSubscriptionExpired(tenant, todayIso)) return [];
-
-      const replacementPackage = packages.find((pkg) => pkg.id === sourcePackage.retirementRequest?.replacementPackageId)
-        || getSubscriptionPackage(packages, sourcePackage.retirementRequest.replacementPackageName);
-      if (!replacementPackage || (replacementPackage.status || 'ACTIVE') !== 'ACTIVE') return [];
-
-      return [{ tenant, sourcePackage, replacementPackage }];
-    });
-
-    if (migrations.length === 0) return;
-
-    setTenants((currentTenants) => currentTenants.map((tenant) => {
-      const migration = migrations.find((item) => item.tenant.id === tenant.id);
-      if (!migration) return tenant;
-
-      const { sourcePackage, replacementPackage } = migration;
-      const cycle = tenant.billingCycle || 'monthly';
-      const pricing = getSubscriptionPrice(packages, replacementPackage.name, cycle);
-      const cycleDays = getBillingCycleDays(cycle);
-      const now = new Date();
-      const activity = {
-        date: now.toISOString().replace('T', ' ').slice(0, 16),
-        user: 'Hệ thống',
-        type: 'subscription',
-        description: `Tự động chuyển từ gói ${sourcePackage.name} sang ${replacementPackage.name} sau khi subscription cũ hết hạn.`
-      };
-
-      return {
-        ...tenant,
-        packageName: replacementPackage.name,
-        plan: replacementPackage.name,
-        subscriptionPlan: replacementPackage.name,
-        subscriptionPackageId: replacementPackage.id,
-        subscriptionPackageVersion: replacementPackage.version || 1,
-        subscriptionPrice: pricing.price,
-        subscriptionCurrency: pricing.currency,
-        subscriptionStartedAt: todayIso,
-        subscriptionRenewsAt: getIsoDateAfterDays(cycleDays),
-        daysRemaining: cycleDays,
-        status: 'ACTIVE',
-        paymentStatus: 'PENDING',
-        allowOnlineBooking: replacementPackage.capabilities?.some((capability) => capability.key === 'online_booking' && capability.enabled) === true,
-        customActivities: [activity, ...(tenant.customActivities || [])],
-        lastSync: now.toISOString()
-      };
-    }));
-
-    setInvoices((currentInvoices) => {
-      const generatedInvoices: Invoice[] = migrations
-        .filter(({ tenant, sourcePackage }) => !currentInvoices.some((invoice) => invoice.id === `INV-AUTO-${sourcePackage.id}-${tenant.id}-${todayIso}`))
-        .map(({ tenant, sourcePackage, replacementPackage }) => {
-          const cycle = tenant.billingCycle || 'monthly';
-          const pricing = getSubscriptionPrice(packages, replacementPackage.name, cycle);
-          const invoiceCurrency = normalizeCurrency(tenant.currency);
-          const cycleDays = getBillingCycleDays(cycle);
-          return {
-            id: `INV-AUTO-${sourcePackage.id}-${tenant.id}-${todayIso}`,
-            invoiceCode: `INV-AUTO-${tenant.id}-${todayIso}`,
-            tenantId: tenant.id,
-            tenantName: tenant.name,
-            type: 'PLAN_CHANGE',
-            planName: replacementPackage.name,
-            packageId: replacementPackage.id,
-            packageVersion: replacementPackage.version || 1,
-            billingCycle: cycle,
-            servicePeriod: `Tự động chuyển sang ${replacementPackage.name} từ ${todayIso}`,
-            dueDate: todayIso,
-            amount: convertMoney(pricing.price, pricing.currency, invoiceCurrency),
-            currency: invoiceCurrency,
-            status: 'PENDING',
-            note: `Gói ${sourcePackage.name} đã ngừng; chuyển tự động khi subscription hết hạn.`,
-            createdAt: todayIso,
-            billingPeriod: `Đến ${getIsoDateAfterDays(cycleDays).split('-').reverse().join('/')}`
-          };
-        });
-      return generatedInvoices.length > 0 ? dedupeInvoices([...generatedInvoices, ...currentInvoices]) : currentInvoices;
-    });
-  }, [packages, tenants]);
-
-  useEffect(() => {
-    const completedPackageIds = packages
-      .filter((pkg) => pkg.retirementRequest)
-      .filter((pkg) => !tenants.some((tenant) => tenant.subscriptionPackageId === pkg.id || tenant.packageName === pkg.name))
-      .map((pkg) => pkg.id);
-    if (completedPackageIds.length === 0) return;
-
-    setPackages((currentPackages) => currentPackages.map((pkg) => (
-      completedPackageIds.includes(pkg.id)
-        ? { ...pkg, status: 'ARCHIVED', retirementRequest: undefined, updatedAt: new Date().toISOString() }
-        : pkg
-    )));
-  }, [packages, tenants]);
-
-  const syncTenantAuthAccount = (tenant: Tenant) => {
-    if (!tenant.adminEmail || !tenant.adminName) return;
-    void persistManagedAuthAccount({
-      id: tenant.tenantAdminId || tenant.id,
-      email: tenant.adminEmail,
-      username: tenant.adminUsername,
-      password: tenant.adminTempPassword,
-      role: 'TENANT_ADMIN',
-      displayName: tenant.adminName,
-      tenantId: tenant.id,
-      tenantName: tenant.name,
-      status: tenant.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE'
-    }).catch((error) => {
-      showToast(error instanceof Error ? error.message : 'Không thể đồng bộ tài khoản đăng nhập.', 'error');
-    });
-  };
-
-  const syncAdminAuthAccount = (admin: TenantAdminAccount) => {
-    void persistManagedAuthAccount({
-      id: admin.id,
-      email: admin.email,
-      username: admin.username,
-      password: admin.tempPassword,
-      role: 'TENANT_ADMIN',
-      displayName: admin.name,
-      tenantId: admin.tenantIds[0],
-      tenantName: admin.tenantName,
-      status: admin.status
-    }).catch((error) => {
-      showToast(error instanceof Error ? error.message : 'Không thể đồng bộ tài khoản đăng nhập.', 'error');
-    });
-  };
-
-  // Handle Tenant CRUD operations
-  const handleAddTenant = (newTenantData: Omit<Tenant, 'createdAt' | 'lastLogin'>) => {
-    const newId = newTenantData.id.trim().toUpperCase();
-    if (tenants.some((tenant) => tenant.id.toLowerCase() === newId.toLowerCase())) {
-      showToast(`Mã tenant "${newId}" đã tồn tại. Vui lòng chọn mã khác.`, 'error');
-      return;
     }
 
-    const invoiceCurrency = normalizeCurrency(newTenantData.currency);
-    const selectedPackage = getSubscriptionPackage(packages, newTenantData.packageName);
-    const selectedCycle = newTenantData.billingCycle || 'monthly';
-    const packagePricing = getSubscriptionPrice(packages, newTenantData.packageName, selectedCycle);
-    const packageCurrency = normalizeCurrency(packagePricing.currency);
-    const packagePrice = packagePricing.price;
-    const newTenant: Tenant = {
-      ...newTenantData,
-      id: newId,
-      createdAt: new Date().toISOString().slice(0, 10),
-      lastLogin: 'Chưa đăng nhập',
-      lastSync: new Date().toISOString(),
-      subscriptionPackageId: selectedPackage?.id,
-      subscriptionPackageVersion: selectedPackage?.version || 1,
-      subscriptionPrice: packagePricing.price,
-      subscriptionCurrency: packagePricing.currency,
-      subscriptionStartedAt: new Date().toISOString().slice(0, 10),
-      subscriptionRenewsAt: getIsoDateAfterDays(getBillingCycleDays(selectedCycle))
-    };
-    
-    setTenants([newTenant, ...tenants]);
-    syncTenantAuthAccount(newTenant);
-
-    const billingDueDays = newTenant.daysRemaining ?? getBillingCycleDays(newTenant.billingCycle);
-
-    // Also simulate creating an invoice for this tenant
-    const newInvoice: Invoice = {
-      id: `INV-2026-${Math.floor(800 + Math.random() * 200)}`,
-      tenantName: newTenant.name,
-      tenantId: newId,
-      packageId: selectedPackage?.id,
-      packageVersion: selectedPackage?.version || 1,
-      planName: newTenant.packageName,
-      billingCycle: selectedCycle,
-      amount: convertMoney(packagePrice, packageCurrency, invoiceCurrency),
-      currency: invoiceCurrency,
-      dueDate: getIsoDateAfterDays(billingDueDays),
-      status: 'PENDING',
-      billingPeriod: 'Tháng 7/2026',
-      createdAt: new Date().toISOString().slice(0, 10)
-    };
-    setInvoices(prevInvoices => dedupeInvoices([newInvoice, ...prevInvoices]));
-
-    recordAuditLog({
-      eventCode: 'TENANT.CREATED',
-      event: 'Tạo tenant mới',
-      description: `Superadmin đã tạo tenant "${newTenant.name}" và khởi tạo hóa đơn đầu tiên ${newInvoice.id}.`,
-      severity: 'medium',
-      status: 'success',
-      category: 'TENANT',
-      resource: `Tenant ${newTenant.name}`,
-      resourceId: newTenant.id,
-      method: 'CLIENT /tenants',
-      metadata: { package: newTenant.packageName, invoiceId: newInvoice.id }
-    });
-
-    showToast(`Đã thêm tenant "${newTenant.name}" thành công! Hóa đơn đầu tiên ${newInvoice.id} đã được khởi tạo.`);
+    return result;
   };
 
-  const handleUpdateTenant = (id: string, updatedFields: Partial<Tenant>) => {
-    const currentTenant = tenants.find((tenant) => tenant.id === id);
-    if (!currentTenant) return;
+  /** Sửa hồ sơ tiệm — chỉ bốn trường mà máy chủ lưu (BR-TENANT-006). */
+  const handleUpdateTenant = async (id: string, input: UpdateTenantInput) => {
+    const result = await directory.updateTenant(id, input);
 
-    // Phương án 1: Đồng bộ 2 chiều toàn diện giữa Tenant Admin và Tenant
-    const nextFields: Partial<Tenant> = { ...updatedFields };
-    if (updatedFields.status !== undefined && updatedFields.adminStatus === undefined) {
-      nextFields.adminStatus = updatedFields.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
-    } else if (updatedFields.adminStatus !== undefined && updatedFields.status === undefined) {
-      nextFields.status = updatedFields.adminStatus === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
+    if (result.status === 'ok') showToast(`Đã cập nhật tiệm "${result.data.name}".`, 'success');
+
+    return result;
+  };
+
+  /** Gia hạn bằng ngày hết hạn mới do Superadmin nhập tay — BR-TENANT-006. */
+  const handleRenewTenant = async (id: string, expiresAt: string) => {
+    const result = await directory.renewTenant(id, expiresAt);
+
+    if (result.status === 'ok') {
+      showToast(`Đã gia hạn tiệm "${result.data.name}".`, 'success', {
+        description: `Hạn dùng mới: ${new Date(result.data.subscriptionRenewsAt || expiresAt).toLocaleDateString('vi-VN')}.`
+      });
     }
 
-    const mergedTenant = { ...currentTenant, ...nextFields };
-    if (
-      nextFields.adminEmail !== undefined
-      || nextFields.adminName !== undefined
-      || nextFields.adminUsername !== undefined
-      || nextFields.adminTempPassword !== undefined
-      || nextFields.status !== undefined
-      || nextFields.adminStatus !== undefined
-      || nextFields.tenantAdminId !== undefined
-    ) {
-      syncTenantAuthAccount(mergedTenant);
-    }
+    return result;
+  };
 
-    const adminEmail = (nextFields.adminEmail || currentTenant.adminEmail)?.trim().toLowerCase();
-    const targetAdminStatus = nextFields.adminStatus || (nextFields.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE');
+  /**
+   * Khóa hoặc mở khóa tiệm — BR-TENANT-002.
+   *
+   * Chỉ đụng tới tiệm, không đụng tới tài khoản chủ tiệm. Bản cũ khóa cả hai cùng lúc, và
+   * điều đó sai từ khi một tài khoản được phép giữ nhiều tiệm (BR-AUTH-023): khóa một tiệm
+   * mà chặn luôn con người đó là chặn cả những tiệm khác họ đang quản lý.
+   */
+  const handleChangeTenantStatus = async (id: string, status: 'ACTIVE' | 'SUSPENDED') => {
+    const result = await directory.changeTenantStatus(id, status);
 
-    setTenants(prevTenants => prevTenants.map(t => {
-      const isTarget = t.id === id;
-      const isSameAdmin = !isTarget && adminEmail && t.adminEmail?.trim().toLowerCase() === adminEmail && (nextFields.adminStatus !== undefined || nextFields.status !== undefined);
-
-      if (isSameAdmin) {
-        return {
-          ...t,
-          adminStatus: targetAdminStatus,
-          status: targetAdminStatus === 'SUSPENDED' ? 'SUSPENDED' : (t.status === 'SUSPENDED' ? 'ACTIVE' : t.status),
-          lastSync: new Date().toISOString()
-        };
-      }
-
-      if (isTarget) {
-        let subscriptionFields: Partial<Tenant> = {};
-        if (nextFields.packageName && nextFields.packageName !== t.packageName) {
-          const targetPackage = getSubscriptionPackage(packages, nextFields.packageName);
-          const cycle = nextFields.billingCycle || t.billingCycle || 'monthly';
-          const pricing = getSubscriptionPrice(packages, nextFields.packageName, cycle);
-          subscriptionFields = {
-            subscriptionPackageId: targetPackage?.id,
-            subscriptionPackageVersion: targetPackage?.version || 1,
-            subscriptionPrice: nextFields.subscriptionPrice ?? pricing.price,
-            subscriptionCurrency: nextFields.subscriptionCurrency ?? pricing.currency,
-            subscriptionStartedAt: nextFields.planStartDate || new Date().toISOString().slice(0, 10),
-            subscriptionRenewsAt: getIsoDateAfterDays(getBillingCycleDays(cycle))
-          };
+    if (result.status === 'ok') {
+      showToast(
+        status === 'SUSPENDED' ? 'Đã khóa tiệm' : 'Đã mở khóa tiệm',
+        status === 'SUSPENDED' ? 'warning' : 'success',
+        {
+          description: status === 'SUSPENDED'
+            ? `Tiệm "${result.data.name}" chuyển sang chế độ chỉ đọc; tài khoản chủ tiệm vẫn đăng nhập được.`
+            : `Tiệm "${result.data.name}" đã hoạt động trở lại.`
         }
-        const nextTenant = { ...t, ...nextFields, ...subscriptionFields, lastSync: new Date().toISOString() };
-        
-        // Let's check if there are new custom invoices added
-        if (nextFields.customInvoices && nextFields.customInvoices.length > (t.customInvoices?.length || 0)) {
-          const newInvs = nextFields.customInvoices.filter(newInv => 
-            !(t.customInvoices || []).some(oldInv => oldInv.id === newInv.id)
-          );
-          
-          if (newInvs.length > 0) {
-            const standardNewInvs: Invoice[] = newInvs.map((newInv: any) => {
-              let standardStatus: Invoice['status'] = 'PENDING';
-              const sUpper = newInv.status?.toUpperCase() || '';
-              if (
-                sUpper === 'PAID' || 
-                newInv.status === 'Đã thanh toán' || 
-                newInv.status === 'Đã thu tiền' || 
-                newInv.status === 'Thu tự động thành công'
-              ) {
-                standardStatus = 'PAID';
-              } else if (sUpper === 'OVERDUE' || newInv.status === 'Quá hạn') {
-                standardStatus = 'OVERDUE';
-              } else if (sUpper === 'CANCELLED' || newInv.status === 'Đã hủy') {
-                standardStatus = 'CANCELLED';
-              } else {
-                standardStatus = 'PENDING';
-              }
-
-              const standardType: Invoice['type'] = newInv.type === 'Gia hạn gói' || newInv.type === 'RENEWAL'
-                ? 'RENEWAL'
-                : (newInv.type === 'Nâng/Đổi gói' || newInv.type === 'PLAN_CHANGE' ? 'PLAN_CHANGE' : 'MONTHLY_SUBSCRIPTION');
-
-              return {
-                id: newInv.id,
-                invoiceCode: newInv.invoiceCode || newInv.id,
-                tenantId: id,
-                tenantName: nextTenant.name,
-                type: standardType,
-                planName: newInv.packageName || nextTenant.packageName,
-                packageId: newInv.packageId || nextTenant.subscriptionPackageId,
-                packageVersion: newInv.packageVersion || nextTenant.subscriptionPackageVersion,
-                billingCycle: newInv.billingCycle || nextTenant.billingCycle || 'monthly',
-                servicePeriod: newInv.period || newInv.servicePeriod,
-                dueDate: newInv.dueDate,
-                amount: newInv.amount,
-                currency: normalizeCurrency(nextTenant.currency),
-                status: standardStatus,
-                paymentMethod: newInv.paymentMethod,
-                paymentGateway: newInv.paymentGateway || inferPaymentGateway(newInv.paymentMethod),
-                transactionCode: newInv.transactionCode || newInv.transactionId,
-                processingFee: newInv.processingFee,
-                netReceived: newInv.netReceived,
-                paymentAttempts: newInv.paymentAttempts,
-                note: newInv.notes || newInv.note,
-                createdAt: newInv.createdAt || new Date().toISOString().slice(0, 10),
-                paidAt: standardStatus === 'PAID' ? (newInv.paidAt || new Date().toISOString().slice(0, 10)) : undefined,
-                billingPeriod: newInv.period || newInv.servicePeriod || 'Tháng dịch vụ'
-              };
-            }).map((invoice) => normalizeInvoicePaymentData(normalizeInvoiceDueDate(invoice)));
-            
-            setInvoices(prevInvoices => dedupeInvoices([...standardNewInvs, ...prevInvoices]));
-          }
-        }
-        
-        return nextTenant;
-      }
-      return t;
-    }));
-
-    if (adminEmail && (nextFields.adminStatus !== undefined || nextFields.status !== undefined)) {
-      setTenantAdmins(prev => prev.map(admin => {
-        if (admin.email.trim().toLowerCase() === adminEmail || (nextFields.tenantAdminId && admin.id === nextFields.tenantAdminId)) {
-          return { ...admin, status: targetAdminStatus };
-        }
-        return admin;
-      }));
+      );
     }
 
-    if (currentTenant) {
-      const changes = buildAuditChanges(currentTenant, nextFields);
-      recordAuditLog({
-        eventCode: 'TENANT.UPDATED',
-        event: 'Cập nhật thông tin tenant',
-        description: `Superadmin đã cập nhật ${changes.length || 1} trường của tenant "${currentTenant.name}".`,
-        severity: nextFields.status || nextFields.packageName ? 'medium' : 'low',
-        status: 'success',
-        category: 'TENANT',
-        resource: `Tenant ${currentTenant.name}`,
-        resourceId: id,
-        method: `CLIENT /tenants/${id}`,
-        changes
-      });
-    }
+    return result;
   };
 
-  const handleDeleteTenant = (id: string) => {
-    const deletedTenant = tenants.find((tenant) => tenant.id === id);
-    if (!deletedTenant) return;
-    const deletedRequests = upgradeRequests.filter((request) => request.tenantId === id);
-    const remainingTenants = tenants.filter((tenant) => tenant.id !== id);
-    const adminStillUsed = remainingTenants.some((tenant) => (
-      tenant.adminEmail.trim().toLowerCase() === deletedTenant.adminEmail.trim().toLowerCase()
-      || (deletedTenant.tenantAdminId && tenant.tenantAdminId === deletedTenant.tenantAdminId)
-    ));
+  /**
+   * Xóa tiệm — BR-TENANT-020/021, xóa mềm ở máy chủ.
+   *
+   * Dữ liệu mẫu của cổng chủ tiệm trong `localStorage` vẫn được dọn theo, vì nó gắn theo tên
+   * tiệm và sẽ hiện nhầm cho tiệm khác trùng tên sau này.
+   */
+  const handleDeleteTenant = async (id: string) => {
+    const target = tenants.find((tenant) => tenant.id === id);
+    const result = await directory.deleteTenant(id);
 
-    setTenants(remainingTenants);
-    setInvoices((current) => current.filter((invoice) => invoice.tenantId !== id));
-    setUpgradeRequests((current) => current.filter((request) => request.tenantId !== id));
-    setAlerts((current) => current.filter((alert) => alert.targetTenantId !== id));
-    setTickets((current) => current.filter((ticket) => ticket.tenantId !== id));
-    setTenantAdmins((current) => current.flatMap((admin) => {
-      if (!admin.tenantIds.includes(id)) return [admin];
-      const tenantIds = admin.tenantIds.filter((tenantId) => tenantId !== id);
-      if (tenantIds.length === 0 && admin.source === 'TENANT') return [];
-      return [{
-        ...admin,
-        tenantIds,
-        tenantCount: tenantIds.length,
-        tenantName: remainingTenants.find((tenant) => tenantIds.includes(tenant.id))?.name || 'Chưa liên kết tiệm'
-      }];
-    }));
-    resetTenantMockStorage(deletedTenant.name);
-    deletedRequests.forEach((request) => {
-      deletePackageUpgradeRequest(request.id);
-    });
-    if (!adminStillUsed) {
-      void deleteManagedAuthAccount(deletedTenant.tenantAdminId || deletedTenant.adminEmail).catch(() => {
-        // The tenant data has already been removed locally; a later sync can retry account cleanup.
+    if (result.status === 'ok' && target) {
+      resetTenantMockStorage(target.name);
+      showToast(`Đã xóa tiệm "${target.name}".`, 'success', {
+        description: 'Mã tiệm vẫn được giữ chỗ; tài khoản chủ tiệm không bị xóa theo.'
       });
     }
-    if (deletedTenant) {
-      recordAuditLog({
-        eventCode: 'TENANT.DELETED',
-        event: 'Xóa tenant',
-        description: `Superadmin đã xóa tenant "${deletedTenant.name}" và các hóa đơn liên kết khỏi dữ liệu trình duyệt.`,
-        severity: 'high',
-        status: 'success',
-        category: 'TENANT',
-        resource: `Tenant ${deletedTenant.name}`,
-        resourceId: id,
-        method: `CLIENT /tenants/${id}`
-      });
-    }
+
+    return result;
   };
 
-  // Toggle tenant status from overview
+  /** Bật/tắt khóa từ màn Tổng quan — cùng một đường ghi với màn Quản lý tiệm. */
   const handleToggleTenantStatusFromOverview = (id: string, newStatus: TenantStatus) => {
     const currentTenant = tenants.find((tenant) => tenant.id === id);
     if (!currentTenant || currentTenant.status === newStatus) return;
-    
-    handleUpdateTenant(id, {
-      status: newStatus,
-      adminStatus: newStatus === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE'
-    });
 
-    showToast(
-      'Đã cập nhật trạng thái',
-      newStatus === 'SUSPENDED' ? 'warning' : 'success',
-      { description: `Tenant "${currentTenant.name}" và tài khoản Tenant Admin đã được chuyển sang trạng thái ${newStatus}.` }
+    void handleChangeTenantStatus(id, newStatus === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE').then(
+      (result) => {
+        if (result.status === 'error') {
+          const { message, tone } = describeApiError(result.error);
+          showToast(message, tone);
+        }
+      }
     );
   };
 
@@ -1137,113 +736,15 @@ export default function App() {
         }
       ] : (paymentDetails.activities || inv.activities)
     }) : inv));
-    
-    // Sync to Tenant state and activate package / extend subscription when invoice is PAID
-    setTenants(prevTenants => prevTenants.map(t => {
-      const isTargetTenant = (currentInvoice && t.id === currentInvoice.tenantId) ||
-        (t.customInvoices && t.customInvoices.some(inv => inv.id === id || inv.invoiceCode === id));
-      
-      if (!isTargetTenant) return t;
 
-      let updatedCustomInvoices = t.customInvoices;
-      if (t.customInvoices) {
-        updatedCustomInvoices = t.customInvoices.map(inv => {
-          if (inv.id === id || inv.invoiceCode === id) {
-            let displayStatus = 'Đang chờ';
-            if (newStatus === 'PAID') displayStatus = 'Đã thanh toán';
-            else if (newStatus === 'OVERDUE') displayStatus = 'Quá hạn';
-            else if (newStatus === 'CANCELLED') displayStatus = 'Đã hủy';
-            return {
-              ...inv,
-              status: displayStatus,
-              paymentMethod: paymentDetails.paymentMethod || inv.paymentMethod,
-              transactionCode: paymentDetails.transactionCode || inv.transactionCode
-            };
-          }
-          return inv;
-        });
-      }
-
-      if (newStatus === 'PAID') {
-        const inv = currentInvoice;
-        const customInv = t.customInvoices?.find(i => i.id === id || i.invoiceCode === id);
-        const invPackageId = inv?.packageId || (customInv as any)?.packageId;
-        const invPlanName = inv?.planName || (customInv as any)?.packageName || (customInv as any)?.planName;
-        const invCycle = inv?.billingCycle || (customInv as any)?.billingCycle || (customInv as any)?.duration;
-        const invCurrency = inv?.currency || (customInv as any)?.currency;
-        const invAmount = inv?.amount || customInv?.amount || 0;
-
-        const isPlanChange = inv?.type === 'PLAN_CHANGE' || Boolean(invPackageId) || Boolean(t.pendingSubscriptionChange);
-        const targetPackage = (invPackageId ? packages.find(p => p.id === invPackageId) : null)
-          || (invPlanName ? getSubscriptionPackage(packages, invPlanName) : null)
-          || (t.pendingSubscriptionChange?.packageId ? packages.find(p => p.id === t.pendingSubscriptionChange?.packageId) : null)
-          || getSubscriptionPackage(packages, t.packageName);
-
-        const cycle = (invCycle || t.pendingSubscriptionChange?.billingCycle || t.billingCycle || 'monthly') as 'monthly' | 'yearly';
-        const cycleDays = getBillingCycleDays(cycle);
-        const pricing = targetPackage ? getSubscriptionPrice(packages, targetPackage.name, cycle) : { price: invAmount || t.subscriptionPrice, currency: t.subscriptionCurrency || 'VND' };
-
-        const paymentActivity = {
-          date: nowFormatted,
-          user: 'Super Admin',
-          type: 'payment',
-          description: `Xác nhận thanh toán hóa đơn ${inv?.invoiceCode || customInv?.invoiceCode || id} (${(invAmount || pricing.price).toLocaleString('vi-VN')} ${invCurrency || pricing.currency}). ${isPlanChange && targetPackage ? `Gói ${targetPackage.name} đã kích hoạt toàn diện.` : 'Dịch vụ đã được gia hạn.'}`
-        };
-
-        const nextStatus: TenantStatus = t.status === 'SUSPENDED' && t.paymentStatus === 'OVERDUE' ? 'ACTIVE' : t.status === 'OVERDUE' || t.status === 'EXPIRING' || t.status === 'TRIAL' ? 'ACTIVE' : t.status;
-
-        if (isPlanChange && targetPackage) {
-          return {
-            ...t,
-            packageName: targetPackage.name,
-            plan: targetPackage.name,
-            subscriptionPlan: targetPackage.name,
-            subscriptionPackageId: targetPackage.id,
-            subscriptionPackageVersion: targetPackage.version || 1,
-            subscriptionPrice: pricing.price,
-            subscriptionCurrency: pricing.currency,
-            billingCycle: cycle,
-            planStartDate: now.slice(0, 10),
-            subscriptionStartedAt: now.slice(0, 10),
-            subscriptionRenewsAt: getIsoDateAfterDays(cycleDays),
-            daysRemaining: cycleDays,
-            status: nextStatus,
-            paymentStatus: 'PAID',
-            pendingSubscriptionChange: undefined,
-            allowOnlineBooking: targetPackage.capabilities?.some(c => c.key === 'online_booking' && c.enabled) ?? true,
-            customInvoices: updatedCustomInvoices,
-            customActivities: [paymentActivity, ...(t.customActivities || [])],
-            lastSync: now
-          };
-        } else {
-          return {
-            ...t,
-            status: nextStatus,
-            paymentStatus: 'PAID',
-            subscriptionRenewsAt: getIsoDateAfterDays(cycleDays),
-            daysRemaining: cycleDays,
-            customInvoices: updatedCustomInvoices,
-            customActivities: [paymentActivity, ...(t.customActivities || [])],
-            lastSync: now
-          };
-        }
-      }
-
-      if (newStatus === 'OVERDUE') {
-        return {
-          ...t,
-          paymentStatus: 'OVERDUE',
-          customInvoices: updatedCustomInvoices,
-          lastSync: now
-        };
-      }
-
-      return {
-        ...t,
-        customInvoices: updatedCustomInvoices,
-        lastSync: now
-      };
-    }));
+    // Ở đây từng có một khối dài sửa luôn tiệm khi hóa đơn chuyển sang ĐÃ THU: kích hoạt gói
+    // mới, đẩy ngày gia hạn, mở khóa tiệm. Khối đó đã được gỡ ở ngày 6.
+    //
+    // Lý do không phải là dọn dẹp mà là tính trung thực: hóa đơn đăng ký vẫn nằm ở
+    // `localStorage` (module gói đăng ký đã bị cắt khỏi MVP), trong khi tiệm nay do máy chủ
+    // giữ. Một thao tác ở trình duyệt không thể gia hạn một tiệm thật; nếu vẫn để, màn hình
+    // sẽ báo "đã gia hạn" rồi tải lại trang là mọi thứ trở về như cũ. Gia hạn thật nằm ở nút
+    // Gia hạn của màn Quản lý tiệm, gọi thẳng `POST /api/tenants/{id}/renew` (BR-TENANT-006).
 
     // If there's an upgrade request linked to this invoice, finalize it to APPROVED
     if (newStatus === 'PAID' && currentInvoice) {
@@ -1326,273 +827,16 @@ export default function App() {
     return true;
   };
 
-  // Subscription update pricing/features
-  const handleUpdatePackage = (id: string, updatedFields: Partial<SubscriptionPackage>) => {
-    const currentPackage = packages.find((pkg) => pkg.id === id);
-    if (!currentPackage) return;
-
-    const packageHasTenants = tenants.some((tenant) => tenant.subscriptionPackageId === id || tenant.packageName === currentPackage.name);
-    if (packageHasTenants && updatedFields.status === 'ARCHIVED') {
-      showToast('Không thể lưu trữ ngay gói đang có tenant. Hãy dùng “Ngừng đăng ký” và chọn gói thay thế.', 'error');
-      return;
-    }
-    if (packageHasTenants && updatedFields.status === 'DEPRECATED' && !currentPackage.retirementRequest) {
-      showToast('Gói đang có tenant sử dụng. Hãy tạo yêu cầu “Ngừng đăng ký” để tenant được chuyển an toàn khi hết hạn.', 'warning');
-      return;
-    }
-
-    const nextName = updatedFields.name?.trim() || currentPackage.name;
-    const duplicateName = packages.some((pkg) => pkg.id !== id && pkg.name.toLowerCase() === nextName.toLowerCase());
-    if (duplicateName) {
-      showToast(`Gói dịch vụ "${nextName}" đã tồn tại.`, 'error');
-      return;
-    }
-
-    const nextMonthlyPrice = updatedFields.price ?? currentPackage.price;
-    const nextYearlyPrice = updatedFields.yearlyPrice
-      ?? (updatedFields.price !== undefined ? Number((nextMonthlyPrice * 12 * (1 - (updatedFields.yearlyDiscountPercent ?? currentPackage.yearlyDiscountPercent ?? 0) / 100)).toFixed(2)) : getYearlyPackagePrice(currentPackage));
-    const priceChanged = nextMonthlyPrice !== currentPackage.price
-      || nextYearlyPrice !== getYearlyPackagePrice(currentPackage)
-      || (updatedFields.currency && updatedFields.currency !== currentPackage.currency);
-    const nextVersion = (currentPackage.version || 1) + 1;
-    const nextPackage = normalizeSubscriptionPackage({
-      ...currentPackage,
-      ...updatedFields,
-      name: nextName,
-      yearlyPrice: nextYearlyPrice,
-      retirementRequest: updatedFields.status === 'ACTIVE' ? undefined : (updatedFields.retirementRequest ?? currentPackage.retirementRequest),
-      version: nextVersion,
-      updatedAt: new Date().toISOString(),
-      priceHistory: priceChanged
-        ? [
-            {
-              id: `PRICE-${Date.now()}`,
-              monthlyPrice: currentPackage.price,
-              yearlyPrice: getYearlyPackagePrice(currentPackage),
-              currency: currentPackage.currency || 'USD',
-              effectiveFrom: currentPackage.updatedAt?.slice(0, 10) || currentPackage.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-              note: 'Phiên bản giá trước; tenant đã đăng ký tiếp tục dùng giá đã khóa.'
-            },
-            ...(currentPackage.priceHistory || [])
-          ]
-        : currentPackage.priceHistory
-    });
-
-    setPackages((current) => current.map((pkg) => pkg.id === id ? nextPackage : pkg));
-
-    const packageChanges = buildAuditChanges(currentPackage, updatedFields);
-    recordAuditLog({
-      eventCode: priceChanged ? 'PACKAGE.PRICE.UPDATED' : 'PACKAGE.UPDATED',
-      event: priceChanged ? 'Cập nhật giá gói dịch vụ' : 'Cập nhật gói dịch vụ',
-      description: `Superadmin đã cập nhật gói "${currentPackage.name}" lên phiên bản ${nextVersion}.`,
-      severity: priceChanged || updatedFields.status ? 'medium' : 'low',
-      status: 'success',
-      category: 'PACKAGE',
-      resource: `Gói ${currentPackage.name}`,
-      resourceId: id,
-      method: `CLIENT /packages/${id}`,
-      changes: packageChanges,
-      metadata: { version: nextVersion, priceChanged }
-    });
-
-    if (nextName !== currentPackage.name) {
-      setTenants((current) => current.map((tenant) => (
-        tenant.subscriptionPackageId === id || tenant.packageName === currentPackage.name
-          ? {
-              ...tenant,
-              packageName: nextName,
-              plan: nextName,
-              subscriptionPlan: nextName
-            }
-          : tenant
-      )));
-      setInvoices((current) => current.map((invoice) => (
-        invoice.packageId === id || invoice.planName === currentPackage.name
-          ? { ...invoice, packageId: id }
-          : invoice
-      )));
-    }
-  };
-
-  const handleAddPackage = (newPackage: Omit<SubscriptionPackage, 'id' | 'activeTenants'>) => {
-    const normalizedName = newPackage.name.trim();
-    const isDuplicate = packages.some(p => p.name.toLowerCase() === normalizedName.toLowerCase());
-
-    if (isDuplicate) {
-      showToast(`Gói dịch vụ "${normalizedName}" đã tồn tại.`, 'error');
-      return;
-    }
-
-    setPackages((current) => [
-      ...current,
-      normalizeSubscriptionPackage({
-        ...newPackage,
-        id: `PKG-${Date.now()}`,
-        name: normalizedName,
-        activeTenants: 0,
-        status: newPackage.status || 'DRAFT',
-        version: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      })
-    ]);
-    recordAuditLog({
-      eventCode: 'PACKAGE.CREATED',
-      event: 'Tạo gói dịch vụ',
-      description: `Superadmin đã tạo gói "${normalizedName}" ở trạng thái ${newPackage.status || 'DRAFT'}.`,
-      severity: 'medium',
-      status: 'success',
-      category: 'PACKAGE',
-      resource: `Gói ${normalizedName}`,
-      method: 'CLIENT /packages',
-      metadata: { status: newPackage.status || 'DRAFT', monthlyPrice: newPackage.price }
-    });
-    showToast(`Đã thêm gói dịch vụ "${normalizedName}" thành công!`);
-  };
-
-  const handleDeprecatePackage = (id: string) => {
-    const targetPackage = packages.find(p => p.id === id);
-    setPackages(packages.map(p => p.id === id ? { ...p, status: 'DEPRECATED' } : p));
-    if (targetPackage) recordAuditLog({
-      eventCode: 'PACKAGE.DEPRECATED', event: 'Ngừng cung cấp gói dịch vụ',
-      description: `Gói "${targetPackage.name}" ngừng nhận đăng ký mới.`, severity: 'medium', status: 'success',
-      category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id, method: `CLIENT /packages/${id}/deprecate`,
-      changes: [{ field: 'status', before: targetPackage.status || 'ACTIVE', after: 'DEPRECATED' }]
-    });
-    showToast(`Đã ngưng cung cấp gói "${targetPackage?.name || id}". Các tenant đang dùng vẫn được giữ nguyên.`);
-  };
-
-  const handleSchedulePackageRetirement = (id: string, replacementPackageName: string) => {
-    const targetPackage = packages.find((pkg) => pkg.id === id);
-    const replacementPackage = getSubscriptionPackage(packages, replacementPackageName);
-    if (!targetPackage || !replacementPackage || replacementPackage.id === id || (replacementPackage.status || 'ACTIVE') !== 'ACTIVE') {
-      showToast('Vui lòng chọn một gói thay thế đang hoạt động.', 'error');
-      return;
-    }
-
-    const affectedTenants = tenants.filter((tenant) => (
-      tenant.subscriptionPackageId === id || tenant.packageName === targetPackage.name
-    ));
-    if (affectedTenants.length === 0) {
-      handleDeprecatePackage(id);
-      return;
-    }
-
-    const incompatibleTenant = affectedTenants.find((tenant) => (
-      (tenant.branches?.length || 1) > replacementPackage.maxSalons
-      || Number(tenant.staffCount || 0) > replacementPackage.maxStaff
-    ));
-    if (incompatibleTenant) {
-      showToast(`Gói ${replacementPackage.name} không đủ hạn mức cho tenant "${incompatibleTenant.name}". Vui lòng chọn gói thay thế khác.`, 'error');
-      return;
-    }
-
-    setPackages((currentPackages) => currentPackages.map((pkg) => pkg.id === id ? {
-      ...pkg,
-      status: 'DEPRECATED',
-      retirementRequest: {
-        requestedAt: new Date().toISOString(),
-        replacementPackageId: replacementPackage.id,
-        replacementPackageName: replacementPackage.name,
-        affectedTenantIds: affectedTenants.map((tenant) => tenant.id),
-        mode: 'AT_TENANT_EXPIRY'
-      },
-      updatedAt: new Date().toISOString()
-    } : pkg));
-    recordAuditLog({
-      eventCode: 'PACKAGE.RETIREMENT.SCHEDULED', event: 'Lập lịch ngừng gói dịch vụ',
-      description: `${affectedTenants.length} tenant sẽ được chuyển từ "${targetPackage.name}" sang "${replacementPackage.name}" khi hết hạn.`,
-      severity: 'high', status: 'success', category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id,
-      method: `CLIENT /packages/${id}/retirement`, metadata: { replacementPackage: replacementPackage.name, affectedTenants: affectedTenants.length }
-    });
-    showToast(`Đã ngừng nhận đăng ký mới cho gói "${targetPackage.name}". ${affectedTenants.length} tenant hiện tại sẽ tự chuyển sang "${replacementPackage.name}" khi hết hạn.`);
-  };
-
-  const handleCancelPackageRetirement = (id: string) => {
-    const targetPackage = packages.find((pkg) => pkg.id === id);
-    if (!targetPackage?.retirementRequest) return;
-    setPackages((currentPackages) => currentPackages.map((pkg) => pkg.id === id ? {
-      ...pkg,
-      status: 'ACTIVE',
-      retirementRequest: undefined,
-      updatedAt: new Date().toISOString()
-    } : pkg));
-    recordAuditLog({
-      eventCode: 'PACKAGE.RETIREMENT.CANCELLED', event: 'Hủy lịch ngừng gói dịch vụ',
-      description: `Đã mở lại đăng ký và hủy lịch chuyển tenant của gói "${targetPackage.name}".`, severity: 'medium', status: 'success',
-      category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id, method: `CLIENT /packages/${id}/retirement`
-    });
-    showToast(`Đã mở lại đăng ký cho gói "${targetPackage.name}". Các lịch chuyển gói đang chờ đã được hủy.`);
-  };
-
-  const handleReactivatePackage = (id: string) => {
-    const targetPackage = packages.find(p => p.id === id);
-    setPackages(packages.map(p => p.id === id ? { ...p, status: 'ACTIVE', retirementRequest: undefined } : p));
-    if (targetPackage) recordAuditLog({
-      eventCode: 'PACKAGE.REACTIVATED', event: 'Mở bán lại gói dịch vụ', description: `Gói "${targetPackage.name}" được chuyển về trạng thái hoạt động.`,
-      severity: 'medium', status: 'success', category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id,
-      method: `CLIENT /packages/${id}/reactivate`, changes: [{ field: 'status', before: targetPackage.status || 'DEPRECATED', after: 'ACTIVE' }]
-    });
-    showToast(`Đã mở bán lại gói "${targetPackage?.name || id}".`);
-  };
-
-  const handleDeletePackage = (id: string) => {
-    const targetPackage = packages.find(p => p.id === id);
-    if (!targetPackage) return;
-    const hasTenants = tenants.some((tenant) => tenant.subscriptionPackageId === id || tenant.packageName === targetPackage.name);
-    if (hasTenants) {
-      showToast('Không thể xóa gói đang có tenant sử dụng. Hãy chuyển tenant sang gói khác hoặc lưu trữ gói này.', 'error');
-      return;
-    }
-    setPackages(packages.filter(p => p.id !== id));
-    recordAuditLog({
-      eventCode: 'PACKAGE.DELETED', event: 'Xóa gói dịch vụ', description: `Superadmin đã xóa gói "${targetPackage.name}" không còn tenant sử dụng.`,
-      severity: 'high', status: 'success', category: 'PACKAGE', resource: `Gói ${targetPackage.name}`, resourceId: id, method: `CLIENT /packages/${id}`
-    });
-    showToast(`Đã xóa gói dịch vụ "${targetPackage?.name || id}".`);
-  };
-
-  const handleTenantAdminsChange = (nextAdmins: TenantAdminAccount[]) => {
-    const added = nextAdmins.filter((admin) => !tenantAdmins.some((current) => current.id === admin.id));
-    const removed = tenantAdmins.filter((admin) => !nextAdmins.some((current) => current.id === admin.id));
-    const updated = nextAdmins.filter((admin) => {
-      const current = tenantAdmins.find((item) => item.id === admin.id);
-      return current && JSON.stringify(current) !== JSON.stringify(admin);
-    });
-    setTenantAdmins(nextAdmins);
-    [...added, ...updated].forEach(syncAdminAuthAccount);
-    removed.forEach((admin) => {
-      void deleteManagedAuthAccount(admin.id).catch(() => {
-        // Local removal remains visible while server cleanup can be retried later.
-      });
-    });
-
-    if (added.length > 0) {
-      const admin = added[0];
-      recordAuditLog({
-        eventCode: 'USER.TENANT_ADMIN.INVITED', event: 'Tạo hoặc mời Tenant Admin',
-        description: `Đã thêm tài khoản Tenant Admin ${admin.email}${added.length > 1 ? ` và ${added.length - 1} tài khoản khác` : ''}.`,
-        severity: 'medium', status: 'success', category: 'USER', resource: `Tenant Admin ${admin.email}`, resourceId: admin.id,
-        method: 'CLIENT /tenant-admins', metadata: { addedAccounts: added.length, role: admin.role }
-      });
-    } else if (removed.length > 0) {
-      const admin = removed[0];
-      recordAuditLog({
-        eventCode: 'USER.TENANT_ADMIN.DELETED', event: 'Xóa Tenant Admin',
-        description: `Đã xóa tài khoản Tenant Admin ${admin.email}${removed.length > 1 ? ` và ${removed.length - 1} tài khoản khác` : ''}.`,
-        severity: 'high', status: 'success', category: 'USER', resource: `Tenant Admin ${admin.email}`, resourceId: admin.id,
-        method: `CLIENT /tenant-admins/${admin.id}`, metadata: { removedAccounts: removed.length }
-      });
-    } else if (updated.length > 0) {
-      const admin = updated[0];
-      recordAuditLog({
-        eventCode: 'USER.TENANT_ADMIN.UPDATED', event: 'Cập nhật Tenant Admin',
-        description: `Đã cập nhật tài khoản Tenant Admin ${admin.email}${updated.length > 1 ? ` và ${updated.length - 1} tài khoản khác` : ''}.`,
-        severity: 'medium', status: 'success', category: 'USER', resource: `Tenant Admin ${admin.email}`, resourceId: admin.id,
-        method: `CLIENT /tenant-admins/${admin.id}`, metadata: { updatedAccounts: updated.length, status: admin.status, role: admin.role }
-      });
-    }
-  };
+  // Ở đây từng có bảy hàm quản lý gói dịch vụ — thêm, sửa giá, ngừng bán, hẹn ngừng, hủy hẹn,
+  // mở bán lại, xóa — cộng một hàm quản lý tài khoản chủ tiệm. Tất cả đã được gỡ ở ngày 6.
+  //
+  // Bảng giá nay đọc từ `GET /api/packages`, và danh sách tài khoản chủ tiệm từ
+  // `GET /api/accounts`. Cả hai endpoint đều CHỈ ĐỌC, vì module quản lý gói đã bị cắt khỏi
+  // MVP và phần cấp tài khoản nằm ở lát cắt sau. Giữ lại các hàm ghi ấy nghĩa là để người
+  // dùng đổi giá một gói, thấy màn hình cập nhật, rồi mất trắng khi tải lại trang — trong khi
+  // tiệm thật ở máy chủ vẫn giữ nguyên giá cũ đã khóa từ lúc đăng ký (BR-SUB-004).
+  //
+  // Hai màn hình tương ứng nay ở chế độ chỉ xem và nói rõ điều đó ngay trên đầu trang.
 
   const handleRequestPackageUpgrade = (
     tenant: Tenant,
@@ -1632,26 +876,10 @@ export default function App() {
       requestedAt: now.toISOString()
     };
 
+    // Yêu cầu nâng gói ở lại `localStorage`: module gói đăng ký nằm ngoài MVP (quyết định
+    // 20). Yêu cầu KHÔNG còn được ghi kèm lên bản ghi tiệm nữa — tiệm do máy chủ giữ, và một
+    // "thay đổi gói đang chờ" chỉ tồn tại trong trình duyệt sẽ biến mất khi tải lại trang.
     setUpgradeRequests((current) => [request, ...current]);
-    setTenants((prevTenants) => prevTenants.map((t) => {
-      if (t.id === tenant.id) {
-        return {
-          ...t,
-          pendingSubscriptionChange: {
-            requestId: request.id,
-            packageName: targetPackage.name,
-            packageId: targetPackage.id,
-            packageVersion: targetPackage.version || 1,
-            billingCycle,
-            price: pricing.price,
-            currency: pricing.currency,
-            effectiveAt: effectiveDate === 'immediate' ? now.toISOString().slice(0, 10) : (t.subscriptionRenewsAt || now.toISOString().slice(0, 10)),
-            requestedAt: now.toISOString()
-          }
-        };
-      }
-      return t;
-    }));
 
     persistPackageUpgradeRequest(request);
     setAlerts((current) => [{
@@ -1747,43 +975,16 @@ export default function App() {
     // chờ xác nhận, và màn hình đã nói rõ đây là dữ liệu mẫu.
     persistPackageUpgradeReview(reviewedRequest);
 
-    if (decision === 'APPROVED' && pricing) {
-      if (effectiveDate === 'immediate') {
-        handleUpdateTenant(tenant.id, {
-          packageName: targetPackage.name,
-          plan: targetPackage.name,
-          subscriptionPlan: targetPackage.name,
-          billingCycle: request.billingCycle,
-          effectiveDate,
-          planStartDate: effectiveStart,
-          subscriptionPrice: pricing.price,
-          subscriptionCurrency: pricing.currency,
-          pendingSubscriptionChange: undefined
-        });
-      } else {
-        handleUpdateTenant(tenant.id, {
-          effectiveDate,
-          pendingSubscriptionChange: {
-            requestId: request.id,
-            packageId: targetPackage.id,
-            packageName: targetPackage.name,
-            packageVersion: targetPackage.version || 1,
-            billingCycle: request.billingCycle,
-            price: pricing.price,
-            currency: pricing.currency,
-            effectiveAt: effectiveStart,
-            requestedAt: reviewedAt
-          }
-        });
-      }
-      if (invoice) setInvoices((current) => dedupeInvoices([invoice!, ...current]));
+    // Duyệt một yêu cầu KHÔNG còn đổi gói của tiệm. Đổi gói là thao tác ghi trên tiệm, mà
+    // tiệm nay do máy chủ giữ và không có endpoint đổi gói — module gói đăng ký đã bị cắt.
+    // Hóa đơn kèm theo vẫn được lập ở `localStorage` như trước, vì hóa đơn đăng ký cũng nằm
+    // trong module bị cắt và màn hình đã gắn nhãn dữ liệu mẫu.
+    if (decision === 'APPROVED' && pricing && invoice) {
+      setInvoices((current) => dedupeInvoices([invoice, ...current]));
     }
 
     setUpgradeRequests((current) => current.map((item) => item.id === requestId ? reviewedRequest : item));
     persistPackageUpgradeReview(reviewedRequest);
-    if (decision === 'REJECTED') {
-      setTenants((prevTenants) => prevTenants.map((t) => (t.id === tenant.id ? { ...t, pendingSubscriptionChange: undefined } : t)));
-    }
     recordAuditLog({
       eventCode: decision === 'APPROVED' ? 'PACKAGE.UPGRADE.APPROVED' : 'PACKAGE.UPGRADE.REJECTED',
       event: decision === 'APPROVED' ? 'Duyệt yêu cầu nâng cấp' : 'Từ chối yêu cầu nâng cấp',
@@ -1830,10 +1031,6 @@ export default function App() {
     );
     persistPackageUpgradeReview(updatedRequest);
 
-    setTenants((prevTenants) =>
-      prevTenants.map((t) => (t.id === request.tenantId ? { ...t, pendingSubscriptionChange: undefined } : t))
-    );
-
     setAlerts((current) => current.filter((alert) => alert.id !== `ALT-${requestId}`));
     showToast('Đã hủy yêu cầu', 'info', { description: 'Yêu cầu nâng cấp gói đã được hủy bỏ.' });
   };
@@ -1870,24 +1067,8 @@ export default function App() {
       })
     );
 
-    setTenants((current) =>
-      current.map((tenant) => {
-        if (!tenant.customInvoices?.some((inv) => inv.id === invoiceId || inv.invoiceCode === invoiceId)) return tenant;
-        return {
-          ...tenant,
-          customInvoices: tenant.customInvoices.map((inv) => {
-            if (inv.id !== invoiceId && inv.invoiceCode !== invoiceId) return inv;
-            return {
-              ...inv,
-              transactionCode: proof.transactionCode || inv.transactionCode,
-              paymentProofUrl: proof.paymentProofUrl || inv.paymentProofUrl,
-              paymentProofNote: proof.paymentProofNote || inv.paymentProofNote,
-              paymentProofSubmittedAt: nowIso
-            };
-          })
-        };
-      })
-    );
+    // Bản sao chứng từ trên bản ghi tiệm (`tenant.customInvoices`) đã được bỏ: máy chủ không
+    // lưu trường đó, nên ghi vào đấy chỉ là ghi vào một bản sao trong bộ nhớ.
 
     setAlerts((current) => [
       {
@@ -1908,7 +1089,16 @@ export default function App() {
 
   // Dynamic Badge counts to supply to sidebar
   const badgeCounts = {
-    expiringSalons: tenants.filter(t => t.status === 'EXPIRING').length,
+    // BR-TENANT-001 đã bỏ trạng thái `EXPIRING`, nên huy hiệu này không còn đếm theo trạng
+    // thái nữa mà đếm theo số ngày còn lại thật do máy chủ tính. Ngưỡng bảy ngày là quy ước
+    // của giao diện — nó chỉ quyết định khi nào hiện lời nhắc, không quyết định quyền gì cả.
+    // Tiệm đã quá hạn có `daysRemaining` âm và không được tính vào đây: chúng đã sang trạng
+    // thái `OVERDUE` và hiện ở cột trạng thái, nhắc thêm một lần nữa là nhắc thừa.
+    expiringSalons: tenants.filter((tenant) => (
+      tenant.daysRemaining !== undefined
+      && tenant.daysRemaining >= 0
+      && tenant.daysRemaining <= EXPIRING_SOON_DAYS
+    )).length,
     overdueInvoices: invoices.filter(i => i.status === 'OVERDUE').length,
     unreadAlerts: alerts.filter(a => !a.isRead).length,
     openTickets: tickets.filter(t => !['RESOLVED', 'CLOSED'].includes(t.status)).length,
@@ -1936,12 +1126,17 @@ export default function App() {
         );
       case 'salons':
         return (
-          <TenantManagement 
+          <TenantManagement
             tenants={tenants}
             packages={packages}
             tenantAdmins={tenantAdmins}
+            loading={directory.loading}
+            loadError={directory.error}
+            onReload={directory.reload}
             onAddTenant={handleAddTenant}
             onUpdateTenant={handleUpdateTenant}
+            onRenewTenant={handleRenewTenant}
+            onChangeTenantStatus={handleChangeTenantStatus}
             onDeleteTenant={handleDeleteTenant}
             selectedTenantFromOverview={selectedTenantFromOverview}
             clearSelectedTenant={() => setSelectedTenantFromOverview(null)}
@@ -1953,21 +1148,14 @@ export default function App() {
           />
         );
       case 'admins':
-        return <TenantAdminManagement tenants={tenants} packages={packages} invitedAdmins={tenantAdmins} onInvitedAdminsChange={handleTenantAdminsChange} onUpdateTenant={handleUpdateTenant} showConfirm={triggerConfirm} />;
+        return <TenantAdminManagement tenants={tenants} packages={packages} invitedAdmins={tenantAdmins} showConfirm={triggerConfirm} />;
       case 'packages':
         return (
-          <SubscriptionPackages 
+          <SubscriptionPackages
             packages={packages}
             invoices={invoices}
             tenants={tenants}
             reportCurrency={systemSettings.general.currency}
-            onAddPackage={handleAddPackage}
-            onUpdatePackage={handleUpdatePackage}
-            onDeprecatePackage={handleDeprecatePackage}
-            onSchedulePackageRetirement={handleSchedulePackageRetirement}
-            onCancelPackageRetirement={handleCancelPackageRetirement}
-            onReactivatePackage={handleReactivatePackage}
-            onDeletePackage={handleDeletePackage}
           />
         );
       case 'billing':

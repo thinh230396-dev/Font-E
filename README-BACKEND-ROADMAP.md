@@ -135,34 +135,67 @@ server/
 ```
 NailManagement.slnx
   NailManagement.Domain/          ◄── Enterprise Business Rules — không tham chiếu project nào
-    Entities/                       AppUser, AppSession
-    ValueObjects/                   Email, RawPassword
-    Enums/                          UserRole, AccountStatus
-    Policies/                       AuthPolicy (5 lần sai, khóa 15 phút, phiên 8h/30 ngày)
-    Repositories/                   ★ PORT: IUserRepository, ISessionRepository
-    Common/                         ErrorCode, AppException, DomainException
+    Entities/
+      Auth/                         AppUser, AppSession, UserTenant
+      Platform/                     Tenant, Package, SubscriptionInvoice, PackageUpgradeRequest
+      Salon/                        Branch, Staff, Service, Customer, Appointment,
+                                    AppointmentService, SalesInvoice, SalesInvoiceLine,
+                                    InvoicePayment, InvoiceCounter
+      Auditing/                     AuditLog
+    Enums/
+      Auth/                         UserRole, AccountStatus, AccessLevel, Feature
+      Platform/                     TenantStatus, TenantDisplayStatus, PackageStatus,
+                                    BillingCycle, SubscriptionInvoiceStatus, UpgradeRequestStatus
+      Salon/                        BranchStatus, StaffRole, AppointmentStatus, PaymentMethod…
+      Auditing/                     AuditEvent
+    ValueObjects/                   Email, PhoneNumber, RawPassword
+    Policies/                       AuthPolicy, PermissionMatrix, AppointmentSchedulePolicy…
+    Repositories/                   ★ PORT: IUserRepository, ITenantRepository, IBranchRepository…
+    Common/                         ErrorCode, AppException, DomainException, Guard, ITenantOwned
 
   NailManagement.Application/     ◄── tham chiếu Domain
-    UseCases/Auth/                  LoginUseCase, GetCurrentAccountUseCase, LogoutUseCase
-    DTOs/                           AccountDto, LoginCommand, LoginResult…
+    UseCases/                       chia theo lát cắt: Auth/, Tenants/, Branches/,
+                                    Packages/, Accounts/, Audit/
+    DTOs/                           AuthDtos, TenantDtos, BranchDtos, PackageDtos,
+                                    AccountDto, AuditLogDto, ActorContext
     Mappings/                       AccountMapper — chặn PasswordHash lọt ra ngoài
-    Abstractions/                   IPasswordHasher, IClock, IIdGenerator
+    Abstractions/                   IPasswordHasher, IClock, IIdGenerator, IUnitOfWork…
     Common/Exceptions/              InvalidCredentials, AccountLocked, Unauthenticated…
     DependencyInjection.cs          AddApplication()
 
   NailManagement.Infrastructure/  ◄── tham chiếu Application + Domain
-    Persistence/                    NailDbContext, Configurations/, Repositories/,
-                                    Migrations/, Seed/
-    Security/                       Pbkdf2PasswordHasher
+    Persistence/
+      NailDbContext.cs              bộ lọc theo tiệm nằm ở đây (BR-ISO-002)
+      Configurations/               chia Auth/ Platform/ Salon/ Auditing/ — soi gương Entities/
+      Repositories/                 bản cài đặt của các cổng ở Domain
+      Migrations/                   EF Core sinh ra; không sắp xếp lại
+      Seed/                         DemoAccountSeeder, DemoDataSeeder, DemoSeedCatalog
+      TenantScope/                  AmbientTenantContext
+    Auditing/                       AuditLogger
+    Security/                       Pbkdf2PasswordHasher, RandomPasswordGenerator
     SystemServices/                 SystemClock, GuidIdGenerator
     DependencyInjection.cs          AddInfrastructure() — nơi cắm cổng vào bản cài đặt
 
   NailManagement.API/             ◄── Frameworks & Drivers, tham chiếu Application + Infrastructure
-    Controllers/AuthController.cs   mỏng: đọc HTTP, gọi use case, đặt cookie
+    Controllers/                    Auth, Tenants, Branches, Packages, Accounts, AuditLogs
+    Security/                       attribute phân quyền + middleware phiên và chặn ghi
     Common/ApiExceptionHandler.cs   ★ nơi DUY NHẤT ánh xạ mã lỗi sang HTTP status
     Common/ErrorResponse.cs
     Program.cs                      composition root + áp migration + seed
 ```
+
+**Trục chia thư mục — ba nhóm nghiệp vụ, dùng chung cho cả ba tầng.** `Entities/`, `Enums/` và
+`Configurations/` đều chia theo đúng bốn nhóm mà §3.2 dùng khi liệt kê bảng database: `Auth`
+(xác thực) · `Platform` (nền tảng: tiệm, gói, hóa đơn đăng ký) · `Salon` (nghiệp vụ trong tiệm) ·
+`Auditing` (nhật ký). Dùng lại đúng từ vựng đã có nghĩa là không ai phải học một cách phân loại
+thứ hai, và ba thư mục soi gương nhau nên tìm `BranchConfiguration` chỉ cần biết `Branch` nằm ở đâu.
+
+> Nhóm nhật ký tên là **`Auditing`**, không phải `System`. Đây là ràng buộc của C# chứ không phải
+> sở thích: một namespace con tên `System` khiến mọi tham chiếu `System.X` bên trong nhánh đó bị
+> tra vào chính nó trước, nên `System.DateTimeOffset` sẽ không biên dịch được.
+
+Hai thư mục cố ý **không** chia: `Migrations/` do EF Core sinh và quản lý, còn `DTOs/` chỉ có bảy
+tệp — chia ra thì mỗi nhóm còn đúng một tệp, đó là chia nhỏ quá mức.
 
 **Ba chỗ then chốt, để tra nhanh khi viết báo cáo:**
 
@@ -901,3 +934,101 @@ taskkill /F /IM NailManagement.API.exe ; dotnet run --project NailManagement.API
 #### Chỗ thiếu cần biết trước khi làm ngày 6
 
 **Chưa có endpoint liệt kê tài khoản chủ tiệm.** Chế độ `owner.mode = "existing"` của BR-TENANT-004 đòi `existingUserId`, nhưng không API nào trả về danh sách tài khoản chủ tiệm để màn hình Superadmin cho chọn. Ngày 6 hoặc chỉ nối được nhánh "tạo tài khoản mới", hoặc phải kéo phần liệt kê tài khoản của ngày 7 lên sớm.
+
+### Ngày 6 — xong
+
+Tám quyết định chốt đầu ngày, tất cả đều theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 23 | **Một nguồn duy nhất**: cả bảy màn của Superadmin đọc tiệm từ `GET /api/tenants` | Gỡ được hai danh sách tiệm song song. Kéo theo: gỡ `monthlyRevenue` khỏi kiểu `Tenant`, và mọi khối doanh thu tiệm ở Tổng quan / Báo cáo phải đổi nguồn |
+| 24 | **Kéo `GET /api/accounts` của ngày 7 lên ngày 6** | Mở được nhánh "giao tiệm cho chủ tiệm đã có" (BR-TENANT-004), và màn Quản lý chủ tiệm có danh sách thật |
+| 25 | **Bỏ khỏi biểu mẫu** những ô máy chủ không lưu | Form tạo tiệm còn 12 ô thay vì 29. Nhập gì lưu nấy |
+| 26 | `BranchCode` — **chỉ nới kiểu ở ranh giới**, chưa gỡ ở 9 màn mức C | Xong phần rẻ, hoãn phần đắt sang ngày 8 |
+| 27 | Doanh thu ở Tổng quan / Báo cáo đổi sang **doanh thu nền tảng** từ hóa đơn đăng ký (BR-REV-008) | Nhãn đổi từ "doanh thu tiệm" sang "đã thu từ tiệm" cho đúng bản chất |
+| 28 | Huy hiệu "sắp hết hạn" đếm theo `daysRemaining ≤ 7` | Ngưỡng 7 ngày là quy ước của giao diện, ghi rõ ở `EXPIRING_SOON_DAYS` trong `App.tsx` |
+| 29 | Modal chi tiết **giữ tab, hiện trạng thái trống** | Tab Chi nhánh và Hoạt động nói thẳng "chưa nối máy chủ" thay vì dựng danh sách không có thật |
+| 30 | **Sửa lỗi 403** bằng một phép kiểm quyền chạy sớm | Gỡ được việc treo số 3 sau ngày 5 |
+
+**Backend — 1 endpoint mới, 2 chỗ vá:**
+
+| Hạng mục | Kết quả |
+|---|---|
+| `GET /api/accounts?role=TENANT_ADMIN` — chỉ đọc, chỉ Superadmin. Use case `ListTenantAdminAccountsUseCase`, DTO `TenantAdminAccountDto`, cổng mới `IUserRepository.ListByRoleAsync` và `IUserTenantRepository.ListTenantIdsByUserAsync` | Xong, `dotnet build` 0 lỗi 0 cảnh báo |
+| **Quyết định 30** — `RequirePermissionAttribute` từ chối sớm khi vai trò không có ô nào trong ma trận | Xong. Superadmin gọi `/api/branches` nay nhận `403 FORBIDDEN` thay vì "Chưa chọn tiệm để làm việc". Thứ tự bốn bước BR-TENANT-013 **không đổi** với vai trò *có* ô — chủ tiệm chưa chọn tiệm vẫn nhận đúng `TENANT_NOT_SELECTED` |
+| 🔴 **Lỗi ngày 5 lộ ra khi nối giao diện** — `ListOwnersAsync` không lọc theo vai trò | Đã vá, xem mục dưới |
+
+**Frontend — 13 tệp:**
+
+| Hạng mục | Kết quả |
+|---|---|
+| `src/services/tenants.ts` — tầng gọi API cho tiệm, gói và tài khoản chủ tiệm | Mới |
+| `src/hooks/useTenants.ts` — **chỗ duy nhất** chuyển `TenantDetailDto` sang `Tenant`; nạp ba danh sách song song, ghi xong nạp lại | Mới |
+| `src/utils/platformRevenue.ts` — công thức doanh thu nền tảng (BR-REV-008), tách khỏi màn hình để hai màn không tính khác nhau | Mới |
+| `apiClient` — thêm `apiPut`, `apiPatch`, `apiDelete` | Xong |
+| `App.tsx` — **giảm 620 dòng**: gỡ state `tenants`, `packages`, `tenantAdmins`; gỡ 4 effect nghiệp vụ; gỡ 8 hàm ghi của module gói đã cắt | Xong |
+| `TenantManagement.tsx` — tạo, sửa, gia hạn, khóa, xóa đều gọi API; lỗi máy chủ gắn vào đúng ô nhập | Xong |
+| `tenantValidation.ts` — bản nháp viết lại đúng bằng hợp đồng `POST /api/tenants` | Xong |
+| `data.ts` — xóa `INITIAL_TENANTS` và `INITIAL_PACKAGES` | Xong |
+| `Overview`, `SystemReports` — doanh thu đổi nguồn, bỏ `EXPIRING` | Xong |
+| `SubscriptionPackages`, `TenantAdminManagement`, `TenantDetailModal` — chuyển sang chỉ xem, nói rõ vì sao | Xong |
+| `npx tsc --noEmit` trên mã ứng dụng | **0 lỗi** |
+
+**Kiểm chứng trên trình duyệt thật — 14 phép thử, tất cả đạt:**
+
+| # | Phép thử | Kết quả |
+|---|---|---|
+| 1 | Tổng quan hiện **6 tiệm thật từ database**, đúng 4 trạng thái, không còn `EXPIRING` | Đạt |
+| 2 | Cột doanh thu đổi thành "Đã thu từ tiệm", số lấy từ hóa đơn đăng ký đã thu | Đạt |
+| 3 | Bảng Quản lý tiệm: chủ tiệm, gói, số chi nhánh, số nhân sự, số ngày còn lại — tất cả từ máy chủ | Đạt |
+| 4 | Nguyễn Văn Boss hiện là chủ của **cả Nailé Studio lẫn Muse Nail Lab** — BR-AUTH-023 nhìn thấy được | Đạt |
+| 5 | Tạo tiệm mới kèm chủ tiệm mới → tiệm + chi nhánh chính + hóa đơn đăng ký | Đạt |
+| 6 | **Mật khẩu máy chủ sinh hiện đúng một lần**, hộp thoại không tự đóng | Đạt |
+| 7 | Đăng nhập ngay bằng mật khẩu vừa hiện | `200` |
+| 8 | Email trùng một tài khoản **lễ tân** — phép kiểm ở trình duyệt bỏ lọt, máy chủ bắt được và lỗi **gắn đúng ô Email đăng nhập** | Đạt |
+| 9 | Gia hạn về quá khứ → máy chủ từ chối, lỗi hiện ngay tại ô ngày | Đạt |
+| 10 | Gia hạn tới 31/12/2028 → cột "Còn lại" đổi thành 859 ngày | Đạt |
+| 11 | Khóa tiệm → trạng thái "Tạm ngưng", câu chữ nói rõ chủ tiệm vẫn đăng nhập được | Đạt |
+| 12 | Xóa tiệm → biến khỏi danh sách; **mã tiệm vẫn bị chiếm** (`422`) | Đạt |
+| 13 | **BR-TENANT-021** — chủ tiệm mất hết tiệm vẫn đăng nhập được | `200` |
+| 14 | Giao tiệm mới cho chủ tiệm **đã có** → màn chọn tiệm của họ hiện 3 tiệm | Đạt |
+
+Console sạch: chỉ còn hai lỗi `401` lúc mở trang khi chưa đăng nhập — đó là trạng thái bình thường, không phải sự cố.
+
+#### 🔴 Lỗi ngày 5 lộ ra khi nối giao diện: danh sách chủ tiệm lẫn cả lễ tân
+
+Màn hình vừa nối xong hiện **Lê Hoàng Nam — lễ tân** ở cột "Chủ tiệm chính" của Nailé Studio.
+
+`ListOwnersAsync` đọc bảng `UserTenants` nhưng **không lọc theo vai trò**. Bảng ấy mang cả lễ tân — họ cũng cần một tiệm để làm việc — và tệ hơn: lễ tân được giao sớm hơn, nên câu `OrderBy(CreatedAt)` đẩy chính họ lên đầu. Hậu quả không dừng ở một dòng hiển thị sai: `TenantDetailDto.Owners[0]` là thứ giao diện dùng làm chủ tiệm chính, nên toàn bộ cột chủ tiệm của màn quản lý đều sai theo.
+
+Ba mươi lăm phép thử của ngày 5 không bắt được vì chúng kiểm qua HTTP và chỉ đọc *có* chủ tiệm hay không, chưa ai đọc kỹ *ai* đứng đầu danh sách.
+
+**Đã vá:** thêm điều kiện `link.User.Role == UserRole.TenantAdmin` ngay trong câu truy vấn. Sau khi vá, cả sáu tiệm đều hiện đúng một chủ tiệm, và Nguyễn Văn Boss hiện đúng ở cả hai tiệm anh quản lý.
+
+#### 🔴 Điều kiện xóa tiệm ở frontend khiến không tiệm nào xóa được
+
+`getTenantDeletionEligibility` chặn xóa khi tiệm còn chi nhánh, còn nhân sự, đang hoạt động, hoặc còn yêu cầu nâng gói. Cả bốn là quy ước tự đặt thời dữ liệu mẫu, không có trong `README-BUSINESS-RULES.md`.
+
+Điều kiện đầu **bất khả thi**: BR-BRANCH-002 cấm ngừng chi nhánh chính, nên số chi nhánh hoạt động không bao giờ về 0. Nghĩa là `DELETE /api/tenants/{id}` — endpoint đã viết và đã kiểm chứng ở ngày 5 — không có đường nào gọi tới từ giao diện.
+
+Bản cũ còn nói sai bản chất: hộp thoại ghi *"loại bỏ hoàn toàn hồ sơ, tài khoản Tenant Admin và toàn bộ lịch sử thanh toán"*, trong khi BR-TENANT-020/021 quy định xóa mềm, mã tiệm vẫn bị giữ chỗ và tài khoản chủ tiệm **không** bị xóa theo.
+
+**Đã vá:** còn đúng một điều kiện và nó thực hiện được — tiệm đang hoạt động thì khóa trước, nút khóa nằm ngay cạnh nút xóa. Câu chữ viết lại đúng ba hệ quả thật của xóa mềm.
+
+#### Năm điều chệch khỏi kế hoạch, có chủ đích
+
+1. **Gói dịch vụ cũng chuyển sang đọc từ máy chủ**, không chỉ tiệm. Bắt buộc: mã gói ở dữ liệu mẫu là `PKG-1`, ở database là `PKG-BASIC`. Giữ bảng giá mẫu thì mọi tiệm thật sẽ hiện ra "gói không xác định", và tiệm mới tạo sẽ trỏ tới một mã gói không tồn tại. Hệ quả: màn Quản lý gói mất phần thêm, sửa giá, ngừng bán — đúng phạm vi module đã cắt — và nói rõ điều đó bằng một dòng "Chỉ xem" ở đầu trang.
+2. **`EXPIRING` bị gỡ khỏi kiểu `TenantStatus`**, không chỉ khỏi huy hiệu. BR-TENANT-001 đã bỏ trạng thái này và máy chủ không bao giờ trả về nó; để lại trong kiểu chỉ khiến trình biên dịch im lặng ở sáu chỗ vẫn đang so sánh với nó.
+3. **Cột "Doanh thu" của bảng tiệm đổi thành "Còn lại"** thay vì đổi nguồn như hai màn kia. Màn quản lý tiệm không nhận danh sách hóa đơn, và thứ người bán gói thật sự theo dõi trên bảng này là hạn dùng chứ không phải tiền.
+4. **Hai màn chuyển sang chỉ xem bằng cách gỡ lối vào, không gỡ biểu mẫu.** `TenantAdminManagement` và `TenantDetailModal` giữ nguyên bộ biểu mẫu bên dưới ở dạng không có đường nào gọi tới, vì chúng sẽ dùng lại gần như nguyên vẹn khi các endpoint ghi xuất hiện. Điều bắt buộc đã làm: hai hàm ghi bị thay bằng hàm rỗng, nên không còn khả năng lặng lẽ sửa dữ liệu trong bộ nhớ rồi báo thành công.
+5. **Cảnh báo "một Tenant Admin gắn cho nhiều tenant" bị gỡ.** Nó nói ngược BR-AUTH-023, và chính dữ liệu mẫu dựng sẵn một người giữ hai tiệm để demo điều đó.
+
+### Việc còn treo sau ngày 6
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — nó nhân một tỉ lệ cố định với một mốc 128.500.000 ₫ gắn cứng, nên đang hiện 414 triệu ngay dưới ô chỉ số nói 86 triệu. Trước ngày 6 hai con số cùng sai nên không ai thấy; nay ô chỉ số đã thật, chỗ vênh lộ ra. Cần hoặc dựng biểu đồ từ `paidAt` của hóa đơn thật, hoặc bỏ biểu đồ | **Cần sửa** |
+| 2 | `BranchCode = 'Q1' \| 'Q3'` vẫn còn ở **12 tệp** mức C. Đã nới `DemoAccount.branchCode` thành `string` nên chỗ ép kiểu ở `App.tsx` không còn; phần còn lại theo quyết định 26 chờ ngày 8 | Đã có lịch |
+| 3 | Cấp, sửa, khóa tài khoản chủ tiệm chưa có endpoint. `GET /api/accounts` mới chỉ đọc | Đã có lịch |
+| 4 | `TenantDetailModal` còn ~600 dòng biểu mẫu chi nhánh không có đường gọi tới. Dùng lại được ở ngày 8, nhưng tới đó mà không dùng thì nên xóa | Thấp |
+| 5 | Database demo lẫn thêm hai tài khoản chủ tiệm mồ côi từ phiên thử: `chu@velvetnail.vn` (ngày 5) và `chu@velvetnailbar.vn` (ngày 6). Đúng theo BR-TENANT-021 — xóa tiệm không xóa tài khoản — nhưng vẫn nên dọn trước khi bảo vệ | Thấp |

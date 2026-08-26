@@ -190,6 +190,25 @@ export const apiPost = <T>(path: string, body?: unknown) =>
     body: body === undefined ? undefined : JSON.stringify(body)
   });
 
+export const apiPut = <T>(path: string, body?: unknown) =>
+  apiRequest<T>(path, {
+    method: 'PUT',
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+
+/**
+ * `PATCH` dành cho những thao tác chỉ đụng tới **một** thuộc tính — khóa tiệm,
+ * ngừng một chi nhánh. Backend cố ý tách chúng khỏi `PUT` sửa hồ sơ, để việc
+ * khóa một tiệm không bao giờ xảy ra như tác dụng phụ của một lần sửa tên.
+ */
+export const apiPatch = <T>(path: string, body?: unknown) =>
+  apiRequest<T>(path, {
+    method: 'PATCH',
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+
+export const apiDelete = <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' });
+
 /**
  * Chuyển lỗi thành nội dung cho `ToastProvider` có sẵn.
  *

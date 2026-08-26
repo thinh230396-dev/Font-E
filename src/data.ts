@@ -1,114 +1,14 @@
-import { Tenant, SubscriptionPackage, SystemAlert, Invoice, BackupSnapshot, BackupPolicy, RestoreJob } from './types';
+import { SystemAlert, Invoice, BackupSnapshot, BackupPolicy, RestoreJob } from './types';
 
-const initialTenant = (
-  id: string,
-  name: string,
-  packageName: 'Basic' | 'Premium' | 'Enterprise',
-  status: Tenant['status'],
-  monthlyRevenue: number,
-  adminName: string,
-  adminEmail: string,
-  address: string
-): Tenant => ({
-  id,
-  name,
-  adminEmail,
-  packageName,
-  status,
-  monthlyRevenue,
-  createdAt: '2026-01-15',
-  address,
-  phone: '0900000000',
-  contactEmail: adminEmail,
-  country: 'Vietnam',
-  timezone: 'Asia/Ho_Chi_Minh',
-  staffCount: packageName === 'Basic' ? 5 : packageName === 'Premium' ? 14 : 32,
-  adminName,
-  lastLogin: '15/07/2026 18:30',
-  allowOnlineBooking: true,
-  currency: 'VND',
-  defaultLanguage: 'Vietnamese',
-  billingCycle: packageName === 'Enterprise' ? 'yearly' : 'monthly',
-  subscriptionPackageId: packageName === 'Basic' ? 'PKG-1' : packageName === 'Premium' ? 'PKG-2' : 'PKG-3',
-  subscriptionPackageVersion: packageName === 'Basic' ? 2 : 4,
-  subscriptionStartedAt: '2026-07-01',
-  subscriptionRenewsAt: packageName === 'Enterprise' ? '2027-06-30' : '2026-07-31',
-  planStartDate: '2026-07-01',
-  adminStatus: status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE',
-  paymentStatus: status === 'OVERDUE' ? 'OVERDUE' : 'PAID'
-});
+// `initialTenant` và `INITIAL_TENANTS` từng nằm ở đây. Cả hai đã được gỡ ở ngày 6: danh
+// sách tiệm nay đến từ `GET /api/tenants`, và bộ nạp dữ liệu mẫu của máy chủ đã dựng sẵn
+// sáu tiệm phủ đủ bốn trạng thái hiển thị. Giữ thêm một danh sách tiệm mẫu ở frontend chỉ
+// tạo ra một danh sách thứ hai để lệch với danh sách thật.
 
-export const INITIAL_TENANTS: Tenant[] = [
-  initialTenant('TEN-AURORA', 'Aurora Beauty & Spa', 'Enterprise', 'ACTIVE', 128_000_000, 'Trần Minh Anh', 'admin@aurorabeauty.vn', '28 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh'),
-  initialTenant('TEN-LUMIERE', 'Lumière Hair Studio', 'Premium', 'ACTIVE', 86_500_000, 'Nguyễn Văn Boss', 'tenantadmin@lumierehair.vn', '95 Võ Văn Tần, Quận 3, TP. Hồ Chí Minh'),
-  initialTenant('TEN-BLOOM', 'Bloom Salon', 'Premium', 'TRIAL', 52_400_000, 'Vũ Thu Hà', 'ha.vu@bloomsalon.vn', '12 Nguyễn Văn Trỗi, Phú Nhuận, TP. Hồ Chí Minh'),
-  initialTenant('TEN-OASIS', 'Oasis Wellness', 'Premium', 'OVERDUE', 44_800_000, 'Trịnh Bảo Ngọc', 'ngoc.trinh@oasiswellness.vn', '181 Hai Bà Trưng, Quận 1, TP. Hồ Chí Minh'),
-  initialTenant('TEN-MUSE', 'Muse Nail Lab', 'Basic', 'ACTIVE', 31_200_000, 'Đỗ Khánh Linh', 'linh.do@musenail.vn', '43 Lê Văn Sỹ, Quận 3, TP. Hồ Chí Minh'),
-  initialTenant('TEN-MORNING', 'Morning Dew Spa', 'Basic', 'SUSPENDED', 18_600_000, 'Hoàng Ngọc Uyên', 'uyen.hoang@morningdew.vn', '57 Phan Xích Long, Phú Nhuận, TP. Hồ Chí Minh'),
-  initialTenant('TEN-SORA', 'Sora Japanese Salon', 'Premium', 'EXPIRING', 73_900_000, 'Ngô Minh Quang', 'quang.ngo@sorasalon.vn', '8 Thái Văn Lung, Quận 1, TP. Hồ Chí Minh'),
-  initialTenant('TEN-IVORY', 'Ivory Skin Clinic', 'Enterprise', 'ACTIVE', 119_500_000, 'Phạm Thanh Tú', 'tu.pham@ivoryskin.vn', '66 Đồng Khởi, Quận 1, TP. Hồ Chí Minh')
-];
+// `INITIAL_PACKAGES` cũng đã rời khỏi đây cùng lý do: bảng giá đọc từ `GET /api/packages`.
+// Giữ bản mẫu sẽ nguy hiểm hơn cả giữ danh sách tiệm mẫu — mã gói ở đây là `PKG-1`, còn ở
+// database là `PKG-BASIC`, nên một tiệm thật sẽ hiện ra là "gói không xác định".
 
-export const INITIAL_PACKAGES: SubscriptionPackage[] = [
-  {
-    id: 'PKG-1',
-    name: 'Basic',
-    price: 49,
-    currency: 'USD',
-    billingCycle: 'monthly',
-    activeTenants: 0,
-    features: [
-      'Quản lý lịch hẹn cơ bản',
-      'Tối đa 5 nhân viên',
-      'Báo cáo doanh thu ngày',
-      'Hỗ trợ qua Email',
-      'Trang đặt lịch tự động'
-    ],
-    maxStaff: 5,
-    maxSalons: 1,
-    color: '#7c3aed' // purple
-  },
-  {
-    id: 'PKG-2',
-    name: 'Premium',
-    price: 99,
-    currency: 'USD',
-    billingCycle: 'monthly',
-    activeTenants: 0,
-    features: [
-      'Quản lý lịch hẹn nâng cao',
-      'Không giới hạn nhân viên',
-      'Báo cáo phân tích chuyên sâu',
-      'Hỗ trợ 24/7 qua chat & phone',
-      'Hệ thống Loyalty & Khách hàng thân thiết',
-      'Tự động gửi SMS & Email nhắc lịch',
-      'API tích hợp website riêng'
-    ],
-    maxStaff: 999,
-    maxSalons: 3,
-    color: '#10b981' // emerald
-  },
-  {
-    id: 'PKG-3',
-    name: 'Enterprise',
-    price: 249,
-    currency: 'USD',
-    billingCycle: 'monthly',
-    activeTenants: 0,
-    features: [
-      'Toàn bộ tính năng gói Premium',
-      'Quản lý chuỗi nhiều cửa hàng',
-      'Domain riêng (Custom Domain)',
-      'Hệ thống kế toán & kho hàng chuyên nghiệp',
-      'Dedicated Account Manager',
-      'Bảo mật nâng cao & SSO',
-      'SLA cam kết 99.9%'
-    ],
-    maxStaff: 9999,
-    maxSalons: 99,
-    color: '#f59e0b' // amber
-  }
-];
 
 const alertMinutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60 * 1000).toISOString();
 

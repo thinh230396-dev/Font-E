@@ -38,8 +38,6 @@ interface TenantAdminManagementProps {
   tenants: Tenant[];
   packages: SubscriptionPackage[];
   invitedAdmins: TenantAdminAccount[];
-  onInvitedAdminsChange: (admins: TenantAdminAccount[]) => void;
-  onUpdateTenant: (id: string, updated: Partial<Tenant>) => void;
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
 }
 
@@ -235,7 +233,7 @@ const getDefaultTimezoneForCountry = (country: string) => {
   }
 };
 
-export default function TenantAdminManagement({ tenants, packages, invitedAdmins, onInvitedAdminsChange, onUpdateTenant, showConfirm }: TenantAdminManagementProps) {
+export default function TenantAdminManagement({ tenants, packages, invitedAdmins, showConfirm }: TenantAdminManagementProps) {
   const showToast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | AdminRole>('ALL');
@@ -246,7 +244,27 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
   const [expandedBranchTenantIds, setExpandedBranchTenantIds] = useState<string[]>([]);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, AdminStatus>>({});
-  const setInvitedAdmins = onInvitedAdminsChange;
+
+  /**
+   * Màn hình này CHỈ XEM kể từ ngày 6.
+   *
+   * Danh sách tài khoản chủ tiệm nay đọc thật từ `GET /api/accounts`, nhưng cấp, sửa, khóa và
+   * gỡ tài khoản chưa có endpoint — chúng thuộc lát cắt cấp tài khoản nằm sau trong lộ trình.
+   * Mọi lối vào các thao tác đó đã được gỡ khỏi giao diện, nên hai hàm dưới đây không còn
+   * đường nào gọi tới.
+   *
+   * Giữ chúng ở dạng không làm gì, thay vì xóa cả bộ biểu mẫu bên dưới, là một đánh đổi có
+   * chủ đích: biểu mẫu sẽ được dùng lại gần như nguyên vẹn khi các endpoint ghi xuất hiện.
+   * Điều bắt buộc là chúng KHÔNG được lặng lẽ sửa dữ liệu trong bộ nhớ — làm vậy là báo với
+   * người dùng rằng đã đổi được tài khoản, trong khi máy chủ không biết gì.
+   */
+  const setInvitedAdmins = (_next: TenantAdminAccount[]) => {
+    void _next;
+  };
+  const onUpdateTenant = (_id: string, _updated: Partial<Tenant>) => {
+    void _id;
+    void _updated;
+  };
 
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -795,16 +813,10 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
             <span>Quản lí Tenant Admin</span>
           </h1>
           <p className="text-xs text-brand-text-muted mt-1">
-            Dữ liệu được đồng bộ trực tiếp từ danh sách tenant. Khi tạo hoặc sửa tenant, admin sẽ tự cập nhật tại đây.
+            Danh sách đọc trực tiếp từ máy chủ. Tài khoản chủ tiệm được cấp trong lúc tạo tiệm,
+            nên màn hình này chỉ để tra cứu — cấp và khóa tài khoản làm ở màn Quản lý tiệm.
           </p>
         </div>
-        <button
-          onClick={() => setShowInviteModal(true)}
-          className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary text-sm font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2 cursor-pointer shadow-md self-start sm:self-auto"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>Thêm Admin</span>
-        </button>
       </div>
 
       <div className="bg-brand-surface border border-brand-outline/35 rounded-xl p-4 flex flex-col sm:flex-row gap-4 justify-between items-center shadow-sm">
@@ -947,29 +959,6 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
                           className="p-1 rounded text-brand-text-muted hover:text-brand-primary hover:bg-brand-surface-high transition-colors cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => openEditAdmin(admin)}
-                          title="Chỉnh sửa Tenant Admin"
-                          className="p-1 rounded text-brand-text-muted hover:text-brand-secondary hover:bg-brand-surface-high transition-colors cursor-pointer"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => toggleAdminStatus(admin)}
-                          title={admin.status === 'ACTIVE' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-                          className={`p-1 rounded hover:bg-brand-surface-high transition-colors cursor-pointer ${
-                            admin.status === 'ACTIVE' ? 'text-brand-text-muted hover:text-brand-error' : 'text-brand-text-muted hover:text-emerald-400'
-                          }`}
-                        >
-                          <Lock className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => deleteAdmin(admin)}
-                          title={admin.source === 'TENANT' ? 'Khóa Tenant Admin' : 'Gỡ quyền quản trị'}
-                          className="p-1 rounded text-brand-text-muted hover:text-brand-error hover:bg-brand-surface-high transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>

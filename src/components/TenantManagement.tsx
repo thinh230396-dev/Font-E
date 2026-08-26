@@ -33,24 +33,28 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { CurrencyCode, PackageUpgradeRequest, Tenant, TenantStatus, SubscriptionPackage, SubscriptionPackageName, TenantAdminAccount } from '../types';
-import { normalizeBranch } from '../utils/branches';
 import TenantDetailModal from './TenantDetailModal';
 import PackageUpgradeRequests from './PackageUpgradeRequests';
-import { convertMoney, formatMoney } from '../utils/money';
-import { Button, DataTable, Field, Modal, Pagination, StatusBadge, Switch, useToast } from './ui';
+import { formatMoney } from '../utils/money';
+import { getPlatformRevenueByTenant } from '../utils/platformRevenue';
+import { Button, DataTable, Field, Modal, Pagination, StatusBadge, useToast } from './ui';
+import {
+  describeApiError,
+  fieldErrorMap,
+  type ApiError,
+  type ApiResult
+} from '../services/apiClient';
+import type { CreateTenantInput, UpdateTenantInput } from '../services/tenants';
 import {
   getSellablePackages,
   getSubscriptionBranchLimit,
   getSubscriptionStaffLimit,
-  hasSubscriptionCapability,
   isUnlimitedBranches,
   isUnlimitedStaff
 } from '../utils/subscriptions';
 import {
-  getSuggestedTrialEndDate,
   getTenantDeletionEligibility,
   isTenantAdminSuspended,
-  redistributeBranchStaff,
   validateTenantDraft,
   type TenantDeletionEligibility,
   type TenantFieldErrors
@@ -60,7 +64,7 @@ import {
 
 const TENANT_PAGE_SIZE = 10;
 
-type TenantSortColumn = 'name' | 'revenue' | 'date' | 'branches' | 'staff';
+type TenantSortColumn = 'name' | 'remaining' | 'date' | 'branches' | 'staff';
 
 /** Tiêu đề cột bấm được để sắp xếp, kèm chỉ báo chiều đang áp dụng. */
 function SortableHeader({
@@ -164,9 +168,16 @@ interface TenantManagementProps {
   tenants: Tenant[];
   packages: SubscriptionPackage[];
   tenantAdmins?: TenantAdminAccount[];
-  onAddTenant: (tenant: Omit<Tenant, 'createdAt' | 'lastLogin'>) => void;
-  onUpdateTenant: (id: string, updated: Partial<Tenant>) => void;
-  onDeleteTenant: (id: string) => void;
+  /** Đang tải danh sách tiệm từ máy chủ. */
+  loading?: boolean;
+  /** Lỗi của lần tải gần nhất; khác `null` thì bảng nhường chỗ cho khối lỗi kèm nút thử lại. */
+  loadError?: ApiError | null;
+  onReload?: () => void;
+  onAddTenant: (input: CreateTenantInput) => Promise<ApiResult<{ tenant: Tenant; generatedPassword?: string }>>;
+  onUpdateTenant: (id: string, input: UpdateTenantInput) => Promise<ApiResult<Tenant>>;
+  onRenewTenant: (id: string, expiresAt: string) => Promise<ApiResult<Tenant>>;
+  onChangeTenantStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED') => Promise<ApiResult<Tenant>>;
+  onDeleteTenant: (id: string) => Promise<ApiResult<void>>;
   selectedTenantFromOverview?: Tenant | null;
   clearSelectedTenant?: () => void;
   searchQuery: string;
@@ -178,18 +189,21 @@ interface TenantManagementProps {
     reviewNote: string,
     effectiveDate: 'immediate' | 'next_cycle'
   ) => Promise<boolean>;
-  /* Tiền tệ báo cáo của hệ thống. Doanh thu từng tenant được lưu theo tiền tệ
-     riêng của tenant, nên cột doanh thu phải quy đổi về một đơn vị thì mới so
-     sánh, cộng và sắp xếp đúng — giống màn Tổng quan và Báo cáo hệ thống. */
+  /** Đơn vị tiền của báo cáo hệ thống, dùng cho cột "Đã thu từ tiệm". */
   reportCurrency: CurrencyCode;
 }
 
-export default function TenantManagement({ 
-  tenants, 
+export default function TenantManagement({
+  tenants,
   packages,
   tenantAdmins = [],
-  onAddTenant, 
-  onUpdateTenant, 
+  loading = false,
+  loadError = null,
+  onReload,
+  onAddTenant,
+  onUpdateTenant,
+  onRenewTenant,
+  onChangeTenantStatus,
   onDeleteTenant,
   selectedTenantFromOverview,
   clearSelectedTenant,
@@ -202,27 +216,22 @@ export default function TenantManagement({
   const showToast = useToast();
 
   const selectablePackages = getSellablePackages(packages);
-  const defaultPackageName = selectablePackages[0]?.name || packages[0]?.name || 'Basic';
+  const defaultPackageName = selectablePackages[0]?.name || packages[0]?.name || '';
   const packageFilterOptions = Array.from(new Set([
     ...packages.filter((pkg) => (pkg.status || 'ACTIVE') !== 'ARCHIVED').map((pkg) => pkg.name),
     ...tenants.map((tenant) => tenant.packageName)
   ]));
 
-  const tenantAdminUsageByEmail = tenants.reduce<Record<string, number>>((acc, tenant) => {
-    const email = tenant.adminEmail.trim().toLowerCase();
-    if (!email) return acc;
-    acc[email] = (acc[email] || 0) + 1;
-    return acc;
-  }, {});
-
-  const duplicateTenantAdminGroups = Object.values(tenantAdminUsageByEmail).filter(count => count > 1).length;
-  const assignedTenantAdminEmails = new Set(tenants.map((tenant) => tenant.adminEmail.trim().toLowerCase()).filter(Boolean));
-  const availableTenantAdmins = tenantAdmins.filter((admin) => (
-    admin.source === 'INVITED' &&
-    admin.status !== 'SUSPENDED' &&
-    admin.tenantIds.length === 0 &&
-    !assignedTenantAdminEmails.has(admin.email.trim().toLowerCase())
-  ));
+  /**
+   * Chủ tiệm có thể được giao thêm tiệm mới.
+   *
+   * Bản cũ chỉ nhận tài khoản CHƯA giữ tiệm nào, vì mô hình khi đó là một chủ tiệm quản đúng
+   * một tiệm. BR-AUTH-023 nói ngược lại: một tài khoản quản được nhiều tiệm, và dữ liệu mẫu
+   * đã dựng sẵn một người giữ hai tiệm để demo điều đó. Nên điều kiện duy nhất còn lại là
+   * tài khoản phải đang hoạt động — giao tiệm cho một tài khoản bị khóa là giao cho người
+   * không đăng nhập được.
+   */
+  const availableTenantAdmins = tenantAdmins.filter((admin) => admin.status === 'ACTIVE');
 
   // Table filtering & searching states
   const [internalSearch, setInternalSearch] = useState('');
@@ -244,45 +253,74 @@ export default function TenantManagement({
   const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<Tenant | null>(null);
   const [confirmDeleteInput, setConfirmDeleteInput] = useState('');
   const [confirmDeleteAgreement, setConfirmDeleteAgreement] = useState(false);
+  const [renewTarget, setRenewTarget] = useState<Tenant | null>(null);
+  const [renewDate, setRenewDate] = useState('');
+  /** Một lệnh ghi đang chạy — khóa nút để không gửi hai lần. */
+  const [submitting, setSubmitting] = useState(false);
+  /** Lỗi máy chủ gắn theo tên ô nhập, hiện ngay tại ô đó thay vì ở góc màn hình. */
+  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
+  /**
+   * Mật khẩu tạm mà máy chủ vừa sinh cho chủ tiệm mới.
+   *
+   * Chuỗi này rời khỏi máy chủ đúng một lần. Hệ thống không gửi email và không có đường đọc
+   * lại, nên nếu màn hình không giữ nó thì tài khoản vừa tạo không ai đăng nhập được.
+   */
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    tenantName: string;
+    email: string;
+    password: string;
+  } | null>(null);
 
-  // Form states
+  // Form states — chỉ còn những ô mà máy chủ thật sự lưu.
   const [formName, setFormName] = useState('');
   const [formTenantCode, setFormTenantCode] = useState('');
   const [isCodeManuallyEdited, setIsCodeManuallyEdited] = useState(false);
-  const [formLogo, setFormLogo] = useState('');
-  const [formLogoName, setFormLogoName] = useState('');
   const [formAddress, setFormAddress] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formSalonEmail, setFormSalonEmail] = useState('');
-  const [formCountry, setFormCountry] = useState('Vietnam');
   const [formTimezone, setFormTimezone] = useState('Asia/Ho_Chi_Minh');
+  const [formPrimaryBranchName, setFormPrimaryBranchName] = useState('');
 
   const [formAdminName, setFormAdminName] = useState('');
   const [formAdminEmail, setFormAdminEmail] = useState('');
-  const [formAdminPhone, setFormAdminPhone] = useState('');
-  const [formAdminCode, setFormAdminCode] = useState('');
   const [formAdminUsername, setFormAdminUsername] = useState('');
   const [formTempPassword, setFormTempPassword] = useState('');
-  const [formSendActivationEmail, setFormSendActivationEmail] = useState(true);
   const [adminCreationMode, setAdminCreationMode] = useState<'existing' | 'new'>('new');
   const [selectedTenantAdminId, setSelectedTenantAdminId] = useState('');
 
   const [formPackage, setFormPackage] = useState<SubscriptionPackageName>(defaultPackageName);
   const [formBillingCycle, setFormBillingCycle] = useState<'Monthly' | 'Yearly'>('Monthly');
-  const [formStartDate, setFormStartDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [formTrialEndDate, setFormTrialEndDate] = useState('');
-  const [formStatus, setFormStatus] = useState<TenantStatus | 'TRIAL'>('ACTIVE');
-
-  const [formStaff, setFormStaff] = useState(() => Math.min(5, getSubscriptionStaffLimit(packages, defaultPackageName)));
-  const [formBranchCount, setFormBranchCount] = useState(1);
-  const [formRevenue, setFormRevenue] = useState<number | ''>(0);
-  const [formCurrency, setFormCurrency] = useState<'USD' | 'VND'>('VND');
-  const [formDefaultLanguage, setFormDefaultLanguage] = useState<'Vietnamese' | 'English'>('Vietnamese');
-  const [formAllowOnlineBooking, setFormAllowOnlineBooking] = useState(true);
-  const [formInternalNotes, setFormInternalNotes] = useState('');
+  /** Hạn dùng — BR-TENANT-006. Máy chủ từ chối ngày trong quá khứ. */
+  const [formExpiresAt, setFormExpiresAt] = useState('');
+  const [formIsTrial, setFormIsTrial] = useState(false);
   /* Chỉ hiện lỗi sau lần bấm Lưu đầu tiên. Đánh dấu đỏ ngay khi form vừa mở thì
      mọi trường bắt buộc đều đỏ trong lúc người dùng còn chưa gõ gì. */
   const [addFormSubmitted, setAddFormSubmitted] = useState(false);
+
+  /** Đưa biểu mẫu về trạng thái ban đầu. Một chỗ duy nhất, để không sót ô nào. */
+  const resetCreateForm = () => {
+    setFormName('');
+    setFormTenantCode('');
+    setIsCodeManuallyEdited(false);
+    setFormAddress('');
+    setFormPhone('');
+    setFormSalonEmail('');
+    setFormTimezone('Asia/Ho_Chi_Minh');
+    setFormPrimaryBranchName('');
+    setFormAdminName('');
+    setFormAdminEmail('');
+    setFormAdminUsername('');
+    setFormTempPassword('');
+    setAdminCreationMode('new');
+    setSelectedTenantAdminId('');
+    setFormPackage(defaultPackageName);
+    setFormBillingCycle('Monthly');
+    setFormExpiresAt('');
+    setFormIsTrial(false);
+    setAddFormSubmitted(false);
+    setServerFieldErrors({});
+  };
+
 
   const generateCodeFromName = (name: string) => {
     if (!name) return '';
@@ -335,93 +373,12 @@ export default function TenantManagement({
     }
   };
 
-  const getDefaultTimezoneForCountry = (country: string) => {
-    switch (country) {
-      case 'Vietnam':
-        return 'Asia/Ho_Chi_Minh';
-      case 'United States':
-        return 'America/New_York';
-      case 'Canada':
-        return 'America/Toronto';
-      case 'Australia':
-        return 'Australia/Sydney';
-      case 'Japan':
-        return 'Asia/Tokyo';
-      case 'Korea':
-        return 'Asia/Seoul';
-      default:
-        return 'Asia/Ho_Chi_Minh';
-    }
-  };
-
-  const handleCountryChange = (country: string) => {
-    setFormCountry(country);
-    setFormTimezone(getDefaultTimezoneForCountry(country));
-  };
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFormLogoName(file.name);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormLogo(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleLogoDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  };
-
-  const handleLogoDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      setFormLogoName(file.name);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormLogo(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleEditLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingTenant) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setEditingTenant({ ...editingTenant, logoUrl: reader.result as string });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const createRandomPassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let pass = '';
-    for (let i = 0; i < 10; i++) {
-      pass += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return pass;
-  };
-
-  const generateRandomPassword = () => {
-    const pass = createRandomPassword();
-    setFormTempPassword(pass);
-  };
-
   const clearTenantAdminForm = () => {
     setSelectedTenantAdminId('');
     setFormAdminName('');
     setFormAdminEmail('');
-    setFormAdminPhone('');
-    setFormAdminCode('');
     setFormAdminUsername('');
     setFormTempPassword('');
-    setFormSendActivationEmail(true);
   };
 
   const selectExistingTenantAdmin = (adminId: string) => {
@@ -429,156 +386,49 @@ export default function TenantManagement({
     const admin = availableTenantAdmins.find((item) => item.id === adminId);
     if (!admin) return;
 
-    setFormAdminCode(admin.adminCode || admin.id);
+    // Chỉ để Superadmin đối chiếu bằng mắt. Khi gửi đi, chế độ "chủ tiệm đã có" chỉ mang theo
+    // mã tài khoản — máy chủ tự đọc phần còn lại, và nó mới là bên nắm sự thật.
     setFormAdminName(admin.name);
     setFormAdminEmail(admin.email);
-    setFormAdminPhone(admin.phone);
-    setFormAdminUsername(admin.username || admin.email.split('@')[0] || admin.email);
-    setFormTempPassword(admin.tempPassword || '');
-    setFormSendActivationEmail(admin.sendActivationEmail === true);
+    setFormAdminUsername(admin.username || '');
+    setFormTempPassword('');
   };
 
   const handleAdminCreationModeChange = (mode: 'existing' | 'new') => {
     setAdminCreationMode(mode);
     clearTenantAdminForm();
-    if (mode === 'new') {
-      setFormAdminCode(generateAdminCode());
-      return;
-    }
+    if (mode === 'new') return;
 
     const firstAvailableAdmin = availableTenantAdmins[0];
-    if (firstAvailableAdmin) {
-      selectExistingTenantAdmin(firstAvailableAdmin.id);
-    }
+    if (firstAvailableAdmin) selectExistingTenantAdmin(firstAvailableAdmin.id);
   };
 
-  const getPackageBranchLimit = (packageName: SubscriptionPackageName) => {
-    return getSubscriptionBranchLimit(packages, packageName);
-  };
+  const getPackageBranchLimit = (packageName: SubscriptionPackageName) => (
+    getSubscriptionBranchLimit(packages, packageName)
+  );
 
-  const getPackageStaffLimitPerBranch = (packageName: SubscriptionPackageName) => {
-    return getSubscriptionStaffLimit(packages, packageName);
-  };
+  const getPackageStaffLimit = (packageName: SubscriptionPackageName) => (
+    getSubscriptionStaffLimit(packages, packageName)
+  );
 
-  const getTenantBranchCount = (tenant: Tenant) => Math.max(1, tenant.branches?.length || 1);
+  /**
+   * Số chi nhánh đang hoạt động, do máy chủ đếm.
+   *
+   * Bản cũ đọc `tenant.branches?.length` rồi ép tối thiểu bằng 1. Cả hai đều là di sản của dữ
+   * liệu mẫu: danh sách chi nhánh không còn đi kèm bản ghi tiệm, và một tiệm hoàn toàn có thể
+   * đang ở mức 0 chi nhánh hoạt động nếu chi nhánh phụ bị ngừng hết — hiển thị 1 khi đó là
+   * nói sai về chính hạn mức mà màn hình này có nhiệm vụ theo dõi.
+   */
+  const getTenantBranchCount = (tenant: Tenant) => Number(tenant.branchCount || 0);
 
   const getTenantBranchLimitLabel = (packageName: SubscriptionPackageName) => {
     const limit = getPackageBranchLimit(packageName);
     return isUnlimitedBranches(limit) ? 'Không giới hạn' : `${limit} chi nhánh`;
   };
 
-  const getTenantStaffLimit = (packageName: SubscriptionPackageName, _branchCount?: number) => {
-    return getPackageStaffLimitPerBranch(packageName);
-  };
-
-  const getCreateStaffLimit = (packageName: SubscriptionPackageName, branchCount = formBranchCount) => {
-    return getTenantStaffLimit(packageName, branchCount);
-  };
-
-  const getCreateStaffLimitLabel = (packageName: SubscriptionPackageName, branchCount = formBranchCount) => {
-    const limit = getCreateStaffLimit(packageName, branchCount);
+  const getTenantStaffLimitLabel = (packageName: SubscriptionPackageName) => {
+    const limit = getPackageStaffLimit(packageName);
     return isUnlimitedStaff(limit) ? 'Không giới hạn' : `${limit} nhân sự`;
-  };
-
-  const handleCreatePackageChange = (nextPackage: SubscriptionPackageName) => {
-    const nextBranchLimit = getPackageBranchLimit(nextPackage);
-    const nextBranchCount = Math.min(formBranchCount, nextBranchLimit);
-    const nextLimit = getCreateStaffLimit(nextPackage, nextBranchCount);
-    setFormPackage(nextPackage);
-    if (!hasSubscriptionCapability(packages, { packageName: nextPackage }, 'online_booking')) {
-      setFormAllowOnlineBooking(false);
-    }
-    setFormBranchCount(nextBranchCount);
-    setFormStaff((current) => Math.min(Number(current || 0), nextLimit));
-  };
-
-  /**
-   * Đổi trạng thái ban đầu. Chọn "Dùng thử" thì tự điền mốc kết thúc theo số
-   * ngày trial của chính gói đang chọn — trường này nay là bắt buộc, và gợi ý
-   * sẵn thì nhanh hơn bắt người dùng tự tính. Rời khỏi TRIAL thì xóa đi để
-   * tenant không mang theo một mốc dùng thử vô nghĩa.
-   */
-  const handleCreateStatusChange = (nextStatus: TenantStatus) => {
-    setFormStatus(nextStatus);
-    if (nextStatus === 'TRIAL') {
-      setFormTrialEndDate((current) => current || getSuggestedTrialEndDate(packages, formPackage));
-    } else {
-      setFormTrialEndDate('');
-    }
-  };
-
-  const handleCreateBranchCountChange = (value: number) => {
-    const branchLimit = getPackageBranchLimit(formPackage);
-    const nextBranchCount = Math.max(1, Math.min(Number(value) || 1, branchLimit));
-    const nextStaffLimit = getCreateStaffLimit(formPackage, nextBranchCount);
-
-    setFormBranchCount(nextBranchCount);
-    setFormStaff((current) => (
-      isUnlimitedStaff(nextStaffLimit)
-        ? Number(current || 0)
-        : Math.min(Number(current || 0), nextStaffLimit)
-    ));
-  };
-
-  const getPackageLimitIssue = (tenant: Tenant, packageName: SubscriptionPackageName) => {
-    const branchCount = tenant.branches?.length || 1;
-    const branchLimit = getPackageBranchLimit(packageName);
-    if (branchCount > branchLimit) {
-      return `Gói ${packageName} chỉ hỗ trợ tối đa ${branchLimit === 99 ? 'không giới hạn' : branchLimit} chi nhánh, tenant hiện có ${branchCount} chi nhánh.`;
-    }
-
-    const maxStaff = getPackageStaffLimitPerBranch(packageName);
-    if (!isUnlimitedStaff(maxStaff) && Number(tenant.staffCount) > maxStaff) {
-      return `Gói ${packageName} chỉ hỗ trợ tối đa ${maxStaff} nhân viên toàn tenant, tenant hiện có ${tenant.staffCount} nhân viên.`;
-    }
-
-    return null;
-  };
-
-  const createInitialBranches = (
-    tenantName: string,
-    mainAddress: string,
-    branchCount: number,
-    staffCount: number,
-    packageName: SubscriptionPackageName,
-    managerName: string,
-    phone: string,
-    email: string,
-    timezone: string,
-    monthlyRevenue: number
-  ) => {
-    const safeBranchCount = Math.max(1, branchCount);
-    const baseStaff = Math.floor(staffCount / safeBranchCount);
-    const extraStaff = staffCount % safeBranchCount;
-
-    return Array.from({ length: safeBranchCount }, (_, idx) => {
-      const branchNumber = idx + 1;
-      const staffForThisBranch = safeBranchCount === 1
-        ? staffCount
-        : baseStaff + (idx < extraStaff ? 1 : 0);
-
-      return normalizeBranch({
-        id: `BR-${branchNumber}`,
-        code: `BR-${branchNumber}`,
-        name: `${tenantName} - Chi nhánh ${branchNumber === 1 ? 'chính' : branchNumber}`,
-        address: branchNumber === 1 ? (mainAddress || 'Chưa cập nhật') : `Chưa cập nhật địa chỉ chi nhánh ${branchNumber}`,
-        model: branchNumber === 1 ? 'FULL_SERVICE' : 'NAIL_STUDIO',
-        isPrimary: branchNumber === 1,
-        managerName: branchNumber === 1 ? managerName : 'Chưa phân công',
-        phone: branchNumber === 1 ? phone : 'Chưa cập nhật',
-        email: branchNumber === 1 ? email : '',
-        timezone,
-        openingHours: '08:00–21:00',
-        stationCount: Math.max(4, staffForThisBranch + 2),
-        staffCapacity: Math.max(4, staffForThisBranch),
-        monthlyRevenue: Math.round(monthlyRevenue / safeBranchCount),
-        capacityPercent: 0,
-        staffUsed: staffForThisBranch,
-        staffLimit: getPackageStaffLimitPerBranch(packageName),
-        status: 'ACTIVE' as const,
-        staffCount: staffForThisBranch
-      }, undefined, idx);
-    });
   };
 
   // Synchronize view state if overview selected changes
@@ -591,27 +441,12 @@ export default function TenantManagement({
     }
   }, [selectedTenantFromOverview]);
 
-  React.useEffect(() => {
-    if (showAddForm && adminCreationMode === 'new' && !formAdminCode) {
-      setFormAdminCode(generateAdminCode());
-    }
-  }, [showAddForm, formAdminCode, adminCreationMode]);
-
+  /* Bảng giá tới sau khi biểu mẫu đã mở thì chọn sẵn gói đầu tiên, để ô gói không rỗng. */
   React.useEffect(() => {
     if (showAddForm && !selectablePackages.some((pkg) => pkg.name === formPackage)) {
       setFormPackage(defaultPackageName);
-      setFormBranchCount(1);
-      setFormStaff(Math.min(5, getSubscriptionStaffLimit(packages, defaultPackageName)));
     }
-  }, [showAddForm, selectablePackages, formPackage, defaultPackageName, packages]);
-
-  /* Doanh thu của mỗi tenant lưu theo tiền tệ riêng của tenant đó. Muốn cộng,
-     so sánh hay sắp xếp thì phải quy về cùng một đơn vị trước. */
-  const getReportRevenue = (tenant: Tenant) => convertMoney(
-    Number(tenant.monthlyRevenue || 0),
-    tenant.currency,
-    reportCurrency
-  );
+  }, [showAddForm, selectablePackages, formPackage, defaultPackageName]);
 
   // Ô tìm ở Header và ô tìm trong trang dùng chung một từ khoá.
   const effectiveSearch = (searchQuery || internalSearch).trim().toLowerCase();
@@ -630,7 +465,11 @@ export default function TenantManagement({
     return matchesSearch && matchesStatus && matchesPackage;
   }).sort((a, b) => {
     const direction = sortDirection === 'asc' ? 1 : -1;
-    if (sortBy === 'revenue') return (getReportRevenue(a) - getReportRevenue(b)) * direction;
+    // Cột doanh thu đã được thay bằng "còn lại": doanh thu của tiệm không tới được màn hình
+    // này nữa (BR-AUTH-030), còn số ngày còn hạn thì là thứ người bán gói thật sự theo dõi.
+    if (sortBy === 'remaining') {
+      return ((a.daysRemaining ?? 0) - (b.daysRemaining ?? 0)) * direction;
+    }
     if (sortBy === 'date') return a.createdAt.localeCompare(b.createdAt) * direction;
     if (sortBy === 'branches') return (getTenantBranchCount(a) - getTenantBranchCount(b)) * direction;
     if (sortBy === 'staff') return (Number(a.staffCount || 0) - Number(b.staffCount || 0)) * direction;
@@ -662,7 +501,11 @@ export default function TenantManagement({
 
   const totalBranchCount = tenants.reduce((sum, tenant) => sum + getTenantBranchCount(tenant), 0);
   const totalStaffCount = tenants.reduce((sum, tenant) => sum + Number(tenant.staffCount || 0), 0);
-  const totalReportRevenue = tenants.reduce((sum, tenant) => sum + getReportRevenue(tenant), 0);
+  const expiringSoonCount = tenants.filter((tenant) => (
+    tenant.daysRemaining !== undefined && tenant.daysRemaining >= 0 && tenant.daysRemaining <= 7
+  )).length;
+
+  const selectedPackageForForm = packages.find((pkg) => pkg.name === formPackage);
 
   /* Chạy lại theo từng lần gõ, nên panel điều kiện và dấu lỗi trên từng ô luôn
      phản ánh trạng thái hiện tại của biểu mẫu. */
@@ -674,18 +517,15 @@ export default function TenantManagement({
       timezone: formTimezone,
       contactEmail: formSalonEmail,
       phone: formPhone,
+      packageId: selectedPackageForForm ? selectedPackageForForm.id : '',
+      expiresAt: formExpiresAt,
+      primaryBranchName: formPrimaryBranchName,
       adminMode: adminCreationMode,
       selectedAdminId: selectedTenantAdminId,
-      adminCode: formAdminCode,
       adminName: formAdminName,
       adminEmail: formAdminEmail,
-      adminPhone: formAdminPhone,
       adminUsername: formAdminUsername,
-      packageName: formPackage,
-      branchCount: formBranchCount,
-      staffCount: Number(formStaff || 0),
-      status: formStatus,
-      trialEndDate: formTrialEndDate
+      adminPassword: formTempPassword
     },
     {
       tenants,
@@ -694,9 +534,17 @@ export default function TenantManagement({
       availableAdminIds: availableTenantAdmins.map((admin) => admin.id)
     }
   );
-  /* Lỗi chỉ hiện sau lần bấm Lưu đầu tiên; xem `addFormSubmitted`. */
-  const addFormErrors: TenantFieldErrors = addFormSubmitted ? addFormValidation.errors : {};
-  const canUseOnlineBooking = hasSubscriptionCapability(packages, { packageName: formPackage }, 'online_booking');
+  /**
+   * Lỗi hiện trên biểu mẫu.
+   *
+   * Lỗi của máy chủ luôn thắng lỗi kiểm tại chỗ: cùng một ô có thể qua được phép kiểm ở trình
+   * duyệt rồi vẫn bị máy chủ từ chối — mã tiệm do người khác vừa chiếm chẳng hạn — và khi đó
+   * câu trả lời đúng là câu của máy chủ.
+   */
+  const addFormErrors: TenantFieldErrors = {
+    ...(addFormSubmitted ? addFormValidation.errors : {}),
+    ...(serverFieldErrors as TenantFieldErrors)
+  };
 
   const openTenantDetail = (
     tenant: Tenant,
@@ -708,9 +556,21 @@ export default function TenantManagement({
     setViewingTenant(tenant);
   };
 
+  /**
+   * Gửi biểu mẫu tạo tiệm — BR-TENANT-004/005.
+   *
+   * Từ ngày 6, hàm này không còn dựng sẵn một đối tượng tiệm rồi đẩy vào state. Nó gói dữ
+   * liệu đúng theo hợp đồng của `POST /api/tenants` và để máy chủ làm cả năm bước trong một
+   * giao dịch: tiệm, chi nhánh chính, tài khoản chủ tiệm, dòng liên kết, và hóa đơn đăng ký.
+   *
+   * Lỗi trả về được gắn vào đúng ô nhập qua `serverFieldErrors`. Đó là lý do tầng gọi API
+   * mang theo danh sách `fields`: một mã tiệm trùng phải đỏ lên ngay tại ô mã tiệm, chứ
+   * không phải hiện một dòng chữ ở góc màn hình rồi để người dùng tự dò.
+   */
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAddFormSubmitted(true);
+    setServerFieldErrors({});
 
     if (!addFormValidation.isValid) {
       const [firstErrorKey] = Object.keys(addFormValidation.errors);
@@ -726,249 +586,182 @@ export default function TenantManagement({
       return;
     }
 
-    const normalizedTenantCode = formTenantCode.trim().toUpperCase();
-    const finalStatus: TenantStatus = formStatus;
-    const trialDaysRemaining = formTrialEndDate
-      ? Math.max(0, Math.ceil((new Date(formTrialEndDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
-      : undefined;
+    const selectedPackage = packages.find((pkg) => pkg.name === formPackage);
+    if (!selectedPackage) {
+      showToast('Không đọc được gói dịch vụ từ máy chủ. Hãy tải lại trang rồi thử lại.', 'error');
+      return;
+    }
 
-    const finalAdminName = formAdminName.trim();
-    const finalAdminEmail = formAdminEmail.trim();
-    const finalAdminPhone = formAdminPhone.trim();
-    let finalAdminCode = formAdminCode.trim();
-    let finalAdminUsername = formAdminUsername.trim();
-    let finalAdminTempPassword = formTempPassword.trim();
     const selectedExistingAdmin = adminCreationMode === 'existing'
       ? availableTenantAdmins.find((admin) => admin.id === selectedTenantAdminId)
       : null;
 
-    finalAdminCode = finalAdminCode || generateAdminCode();
-    finalAdminTempPassword = adminCreationMode === 'new'
-      ? (finalAdminTempPassword || createRandomPassword())
-      : (selectedExistingAdmin?.tempPassword || '');
-    const finalTenantAdminId = finalAdminCode;
-
-    // Validation passed! Now show confirmation modal
     showConfirm(
-      "Xác nhận tạo Tenant",
-      `Bạn có chắc chắn muốn tạo Tenant mới "${formName}" với ${formBranchCount} chi nhánh ban đầu và ${adminCreationMode === 'existing' ? 'gán Tenant Admin có sẵn' : 'tạo Tenant Admin mới'} là ${finalAdminEmail} không?`,
+      'Xác nhận tạo tiệm',
+      `Tạo tiệm "${formName}" theo gói ${formPackage}, ${adminCreationMode === 'existing'
+        ? `giao cho chủ tiệm đã có ${selectedExistingAdmin ? selectedExistingAdmin.email : ''}`
+        : `kèm tài khoản chủ tiệm mới ${formAdminEmail.trim()}`}. Tiệm và chi nhánh chính được lập cùng lúc.`,
       () => {
-        const initialBranches = createInitialBranches(
-          formName,
-          formAddress,
-          formBranchCount,
-          Number(formStaff),
-          formPackage,
-          finalAdminName,
-          formPhone || finalAdminPhone,
-          formSalonEmail,
-          formTimezone,
-          Number(formRevenue || 0)
-        );
+        setSubmitting(true);
 
-        const timestamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
-        const logDescription = `${adminCreationMode === 'existing' ? 'Gán Tenant Admin có sẵn' : 'Tạo Tenant Admin chính'} ${finalAdminEmail} cho tenant`;
-
-        const initialActivities = [
-          {
-            date: timestamp,
-            user: 'Superadmin',
-            type: 'config',
-            description: logDescription
-          }
-        ];
-
-        onAddTenant({
-          id: normalizedTenantCode,
-          name: formName,
-          adminName: finalAdminName,
-          adminEmail: finalAdminEmail,
-          packageName: formPackage,
-          status: finalStatus,
-          monthlyRevenue: Number(formRevenue || 0),
-          contactEmail: formSalonEmail.trim() || undefined,
-          logoUrl: formLogo || undefined,
-          country: formCountry,
-          timezone: formTimezone,
-          currency: formCurrency,
-          defaultLanguage: formDefaultLanguage,
-          allowOnlineBooking: hasSubscriptionCapability(packages, { packageName: formPackage }, 'online_booking')
-            ? formAllowOnlineBooking
-            : false,
-          internalNotes: formInternalNotes.trim() || undefined,
-          staffCount: Number(formStaff),
-          address: formAddress || 'Chưa cập nhật',
-          phone: formPhone || finalAdminPhone || 'Chưa cập nhật',
-          branches: initialBranches,
-          tenantAdminId: finalTenantAdminId,
-          adminCreationMode,
-          isNewAdminCreated: adminCreationMode === 'new',
-          adminUsername: finalAdminUsername,
-          adminPhone: finalAdminPhone,
-          adminTempPassword: finalAdminTempPassword || undefined,
-          adminSendActivationEmail: adminCreationMode === 'new' ? formSendActivationEmail : selectedExistingAdmin?.sendActivationEmail,
-          adminEmailVerified: adminCreationMode === 'existing' ? selectedExistingAdmin?.emailVerified : false,
-          adminPhoneVerified: adminCreationMode === 'existing' ? selectedExistingAdmin?.phoneVerified : false,
-          adminCountry: formCountry,
-          adminTimezone: formTimezone,
-          adminAddress: formAddress || 'Chưa cập nhật',
+        void onAddTenant({
+          code: formTenantCode.trim().toUpperCase(),
+          name: formName.trim(),
+          packageId: selectedPackage.id,
+          // Ô nhập là một ngày, còn hợp đồng API là một mốc thời gian. Lấy cuối ngày để
+          // "hết hạn 31/12" nghĩa là còn dùng được trọn ngày 31, không phải mất từ 0 giờ.
+          expiresAt: new Date(`${formExpiresAt}T23:59:59`).toISOString(),
+          isTrial: formIsTrial,
           billingCycle: formBillingCycle === 'Yearly' ? 'yearly' : 'monthly',
-          planStartDate: formStartDate,
-          trialEndDate: formTrialEndDate || undefined,
-          daysRemaining: finalStatus === 'TRIAL' ? trialDaysRemaining : undefined,
-          paymentStatus: finalStatus === 'TRIAL' ? 'PENDING' : undefined,
-          plan: formPackage,
-          subscriptionPlan: formPackage,
-          customActivities: initialActivities
+          address: formAddress.trim() || undefined,
+          phone: formPhone.trim() || undefined,
+          contactEmail: formSalonEmail.trim() || undefined,
+          timezone: formTimezone,
+          primaryBranchName: formPrimaryBranchName.trim() || undefined,
+          owner: adminCreationMode === 'existing'
+            ? { mode: 'existing', existingUserId: selectedTenantAdminId }
+            : {
+              mode: 'new',
+              email: formAdminEmail.trim(),
+              username: formAdminUsername.trim() || undefined,
+              displayName: formAdminName.trim(),
+              // Bỏ trống thì máy chủ tự sinh và trả về đúng một lần.
+              password: formTempPassword.trim() || undefined
+            }
+        }).then((result) => {
+          setSubmitting(false);
+
+          if (result.status === 'error') {
+            const fields = fieldErrorMap(result.error);
+            setServerFieldErrors(fields);
+
+            if (Object.keys(fields).length === 0) {
+              const { message, tone } = describeApiError(result.error);
+              showToast(message, tone);
+            } else {
+              showToast('Máy chủ từ chối dữ liệu nhập', 'warning', {
+                description: 'Các ô bị từ chối đã được đánh dấu trong biểu mẫu.'
+              });
+            }
+            return;
+          }
+
+          // Mật khẩu chỉ tồn tại ở dạng đọc được đúng lần này. Hiện ra và giữ trên màn hình
+          // cho tới khi Superadmin tự đóng — hệ thống không gửi email và không có đường đọc
+          // lại, nên đóng hộp thoại quá sớm là mất tài khoản vừa tạo.
+          if (result.data.generatedPassword) {
+            setCreatedCredentials({
+              tenantName: result.data.tenant.name,
+              email: formAdminEmail.trim(),
+              password: result.data.generatedPassword
+            });
+          }
+
+          resetCreateForm();
+          setShowAddForm(false);
         });
-
-        // Reset Form
-        setFormName('');
-        setFormTenantCode('');
-        setIsCodeManuallyEdited(false);
-        setFormLogo('');
-        setFormLogoName('');
-        setFormAddress('');
-        setFormPhone('');
-        setFormSalonEmail('');
-        setFormCountry('Vietnam');
-        setFormTimezone('Asia/Ho_Chi_Minh');
-        setFormAdminName('');
-        setFormAdminEmail('');
-        setFormAdminPhone('');
-        setFormAdminCode('');
-        setFormAdminUsername('');
-        setFormTempPassword('');
-        setFormSendActivationEmail(true);
-        setAdminCreationMode('new');
-        setSelectedTenantAdminId('');
-        setFormPackage(defaultPackageName);
-        setFormBillingCycle('Monthly');
-        setFormStartDate(new Date().toISOString().split('T')[0]);
-        setFormTrialEndDate('');
-        setFormStatus('ACTIVE');
-        setFormStaff(Math.min(5, getSubscriptionStaffLimit(packages, defaultPackageName)));
-        setFormBranchCount(1);
-        setFormRevenue(0);
-        setFormCurrency('VND');
-        setFormDefaultLanguage('Vietnamese');
-        setFormAllowOnlineBooking(true);
-        setFormInternalNotes('');
-        setAddFormSubmitted(false);
-
-        setShowAddForm(false);
       }
     );
   };
-
   const handleCancelCreate = () => {
-    // Show confirmation modal for canceling
     showConfirm(
-      "Hủy tạo Tenant",
-      "Bạn có chắc chắn muốn hủy bỏ việc tạo mới? Các thông tin đã nhập sẽ bị mất.",
+      'Hủy tạo tiệm',
+      'Bạn có chắc chắn muốn hủy bỏ việc tạo mới? Các thông tin đã nhập sẽ bị mất.',
       () => {
-        // Reset Form
-        setFormName('');
-        setFormTenantCode('');
-        setIsCodeManuallyEdited(false);
-        setFormLogo('');
-        setFormLogoName('');
-        setFormAddress('');
-        setFormPhone('');
-        setFormSalonEmail('');
-        setFormCountry('Vietnam');
-        setFormTimezone('Asia/Ho_Chi_Minh');
-        setFormAdminName('');
-        setFormAdminEmail('');
-        setFormAdminPhone('');
-        setFormAdminCode('');
-        setFormAdminUsername('');
-        setFormTempPassword('');
-        setFormSendActivationEmail(true);
-        setAdminCreationMode('new');
-        setSelectedTenantAdminId('');
-        setFormPackage(defaultPackageName);
-        setFormBillingCycle('Monthly');
-        setFormStartDate(new Date().toISOString().split('T')[0]);
-        setFormTrialEndDate('');
-        setFormStatus('ACTIVE');
-        setFormStaff(Math.min(5, getSubscriptionStaffLimit(packages, defaultPackageName)));
-        setFormBranchCount(1);
-        setFormRevenue(0);
-        setFormCurrency('VND');
-        setFormDefaultLanguage('Vietnamese');
-        setFormAllowOnlineBooking(true);
-        setFormInternalNotes('');
-        setAddFormSubmitted(false);
-
+        resetCreateForm();
         setShowAddForm(false);
       }
     );
   };
 
+  /**
+   * Sửa hồ sơ tiệm — bốn trường mà `PUT /api/tenants/{id}` nhận.
+   *
+   * Bản cũ gửi kèm gói, trạng thái, số nhân viên, doanh thu và cả mảng chi nhánh. Không
+   * trường nào trong số đó thuộc về lệnh sửa hồ sơ ở máy chủ, và đó là chủ ý chứ không phải
+   * thiếu sót: đổi gói là một quyết định thương mại, khóa tiệm là một hành động riêng
+   * (BR-TENANT-002), còn số nhân viên và chi nhánh là kết quả ĐẾM từ dữ liệu thật chứ không
+   * phải con số ai đó gõ vào (BR-SUB-005).
+   */
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingTenant) return;
+    if (!editingTenant || submitting) return;
 
-    const originalTenant = tenants.find(t => t.id === editingTenant.id);
-    const lockedPackageName = originalTenant?.packageName || editingTenant.packageName;
-    const normalizedAdminEmail = editingTenant.adminEmail.trim().toLowerCase();
-    const adminEmailUsedByAnotherTenant = tenants.some(t => (
-      t.id !== editingTenant.id && t.adminEmail.trim().toLowerCase() === normalizedAdminEmail
-    ));
+    setSubmitting(true);
+    setServerFieldErrors({});
 
-    if (adminEmailUsedByAnotherTenant) {
-      showToast('Email Tenant Admin này đang được dùng ở tenant khác. Theo logic hiện tại, mỗi Tenant Admin chỉ quản lý 1 tenant.', 'error');
-      return;
-    }
+    void onUpdateTenant(editingTenant.id, {
+      name: editingTenant.name.trim(),
+      address: editingTenant.address.trim() || undefined,
+      phone: editingTenant.phone.trim() || undefined,
+      contactEmail: editingTenant.contactEmail ? editingTenant.contactEmail.trim() : undefined
+    }).then((result) => {
+      setSubmitting(false);
 
-    if (editingTenant.packageName !== lockedPackageName) {
-      showToast('Không thể đổi gói trực tiếp trong form cập nhật thông tin Tenant. Vui lòng dùng chức năng "Nâng/Đổi gói" trong tab Gói & thanh toán để hệ thống kiểm tra điều kiện và tạo hóa đơn.', 'warning');
-      setEditingTenant({ ...editingTenant, packageName: lockedPackageName });
-      return;
-    }
+      if (result.status === 'error') {
+        const fields = fieldErrorMap(result.error);
+        setServerFieldErrors(fields);
 
-    const packageLimitIssue = getPackageLimitIssue(editingTenant, lockedPackageName);
-    if (packageLimitIssue) {
-      showToast(`${packageLimitIssue} Vui lòng điều chỉnh số chi nhánh/nhân viên hoặc đổi sang gói phù hợp trước khi lưu.`, 'error');
-      return;
-    }
-
-    const updatedStaffLimit = getPackageStaffLimitPerBranch(lockedPackageName);
-    const currentBranches = editingTenant.branches || [];
-    const updatedBranches = currentBranches.length > 0 ? redistributeBranchStaff(
-      currentBranches,
-      Number(editingTenant.staffCount)
-    ).map((branch) => ({ ...branch, staffLimit: updatedStaffLimit })) : [
-      {
-        id: 'BR-1',
-        name: `${editingTenant.name} - Chi nhánh chính`,
-        address: editingTenant.address || 'Chưa cập nhật',
-        staffUsed: Number(editingTenant.staffCount),
-        staffLimit: updatedStaffLimit,
-        status: 'ACTIVE' as const,
-        staffCount: Number(editingTenant.staffCount)
+        if (Object.keys(fields).length === 0) {
+          const { message, tone } = describeApiError(result.error);
+          showToast(message, tone);
+        }
+        return;
       }
-    ];
 
-    onUpdateTenant(editingTenant.id, {
-      name: editingTenant.name,
-      adminName: editingTenant.adminName.trim(),
-      adminEmail: editingTenant.adminEmail.trim(),
-      packageName: lockedPackageName,
-      status: editingTenant.status,
-      monthlyRevenue: Number(editingTenant.monthlyRevenue),
-      logoUrl: editingTenant.logoUrl,
-      country: editingTenant.country,
-      timezone: editingTenant.timezone,
-      staffCount: Number(editingTenant.staffCount),
-      address: editingTenant.address,
-      phone: editingTenant.phone,
-      branches: updatedBranches
+      setEditingTenant(null);
     });
-    setEditingTenant(null);
   };
 
+  /** Gia hạn — BR-TENANT-006, Superadmin nhập tay hạn dùng mới. */
+  const handleRenewSubmit = () => {
+    if (!renewTarget || !renewDate || submitting) return;
+
+    setSubmitting(true);
+    setServerFieldErrors({});
+
+    void onRenewTenant(renewTarget.id, new Date(`${renewDate}T23:59:59`).toISOString()).then((result) => {
+      setSubmitting(false);
+
+      if (result.status === 'error') {
+        const fields = fieldErrorMap(result.error);
+        setServerFieldErrors(fields);
+
+        if (Object.keys(fields).length === 0) {
+          const { message, tone } = describeApiError(result.error);
+          showToast(message, tone);
+        }
+        return;
+      }
+
+      setRenewTarget(null);
+    });
+  };
+
+  /**
+   * Khóa hoặc mở khóa tiệm — BR-TENANT-002.
+   *
+   * Tiệm quá hạn KHÔNG mở khóa được bằng nút này: `OVERDUE` là kết quả tính từ hạn dùng, và
+   * thứ chữa nó là gia hạn. Máy chủ cũng chỉ nhận đúng hai giá trị `ACTIVE` và `SUSPENDED`.
+   */
+  const handleToggleStatus = (tenant: Tenant) => {
+    const nextStatus = tenant.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+
+    showConfirm(
+      nextStatus === 'SUSPENDED' ? `Khóa tiệm ${tenant.name}?` : `Mở khóa tiệm ${tenant.name}?`,
+      nextStatus === 'SUSPENDED'
+        ? 'Tiệm sẽ chuyển sang chế độ chỉ đọc: xem được dữ liệu nhưng không ghi được gì. Tài khoản chủ tiệm vẫn đăng nhập bình thường.'
+        : 'Tiệm hoạt động trở lại và ghi được dữ liệu ngay.',
+      () => {
+        void onChangeTenantStatus(tenant.id, nextStatus).then((result) => {
+          if (result.status === 'error') {
+            const { message, tone } = describeApiError(result.error);
+            showToast(message, tone);
+          }
+        });
+      }
+    );
+  };
 
   const pendingUpgradeCount = upgradeRequests.filter((request) => request.status === 'PENDING').length;
   const managementTabs = (
@@ -1001,7 +794,7 @@ export default function TenantManagement({
             <span>Quản lý Tenant / Chuỗi tiệm Nail</span>
           </h1>
           <p className="text-xs text-brand-text-muted mt-1">
-            Mỗi dòng là 1 tenant do Superadmin quản lý. Mỗi tenant có 1 Tenant Admin chính và có thể có nhiều chi nhánh.
+            Danh sách đọc trực tiếp từ máy chủ. Một tài khoản chủ tiệm quản được nhiều tiệm, và mỗi tiệm có một chi nhánh chính sinh ra cùng lúc với tiệm.
           </p>
         </div>
         <button 
@@ -1021,19 +814,32 @@ export default function TenantManagement({
         <SummaryTile label="Tổng chi nhánh" value={totalBranchCount.toLocaleString('vi-VN')} />
         <SummaryTile label="Tổng nhân sự" value={totalStaffCount.toLocaleString('vi-VN')} />
         <SummaryTile
-          label="Doanh thu tháng"
-          value={formatMoney(totalReportRevenue, reportCurrency)}
-          hint={`Quy đổi về ${reportCurrency}`}
+          label="Sắp hết hạn"
+          value={expiringSoonCount.toLocaleString('vi-VN')}
+          hint="Còn 7 ngày hoặc ít hơn"
         />
       </div>
 
-      {duplicateTenantAdminGroups > 0 && (
-        <div className="flex items-start gap-2 rounded-card border border-brand-tertiary/30 bg-brand-tertiary/10 px-4 py-3 text-brand-text">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-brand-tertiary" aria-hidden="true" />
-          <div>
-            <p className="font-bold">Có Tenant Admin đang được gắn cho nhiều tenant.</p>
-            <p className="mt-0.5 text-brand-text-muted">Theo logic hiện tại, mỗi Tenant Admin chỉ nên quản lý 1 tenant. Các dòng bị trùng được đánh dấu trong bảng.</p>
+      {/*
+        Ở đây từng có cảnh báo "một Tenant Admin đang được gắn cho nhiều tenant". Cảnh báo ấy
+        đã được gỡ vì BR-AUTH-023 nói ngược lại: một tài khoản chủ tiệm quản nhiều tiệm là
+        chuyện bình thường, và dữ liệu mẫu dựng sẵn một người giữ hai tiệm để demo điều đó.
+      */}
+
+      {loadError && (
+        <div className="flex flex-col gap-3 rounded-card border border-brand-error/30 bg-brand-error/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-brand-error" aria-hidden="true" />
+            <div>
+              <p className="font-bold text-brand-text">Không tải được danh sách tiệm.</p>
+              <p className="mt-0.5 text-brand-text-muted">{loadError.message}</p>
+            </div>
           </div>
+          {onReload && (
+            <Button type="button" variant="secondary" onClick={onReload} className="shrink-0">
+              Thử lại
+            </Button>
+          )}
         </div>
       )}
 
@@ -1063,7 +869,6 @@ export default function TenantManagement({
               <option value="ALL">Tất cả</option>
               <option value="ACTIVE">Đang hoạt động</option>
               <option value="TRIAL">Dùng thử</option>
-              <option value="EXPIRING">Sắp đến hạn</option>
               <option value="OVERDUE">Quá hạn</option>
               <option value="SUSPENDED">Tạm ngưng</option>
             </BeautifulSelect>
@@ -1164,7 +969,6 @@ export default function TenantManagement({
             header: 'Tenant Admin chính',
             hideBelow: 'md',
             cell: (tenant) => {
-              const adminTenantCount = tenantAdminUsageByEmail[tenant.adminEmail.trim().toLowerCase()] || 0;
               const adminLocked = isTenantAdminSuspended(tenant, tenantAdmins);
               const initials = tenant.adminName
                 ? tenant.adminName.trim().split(/\s+/).filter(Boolean).slice(-2).map(w => w[0]).join('').toUpperCase()
@@ -1192,14 +996,6 @@ export default function TenantManagement({
                           title="Tài khoản Tenant Admin bị khóa"
                         >
                           <Lock className="w-2.5 h-2.5" /> Khóa
-                        </span>
-                      )}
-                      {!adminLocked && adminTenantCount > 1 && (
-                        <span
-                          title={`Tenant Admin này đang được gắn cho ${adminTenantCount} tenant`}
-                          className="rounded px-1 py-0.5 text-[9px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 shrink-0"
-                        >
-                          {adminTenantCount} tiệm
                         </span>
                       )}
                     </div>
@@ -1240,20 +1036,25 @@ export default function TenantManagement({
             cell: (tenant) => Number(tenant.staffCount || 0).toLocaleString('vi-VN')
           },
           {
-            key: 'revenue',
-            header: <SortableHeader label={`Doanh thu (${reportCurrency})`} column="revenue" activeColumn={sortBy} direction={sortDirection} onSort={toggleSort} />,
+            key: 'remaining',
+            header: <SortableHeader label="Còn lại" column="remaining" activeColumn={sortBy} direction={sortDirection} onSort={toggleSort} />,
             numeric: true,
             hideBelow: 'lg',
-            cell: (tenant) => (
-              <span
-                className="whitespace-nowrap font-medium text-xs sm:text-sm"
-                title={tenant.currency && tenant.currency !== reportCurrency
-                  ? `Nguyên tệ: ${formatMoney(Number(tenant.monthlyRevenue || 0), tenant.currency)}`
-                  : undefined}
-              >
-                {formatMoney(getReportRevenue(tenant), reportCurrency)}
-              </span>
-            )
+            // Số ngày còn hạn do máy chủ tính lúc đọc (BR-TENANT-002) và mang giá trị âm khi
+            // tiệm đã quá hạn — hiển thị đúng như vậy thay vì kẹp về 0.
+            cell: (tenant) => {
+              const days = tenant.daysRemaining;
+              if (days === undefined) return <span className="text-brand-text-muted">—</span>;
+              return (
+                <span
+                  className={`whitespace-nowrap font-medium text-xs sm:text-sm ${
+                    days < 0 ? 'text-brand-error' : days <= 7 ? 'text-brand-tertiary' : ''
+                  }`}
+                >
+                  {days < 0 ? `Quá ${Math.abs(days)} ngày` : `${days} ngày`}
+                </span>
+              );
+            }
           },
           {
             key: 'actions',
@@ -1282,41 +1083,38 @@ export default function TenantManagement({
                 >
                   <Edit />
                 </Button>
-                {tenant.status === 'SUSPENDED' ? (
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    iconOnly
-                    aria-label={`Mở khóa tenant ${tenant.name}`}
-                    title="Mở khóa toàn bộ tenant"
-                    onClick={() => showConfirm(
-                      'Mở khóa Tenant',
-                      `Bạn chắc chắn muốn mở khóa Tenant "${tenant.name}"? Tenant Admin và toàn bộ chi nhánh sẽ được truy cập lại hệ thống.`,
-                      () => onUpdateTenant(tenant.id, { status: 'ACTIVE' })
-                    )}
-                  >
-                    <Unlock />
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    iconOnly
-                    aria-label={`Khóa tạm thời tenant ${tenant.name}`}
-                    title="Khóa tạm thời toàn bộ tenant"
-                    onClick={() => showConfirm(
-                      'Khóa tạm thời Tenant',
-                      `Bạn chắc chắn muốn khóa tạm thời Tenant "${tenant.name}"? Tenant Admin và nhân sự của tất cả chi nhánh sẽ bị chặn truy cập.`,
-                      () => onUpdateTenant(tenant.id, { status: 'SUSPENDED' })
-                    )}
-                  >
-                    <Lock />
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="small"
+                  iconOnly
+                  aria-label={`Gia hạn tiệm ${tenant.name}`}
+                  title="Gia hạn hạn dùng"
+                  onClick={() => {
+                    setRenewTarget(tenant);
+                    // Gợi ý mốc mới là hạn hiện tại cộng một tháng; Superadmin sửa lại được.
+                    const base = tenant.subscriptionRenewsAt ? new Date(tenant.subscriptionRenewsAt) : new Date();
+                    const suggested = new Date(Math.max(base.getTime(), Date.now()));
+                    suggested.setMonth(suggested.getMonth() + 1);
+                    setRenewDate(suggested.toISOString().slice(0, 10));
+                    setServerFieldErrors({});
+                  }}
+                >
+                  <RefreshCw />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="small"
+                  iconOnly
+                  aria-label={tenant.status === 'SUSPENDED' ? `Mở khóa tiệm ${tenant.name}` : `Khóa tiệm ${tenant.name}`}
+                  title={tenant.status === 'SUSPENDED' ? 'Mở khóa tiệm' : 'Khóa tiệm về chế độ chỉ đọc'}
+                  onClick={() => handleToggleStatus(tenant)}
+                >
+                  {tenant.status === 'SUSPENDED' ? <Unlock /> : <Lock />}
+                </Button>
                 {/* Xóa là hành động nguy hiểm: kiểm tra ràng buộc logic trước,
                     nếu thỏa mãn thì mới mở bước xác nhận an toàn. */}
                 {(() => {
-                  const eligibility = getTenantDeletionEligibility(tenant, { upgradeRequests });
+                  const eligibility = getTenantDeletionEligibility(tenant);
                   return (
                     <Button
                       variant="danger"
@@ -1354,806 +1152,510 @@ export default function TenantManagement({
           tenant={viewingTenant}
           packages={packages}
           onClose={() => setViewingTenant(null)}
-          onUpdateTenant={(id, updated) => {
-            onUpdateTenant(id, updated);
-            // Update viewingTenant state dynamically so the detail modal instantly reacts
-            setViewingTenant((prev) => prev && prev.id === id ? { ...prev, ...updated, lastSync: new Date().toISOString() } : prev);
-          }}
           onEditClick={() => setEditingTenant(viewingTenant)}
           initialTab={detailInitialTab}
           initialViewMode={detailInitialViewMode}
         />
       )}
 
-      {/* EDIT MODAL */}
+      {/*
+        HỘP THOẠI SỬA HỒ SƠ TIỆM
+
+        Chỉ còn bốn ô, đúng bằng những gì `PUT /api/tenants/{id}` nhận. Gói, trạng thái, số
+        chi nhánh và số nhân sự đã rời khỏi đây: hai cái đầu có đường đi riêng, hai cái sau là
+        kết quả đếm từ dữ liệu thật chứ không phải con số ai đó gõ vào (BR-SUB-005).
+      */}
       {editingTenant && (
         <Modal
           open
           onClose={() => setEditingTenant(null)}
-          title="Cập Nhật Thông Tin Tenant"
+          title={`Sửa hồ sơ tiệm ${editingTenant.name}`}
           size="medium"
           closeOnBackdrop={false}
           footer={
             <>
-              <button type="button" onClick={() => setEditingTenant(null)} className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text-muted px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer">Hủy</button>
-              <button type="submit" form="edit-tenant-form" className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-2"><Save className="w-3.5 h-3.5" /><span>Lưu cập nhật</span></button>
+              <Button type="button" variant="secondary" onClick={() => setEditingTenant(null)}>Hủy</Button>
+              <Button type="submit" form="edit-tenant-form" disabled={submitting}>
+                <Save className="h-3.5 w-3.5" />
+                <span>{submitting ? 'Đang lưu…' : 'Lưu cập nhật'}</span>
+              </Button>
             </>
           }
         >
-          <form id="edit-tenant-form" onSubmit={handleEditSubmit}>
-            <div className="space-y-4">
-              
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Tên tenant / chuỗi tiệm *</label>
-                <input 
-                  type="text" 
-                  value={editingTenant.name}
-                  onChange={(e) => setEditingTenant({ ...editingTenant, name: e.target.value })}
-                  className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
-                  required
-                />
-              </div>
+          <form id="edit-tenant-form" onSubmit={handleEditSubmit} noValidate className="space-y-4">
+            <div className="rounded-control border border-brand-outline/45 bg-brand-surface-lowest px-3 py-2 text-caption text-brand-text-muted">
+              Mã tiệm <strong className="text-brand-text">{editingTenant.code || editingTenant.id}</strong> và
+              gói <strong className="text-brand-text">{editingTenant.packageName}</strong> được chốt lúc lập tiệm
+              và không sửa ở đây.
+            </div>
 
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Ảnh đại diện Tenant</label>
-                <div className="flex items-center gap-4 rounded-xl border border-brand-outline/40 bg-brand-surface-lowest p-3">
-                  {renderTenantAvatar(editingTenant, 'w-14 h-14')}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-brand-text truncate">
-                      {editingTenant.logoUrl ? 'Đã có ảnh đại diện' : 'Chưa có ảnh đại diện'}
-                    </p>
-                    <p className="text-[10px] text-brand-text-muted mt-0.5">PNG, JPG hoặc JPEG.</p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-primary/10 text-brand-primary border border-brand-primary/20 text-[10px] font-bold cursor-pointer hover:bg-brand-primary/15">
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Chọn ảnh</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleEditLogoChange}
-                          className="hidden"
-                        />
-                      </label>
-                      {editingTenant.logoUrl && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingTenant({ ...editingTenant, logoUrl: undefined })}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-surface-high text-brand-text-muted border border-brand-outline/35 text-[10px] font-bold cursor-pointer hover:text-brand-error"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          <span>Xóa ảnh</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <Field label="Tên tiệm" required error={serverFieldErrors.name}>
+              <input
+                type="text"
+                value={editingTenant.name}
+                onChange={(e) => setEditingTenant({ ...editingTenant, name: e.target.value })}
+                className="form-control"
+              />
+            </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Tên Tenant Admin chính *</label>
-                  <input 
-                    type="text" 
-                    value={editingTenant.adminName}
-                    onChange={(e) => setEditingTenant({ ...editingTenant, adminName: e.target.value })}
-                    className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Email Tenant Admin *</label>
-                  <input 
-                    type="email" 
-                    value={editingTenant.adminEmail}
-                    onChange={(e) => setEditingTenant({ ...editingTenant, adminEmail: e.target.value })}
-                    className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
-                    required
-                  />
-                </div>
-              </div>
+            <Field label="Địa chỉ" error={serverFieldErrors.address}>
+              <input
+                type="text"
+                value={editingTenant.address}
+                onChange={(e) => setEditingTenant({ ...editingTenant, address: e.target.value })}
+                className="form-control"
+              />
+            </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Gói Dịch Vụ</label>
-                  <div className="bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text flex items-center justify-between gap-2">
-                    <span className="font-bold">Gói {editingTenant.packageName}</span>
-                    <Lock className="w-3.5 h-3.5 text-brand-text-muted shrink-0" />
-                  </div>
-                  <p className="mt-1.5 text-[10px] leading-relaxed text-brand-text-muted">
-                    Đổi gói cần kiểm tra giới hạn chi nhánh/nhân viên và phát hành hóa đơn, nên phải thực hiện trong luồng Gói & thanh toán.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setViewingTenant(tenants.find(t => t.id === editingTenant.id) || editingTenant);
-                      setEditingTenant(null);
-                    }}
-                    className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold text-brand-primary hover:text-brand-primary/80 cursor-pointer"
-                  >
-                    <Sliders className="w-3.5 h-3.5" />
-                    <span>Mở luồng Nâng/Đổi gói</span>
-                  </button>
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Trạng Thái</label>
-                  <BeautifulSelect
-                    value={editingTenant.status}
-                    onChange={(e) => setEditingTenant({ ...editingTenant, status: e.target.value as TenantStatus })}
-                    className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer"
-                  >
-                    <option value="ACTIVE">Hoạt động (ACTIVE)</option>
-                    <option value="TRIAL">Dùng thử (TRIAL)</option>
-                    <option value="EXPIRING">Sắp hết hạn (EXPIRING)</option>
-                    <option value="OVERDUE">Quá hạn thanh toán (OVERDUE)</option>
-                    <option value="SUSPENDED">Khóa / Tạm ngưng (SUSPENDED)</option>
-                  </BeautifulSelect>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Doanh thu tháng toàn tenant</label>
-                  <input 
-                    type="number" 
-                    value={editingTenant.monthlyRevenue}
-                    onChange={(e) => setEditingTenant({ ...editingTenant, monthlyRevenue: Number(e.target.value) })}
-                    className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Tổng nhân sự toàn tenant</label>
-                  <input 
-                    type="number" 
-                    value={editingTenant.staffCount}
-                    onChange={(e) => setEditingTenant({ ...editingTenant, staffCount: Number(e.target.value) })}
-                    className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Số chi nhánh</label>
-                  <div className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs font-bold text-brand-text">
-                    {getTenantBranchCount(editingTenant)} chi nhánh
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Giới hạn theo gói</label>
-                  <div className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs font-bold text-brand-text">
-                    {getTenantBranchLimitLabel(editingTenant.packageName)}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Địa chỉ đại diện / chi nhánh chính</label>
-                <input 
-                  type="text" 
-                  value={editingTenant.address}
-                  onChange={(e) => setEditingTenant({ ...editingTenant, address: e.target.value })}
-                  className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Điện thoại tenant</label>
-                <input 
-                  type="text" 
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Số điện thoại" error={serverFieldErrors.phone}>
+                <input
+                  type="tel"
                   value={editingTenant.phone}
                   onChange={(e) => setEditingTenant({ ...editingTenant, phone: e.target.value })}
-                  className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary"
+                  className="form-control"
                 />
-              </div>
+              </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Quốc gia</label>
-                  <BeautifulSelect
-                    value={editingTenant.country || 'Vietnam'}
-                    onChange={(e) => {
-                      const nextCountry = e.target.value;
-                      setEditingTenant({
-                        ...editingTenant,
-                        country: nextCountry,
-                        timezone: getDefaultTimezoneForCountry(nextCountry)
-                      });
-                    }}
-                    className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer"
-                  >
-                    <option value="Vietnam">Vietnam</option>
-                    <option value="United States">United States</option>
-                    <option value="Canada">Canada</option>
-                    <option value="Australia">Australia</option>
-                    <option value="Japan">Japan</option>
-                    <option value="Korea">Korea</option>
-                  </BeautifulSelect>
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-brand-text-muted mb-1.5">Múi giờ</label>
-                  <BeautifulSelect
-                    value={editingTenant.timezone || getDefaultTimezoneForCountry(editingTenant.country || 'Vietnam')}
-                    onChange={(e) => setEditingTenant({ ...editingTenant, timezone: e.target.value })}
-                    className="w-full bg-brand-surface-lowest border border-brand-outline/40 rounded-lg px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary cursor-pointer"
-                  >
-                    <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
-                    <option value="America/New_York">America/New_York (GMT-5)</option>
-                    <option value="America/Toronto">America/Toronto (GMT-5)</option>
-                    <option value="America/Los_Angeles">America/Los_Angeles (GMT-8)</option>
-                    <option value="Europe/London">Europe/London (GMT+0)</option>
-                    <option value="Asia/Tokyo">Asia/Tokyo (GMT+9)</option>
-                    <option value="Asia/Seoul">Asia/Seoul (GMT+9)</option>
-                    <option value="Australia/Sydney">Australia/Sydney (GMT+11)</option>
-                  </BeautifulSelect>
-                </div>
-              </div>
-
+              <Field label="Email liên hệ" error={serverFieldErrors.contactEmail}>
+                <input
+                  type="email"
+                  value={editingTenant.contactEmail || ''}
+                  onChange={(e) => setEditingTenant({ ...editingTenant, contactEmail: e.target.value })}
+                  className="form-control"
+                />
+              </Field>
             </div>
           </form>
         </Modal>
       )}
 
-      {/* ADD MODAL */}
+      {/* HỘP THOẠI GIA HẠN — BR-TENANT-006 */}
+      {renewTarget && (
+        <Modal
+          open
+          onClose={() => setRenewTarget(null)}
+          title={`Gia hạn tiệm ${renewTarget.name}`}
+          size="small"
+          footer={
+            <>
+              <Button type="button" variant="secondary" onClick={() => setRenewTarget(null)}>Hủy</Button>
+              <Button type="button" onClick={handleRenewSubmit} disabled={submitting || !renewDate}>
+                {submitting ? 'Đang lưu…' : 'Gia hạn'}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-caption text-brand-text-muted">
+              Hạn dùng hiện tại:{' '}
+              <strong className="text-brand-text">
+                {renewTarget.subscriptionRenewsAt
+                  ? new Date(renewTarget.subscriptionRenewsAt).toLocaleDateString('vi-VN')
+                  : 'Chưa rõ'}
+              </strong>
+              {renewTarget.daysRemaining !== undefined && (
+                <> · {renewTarget.daysRemaining < 0
+                  ? `đã quá hạn ${Math.abs(renewTarget.daysRemaining)} ngày`
+                  : `còn ${renewTarget.daysRemaining} ngày`}</>
+              )}
+            </p>
+
+            <Field
+              label="Hạn dùng mới"
+              required
+              error={serverFieldErrors.expiresAt}
+              helper="Máy chủ từ chối ngày nằm trong quá khứ."
+            >
+              <input
+                type="date"
+                value={renewDate}
+                onChange={(e) => setRenewDate(e.target.value)}
+                className="form-control"
+              />
+            </Field>
+
+            {renewTarget.isTrial && (
+              <p className="text-caption text-brand-text-muted">
+                Tiệm đang ở chế độ dùng thử. Gia hạn sẽ tắt cờ dùng thử và chuyển tiệm sang trạng thái
+                đang hoạt động.
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/*
+        HỘP THOẠI MẬT KHẨU TẠM
+
+        Chuỗi này rời khỏi máy chủ đúng một lần. Hệ thống không gửi email và không có đường
+        đọc lại, nên hộp thoại không tự đóng — Superadmin phải chủ động xác nhận đã lưu.
+      */}
+      {createdCredentials && (
+        <Modal
+          open
+          onClose={() => setCreatedCredentials(null)}
+          title="Mật khẩu tạm của chủ tiệm mới"
+          size="small"
+          closeOnBackdrop={false}
+          footer={
+            <Button type="button" onClick={() => setCreatedCredentials(null)}>Tôi đã lưu lại</Button>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-caption text-brand-text-muted">
+              Đã lập tiệm <strong className="text-brand-text">{createdCredentials.tenantName}</strong>.
+              Máy chủ vừa sinh mật khẩu dưới đây và <strong className="text-brand-text">chỉ hiển thị một lần</strong> —
+              hệ thống không gửi email, cũng không có cách xem lại.
+            </p>
+
+            <div className="space-y-1 rounded-control border border-brand-outline bg-brand-surface-lowest px-3 py-2.5">
+              <p className="text-caption text-brand-text-muted">Đăng nhập bằng</p>
+              <p className="font-mono text-sm font-bold text-brand-text">{createdCredentials.email}</p>
+              <p className="mt-2 text-caption text-brand-text-muted">Mật khẩu tạm</p>
+              <p className="font-mono text-lg font-black tracking-wide text-brand-text">{createdCredentials.password}</p>
+            </div>
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                void navigator.clipboard.writeText(createdCredentials.password)
+                  .then(() => showToast('Đã sao chép mật khẩu tạm.', 'success'))
+                  .catch(() => showToast('Trình duyệt không cho sao chép. Hãy chọn và chép tay.', 'warning'));
+              }}
+            >
+              Sao chép mật khẩu
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* BIỂU MẪU TẠO TIỆM — BR-TENANT-004/005 */}
       {showAddForm && (
         <Modal
           open
           onClose={handleCancelCreate}
           icon={<Store className="w-5 h-5" />}
-          title="Tạo Mới Tenant Hệ Thống"
-          size="fullscreen"
+          title="Lập tiệm mới"
+          size="large"
           closeOnBackdrop={false}
-          bodyClassName="!p-0"
           footer={
             <>
-              <button type="button" onClick={handleCancelCreate} className="bg-brand-surface-highest hover:bg-brand-surface-highest/80 text-brand-text px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer">Hủy</button>
-              <button type="submit" form="add-tenant-form" className="bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary px-5 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-2"><Plus className="w-3.5 h-3.5 stroke-[3]" /><span>Tạo tenant</span></button>
+              <Button type="button" variant="secondary" onClick={handleCancelCreate}>Hủy</Button>
+              <Button type="submit" form="add-tenant-form" disabled={submitting}>
+                <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                <span>{submitting ? 'Đang lập tiệm…' : 'Lập tiệm'}</span>
+              </Button>
             </>
           }
         >
-          <form id="add-tenant-form" onSubmit={handleAddSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
-            <div className="flex-1 overflow-y-auto p-6 space-y-7">
+          <form id="add-tenant-form" onSubmit={handleAddSubmit} noValidate className="space-y-8">
 
-              {/* SECTION 1: THÔNG TIN TENANT */}
-              <section className="space-y-4">
-                <FormSectionHeading step={1} title="Thông tin tenant / chuỗi tiệm" />
+            <section className="space-y-4">
+              <FormSectionHeading step={1} title="Hồ sơ tiệm" />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TenantFormField
-                    fieldKey="name"
-                    label="Tên tenant / chuỗi tiệm Nail"
+              <div className="grid gap-4 md:grid-cols-2">
+                <div data-tenant-field="name">
+                  <Field label="Tên tiệm" required error={addFormErrors.name}>
+                    <input
+                      type="text"
+                      value={formName}
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      placeholder="Nailé Studio"
+                      className="form-control"
+                    />
+                  </Field>
+                </div>
+
+                <div data-tenant-field="code">
+                  <Field
+                    label="Mã tiệm"
                     required
-                    error={addFormErrors.name}
+                    error={addFormErrors.code}
+                    helper="Gợi ý tự động từ tên; sửa được. Mã tiệm không đổi lại sau khi lập."
                   >
                     <input
                       type="text"
-                      placeholder="Ví dụ: Blossom Nail & Spa"
-                      value={formName}
-                      onChange={(e) => handleNameChange(e.target.value)}
-                    />
-                  </TenantFormField>
-
-                  <div data-tenant-field="code" className="space-y-1.5">
-                    <Field
-                      label="Mã tenant"
-                      required
-                      error={addFormErrors.code}
-                      helper={!addFormErrors.code ? 'Tự sinh từ tên tenant; có thể sửa tay.' : undefined}
-                    >
-                      <input
-                        type="text"
-                        placeholder="Ví dụ: BL-STUDIO-001"
-                        value={formTenantCode}
-                        onChange={(e) => {
-                          setFormTenantCode(e.target.value);
-                          setIsCodeManuallyEdited(true);
-                        }}
-                        className="uppercase"
-                      />
-                    </Field>
-                    <Button
-                      variant="link"
-                      size="small"
-                      iconLeading={<RefreshCw />}
-                      onClick={() => {
-                        setFormTenantCode(generateCodeFromName(formName));
-                        setIsCodeManuallyEdited(false);
+                      value={formTenantCode}
+                      onChange={(e) => {
+                        setIsCodeManuallyEdited(true);
+                        setFormTenantCode(e.target.value.toUpperCase());
                       }}
-                    >
-                      Tạo lại mã từ tên
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Logo tenant */}
-                <div className="ui-field">
-                  <span className="ui-field-label">Logo tenant</span>
-                  <div
-                    onDragOver={handleLogoDragOver}
-                    onDrop={handleLogoDrop}
-                    className="relative flex flex-col items-center justify-center rounded-control border-2 border-dashed border-brand-outline p-4 transition-colors hover:border-brand-primary/60"
-                  >
-                    <input
-                      type="file"
-                      accept="image/*"
-                      aria-label="Chọn logo tenant"
-                      onChange={handleLogoChange}
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      placeholder="NS-123"
+                      className="form-control font-mono"
                     />
-                    {formLogo ? (
-                      <div className="z-10 flex items-center gap-3">
-                        <img src={formLogo} alt="Xem trước logo" className="h-12 w-12 rounded-control border border-brand-outline object-cover" referrerPolicy="no-referrer" />
-                        <div className="text-left">
-                          <p className="max-w-[200px] truncate font-semibold text-brand-text">{formLogoName || 'logo.png'}</p>
-                          <Button
-                            variant="link"
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setFormLogo('');
-                              setFormLogoName('');
-                            }}
-                          >
-                            Xóa ảnh
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1 text-center">
-                        <Upload className="mx-auto h-6 w-6 text-brand-text-muted" aria-hidden="true" />
-                        <p className="text-brand-text">Kéo thả logo vào đây hoặc <span className="font-semibold text-brand-primary">chọn từ thiết bị</span></p>
-                        <p className="text-caption text-brand-text-muted">PNG, JPG hoặc JPEG, tối đa 5MB.</p>
-                      </div>
-                    )}
-                  </div>
+                  </Field>
                 </div>
+              </div>
 
-                <TenantFormField
-                  fieldKey="address"
-                  label="Địa chỉ đại diện / chi nhánh chính"
-                  required
-                  error={addFormErrors.address}
-                >
+              <div data-tenant-field="address">
+                <Field label="Địa chỉ" required error={addFormErrors.address}>
                   <input
                     type="text"
-                    placeholder="Số nhà, đường, quận/huyện, tỉnh/thành phố"
                     value={formAddress}
                     onChange={(e) => setFormAddress(e.target.value)}
+                    placeholder="95 Võ Văn Tần, Quận 3, TP. Hồ Chí Minh"
+                    className="form-control"
                   />
-                </TenantFormField>
+                </Field>
+              </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TenantFormField
-                    fieldKey="phone"
-                    label="Số điện thoại tenant"
-                    error={addFormErrors.phone}
-                    helper={!addFormErrors.phone ? 'Không bắt buộc. Ví dụ: 0901234567.' : undefined}
-                  >
+              <div className="grid gap-4 md:grid-cols-3">
+                <div data-tenant-field="phone">
+                  <Field label="Số điện thoại" error={addFormErrors.phone}>
                     <input
                       type="tel"
-                      placeholder="0901234567"
                       value={formPhone}
                       onChange={(e) => setFormPhone(e.target.value)}
+                      placeholder="0283930001"
+                      className="form-control"
                     />
-                  </TenantFormField>
-
-                  <TenantFormField
-                    fieldKey="contactEmail"
-                    label="Email liên hệ tenant"
-                    error={addFormErrors.contactEmail}
-                    helper={!addFormErrors.contactEmail ? 'Không bắt buộc. Dùng cho liên hệ vận hành.' : undefined}
-                  >
-                    <input
-                      type="email"
-                      placeholder="contact@tiemnail.com"
-                      value={formSalonEmail}
-                      onChange={(e) => setFormSalonEmail(e.target.value)}
-                    />
-                  </TenantFormField>
+                  </Field>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TenantFormField fieldKey="country" label="Quốc gia">
-                    <BeautifulSelect value={formCountry} onChange={(e) => handleCountryChange(e.target.value)}>
-                      {COUNTRY_OPTIONS.map((country) => (
-                        <option key={country} value={country}>{country}</option>
-                      ))}
-                    </BeautifulSelect>
-                  </TenantFormField>
+                <div data-tenant-field="contactEmail">
+                  <Field label="Email liên hệ" error={addFormErrors.contactEmail}>
+                    <input
+                      type="email"
+                      value={formSalonEmail}
+                      onChange={(e) => setFormSalonEmail(e.target.value)}
+                      placeholder="lienhe@tiemnail.vn"
+                      className="form-control"
+                    />
+                  </Field>
+                </div>
 
-                  <TenantFormField
-                    fieldKey="timezone"
-                    label="Múi giờ"
-                    required
-                    error={addFormErrors.timezone}
-                  >
-                    <BeautifulSelect value={formTimezone} onChange={(e) => setFormTimezone(e.target.value)}>
+                <div data-tenant-field="timezone">
+                  <Field label="Múi giờ" required error={addFormErrors.timezone}>
+                    <BeautifulSelect
+                      value={formTimezone}
+                      onChange={(e) => setFormTimezone(e.target.value)}
+                      className="form-control"
+                    >
                       {TIMEZONE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
                     </BeautifulSelect>
-                  </TenantFormField>
-                </div>
-              </section>
-
-              {/* SECTION 2: TENANT ADMIN CHÍNH */}
-              <section className="space-y-4">
-                <FormSectionHeading step={2} title="Tenant Admin chính" />
-
-                <p className="flex items-start gap-2 rounded-control border border-brand-primary/20 bg-brand-primary/10 p-3 text-brand-text">
-                  <Shield className="mt-0.5 h-4 w-4 shrink-0 text-brand-primary" aria-hidden="true" />
-                  <span>
-                    <strong className="font-bold">Mỗi tenant có đúng một Tenant Admin chính.</strong>{' '}
-                    <span className="text-brand-text-muted">Có thể tạo tài khoản mới hoặc gán một Tenant Admin đã tạo trước đó nhưng chưa quản lý tenant nào.</span>
-                  </span>
-                </p>
-
-                <div data-tenant-field="adminSelection" className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleAdminCreationModeChange('new')}
-                      aria-pressed={adminCreationMode === 'new'}
-                      className={`rounded-control border p-3 text-left ${
-                        adminCreationMode === 'new'
-                          ? 'border-brand-primary bg-brand-primary/10 text-brand-text ring-1 ring-brand-primary/20'
-                          : 'border-brand-outline bg-brand-surface-lowest text-brand-text-muted hover:bg-brand-surface'
-                      }`}
-                    >
-                      <span className="block font-bold text-brand-text">Tạo Tenant Admin mới</span>
-                      <span className="mt-1 block text-caption">Nhập thông tin admin mới và gửi email kích hoạt.</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAdminCreationModeChange('existing')}
-                      disabled={availableTenantAdmins.length === 0}
-                      aria-pressed={adminCreationMode === 'existing'}
-                      className={`rounded-control border p-3 text-left ${
-                        availableTenantAdmins.length === 0
-                          ? 'cursor-not-allowed border-brand-outline bg-brand-surface-lowest text-brand-text-muted opacity-60'
-                          : adminCreationMode === 'existing'
-                            ? 'border-brand-secondary bg-brand-secondary/10 text-brand-text ring-1 ring-brand-secondary/20'
-                            : 'border-brand-outline bg-brand-surface-lowest text-brand-text-muted hover:bg-brand-surface'
-                      }`}
-                    >
-                      <span className="block font-bold text-brand-text">Dùng Tenant Admin có sẵn</span>
-                      <span className="mt-1 block text-caption">
-                        {availableTenantAdmins.length > 0
-                          ? `${availableTenantAdmins.length} admin chưa gán tenant`
-                          : 'Chưa có admin trống để gán'}
-                      </span>
-                    </button>
-                  </div>
-
-                  {adminCreationMode === 'existing' && (
-                    <Field
-                      label="Chọn Tenant Admin có sẵn"
-                      required
-                      error={addFormErrors.adminSelection}
-                      helper={!addFormErrors.adminSelection ? 'Chỉ hiển thị Tenant Admin chưa quản lý tenant nào.' : undefined}
-                    >
-                      <BeautifulSelect
-                        value={selectedTenantAdminId}
-                        onChange={(e) => selectExistingTenantAdmin(e.target.value)}
-                      >
-                        <option value="">Chọn Tenant Admin chưa gán tenant</option>
-                        {availableTenantAdmins.map((admin) => (
-                          <option key={admin.id} value={admin.id}>
-                            {(admin.adminCode || admin.id)} — {admin.name} — {admin.email}
-                          </option>
-                        ))}
-                      </BeautifulSelect>
-                    </Field>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div data-tenant-field="adminCode" className="space-y-1.5">
-                    <Field label="Mã Tenant Admin" error={addFormErrors.adminCode}>
-                      <input
-                        type="text"
-                        placeholder="TA-0000"
-                        value={formAdminCode}
-                        onChange={(e) => setFormAdminCode(e.target.value)}
-                        readOnly={adminCreationMode === 'existing'}
-                      />
-                    </Field>
-                    {adminCreationMode === 'new' && (
-                      <Button variant="link" size="small" onClick={() => setFormAdminCode(generateAdminCode())}>
-                        Tạo mã khác
-                      </Button>
-                    )}
-                  </div>
-
-                  <Field label="Vai trò" helper="Không đổi được — mỗi tenant có một Tenant Admin chính.">
-                    <input type="text" value="Tenant Admin chính" readOnly />
                   </Field>
                 </div>
+              </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TenantFormField
-                    fieldKey="adminName"
-                    label="Tên Tenant Admin chính"
+              <div data-tenant-field="primaryBranchName">
+                <Field
+                  label="Tên chi nhánh chính"
+                  error={addFormErrors.primaryBranchName}
+                  helper="Bỏ trống thì máy chủ đặt là “Chi nhánh chính”. Mỗi tiệm có đúng một chi nhánh chính và nó sinh ra cùng tiệm (BR-BRANCH-001)."
+                >
+                  <input
+                    type="text"
+                    value={formPrimaryBranchName}
+                    onChange={(e) => setFormPrimaryBranchName(e.target.value)}
+                    placeholder="Chi nhánh Quận 3"
+                    className="form-control"
+                  />
+                </Field>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <FormSectionHeading step={2} title="Gói đăng ký" />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div data-tenant-field="packageId">
+                  <Field
+                    label="Gói dịch vụ"
                     required
-                    error={addFormErrors.adminName}
+                    error={addFormErrors.packageId}
+                    helper={selectedPackageForForm
+                      ? `${getTenantBranchLimitLabel(formPackage)} · ${getTenantStaffLimitLabel(formPackage)} · ${formatMoney(selectedPackageForForm.price, reportCurrency)}/tháng`
+                      : 'Đang đọc bảng giá từ máy chủ…'}
                   >
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: Nguyễn Văn A"
-                      value={formAdminName}
-                      onChange={(e) => setFormAdminName(e.target.value)}
-                      readOnly={adminCreationMode === 'existing'}
-                    />
-                  </TenantFormField>
-
-                  <TenantFormField
-                    fieldKey="adminEmail"
-                    label="Email Tenant Admin"
-                    required
-                    error={addFormErrors.adminEmail}
-                    helper={!addFormErrors.adminEmail ? 'Đây là tài khoản đăng nhập của tenant.' : undefined}
-                  >
-                    <input
-                      type="email"
-                      placeholder="owner@gmail.com"
-                      value={formAdminEmail}
-                      onChange={(e) => setFormAdminEmail(e.target.value)}
-                      readOnly={adminCreationMode === 'existing'}
-                    />
-                  </TenantFormField>
-
-                  <TenantFormField
-                    fieldKey="adminPhone"
-                    label="Số điện thoại Tenant Admin"
-                    required
-                    error={addFormErrors.adminPhone}
-                  >
-                    <input
-                      type="tel"
-                      placeholder="0901234567"
-                      value={formAdminPhone}
-                      onChange={(e) => setFormAdminPhone(e.target.value)}
-                      readOnly={adminCreationMode === 'existing'}
-                    />
-                  </TenantFormField>
-
-                  <TenantFormField
-                    fieldKey="adminUsername"
-                    label="Username đăng nhập"
-                    required
-                    error={addFormErrors.adminUsername}
-                    helper={!addFormErrors.adminUsername ? 'Dùng để đăng nhập quản trị tenant, không nhập dạng email.' : undefined}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: nguyenvanbay"
-                      value={formAdminUsername}
-                      onChange={(e) => setFormAdminUsername(e.target.value)}
-                      readOnly={adminCreationMode === 'existing'}
-                    />
-                  </TenantFormField>
-                </div>
-
-                {adminCreationMode === 'new' && (
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <Field label="Mật khẩu tạm thời" helper="Bỏ trống để hệ thống tự tạo khi lưu.">
-                        <input
-                          type="text"
-                          placeholder="Bỏ trống để tự tạo"
-                          value={formTempPassword}
-                          onChange={(e) => setFormTempPassword(e.target.value)}
-                        />
-                      </Field>
-                      <Button variant="link" size="small" onClick={generateRandomPassword}>
-                        Tạo mật khẩu ngẫu nhiên
-                      </Button>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-brand-outline bg-brand-surface-lowest p-3">
-                      <Switch
-                        checked={formSendActivationEmail}
-                        onChange={setFormSendActivationEmail}
-                        label="Gửi email kích hoạt"
-                      />
-                      <span className="text-caption text-brand-text-muted">Email hướng dẫn tạo mật khẩu được gửi sau khi lưu.</span>
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              {/* SECTION 3: GÓI ĐĂNG KÝ */}
-              <section className="space-y-4">
-                <FormSectionHeading step={3} title="Gói đăng ký" />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TenantFormField fieldKey="packageName" label="Gói đăng ký ban đầu" required>
                     <BeautifulSelect
                       value={formPackage}
-                      onChange={(e) => handleCreatePackageChange(e.target.value as SubscriptionPackageName)}
+                      onChange={(e) => setFormPackage(e.target.value)}
+                      className="form-control"
                     >
+                      {selectablePackages.length === 0 && <option value="">Chưa đọc được bảng giá</option>}
                       {selectablePackages.map((pkg) => (
                         <option key={pkg.id} value={pkg.name}>{pkg.name}</option>
                       ))}
                     </BeautifulSelect>
-                  </TenantFormField>
-
-                  <TenantFormField fieldKey="billingCycle" label="Chu kỳ thanh toán" required>
-                    <BeautifulSelect
-                      value={formBillingCycle}
-                      onChange={(e) => setFormBillingCycle(e.target.value as 'Monthly' | 'Yearly')}
-                    >
-                      <option value="Monthly">Hằng tháng</option>
-                      <option value="Yearly">Hằng năm (tiết kiệm 20%)</option>
-                    </BeautifulSelect>
-                  </TenantFormField>
+                  </Field>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TenantFormField fieldKey="status" label="Trạng thái ban đầu" required>
-                    <BeautifulSelect value={formStatus} onChange={(e) => handleCreateStatusChange(e.target.value as TenantStatus)}>
-                      <option value="ACTIVE">Đang hoạt động</option>
-                      <option value="TRIAL">Dùng thử</option>
-                      <option value="SUSPENDED">Tạm ngưng</option>
-                    </BeautifulSelect>
-                  </TenantFormField>
+                <Field label="Chu kỳ thanh toán">
+                  <BeautifulSelect
+                    value={formBillingCycle}
+                    onChange={(e) => setFormBillingCycle(e.target.value as 'Monthly' | 'Yearly')}
+                    className="form-control"
+                  >
+                    <option value="Monthly">Theo tháng</option>
+                    <option value="Yearly">Theo năm</option>
+                  </BeautifulSelect>
+                </Field>
+              </div>
 
-                  <TenantFormField fieldKey="startDate" label="Ngày bắt đầu">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div data-tenant-field="expiresAt">
+                  <Field
+                    label="Hạn dùng"
+                    required
+                    error={addFormErrors.expiresAt}
+                    helper="Ngày tiệm hết quyền ghi dữ liệu nếu không gia hạn."
+                  >
                     <input
                       type="date"
-                      value={formStartDate}
-                      onChange={(e) => setFormStartDate(e.target.value)}
+                      value={formExpiresAt}
+                      onChange={(e) => setFormExpiresAt(e.target.value)}
+                      className="form-control"
                     />
-                  </TenantFormField>
+                  </Field>
                 </div>
 
-                <TenantFormField
-                  fieldKey="trialEndDate"
-                  label="Ngày kết thúc dùng thử"
-                  required={formStatus === 'TRIAL'}
-                  error={addFormErrors.trialEndDate}
-                  helper={!addFormErrors.trialEndDate
-                    ? (formStatus === 'TRIAL'
-                        ? 'Bắt buộc với tenant dùng thử — đây là mốc hệ thống tự chuyển tenant sang hết hạn.'
-                        : 'Chỉ dùng khi trạng thái ban đầu là Dùng thử.')
-                    : undefined}
+                <Field
+                  label="Loại đăng ký"
+                  helper="Tiệm dùng thử hiện trạng thái “Dùng thử” cho tới khi được gia hạn."
                 >
-                  <input
-                    type="date"
-                    value={formTrialEndDate}
-                    min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)}
-                    onChange={(e) => setFormTrialEndDate(e.target.value)}
-                    disabled={formStatus !== 'TRIAL'}
-                  />
-                </TenantFormField>
-              </section>
-
-              {/* SECTION 4: QUY MÔ & CẤU HÌNH */}
-              <section className="space-y-4">
-                <FormSectionHeading step={4} title="Quy mô & cấu hình" />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TenantFormField
-                    fieldKey="branchCount"
-                    label="Số chi nhánh ban đầu"
-                    required
-                    error={addFormErrors.branchCount}
-                    helper={!addFormErrors.branchCount ? `Gói ${formPackage} hỗ trợ tối đa ${getTenantBranchLimitLabel(formPackage)}.` : undefined}
-                  >
-                    <input
-                      type="number"
-                      min={1}
-                      max={getPackageBranchLimit(formPackage)}
-                      value={formBranchCount}
-                      onChange={(e) => handleCreateBranchCountChange(Number(e.target.value))}
-                    />
-                  </TenantFormField>
-
-                  <TenantFormField
-                    fieldKey="staffCount"
-                    label="Tổng nhân sự toàn tenant"
-                    required
-                    error={addFormErrors.staffCount}
-                    helper={!addFormErrors.staffCount ? `Gói ${formPackage} hỗ trợ tối đa ${getCreateStaffLimitLabel(formPackage, formBranchCount)}.` : undefined}
-                  >
-                    <input
-                      type="number"
-                      min={0}
-                      max={isUnlimitedStaff(getCreateStaffLimit(formPackage, formBranchCount)) ? undefined : getCreateStaffLimit(formPackage, formBranchCount)}
-                      value={formStaff}
-                      onChange={(e) => {
-                        const nextStaff = Math.max(0, Number(e.target.value));
-                        const limit = getCreateStaffLimit(formPackage, formBranchCount);
-                        setFormStaff(isUnlimitedStaff(limit) ? nextStaff : Math.min(nextStaff, limit));
-                      }}
-                    />
-                  </TenantFormField>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TenantFormField
-                    fieldKey="revenue"
-                    label={`Ước tính doanh thu tháng (${formCurrency})`}
-                  >
-                    <input
-                      type="number"
-                      min={0}
-                      value={formRevenue}
-                      onChange={(e) => {
-                        const nextValue = e.target.value;
-                        setFormRevenue(nextValue === '' ? '' : Math.max(0, Number(nextValue)));
-                      }}
-                    />
-                  </TenantFormField>
-
-                  <TenantFormField fieldKey="currency" label="Đơn vị tiền tệ" required>
-                    <BeautifulSelect value={formCurrency} onChange={(e) => setFormCurrency(e.target.value as 'USD' | 'VND')}>
-                      <option value="VND">VND (Việt Nam Đồng)</option>
-                      <option value="USD">USD (Đô la Mỹ)</option>
-                    </BeautifulSelect>
-                  </TenantFormField>
-                </div>
-
-                <TenantFormField fieldKey="language" label="Ngôn ngữ mặc định" required>
                   <BeautifulSelect
-                    value={formDefaultLanguage}
-                    onChange={(e) => setFormDefaultLanguage(e.target.value as 'Vietnamese' | 'English')}
+                    value={formIsTrial ? 'trial' : 'paid'}
+                    onChange={(e) => setFormIsTrial(e.target.value === 'trial')}
+                    className="form-control"
                   >
-                    <option value="Vietnamese">Tiếng Việt</option>
-                    <option value="English">English</option>
+                    <option value="paid">Đăng ký trả phí</option>
+                    <option value="trial">Dùng thử</option>
                   </BeautifulSelect>
-                </TenantFormField>
-
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-brand-outline bg-brand-surface-lowest p-3">
-                  <Switch
-                    checked={formAllowOnlineBooking}
-                    onChange={setFormAllowOnlineBooking}
-                    disabled={!canUseOnlineBooking}
-                    label="Cho phép đặt lịch online"
-                  />
-                  <span className="text-caption text-brand-text-muted">
-                    {canUseOnlineBooking
-                      ? 'Bật trang đặt lịch trực tuyến cho tenant.'
-                      : `Gói ${formPackage} chưa có quyền đặt lịch online.`}
-                  </span>
-                </div>
-
-                <Field label="Ghi chú nội bộ" helper="Chỉ Superadmin đọc được.">
-                  <textarea
-                    rows={3}
-                    placeholder="Ghi chú về tenant, chi nhánh, gói dịch vụ hoặc yêu cầu vận hành..."
-                    value={formInternalNotes}
-                    onChange={(e) => setFormInternalNotes(e.target.value)}
-                    className="resize-y py-2"
-                  />
                 </Field>
-              </section>
-            </div>
+              </div>
+            </section>
 
-            {/* Bảng điều kiện: nói rõ còn thiếu gì, thay vì để người dùng bấm Lưu rồi tự dò. */}
-            <div
-              role="status"
-              className={`shrink-0 border-t p-4 sm:px-6 ${
-                addFormValidation.isValid
-                  ? 'border-brand-secondary/25 bg-brand-secondary/10'
-                  : 'border-brand-tertiary/25 bg-brand-tertiary/10'
-              }`}
-            >
-              <p className={`font-bold ${addFormValidation.isValid ? 'text-brand-secondary' : 'text-brand-tertiary'}`}>
-                {addFormValidation.isValid
-                  ? 'Đã đủ điều kiện tạo tenant'
-                  : `Còn ${Object.keys(addFormValidation.errors).length} điều kiện chưa đạt`}
-              </p>
-              {!addFormValidation.isValid && addFormSubmitted && (
+            <section className="space-y-4">
+              <FormSectionHeading step={3} title="Chủ tiệm" />
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={adminCreationMode === 'new' ? 'primary' : 'secondary'}
+                  size="small"
+                  onClick={() => handleAdminCreationModeChange('new')}
+                >
+                  Lập tài khoản mới
+                </Button>
+                <Button
+                  type="button"
+                  variant={adminCreationMode === 'existing' ? 'primary' : 'secondary'}
+                  size="small"
+                  disabled={availableTenantAdmins.length === 0}
+                  title={availableTenantAdmins.length === 0 ? 'Chưa có tài khoản chủ tiệm nào đang hoạt động.' : undefined}
+                  onClick={() => handleAdminCreationModeChange('existing')}
+                >
+                  Giao cho chủ tiệm đã có
+                </Button>
+              </div>
+
+              {adminCreationMode === 'existing' ? (
+                <div data-tenant-field="adminSelection">
+                  <Field
+                    label="Chọn chủ tiệm"
+                    required
+                    error={addFormErrors.adminSelection}
+                    helper="Một tài khoản chủ tiệm quản được nhiều tiệm; sau khi đăng nhập họ chọn tiệm muốn làm việc (BR-AUTH-023)."
+                  >
+                    <BeautifulSelect
+                      value={selectedTenantAdminId}
+                      onChange={(e) => selectExistingTenantAdmin(e.target.value)}
+                      className="form-control"
+                    >
+                      <option value="">Chọn tài khoản</option>
+                      {availableTenantAdmins.map((admin) => (
+                        <option key={admin.id} value={admin.id}>
+                          {admin.name} · {admin.email} · {admin.tenantCount} tiệm
+                        </option>
+                      ))}
+                    </BeautifulSelect>
+                  </Field>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div data-tenant-field="adminName">
+                      <Field label="Tên chủ tiệm" required error={addFormErrors.adminName}>
+                        <input
+                          type="text"
+                          value={formAdminName}
+                          onChange={(e) => setFormAdminName(e.target.value)}
+                          placeholder="Nguyễn Văn Bảy"
+                          className="form-control"
+                        />
+                      </Field>
+                    </div>
+
+                    <div data-tenant-field="adminEmail">
+                      <Field label="Email đăng nhập" required error={addFormErrors.adminEmail}>
+                        <input
+                          type="email"
+                          value={formAdminEmail}
+                          onChange={(e) => setFormAdminEmail(e.target.value)}
+                          placeholder="chutiem@tiemnail.vn"
+                          className="form-control"
+                        />
+                      </Field>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div data-tenant-field="adminUsername">
+                      <Field
+                        label="Username"
+                        error={addFormErrors.adminUsername}
+                        helper="Không bắt buộc. Có username thì đăng nhập được bằng cả username lẫn email."
+                      >
+                        <input
+                          type="text"
+                          value={formAdminUsername}
+                          onChange={(e) => setFormAdminUsername(e.target.value)}
+                          placeholder="nguyenvanbay"
+                          className="form-control"
+                        />
+                      </Field>
+                    </div>
+
+                    <div data-tenant-field="adminPassword">
+                      <Field
+                        label="Mật khẩu tạm"
+                        error={addFormErrors.adminPassword}
+                        helper="Bỏ trống thì máy chủ tự sinh và hiện ra một lần ngay sau khi lập tiệm."
+                      >
+                        <input
+                          type="text"
+                          value={formTempPassword}
+                          onChange={(e) => setFormTempPassword(e.target.value)}
+                          placeholder="Để trống cho máy chủ tự sinh"
+                          className="form-control font-mono"
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
+
+            {addFormSubmitted && !addFormValidation.isValid && (
+              <div className="rounded-card border border-brand-tertiary/30 bg-brand-tertiary/10 p-4">
+                <p className="font-bold text-brand-text">
+                  Còn {Object.keys(addFormValidation.errors).length} điều kiện chưa đạt
+                </p>
                 <ul className="mt-2 grid gap-1 text-caption leading-5 text-brand-text-muted sm:grid-cols-2">
                   {Object.values(addFormValidation.errors).map((error) => (
                     <li key={error}>• {error}</li>
                   ))}
                 </ul>
-              )}
-            </div>
+              </div>
+            )}
           </form>
         </Modal>
       )}
+
 
       {/* MODAL THÔNG BÁO KHÔNG ĐƯỢC PHÉP XÓA DO RÀNG BUỘC LOGIC */}
       {blockedDeleteTarget && (
@@ -2170,9 +1672,14 @@ export default function TenantManagement({
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    onUpdateTenant(blockedDeleteTarget.tenant.id, { status: 'SUSPENDED' });
+                    const target = blockedDeleteTarget.tenant;
                     setBlockedDeleteTarget(null);
-                    showToast(`Đã chuyển tenant ${blockedDeleteTarget.tenant.name} sang trạng thái SUSPENDED.`, 'info');
+                    void onChangeTenantStatus(target.id, 'SUSPENDED').then((result) => {
+                      if (result.status === 'error') {
+                        const { message, tone } = describeApiError(result.error);
+                        showToast(message, tone);
+                      }
+                    });
                   }}
                 >
                   <Lock className="mr-1.5 h-3.5 w-3.5" />
@@ -2203,13 +1710,16 @@ export default function TenantManagement({
             </div>
 
             <div className="rounded-xl border border-brand-outline/40 bg-brand-surface-lowest p-3 text-caption text-brand-text-muted">
-              <p className="font-semibold text-brand-text mb-1">💡 Quy trình an toàn để xóa một tenant:</p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Đóng/chuyển giao và xóa toàn bộ các chi nhánh trực thuộc tenant.</li>
-                <li>Giải phóng hoặc điều chuyển toàn bộ nhân sự (số lượng nhân sự về 0).</li>
-                <li>Chuyển trạng thái tenant từ <strong>ACTIVE</strong> sang <strong>SUSPENDED</strong> (Khóa tạm thời).</li>
-                <li>Xử lý hoàn tất mọi yêu cầu nâng cấp gói dịch vụ liên quan.</li>
+              <p className="mb-1 font-semibold text-brand-text">Cách đi tiếp:</p>
+              <ol className="list-inside list-decimal space-y-1">
+                <li>Bấm nút khóa ở ngay cạnh nút xóa để đưa tiệm về chế độ chỉ đọc.</li>
+                <li>Kiểm tra lại rằng không còn ai đang làm việc trên tiệm đó.</li>
+                <li>Quay lại và bấm xóa.</li>
               </ol>
+              <p className="mt-2">
+                Chi nhánh và nhân sự của tiệm <strong>không</strong> cần dọn trước: xóa tiệm là xóa
+                mềm, dữ liệu bên trong ở lại nguyên vẹn trong database.
+              </p>
             </div>
           </div>
         </Modal>
@@ -2220,8 +1730,8 @@ export default function TenantManagement({
         <Modal
           open
           onClose={() => setConfirmDeleteTarget(null)}
-          title="Xác nhận xóa vĩnh viễn Tenant"
-          eyebrow="Hành động nguy hiểm — Không thể hoàn tác"
+          title="Xác nhận xóa tiệm"
+          eyebrow="Tiệm biến khỏi hệ thống và không tự khôi phục được"
           icon={<Trash2 className="h-5 w-5 text-rose-500" />}
           size="medium"
           footer={
@@ -2234,22 +1744,30 @@ export default function TenantManagement({
                 disabled={!confirmDeleteAgreement || confirmDeleteInput.trim().toUpperCase() !== confirmDeleteTarget.id.toUpperCase()}
                 onClick={() => {
                   const target = confirmDeleteTarget;
-                  onDeleteTenant(target.id);
                   setConfirmDeleteTarget(null);
-                  showToast(`Tenant ${target.name} (${target.id}) đã được xóa vĩnh viễn khỏi hệ thống.`, 'success');
+                  void onDeleteTenant(target.id).then((result) => {
+                    if (result.status === 'error') {
+                      const { message, tone } = describeApiError(result.error);
+                      showToast(message, tone);
+                    }
+                  });
                 }}
               >
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                Xác nhận xóa vĩnh viễn
+                Xóa tiệm
               </Button>
             </div>
           }
         >
           <div className="space-y-4 text-xs">
             <div className="rounded-xl border border-rose-500/25 bg-rose-50/60 p-3.5 text-rose-950 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-200">
-              <p className="font-bold text-rose-800 dark:text-rose-300">⚠️ CẢNH BÁO NGUY HIỂM</p>
+              <p className="font-bold text-rose-800 dark:text-rose-300">Việc này không tự hoàn tác được</p>
               <p className="mt-1 leading-relaxed text-caption">
-                Tenant này đã thỏa mãn điều kiện logic để xóa (0 chi nhánh, 0 nhân viên, trạng thái không hoạt động). Tuy nhiên, thao tác xóa sẽ loại bỏ hoàn toàn hồ sơ, tài khoản Tenant Admin và toàn bộ lịch sử thanh toán, audit log liên quan. Thao tác này <strong>KHÔNG THỂ KHÔI PHỤC</strong>.
+                Tiệm sẽ biến khỏi mọi danh sách và chủ tiệm mất quyền với nó ngay lập tức. Ba điều
+                cần biết trước khi bấm: <strong>mã tiệm vẫn bị giữ chỗ</strong> nên không lập lại
+                một tiệm khác cùng mã được; <strong>tài khoản chủ tiệm không bị xóa theo</strong> và
+                vẫn đăng nhập được với những tiệm khác họ đang giữ; và <strong>dữ liệu bên trong
+                tiệm không bị xóa khỏi database</strong> — nó chỉ không còn đường nào đọc tới.
               </p>
             </div>
 
@@ -2280,7 +1798,7 @@ export default function TenantManagement({
                 className="mt-0.5 h-4 w-4 rounded border-brand-outline text-brand-primary focus:ring-brand-primary"
               />
               <span className="text-caption font-semibold text-brand-text">
-                Tôi hiểu rằng toàn bộ dữ liệu của tenant này sẽ bị xóa sạch và không thể khôi phục.
+                Tôi hiểu rằng tiệm này sẽ biến khỏi hệ thống và mã tiệm không dùng lại được.
               </span>
             </label>
 

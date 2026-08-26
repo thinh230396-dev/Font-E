@@ -30,6 +30,7 @@ import BeautifulSelect from './BeautifulSelect';
 import type { CurrencyCode, Invoice, SystemAlert, Tenant, TenantStatus, Ticket } from '../types';
 import { formatAlertTimestamp } from '../utils/alerts';
 import { convertMoney, formatMoney } from '../utils/money';
+import { getPlatformRevenueByTenant, getTotalPlatformRevenue } from '../utils/platformRevenue';
 import { getSlaState, isActive, PRIORITY_CONFIG, STATUS_CONFIG } from './HelpAndSupport';
 
 interface OverviewProps {
@@ -56,11 +57,6 @@ const STATUS_META: Record<TenantStatus, { label: string; color: string; classNam
     label: 'Dùng thử',
     color: '#8b5cf6',
     className: 'bg-violet-50 text-violet-800 border-violet-300 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-700/50',
-  },
-  EXPIRING: {
-    label: 'Sắp hết hạn',
-    color: '#f59e0b',
-    className: 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700/50',
   },
   OVERDUE: {
     label: 'Quá hạn',
@@ -129,10 +125,9 @@ export default function Overview({
   const totalTenants = tenants.length;
   const activeCount = tenants.filter((tenant) => tenant.status === 'ACTIVE').length;
   const trialCount = tenants.filter((tenant) => tenant.status === 'TRIAL').length;
-  const expiringCount = tenants.filter((tenant) => tenant.status === 'EXPIRING').length;
   const overdueCount = tenants.filter((tenant) => tenant.status === 'OVERDUE').length;
   const suspendedCount = tenants.filter((tenant) => tenant.status === 'SUSPENDED').length;
-  const healthyTenantCount = activeCount + trialCount + expiringCount;
+  const healthyTenantCount = activeCount + trialCount;
   const activeRate = totalTenants ? Math.round((activeCount / totalTenants) * 100) : 0;
   const unreadAlerts = alerts.filter((alert) => !alert.isRead);
   
@@ -140,13 +135,20 @@ export default function Overview({
   const activeTickets = tickets.filter(isActive);
   const breachedTickets = activeTickets.filter((ticket) => getSlaState(ticket).key === 'BREACHED');
   const openTicketsCount = tickets.filter((ticket) => ticket.status === 'OPEN').length;
-  const totalMonthlyRevenue = tenants.reduce(
-    (total, tenant) =>
-      total +
-      (tenant.status === 'ACTIVE' || tenant.status === 'TRIAL' || tenant.status === 'EXPIRING'
-        ? convertMoney(tenant.monthlyRevenue, tenant.currency, reportCurrency)
-        : 0),
-    0,
+  /**
+   * Doanh thu NỀN TẢNG — tiền SalonSys thu được từ bán gói (BR-REV-008).
+   *
+   * Bản cũ cộng `tenant.monthlyRevenue`, tức doanh thu làm nail của từng tiệm. Đó là dữ liệu
+   * mà tầng nền tảng không được đọc (BR-AUTH-030), nên `GET /api/tenants` không trả về nó và
+   * kiểu `Tenant` cũng không còn mang nó. Nguồn đúng là hóa đơn đăng ký đã thu.
+   */
+  const platformRevenueByTenant = useMemo(
+    () => getPlatformRevenueByTenant(invoices, reportCurrency),
+    [invoices, reportCurrency],
+  );
+  const totalPlatformRevenue = useMemo(
+    () => getTotalPlatformRevenue(invoices, reportCurrency),
+    [invoices, reportCurrency],
   );
   const unpaidInvoices = invoices.filter((invoice) => invoice.status === 'PENDING' || invoice.status === 'OVERDUE');
   const totalOutstanding = unpaidInvoices.reduce(
@@ -168,7 +170,6 @@ export default function Overview({
   const statusSegments = [
     { status: 'ACTIVE' as const, count: activeCount },
     { status: 'TRIAL' as const, count: trialCount },
-    { status: 'EXPIRING' as const, count: expiringCount },
     { status: 'OVERDUE' as const, count: overdueCount },
     { status: 'SUSPENDED' as const, count: suspendedCount },
   ].map((segment) => ({
@@ -199,7 +200,7 @@ export default function Overview({
     // Baseline tính toán theo doanh thu thực tế quy đổi theo đồng tiền báo cáo
     const baseTargetRevenue = Math.max(
       directPaidSum > 0 ? directPaidSum : 128_500_000,
-      totalMonthlyRevenue > 0 ? totalMonthlyRevenue * 4.8 : 128_500_000,
+      totalPlatformRevenue > 0 ? totalPlatformRevenue * 4.8 : 128_500_000,
     );
 
     let items: { label: string; fullLabel: string; ratio: number; baseInvoices: number }[] = [];
@@ -261,7 +262,7 @@ export default function Overview({
         invoiceCount: item.baseInvoices,
       };
     });
-  }, [invoices, reportCurrency, timePeriod, totalMonthlyRevenue]);
+  }, [invoices, reportCurrency, timePeriod, totalPlatformRevenue]);
 
   const periodRevenue = revenueChartData.reduce((total, item) => total + item.amount, 0);
   const maxRevenue = Math.max(...revenueChartData.map((item) => item.amount), 0);
@@ -338,11 +339,11 @@ export default function Overview({
         <article className="sa-metric-card sa-metric-card--violet">
           <div className="sa-metric-icon"><CircleDollarSign /></div>
           <div className="min-w-0">
-            <p className="sa-metric-label">Doanh thu định kỳ</p>
-            <p className="sa-metric-value">{formatMoney(totalMonthlyRevenue, reportCurrency)}</p>
+            <p className="sa-metric-label">Doanh thu nền tảng đã thu</p>
+            <p className="sa-metric-value">{formatMoney(totalPlatformRevenue, reportCurrency)}</p>
             <p className="sa-metric-note sa-positive">
               <TrendingUp className="h-3.5 w-3.5" />
-              {healthyTenantCount} tenant tạo doanh thu
+              {healthyTenantCount} tiệm đang trong hạn
             </p>
           </div>
         </article>
@@ -547,7 +548,7 @@ export default function Overview({
                   <th>Tenant</th>
                   <th>Gói dịch vụ</th>
                   <th>Trạng thái</th>
-                  <th className="text-right">Doanh thu/tháng</th>
+                  <th className="text-right">Đã thu từ tiệm</th>
                   <th><span className="sr-only">Hành động</span></th>
                 </tr>
               </thead>
@@ -592,7 +593,7 @@ export default function Overview({
                     <td><span className="sa-package-pill">{tenant.packageName}</span></td>
                     <td>{getStatusBadge(tenant.status)}</td>
                     <td className="text-right font-semibold text-brand-text">
-                      {formatMoney(tenant.monthlyRevenue, tenant.currency)}
+                      {formatMoney(platformRevenueByTenant.get(tenant.id) || 0, reportCurrency)}
                     </td>
                     <td>
                       <div className="sa-row-actions">

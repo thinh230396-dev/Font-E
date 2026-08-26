@@ -941,15 +941,12 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
     .sort((a, b) => a.price - b.price)[0];
   const renewalDate = tenant?.subscriptionRenewsAt || tenant?.trialEndDate;
   const statusLabel = tenant?.status === 'TRIAL' ? 'Đang dùng thử'
-    : tenant?.status === 'EXPIRING' ? 'Sắp hết hạn'
-      : tenant?.status === 'OVERDUE' ? 'Quá hạn thanh toán'
-        : tenant?.status === 'SUSPENDED' ? 'Đã tạm ngưng'
-          : 'Đang hoạt động';
+    : tenant?.status === 'OVERDUE' ? 'Quá hạn thanh toán'
+      : tenant?.status === 'SUSPENDED' ? 'Đã tạm ngưng'
+        : 'Đang hoạt động';
   const statusTone = tenant?.status === 'SUSPENDED' || tenant?.status === 'OVERDUE'
     ? 'bg-rose-400/15 text-rose-300 ring-rose-300/20'
-    : tenant?.status === 'EXPIRING'
-      ? 'bg-amber-400/15 text-amber-300 ring-amber-300/20'
-      : 'bg-emerald-400/15 text-emerald-300 ring-emerald-300/20';
+    : 'bg-emerald-400/15 text-emerald-300 ring-emerald-300/20';
   const branchRemaining = isUnlimitedTenantLimit(branchLimit, 'branches') ? null : Math.max(0, branchLimit - branchCount);
   const staffRemaining = isUnlimitedTenantLimit(staffLimit, 'staff') ? null : Math.max(0, staffLimit - staffCount);
   const usageItems = [
@@ -1361,14 +1358,11 @@ export default function NailTenantAdminPortal({
     : 0;
   const subscriptionStatusLabel = tenant?.status === 'SUSPENDED' ? t('Tạm ngưng')
     : tenant?.status === 'OVERDUE' ? t('Quá hạn')
-      : tenant?.status === 'EXPIRING' ? t('Sắp hết hạn')
-        : tenant?.status === 'TRIAL' ? t('Dùng thử')
-          : t('Đang hoạt động');
+      : tenant?.status === 'TRIAL' ? t('Dùng thử')
+        : t('Đang hoạt động');
   const subscriptionStatusTone = tenant?.status === 'SUSPENDED' || tenant?.status === 'OVERDUE'
     ? 'bg-rose-400/10 text-rose-300'
-    : tenant?.status === 'EXPIRING'
-      ? 'bg-amber-400/10 text-amber-300'
-      : 'bg-emerald-400/10 text-emerald-300';
+    : 'bg-emerald-400/10 text-emerald-300';
   const renewalLabel = formatPlanDate(tenant?.subscriptionRenewsAt || tenant?.trialEndDate);
   const branchScopedCreatePages = new Set<NailPageId>(['appointments', 'stations', 'pos', 'staff', 'inventory', 'finance', 'sanitation']);
 

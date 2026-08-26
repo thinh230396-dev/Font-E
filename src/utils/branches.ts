@@ -103,7 +103,7 @@ const inferProvince = (address: string) => {
 
 export const normalizeBranch = (
   branch: Branch,
-  tenant?: Pick<Tenant, 'name' | 'address' | 'phone' | 'contactEmail' | 'adminName' | 'timezone' | 'monthlyRevenue'>,
+  tenant?: Pick<Tenant, 'name' | 'address' | 'phone' | 'contactEmail' | 'adminName' | 'timezone'>,
   index = 0
 ): Branch => {
   const isPrimary = branch.isPrimary ?? index === 0;
@@ -131,7 +131,11 @@ export const normalizeBranch = (
     services: branch.services?.length ? branch.services : model === 'EXPRESS_KIOSK'
       ? ['Sơn gel nhanh', 'Manicure cơ bản', 'Nail Art đơn giản']
       : ['Manicure', 'Pedicure', 'Sơn Gel', 'Nail Art'],
-    monthlyRevenue: Number(branch.monthlyRevenue ?? (isPrimary ? tenant?.monthlyRevenue : 0) ?? 0),
+    // Doanh thu chi nhánh không còn suy ra từ doanh thu tiệm: BR-AUTH-030 xếp doanh thu của
+    // tiệm vào dữ liệu mà tầng nền tảng không được đọc, nên `Tenant` không mang trường đó nữa.
+    // Chi nhánh nào tự có số thì giữ số của nó; còn lại là 0 cho tới khi báo cáo doanh thu
+    // theo chi nhánh lên API.
+    monthlyRevenue: Number(branch.monthlyRevenue ?? 0),
     capacityPercent: Math.max(0, Math.min(100, Number(branch.capacityPercent ?? 0))),
     staffUsed,
     staffCount: staffUsed,

@@ -1,4 +1,12 @@
-export type TenantStatus = 'ACTIVE' | 'TRIAL' | 'EXPIRING' | 'OVERDUE' | 'SUSPENDED';
+/**
+ * Bốn trạng thái hiển thị của tiệm — BR-TENANT-001.
+ *
+ * `EXPIRING` đã bị bỏ. Chỉ `ACTIVE` và `SUSPENDED` là cột thật trong database; `TRIAL` và
+ * `OVERDUE` được máy chủ tính lúc đọc từ hạn dùng và cờ dùng thử (BR-TENANT-002), nên không
+ * đặt tay được. "Sắp hết hạn" nay là một lời nhắc trên giao diện, suy từ số ngày còn lại —
+ * xem `EXPIRING_SOON_DAYS` ở `src/App.tsx`.
+ */
+export type TenantStatus = 'ACTIVE' | 'TRIAL' | 'OVERDUE' | 'SUSPENDED';
 export type SubscriptionPackageName = string;
 export type SubscriptionPackageStatus = 'DRAFT' | 'ACTIVE' | 'DEPRECATED' | 'ARCHIVED';
 export type CurrencyCode = 'USD' | 'VND';
@@ -65,13 +73,28 @@ export interface Branch {
   updatedAt?: string;
 }
 
+/**
+ * Một tiệm như màn hình của Superadmin nhìn thấy.
+ *
+ * Từ ngày 6, nguồn của kiểu này là `GET /api/tenants` chứ không còn là
+ * `localStorage`; việc chuyển đổi nằm ở `src/hooks/useTenants.ts`. Những trường
+ * còn lại ở dạng không bắt buộc là di sản của thời dữ liệu mẫu — máy chủ không
+ * lưu chúng, nên chúng luôn `undefined` và màn hình phải hiện trạng thái trống
+ * thay vì một giá trị mặc định trông như thật.
+ *
+ * Doanh thu của tiệm **cố ý không có mặt**: BR-AUTH-030 xếp nó vào dữ liệu
+ * nghiệp vụ mà Superadmin không được truy cập. Doanh thu mà Superadmin nhìn thấy
+ * là doanh thu nền tảng ở BR-REV-008 — tính từ hóa đơn đăng ký, không phải từ
+ * hóa đơn bán hàng của tiệm.
+ */
 export interface Tenant {
   id: string;
+  /** Mã tiệm do Superadmin đặt lúc tạo; `id` bằng `TEN-` cộng mã này. */
+  code?: string;
   name: string;
   adminEmail: string;
   packageName: SubscriptionPackageName;
   status: TenantStatus;
-  monthlyRevenue: number;
   createdAt: string;
   address: string;
   phone: string;
@@ -80,9 +103,23 @@ export interface Tenant {
   country?: string;
   timezone?: string;
   lastSync?: string;
+  /** Số nhân viên đang hoạt động, máy chủ đếm thật để cưỡng chế `max_staff` (BR-SUB-005). */
   staffCount: number;
+  /** Số chi nhánh đang hoạt động, đếm thật để cưỡng chế `max_salons` (BR-BRANCH-005). */
+  branchCount?: number;
+  /** Tiệm đang ở chế độ chỉ đọc vì quá hạn hoặc bị khóa tay — BR-TENANT-010. */
+  isReadOnly?: boolean;
+  isTrial?: boolean;
+  maxSalons?: number;
+  maxStaff?: number;
+  /** Mọi tài khoản chủ tiệm được giao tiệm này. Một tiệm có thể có nhiều người. */
+  owners?: TenantOwnerSummary[];
   adminName: string;
-  lastLogin: string;
+  /**
+   * Hệ thống chưa ghi nhận thời điểm đăng nhập gần nhất ở bảng tài khoản, nên
+   * trường này luôn trống với dữ liệu thật. Màn hình phải nói "chưa ghi nhận".
+   */
+  lastLogin?: string;
   // Extended configuration and detailed properties
   allowOnlineBooking?: boolean;
   currency?: CurrencyCode;
@@ -158,6 +195,15 @@ export interface Tenant {
 
 export type TenantAdminRole = 'Owner' | 'Manager' | 'Staff';
 export type TenantAdminStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
+
+/** Một chủ tiệm trong danh sách chủ tiệm của một tiệm — BR-AUTH-023. */
+export interface TenantOwnerSummary {
+  id: string;
+  email: string;
+  username?: string;
+  displayName: string;
+  status: TenantAdminStatus;
+}
 
 export interface TenantAdminAccount {
   id: string;

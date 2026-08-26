@@ -32,7 +32,8 @@ import {
   Unlock,
   Trash2,
   Edit,
-  Save
+  Save,
+  Info,
 } from 'lucide-react';
 import { Branch, SubscriptionPackage, Tenant, SubscriptionPackageName, TenantStatus } from '../types';
 import { BRANCH_MODEL_OPTIONS, generateBranchCode, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches, validateBranchDraft } from '../utils/branches';
@@ -55,7 +56,6 @@ interface TenantDetailModalProps {
   tenant: Tenant;
   packages: SubscriptionPackage[];
   onClose: () => void;
-  onUpdateTenant: (id: string, updated: Partial<Tenant>) => void;
   onEditClick: () => void;
   initialTab?: 'overview' | 'billing' | 'branches' | 'activities' | 'config';
   initialViewMode?: 'quick' | 'full';
@@ -198,15 +198,6 @@ const getTenantExtraDetails = (tenant: Tenant, packages: SubscriptionPackage[]):
     if (daysRemaining <= 3) {
       alertsList.push({ id: 'AL-DYNAMIC-TRIAL', severity: 'warning', message: `Thời gian dùng thử còn ${Math.max(0, daysRemaining)} ngày.`, action: 'Chọn gói dịch vụ' });
     }
-  } else if (tenant.status === 'EXPIRING') {
-    if (tenant.daysRemaining === undefined) {
-      daysRemaining = 2;
-    }
-    if (tenant.paymentStatus === undefined) {
-      paymentStatus = 'WARNING';
-    }
-    healthStatus = 'WARNING';
-    alertsList.push({ id: 'AL-DYNAMIC-EXP', severity: 'warning', message: `Gói ${tenant.packageName} sắp hết hạn sau ${daysRemaining} ngày.`, action: 'Gia hạn ngay' });
   } else if (tenant.status === 'OVERDUE') {
     if (tenant.daysRemaining === undefined) {
       daysRemaining = -5;
@@ -407,12 +398,29 @@ export default function TenantDetailModal({
   tenant,
   packages,
   onClose,
-  onUpdateTenant,
   onEditClick,
   initialTab = 'overview',
   initialViewMode = 'quick'
 }: TenantDetailModalProps) {
   const showToast = useToast();
+
+  /**
+   * Modal xem chi tiết tiệm CHỈ XEM kể từ ngày 6.
+   *
+   * Tiệm nay do máy chủ giữ, và những gì màn hình này từng ghi — thêm chi nhánh, khóa chi
+   * nhánh, khóa tiệm — hoặc không có endpoint cho Superadmin (chi nhánh thuộc phạm vi tiệm,
+   * BR-AUTH-030), hoặc đã có đường đi riêng ở bảng danh sách (khóa tiệm, gia hạn). Mọi lối
+   * vào đó đã được gỡ khỏi giao diện, nên hàm dưới đây không còn nơi nào gọi tới.
+   *
+   * Giữ nó ở dạng không làm gì, thay vì xóa cả bộ biểu mẫu chi nhánh bên dưới, là đánh đổi
+   * có chủ đích: bộ biểu mẫu ấy sẽ dùng lại được khi màn chi nhánh lên API. Điều bắt buộc là
+   * nó KHÔNG được lặng lẽ sửa dữ liệu trong bộ nhớ rồi báo thành công.
+   */
+  const onUpdateTenant = (_id: string, _updated: Partial<Tenant>) => {
+    void _id;
+    void _updated;
+  };
+
   const [viewMode, setViewMode] = useState<'quick' | 'full'>(initialViewMode);
   const [activeTab, setActiveTab] = useState<'overview' | 'billing' | 'branches' | 'activities' | 'config'>(initialTab);
   
@@ -775,7 +783,7 @@ export default function TenantDetailModal({
         if (rPayStatus === 'paid' || rPayStatus === 'auto') {
           invoiceStatus = 'PAID';
           updatedFields.paymentStatus = 'PAID';
-          if (tenant.status === 'OVERDUE' || tenant.status === 'EXPIRING' || tenant.status === 'SUSPENDED') {
+          if (tenant.status === 'OVERDUE' || tenant.status === 'SUSPENDED') {
             updatedFields.status = 'ACTIVE';
           }
         } else if (rPayStatus === 'unpaid') {
@@ -1022,8 +1030,6 @@ export default function TenantDetailModal({
         return <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Hoạt động</span>;
       case 'TRIAL':
         return <span className="inline-flex items-center gap-1 bg-brand-primary/10 text-brand-primary border border-brand-primary/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Dùng thử</span>;
-      case 'EXPIRING':
-        return <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Sắp hết hạn</span>;
       case 'OVERDUE':
         return <span className="inline-flex items-center gap-1 bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">Quá hạn thanh toán</span>;
       case 'SUSPENDED':
@@ -1192,31 +1198,9 @@ export default function TenantDetailModal({
           : <>Xem tóm tắt thông tin của <strong className="text-brand-text">{tenant.name}</strong></>}
       </span>
 
-      {viewMode === 'full' && (
-        tenant.status === 'SUSPENDED' ? (
-          <Button
-            variant="secondary"
-            iconLeading={<Unlock />}
-            onClick={() => setConfirmAction({
-              type: 'unlock',
-              message: `Bạn chắc chắn muốn MỞ KHÓA dịch vụ hoạt động cho Tenant "${tenant.name}"? Hệ thống sẽ kích hoạt lại quyền truy cập.`
-            })}
-          >
-            Mở khóa
-          </Button>
-        ) : (
-          <Button
-            variant="danger"
-            iconLeading={<Lock />}
-            onClick={() => setConfirmAction({
-              type: 'lock',
-              message: `Bạn chắc chắn muốn KHÓA TẠM THỜI hoạt động của Tenant "${tenant.name}"? Tenant Admin và toàn bộ nhân viên sẽ bị mất quyền truy cập hệ thống ngay lập tức.`
-            })}
-          >
-            Khóa tạm thời
-          </Button>
-        )
-      )}
+      {/* Nút khóa và mở khóa tiệm đã dời hẳn về bảng danh sách, nơi có một đường ghi duy
+          nhất gọi thẳng PATCH /api/tenants/{id}/status. Hai chỗ cùng làm một việc là hai chỗ
+          để hành xử khác nhau. */}
 
       <Button variant="secondary" onClick={onClose}>Đóng lại</Button>
       <Button variant="primary" iconLeading={<Edit />} onClick={() => { onEditClick(); onClose(); }}>
@@ -2216,167 +2200,68 @@ export default function TenantDetailModal({
 
 
 
-                {/* BRANCHES TAB */}
+                {/*
+                  TAB CHI NHÁNH
+
+                  Danh sách chi nhánh thật nằm sau `GET /api/branches`, và endpoint đó thuộc
+                  phạm vi tiệm: Superadmin gọi vào sẽ nhận 403 theo BR-AUTH-030. Nên ở đây chỉ
+                  hiện hai con số mà `GET /api/tenants` có mang theo — số chi nhánh đang hoạt
+                  động và hạn mức của gói — thay vì dựng một danh sách chi nhánh không có thật.
+                */}
                 {activeTab === 'branches' && (
                   <div className="space-y-4 animate-fadeIn">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-brand-text-muted flex items-center gap-1.5">
-                          <Store className="w-4 h-4 text-brand-primary" />
-                          Danh sách chi nhánh thuộc tenant
-                        </h4>
-                        <p className="text-[10px] text-brand-text-muted mt-1">
-                          Đang dùng {details.branches.length} chi nhánh. Giới hạn gói {tenant.packageName}: {currentBranchLimitLabel}.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleOpenAddBranchModal}
-                        disabled={!canAddBranch}
-                        title={canAddBranch ? 'Thêm chi nhánh cho tenant này' : `Gói ${tenant.packageName} đã đạt giới hạn ${currentBranchLimitLabel}`}
-                        className={`min-h-9 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors inline-flex items-center justify-center gap-2 ${
-                          canAddBranch
-                            ? 'bg-brand-primary hover:bg-brand-primary/90 text-brand-on-primary cursor-pointer shadow-md'
-                            : 'bg-brand-surface-highest text-brand-text-muted border border-brand-outline/40 cursor-not-allowed'
-                        }`}
-                      >
-                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>Thêm chi nhánh</span>
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {details.branches.map((br) => {
-                        const hasZeroStaff = br.staffUsed === 0;
-                        const isBranchActive = br.status === 'ACTIVE';
-                        const canDeleteBranch = details.branches.length > 1;
-                        return (
-                          <div key={br.id} className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 ${
-                            !isBranchActive
-                              ? 'bg-brand-outline/10 border-brand-outline/35 opacity-90'
-                              : hasZeroStaff
-                              ? 'bg-brand-error/5 border-brand-error/20'
-                              : 'bg-brand-surface-high/35 border-brand-outline/15'
-                          }`}>
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between items-start">
-                                <div><h5 className="font-bold text-brand-text text-sm flex items-center gap-1"><Store className="w-4 h-4 text-brand-primary shrink-0" />{br.name}</h5><div className="mt-1.5 flex flex-wrap gap-1.5"><span className="rounded-full border border-brand-outline/35 bg-brand-surface px-2 py-0.5 text-[9px] font-bold text-brand-text-muted">{getBranchModelLabel(br.model)}</span>{br.isPrimary && <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[9px] font-bold text-white">Chi nhánh chính</span>}</div></div>
-                                <span className="text-[10px] text-brand-text-muted font-mono">{br.code || br.id}</span>
-                              </div>
-                              <p className="text-xs text-brand-text-muted flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5 text-brand-text-muted shrink-0" />
-                                {br.address}
-                              </p>
-                            </div>
-
-                            <div className="border-t border-brand-outline/10 pt-3 space-y-1.5 text-xs">
-                              <div className="flex justify-between items-center"><span className="text-brand-text-muted">Quản lý:</span><span className="font-semibold text-brand-text">{br.managerName || 'Chưa phân công'}</span></div>
-                              <div className="flex justify-between items-center"><span className="text-brand-text-muted">Liên hệ:</span><span className="font-semibold text-brand-text">{br.phone || 'Chưa cập nhật'}</span></div>
-                              <div className="flex justify-between items-center"><span className="text-brand-text-muted">Mở cửa / Vị trí:</span><span className="font-semibold text-brand-text">{br.openingHours || '08:00–21:00'} · {br.stationCount || 0} vị trí</span></div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-brand-text-muted">Nhân viên / Thợ:</span>
-                                <span className={`font-bold tabular-nums ${hasZeroStaff ? 'text-brand-error font-extrabold' : 'text-brand-text font-semibold'}`}>
-                                  {br.staffUsed} thợ
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-brand-text-muted">Trạng thái chi nhánh:</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${br.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-brand-outline/25 text-brand-text-muted border border-brand-outline/35'}`}>
-                                  {getBranchStatusLabel(br.status)}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap justify-end gap-2 border-t border-brand-outline/10 pt-3">
-                              {isBranchActive ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmAction({
-                                    type: 'branch-status',
-                                    message: `Bạn chắc chắn muốn khóa tạm thời chi nhánh "${br.name}"? Lịch đặt và nhân sự của chi nhánh này sẽ bị tạm dừng, nhưng tenant vẫn hoạt động.`,
-                                    payload: { branchId: br.id, nextStatus: 'INACTIVE' }
-                                  })}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-brand-error/30 bg-brand-error/10 px-3 py-1.5 text-[10px] font-bold text-brand-error hover:bg-brand-error/15 transition-colors cursor-pointer"
-                                  title="Khóa tạm thời riêng chi nhánh này"
-                                >
-                                  <Lock className="w-3.5 h-3.5" />
-                                  <span>Khóa chi nhánh</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmAction({
-                                    type: 'branch-status',
-                                    message: `Bạn chắc chắn muốn mở lại chi nhánh "${br.name}"? Chi nhánh này sẽ hoạt động trở lại trong tenant.`,
-                                    payload: { branchId: br.id, nextStatus: 'ACTIVE' }
-                                  })}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold text-emerald-400 hover:bg-emerald-500/15 transition-colors cursor-pointer"
-                                  title="Mở lại chi nhánh này"
-                                >
-                                  <Unlock className="w-3.5 h-3.5" />
-                                  <span>Mở lại</span>
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                disabled={!canDeleteBranch}
-                                onClick={() => {
-                                  if (!canDeleteBranch) return;
-                                  setConfirmAction({
-                                    type: 'delete-branch',
-                                    message: `Bạn chắc chắn muốn xóa chi nhánh "${br.name}" khỏi tenant "${tenant.name}"? Thao tác này sẽ xóa chi nhánh khỏi danh sách và cập nhật lại tổng nhân sự, tổng khách hàng của tenant.`,
-                                    payload: { branchId: br.id }
-                                  });
-                                }}
-                                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10px] font-bold transition-colors ${
-                                  canDeleteBranch
-                                    ? 'border-brand-error/30 bg-brand-error/10 text-brand-error hover:bg-brand-error/15 cursor-pointer'
-                                    : 'border-brand-outline/35 bg-brand-surface-highest text-brand-text-muted cursor-not-allowed opacity-60'
-                                }`}
-                                title={canDeleteBranch ? 'Xóa chi nhánh khỏi tenant' : 'Không thể xóa chi nhánh cuối cùng của tenant'}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Xóa chi nhánh</span>
-                              </button>
-                            </div>
-
-                            {hasZeroStaff && isBranchActive && (
-                              <div className="bg-brand-error/10 text-brand-error p-2.5 rounded-lg text-[10px] leading-relaxed flex items-start gap-1.5">
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                                <span>Cảnh báo: Chi nhánh này hiện chưa có nhân viên được phân bổ! Cần thông báo cho Tenant Admin bổ sung.</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* ACTIVITIES TAB */}
-                {activeTab === 'activities' && (
-                  <div className="space-y-4 animate-fadeIn">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-brand-text-muted flex items-center gap-1.5">
-                      <Activity className="w-4 h-4 text-brand-primary" />
-                      Nhật ký vận hành & Audit Log chi tiết
+                    <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-brand-text-muted">
+                      <Store className="h-4 w-4 text-brand-primary" />
+                      Chi nhánh
                     </h4>
 
-                    <div className="relative border-l border-brand-outline/35 ml-4 pl-6 space-y-6">
-                      {localActivities.map((act, idx) => (
-                        <div key={idx} className="relative">
-                          <span className={`absolute -left-9 top-1 w-6 h-6 rounded-full border-2 border-brand-surface flex items-center justify-center ${act.type === 'login' ? 'bg-brand-primary text-brand-on-primary' : act.type === 'payment' ? 'bg-brand-secondary text-brand-on-secondary' : act.type === 'staff' ? 'bg-brand-tertiary text-brand-on-tertiary' : 'bg-brand-outline text-brand-text'}`}>
-                            {act.type === 'login' ? <Key className="w-3 h-3" /> : act.type === 'payment' ? <CreditCard className="w-3 h-3" /> : act.type === 'staff' ? <Users className="w-3 h-3" /> : <Settings className="w-3 h-3" />}
-                          </span>
-                          <div className="text-xs">
-                            <span className="text-[10px] text-brand-text-muted tabular-nums">{act.date}</span>
-                            <p className="text-brand-text font-semibold mt-0.5">{act.description}</p>
-                            <span className="text-[10px] text-brand-text-muted mt-1 block">Tác nhân thực hiện: <strong>{act.user}</strong></span>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-card border border-brand-outline bg-brand-surface p-4">
+                        <p className="text-caption font-bold uppercase tracking-wide text-brand-text-muted">Đang hoạt động</p>
+                        <p className="mt-1 text-xl font-black text-brand-text">{Number(tenant.branchCount || 0)}</p>
+                      </div>
+                      <div className="rounded-card border border-brand-outline bg-brand-surface p-4">
+                        <p className="text-caption font-bold uppercase tracking-wide text-brand-text-muted">Hạn mức gói {tenant.packageName}</p>
+                        <p className="mt-1 text-xl font-black text-brand-text">{currentBranchLimitLabel}</p>
+                      </div>
                     </div>
+
+                    <p className="flex items-start gap-2 rounded-control border border-brand-outline/45 bg-brand-surface-lowest px-3 py-2 text-caption text-brand-text-muted">
+                      <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span>
+                        <span className="font-bold text-brand-text">Chưa nối máy chủ.</span>{' '}
+                        Danh sách chi nhánh là dữ liệu bên trong tiệm, và tầng nền tảng không
+                        được đọc nó. Chủ tiệm quản lý chi nhánh trong cổng của mình.
+                      </span>
+                    </p>
                   </div>
                 )}
+
+                {/*
+                  TAB HOẠT ĐỘNG
+
+                  Nhật ký thật do máy chủ ghi và đọc qua `GET /api/audit-logs`; màn Nhật ký &
+                  bảo mật đã nối endpoint đó. Ở đây chỉ trỏ sang chỗ ấy thay vì dựng lại một
+                  dòng thời gian từ dữ liệu trong trình duyệt.
+                */}
+                {activeTab === 'activities' && (
+                  <div className="space-y-4 animate-fadeIn">
+                    <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-brand-text-muted">
+                      <Activity className="h-4 w-4 text-brand-primary" />
+                      Nhật ký vận hành
+                    </h4>
+
+                    <p className="flex items-start gap-2 rounded-control border border-brand-outline/45 bg-brand-surface-lowest px-3 py-2 text-caption text-brand-text-muted">
+                      <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span>
+                        <span className="font-bold text-brand-text">Chưa nối máy chủ.</span>{' '}
+                        Nhật ký của tiệm này được máy chủ ghi lại và xem được ở màn Nhật ký &amp;
+                        bảo mật, lọc theo mã tiệm <span className="font-mono">{tenant.id}</span>.
+                      </span>
+                    </p>
+                  </div>
+                )}
+
 
                 {/* CONFIG TAB */}
                 {activeTab === 'config' && (

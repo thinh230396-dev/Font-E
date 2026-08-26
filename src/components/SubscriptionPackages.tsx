@@ -49,13 +49,6 @@ interface SubscriptionPackagesProps {
   tenants: Tenant[];
   invoices: Invoice[];
   reportCurrency: CurrencyCode;
-  onAddPackage: (pkg: Omit<SubscriptionPackage, 'id' | 'activeTenants'>) => void;
-  onUpdatePackage: (id: string, updated: Partial<SubscriptionPackage>) => void;
-  onDeprecatePackage: (id: string) => void;
-  onSchedulePackageRetirement: (id: string, replacementPackageName: string) => void;
-  onCancelPackageRetirement: (id: string) => void;
-  onReactivatePackage: (id: string) => void;
-  onDeletePackage: (id: string) => void;
 }
 
 type StatusFilter = 'ALL' | SubscriptionPackageStatus;
@@ -131,14 +124,7 @@ export default function SubscriptionPackages({
   packages,
   tenants,
   invoices,
-  reportCurrency,
-  onAddPackage,
-  onUpdatePackage,
-  onDeprecatePackage,
-  onSchedulePackageRetirement,
-  onCancelPackageRetirement,
-  onReactivatePackage,
-  onDeletePackage
+  reportCurrency
 }: SubscriptionPackagesProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
@@ -146,12 +132,8 @@ export default function SubscriptionPackages({
   const [showArchived, setShowArchived] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
   const [expandedFeaturePackageIds, setExpandedFeaturePackageIds] = useState<Set<string>>(() => new Set());
-  const [editor, setEditor] = useState<EditorState | null>(null);
   const [menuPackageId, setMenuPackageId] = useState<string | null>(null);
   const [historyTarget, setHistoryTarget] = useState<SubscriptionPackage | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<SubscriptionPackage | null>(null);
-  const [retirementTarget, setRetirementTarget] = useState<SubscriptionPackage | null>(null);
-  const [replacementPackageName, setReplacementPackageName] = useState('');
 
   const togglePackageFeatures = (packageId: string) => {
     setExpandedFeaturePackageIds((current) => {
@@ -200,44 +182,6 @@ export default function SubscriptionPackages({
     ));
   };
 
-  const openRetirementRequest = (pkg: SubscriptionPackage) => {
-    const packageTenants = tenantsByPackage.get(pkg.id) || [];
-    if (packageTenants.length === 0) {
-      onDeprecatePackage(pkg.id);
-      setMenuPackageId(null);
-      return;
-    }
-
-    const replacement = getCompatibleReplacementPackages(pkg)[0];
-    setRetirementTarget(pkg);
-    setReplacementPackageName(replacement?.name || '');
-    setMenuPackageId(null);
-  };
-
-  const duplicatePackage = (pkg: SubscriptionPackage) => {
-    setEditor({
-      mode: 'add',
-      pkg: normalizeSubscriptionPackage({
-        ...pkg,
-        id: 'NEW-PACKAGE',
-        name: `${pkg.name} - Bản sao`,
-        status: 'DRAFT',
-        isPopular: false,
-        activeTenants: 0,
-        version: 1,
-        priceHistory: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      })
-    });
-    setMenuPackageId(null);
-  };
-
-  const confirmRetirementRequest = () => {
-    if (!retirementTarget || !replacementPackageName) return;
-    onSchedulePackageRetirement(retirementTarget.id, replacementPackageName);
-    setRetirementTarget(null);
-  };
 
   return (
     <div className="space-y-6">
@@ -255,11 +199,18 @@ export default function SubscriptionPackages({
           <button onClick={() => setShowComparison(true)} className="px-4 py-2.5 rounded-lg border border-brand-outline/45 bg-brand-surface text-xs font-bold text-brand-text hover:bg-brand-surface-high transition-colors flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap">
             <BarChart3 className="w-4 h-4 text-brand-secondary" /> <span>So sánh gói</span>
           </button>
-          <button onClick={() => setEditor({ mode: 'add', pkg: createPackageDraft(reportCurrency) })} className="px-5 py-2.5 rounded-lg bg-brand-primary text-brand-on-primary text-sm font-bold hover:bg-brand-primary/90 transition-colors flex items-center gap-2 cursor-pointer shadow-md shrink-0 whitespace-nowrap">
-            <Plus className="w-4 h-4 stroke-[3]" /> Thêm gói dịch vụ
-          </button>
         </div>
       </div>
+
+      <p className="flex items-start gap-2 rounded-control border border-brand-outline/45 bg-brand-surface-lowest px-3 py-2 text-caption text-brand-text-muted">
+        <Info className="mt-px h-3.5 w-3.5 shrink-0 text-brand-text-muted" aria-hidden />
+        <span>
+          <span className="font-bold text-brand-text">Chỉ xem.</span>{' '}
+          Bảng giá đọc trực tiếp từ máy chủ và là bảng giá thật mà các tiệm đang dùng. Việc
+          thêm, sửa giá hay ngừng bán gói nằm ngoài phạm vi bản này, nên màn hình không mở
+          những thao tác đó thay vì mở rồi không lưu được.
+        </span>
+      </p>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <SummaryCard icon={<PackagePlus className="w-5 h-5" />} label="Gói đang bán" value={String(packages.filter((pkg) => getPackageStatus(pkg) === 'ACTIVE').length)} />
@@ -341,27 +292,7 @@ export default function SubscriptionPackages({
                       <button onClick={() => setMenuPackageId(menuPackageId === pkg.id ? null : pkg.id)} className="p-2 rounded-lg text-brand-text-muted hover:text-brand-text hover:bg-brand-surface-high cursor-pointer" aria-label={`Mở thao tác cho gói ${pkg.name}`}><MoreVertical className="w-4 h-4" /></button>
                       {menuPackageId === pkg.id && (
                         <div className="absolute z-20 right-0 top-10 w-48 bg-brand-surface border border-brand-outline/50 rounded-lg shadow-xl p-1 text-[11px]">
-                          <MenuButton icon={<Copy />} label="Sao chép gói" onClick={() => duplicatePackage(pkg)} />
                           <MenuButton icon={<History />} label="Xem lịch sử giá" onClick={() => { setHistoryTarget(pkg); setMenuPackageId(null); }} />
-                          <div className="h-px bg-brand-outline/35 my-1" />
-                          {status === 'ACTIVE' && !hasRetirementRequest && <MenuButton icon={<Clock3 />} label="Ngừng đăng ký" onClick={() => openRetirementRequest(pkg)} />}
-                          {hasRetirementRequest && <MenuButton icon={<RotateCcw />} label="Mở lại đăng ký" onClick={() => { onCancelPackageRetirement(pkg.id); setMenuPackageId(null); }} />}
-                          {!hasRetirementRequest && (status === 'DEPRECATED' || status === 'ARCHIVED' || status === 'DRAFT') && <MenuButton icon={<Sparkles />} label="Mở bán gói" onClick={() => { onReactivatePackage(pkg.id); setMenuPackageId(null); }} />}
-                          <MenuButton
-                            icon={<Archive />}
-                            label="Lưu trữ"
-                            disabled={hasRetirementRequest || status === 'ARCHIVED' || packageTenants.length > 0}
-                            title={packageTenants.length > 0 ? 'Gói đang có tenant; hãy dùng Ngừng đăng ký.' : undefined}
-                            onClick={() => { onUpdatePackage(pkg.id, { status: 'ARCHIVED' }); setMenuPackageId(null); }}
-                          />
-                          <MenuButton
-                            icon={<Trash2 />}
-                            label="Xóa gói"
-                            disabled={packageTenants.length > 0}
-                            title={packageTenants.length > 0 ? 'Không thể xóa gói đang có tenant sử dụng.' : undefined}
-                            onClick={() => { setDeleteTarget(pkg); setMenuPackageId(null); }}
-                            danger
-                          />
                         </div>
                       )}
                     </div>
@@ -411,11 +342,9 @@ export default function SubscriptionPackages({
                       <p className="text-[10px] font-bold text-brand-warning">Đang chờ {packageTenants.length} tenant hết hạn</p>
                       <div className="flex items-center justify-between gap-2 mt-1">
                         <p className="text-[10px] text-brand-text-muted truncate">Sau đó chuyển sang {pkg.retirementRequest.replacementPackageName}</p>
-                        <button onClick={() => onCancelPackageRetirement(pkg.id)} className="shrink-0 text-[10px] font-bold text-brand-text hover:text-brand-primary cursor-pointer">Mở lại đăng ký</button>
                       </div>
                     </div>
                   )}
-                  <button onClick={() => setEditor({ mode: 'edit', pkg: normalizeSubscriptionPackage(pkg) })} className="mt-auto w-full bg-brand-surface-high hover:bg-brand-surface-highest border border-brand-outline/40 text-brand-text rounded-lg px-4 py-2.5 text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"><Edit3 className="w-4 h-4" /> <span>Cấu hình gói</span></button>
                 </div>
               </article>
             );
@@ -423,42 +352,9 @@ export default function SubscriptionPackages({
         </div>
       )}
 
-      {editor && <PackageEditor editor={editor} reportCurrency={reportCurrency} onClose={() => setEditor(null)} onSave={(pkg) => { if (editor.mode === 'add') { const { id, activeTenants, ...newPackage } = pkg; void id; void activeTenants; onAddPackage(newPackage); } else { onUpdatePackage(pkg.id, pkg); } setEditor(null); }} />}
       {showComparison && <ComparisonModal packages={packages.filter((pkg) => getPackageStatus(pkg) !== 'ARCHIVED')} onClose={() => setShowComparison(false)} />}
       {historyTarget && <HistoryModal pkg={historyTarget} onClose={() => setHistoryTarget(null)} />}
-      {deleteTarget && <ConfirmModal title={`Xóa gói ${deleteTarget.name}?`} description="Gói chưa có tenant sử dụng và sẽ bị xóa vĩnh viễn. Hành động này không ảnh hưởng các hóa đơn lịch sử." confirmLabel="Xóa vĩnh viễn" onClose={() => setDeleteTarget(null)} onConfirm={() => { onDeletePackage(deleteTarget.id); setDeleteTarget(null); }} />}
 
-      {retirementTarget && (
-        <Modal
-          open
-          onClose={() => setRetirementTarget(null)}
-          title={`Ngừng đăng ký gói ${retirementTarget.name}`}
-          size="medium"
-          footer={
-            <>
-              <button onClick={() => setRetirementTarget(null)} className="btn-secondary">Đóng</button>
-              <button disabled={!replacementPackageName} onClick={confirmRetirementRequest} className="bg-brand-warning text-white px-4 py-2 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Xác nhận ngừng đăng ký</button>
-            </>
-          }
-        >
-            <div className="space-y-4">
-              <div className="rounded-xl bg-brand-warning/10 border border-brand-warning/25 p-4 text-xs text-brand-text leading-relaxed space-y-2">
-                <p>Gói sẽ <strong>ngừng nhận tenant mới ngay lập tức</strong>.</p>
-                <p><strong>{(tenantsByPackage.get(retirementTarget.id) || []).length} tenant hiện tại</strong> vẫn sử dụng bình thường đến ngày hết hạn riêng của từng tenant.</p>
-                <p>Khi hết hạn, hệ thống tự chuyển tenant sang gói thay thế và tạo hóa đơn mới.</p>
-              </div>
-              <Field label="Gói thay thế sau khi hết hạn">
-                <BeautifulSelect value={replacementPackageName} onChange={(event) => setReplacementPackageName(event.target.value)} className="form-control">
-                  <option value="">Chọn gói đủ hạn mức</option>
-                  {getCompatibleReplacementPackages(retirementTarget).map((pkg) => <option key={pkg.id} value={pkg.name}>{pkg.name}</option>)}
-                </BeautifulSelect>
-              </Field>
-              {getCompatibleReplacementPackages(retirementTarget).length === 0 && (
-                <p className="text-[10px] text-brand-error">Chưa có gói đang hoạt động nào đủ hạn mức cho tất cả tenant. Hãy tạo hoặc nâng hạn mức một gói thay thế trước.</p>
-              )}
-            </div>
-        </Modal>
-      )}
 
     </div>
   );

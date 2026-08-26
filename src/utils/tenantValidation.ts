@@ -11,6 +11,7 @@ import { getSubscriptionBranchLimit, getSubscriptionStaffLimit, isUnlimitedBranc
  * theo từng lần gõ để đánh dấu đúng ô, vừa chạy lại lúc submit.
  */
 
+
 /** Khoá lỗi trùng với tên trường trong biểu mẫu, để UI gắn thẳng vào `Field`. */
 export type TenantFieldKey =
   | 'name'
@@ -19,18 +20,26 @@ export type TenantFieldKey =
   | 'timezone'
   | 'contactEmail'
   | 'phone'
+  | 'packageId'
+  | 'expiresAt'
+  | 'primaryBranchName'
   | 'adminSelection'
-  | 'adminCode'
   | 'adminName'
   | 'adminEmail'
-  | 'adminPhone'
   | 'adminUsername'
-  | 'branchCount'
-  | 'staffCount'
-  | 'trialEndDate';
+  | 'adminPassword';
 
 export type TenantFieldErrors = Partial<Record<TenantFieldKey, string>>;
 
+/**
+ * Bản nháp một tiệm mới, đúng bằng những gì `POST /api/tenants` nhận.
+ *
+ * Trước ngày 6 bản nháp này còn mang số chi nhánh, số nhân sự, doanh thu, trạng thái ban đầu
+ * và mốc kết thúc dùng thử. Không trường nào trong số đó tồn tại ở máy chủ: chi nhánh và
+ * nhân sự là những bản ghi được ĐẾM chứ không phải con số gõ vào (BR-SUB-005), doanh thu
+ * tiệm nằm ngoài tầm với của Superadmin (BR-AUTH-030), còn trạng thái hiển thị được tính
+ * lúc đọc từ hạn dùng (BR-TENANT-002).
+ */
 export interface TenantDraft {
   name: string;
   code: string;
@@ -38,29 +47,25 @@ export interface TenantDraft {
   timezone: string;
   contactEmail: string;
   phone: string;
+  packageId: string;
+  /** Ngày ở dạng `YYYY-MM-DD` lấy thẳng từ ô nhập. */
+  expiresAt: string;
+  primaryBranchName: string;
   adminMode: 'existing' | 'new';
   selectedAdminId: string;
-  adminCode: string;
   adminName: string;
   adminEmail: string;
-  adminPhone: string;
   adminUsername: string;
-  packageName: SubscriptionPackageName;
-  branchCount: number;
-  staffCount: number;
-  status: TenantStatus;
-  trialEndDate: string;
+  adminPassword: string;
 }
 
 export interface TenantValidationContext {
   tenants: Tenant[];
   packages: SubscriptionPackage[];
-  /** Toàn bộ Tenant Admin đã biết, kể cả người được mời nhưng chưa gán tenant. */
+  /** Toàn bộ tài khoản chủ tiệm đã biết, đọc từ máy chủ. */
   tenantAdmins: TenantAdminAccount[];
-  /** Các admin đang được phép chọn ở chế độ "dùng admin có sẵn". */
+  /** Các tài khoản đang được phép chọn ở chế độ "giao cho chủ tiệm đã có". */
   availableAdminIds: string[];
-  /** Bỏ qua chính tenant này khi kiểm trùng, dùng cho biểu mẫu sửa. */
-  editingTenantId?: string;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -75,38 +80,32 @@ export const isValidVietnamPhone = (value: string) => (
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Ngày kết thúc dùng thử gợi ý theo số ngày trial của chính gói được chọn.
- * Trước đây trường này để trống được, nên tenant TRIAL không có mốc hết hạn nào
- * và các effect tự hết hạn trong `App.tsx` không có gì để bám vào.
+ * Kiểm tra trước khi gửi lên máy chủ.
+ *
+ * Đây là lớp kiểm **thứ hai chứ không phải duy nhất**: máy chủ vẫn kiểm lại tất cả và là bên
+ * có tiếng nói cuối cùng. Lớp này tồn tại để người dùng biết mình sai ở đâu ngay lúc gõ,
+ * thay vì phải bấm Lưu rồi chờ một vòng đi về mới thấy lỗi.
  */
-export const getSuggestedTrialEndDate = (
-  packages: SubscriptionPackage[],
-  packageName: SubscriptionPackageName
-) => {
-  const trialDays = packages.find((pkg) => pkg.name === packageName)?.trialDays ?? 14;
-  return new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-};
-
 export const validateTenantDraft = (
   draft: TenantDraft,
   context: TenantValidationContext
 ): { errors: TenantFieldErrors; isValid: boolean } => {
-  const { tenants, packages, tenantAdmins, availableAdminIds, editingTenantId } = context;
+  const { tenants, packages, tenantAdmins, availableAdminIds } = context;
   const errors: TenantFieldErrors = {};
 
   const name = draft.name.trim();
-  if (!name) errors.name = 'Tên tenant không được để trống.';
-  else if (name.length < 3) errors.name = 'Tên tenant phải có ít nhất 3 ký tự.';
-  else if (name.length > 80) errors.name = 'Tên tenant không được vượt quá 80 ký tự.';
+  if (!name) errors.name = 'Tên tiệm không được để trống.';
+  else if (name.length < 3) errors.name = 'Tên tiệm phải có ít nhất 3 ký tự.';
+  else if (name.length > 80) errors.name = 'Tên tiệm không được vượt quá 80 ký tự.';
 
   const code = draft.code.trim().toUpperCase();
-  if (!code) errors.code = 'Mã tenant không được để trống.';
-  else if (!/^[A-Z0-9-]+$/.test(code)) errors.code = 'Mã tenant chỉ gồm chữ in hoa, số và dấu gạch ngang.';
-  else if (tenants.some((tenant) => tenant.id !== editingTenantId && tenant.id.toUpperCase() === code)) {
-    errors.code = `Mã tenant "${code}" đã tồn tại.`;
+  if (!code) errors.code = 'Mã tiệm không được để trống.';
+  else if (!/^[A-Z0-9-]+$/.test(code)) errors.code = 'Mã tiệm chỉ gồm chữ in hoa, số và dấu gạch ngang.';
+  else if (tenants.some((tenant) => (tenant.code || '').toUpperCase() === code)) {
+    errors.code = `Mã tiệm "${code}" đã được dùng.`;
   }
 
-  if (!draft.address.trim()) errors.address = 'Địa chỉ đại diện không được để trống.';
+  if (!draft.address.trim()) errors.address = 'Địa chỉ tiệm không được để trống.';
   else if (draft.address.trim().length < 10) errors.address = 'Địa chỉ cần ghi rõ số nhà, đường và khu vực.';
 
   if (!draft.timezone.trim()) errors.timezone = 'Vui lòng chọn múi giờ.';
@@ -114,87 +113,67 @@ export const validateTenantDraft = (
   /* Hai trường liên hệ của tiệm không bắt buộc, nhưng đã nhập thì phải đúng
      định dạng: biểu mẫu đặt `noValidate` nên trình duyệt không còn kiểm hộ. */
   if (draft.contactEmail.trim() && !isValidEmail(draft.contactEmail)) {
-    errors.contactEmail = 'Email liên hệ tenant chưa đúng định dạng.';
+    errors.contactEmail = 'Email liên hệ của tiệm chưa đúng định dạng.';
   }
   if (draft.phone.trim() && !isValidVietnamPhone(draft.phone)) {
-    errors.phone = 'Số điện thoại tenant phải đúng định dạng Việt Nam, ví dụ 0901234567.';
+    errors.phone = 'Số điện thoại tiệm phải đúng định dạng Việt Nam, ví dụ 0901234567.';
   }
 
-  if (draft.adminMode === 'existing' && !availableAdminIds.includes(draft.selectedAdminId)) {
-    errors.adminSelection = 'Vui lòng chọn một Tenant Admin có sẵn chưa gán tenant.';
+  if (!draft.packageId) errors.packageId = 'Vui lòng chọn gói dịch vụ.';
+  else if (!packages.some((pkg) => pkg.id === draft.packageId)) {
+    errors.packageId = 'Gói dịch vụ này không còn trên bảng giá. Hãy tải lại trang.';
+  }
+
+  /* Hạn dùng bắt buộc và phải ở tương lai. Tự chọn hộ một ngày là âm thầm tạo ra một hợp
+     đồng khác với thứ người dùng định ký, nên biểu mẫu để trống và bắt nhập (BR-TENANT-006). */
+  if (!draft.expiresAt) errors.expiresAt = 'Vui lòng nhập hạn dùng của tiệm.';
+  else if (draft.expiresAt <= todayIso()) errors.expiresAt = 'Hạn dùng phải sau ngày hôm nay.';
+
+  const primaryBranchName = draft.primaryBranchName.trim();
+  if (primaryBranchName && primaryBranchName.length < 3) {
+    errors.primaryBranchName = 'Tên chi nhánh chính phải có ít nhất 3 ký tự.';
+  }
+
+  if (draft.adminMode === 'existing') {
+    if (!availableAdminIds.includes(draft.selectedAdminId)) {
+      errors.adminSelection = 'Vui lòng chọn một tài khoản chủ tiệm đang hoạt động.';
+    }
+
+    return { errors, isValid: Object.keys(errors).length === 0 };
   }
 
   const adminName = draft.adminName.trim();
-  if (!adminName) errors.adminName = 'Tên Tenant Admin không được để trống.';
+  if (!adminName) errors.adminName = 'Tên chủ tiệm không được để trống.';
 
   const adminEmail = draft.adminEmail.trim().toLowerCase();
   if (!adminEmail) {
-    errors.adminEmail = 'Email Tenant Admin không được để trống.';
+    errors.adminEmail = 'Email chủ tiệm không được để trống.';
   } else if (!isValidEmail(adminEmail)) {
-    errors.adminEmail = 'Email Tenant Admin chưa đúng định dạng.';
-  } else if (tenants.some((tenant) => (
-    tenant.id !== editingTenantId && tenant.adminEmail.trim().toLowerCase() === adminEmail
-  ))) {
-    errors.adminEmail = 'Email này đang là Tenant Admin của một tenant khác. Mỗi Tenant Admin chỉ quản lý 1 tenant.';
-  } else if (draft.adminMode === 'new' && tenantAdmins.some((admin) => (
-    /* Ở chế độ tạo mới, email trùng một Tenant Admin ĐÃ MỜI nhưng chưa gán
-       tenant trước đây lọt lưới, vì phép kiểm chỉ soi danh sách tenant. */
-    admin.email.trim().toLowerCase() === adminEmail
-  ))) {
-    errors.adminEmail = 'Email này đã có tài khoản Tenant Admin. Hãy dùng chế độ "Dùng Tenant Admin có sẵn".';
-  }
-
-  const adminPhone = draft.adminPhone.trim();
-  if (!adminPhone) errors.adminPhone = 'Số điện thoại Tenant Admin không được để trống.';
-  else if (!isValidVietnamPhone(adminPhone)) {
-    errors.adminPhone = 'Số điện thoại phải đúng định dạng Việt Nam, ví dụ 0901234567.';
+    errors.adminEmail = 'Email chủ tiệm chưa đúng định dạng.';
+  } else if (tenantAdmins.some((admin) => admin.email.trim().toLowerCase() === adminEmail)) {
+    /* Email đã có tài khoản thì đường đi đúng là giao thêm tiệm cho tài khoản ấy, chứ không
+       phải lập một tài khoản thứ hai cùng email — máy chủ cũng sẽ từ chối. */
+    errors.adminEmail = 'Email này đã có tài khoản chủ tiệm. Hãy dùng chế độ "Giao cho chủ tiệm đã có".';
   }
 
   const adminUsername = draft.adminUsername.trim();
-  if (!adminUsername) errors.adminUsername = 'Username đăng nhập không được để trống.';
-  else if (adminUsername.includes('@')) {
-    errors.adminUsername = 'Username không dùng định dạng email. Ví dụ hợp lệ: nguyenvanbay.';
-  } else if (!/^[a-z0-9._-]+$/i.test(adminUsername)) {
-    errors.adminUsername = 'Username chỉ gồm chữ, số và các ký tự . _ -';
-  } else if (tenants.some((tenant) => (
-    tenant.id !== editingTenantId
-    && (tenant.adminUsername || '').trim().toLowerCase() === adminUsername.toLowerCase()
-  ))) {
-    errors.adminUsername = 'Username này đã được dùng cho một Tenant Admin khác.';
-  }
-
-  const adminCode = draft.adminCode.trim();
-  if (draft.adminMode === 'new' && adminCode && tenants.some((tenant) => (
-    tenant.id !== editingTenantId && (tenant.tenantAdminId || '').toLowerCase() === adminCode.toLowerCase()
-  ))) {
-    errors.adminCode = 'Mã Tenant Admin đã tồn tại trên hệ thống.';
-  }
-
-  const branchLimit = getSubscriptionBranchLimit(packages, draft.packageName);
-  if (!Number.isInteger(draft.branchCount) || draft.branchCount < 1) {
-    errors.branchCount = 'Số chi nhánh phải là số nguyên từ 1 trở lên.';
-  } else if (!isUnlimitedBranches(branchLimit) && draft.branchCount > branchLimit) {
-    errors.branchCount = `Gói ${draft.packageName} chỉ hỗ trợ tối đa ${branchLimit} chi nhánh.`;
-  }
-
-  const staffLimit = getSubscriptionStaffLimit(packages, draft.packageName);
-  if (!Number.isInteger(draft.staffCount) || draft.staffCount < 0) {
-    errors.staffCount = 'Số nhân sự phải là số nguyên từ 0 trở lên.';
-  } else if (!isUnlimitedStaff(staffLimit) && draft.staffCount > staffLimit) {
-    errors.staffCount = `Gói ${draft.packageName} chỉ hỗ trợ tối đa ${staffLimit} nhân sự toàn tenant.`;
-  }
-
-  /* Tenant dùng thử bắt buộc có mốc kết thúc, nếu không thì nó dùng thử vĩnh
-     viễn: `App.tsx` suy ra hạn từ `trialEndDate`/`daysRemaining`, cả hai đều
-     rỗng khi trường này để trống. */
-  if (draft.status === 'TRIAL') {
-    if (!draft.trialEndDate) {
-      errors.trialEndDate = 'Tenant dùng thử phải có ngày kết thúc dùng thử.';
-    } else if (draft.trialEndDate <= todayIso()) {
-      errors.trialEndDate = 'Ngày kết thúc dùng thử phải sau hôm nay.';
+  if (adminUsername) {
+    if (adminUsername.includes('@')) {
+      errors.adminUsername = 'Username không dùng định dạng email. Ví dụ hợp lệ: nguyenvanbay.';
+    } else if (!/^[a-z0-9._-]+$/i.test(adminUsername)) {
+      errors.adminUsername = 'Username chỉ gồm chữ, số và các ký tự . _ -';
+    } else if (tenantAdmins.some((admin) => (
+      (admin.username || '').trim().toLowerCase() === adminUsername.toLowerCase()
+    ))) {
+      errors.adminUsername = 'Username này đã được dùng cho một tài khoản khác.';
     }
-  } else if (draft.trialEndDate && draft.trialEndDate <= todayIso()) {
-    errors.trialEndDate = 'Ngày kết thúc dùng thử phải sau hôm nay.';
+  }
+
+  /* Mật khẩu để trống là hợp lệ và là đường được khuyến khích: máy chủ tự sinh một chuỗi
+     mạnh rồi trả về đúng một lần. Đã tự nhập thì phải đủ dài. */
+  const adminPassword = draft.adminPassword.trim();
+  if (adminPassword && adminPassword.length < 8) {
+    errors.adminPassword = 'Mật khẩu tạm phải có ít nhất 8 ký tự, hoặc để trống cho máy chủ tự sinh.';
   }
 
   return { errors, isValid: Object.keys(errors).length === 0 };
@@ -235,36 +214,28 @@ export interface TenantDeletionEligibility {
 }
 
 /**
- * Kiểm tra các ràng buộc dữ liệu & nghiệp vụ để xác định tenant có thể xóa an toàn hay không.
- * Ngăn chặn xóa nhầm tenant đang có chi nhánh, nhân sự, đang hoạt động hoặc có yêu cầu nâng cấp đang chờ.
+ * Điều kiện an toàn trước khi xóa một tiệm.
+ *
+ * Bản trước ngày 6 chặn bốn thứ: tiệm còn chi nhánh, còn nhân sự, đang hoạt động, hoặc có
+ * yêu cầu nâng gói chờ duyệt. Cả bốn đều là quy ước tự đặt ở thời dữ liệu mẫu, không nằm
+ * trong `README-BUSINESS-RULES.md`, và điều kiện đầu tiên còn **bất khả thi**: BR-BRANCH-002
+ * cấm ngừng chi nhánh chính, nên số chi nhánh hoạt động không bao giờ về 0 và không tiệm nào
+ * xóa được — trong khi `DELETE /api/tenants/{id}` ở máy chủ vẫn nhận và vẫn chạy đúng.
+ *
+ * Nay chỉ còn một điều kiện, và nó có thật: tiệm đang hoạt động thì phải khóa trước. Đây là
+ * bước dừng để người bấm nhìn lại một lần, và nó **thực hiện được** — nút khóa nằm ngay cạnh
+ * nút xóa (BR-TENANT-002).
+ *
+ * Máy chủ vẫn là bên quyết định cuối cùng. Hàm này chỉ giúp người dùng khỏi bấm vào một việc
+ * mà họ sẽ hối tiếc, chứ không phải hàng rào an ninh — hàng rào nằm ở ma trận quyền.
  */
-export const getTenantDeletionEligibility = (
-  tenant: Tenant,
-  context?: {
-    upgradeRequests?: { tenantId: string; status?: string }[];
-  }
-): TenantDeletionEligibility => {
+export const getTenantDeletionEligibility = (tenant: Tenant): TenantDeletionEligibility => {
   const blockReasons: string[] = [];
 
-  const branchCount = Math.max((tenant.branches && tenant.branches.length) || 0, 0);
-  if (branchCount > 0) {
-    blockReasons.push(`Tenant đang có ${branchCount} chi nhánh trực thuộc. Cần xóa hoặc giải thể tất cả chi nhánh trước.`);
-  }
-
-  const staffCount = Number(tenant.staffCount) || 0;
-  if (staffCount > 0) {
-    blockReasons.push(`Tenant đang có ${staffCount} nhân sự trực thuộc. Cần giải phóng hoặc điều chuyển toàn bộ nhân sự.`);
-  }
-
-  if (tenant.status === 'ACTIVE') {
-    blockReasons.push('Tenant đang ở trạng thái Hoạt động ("ACTIVE"). Cần tạm khóa ("SUSPENDED") hoặc ngưng hoạt động trước khi xóa.');
-  }
-
-  const hasPendingUpgrade = context?.upgradeRequests?.some(
-    (req) => req.tenantId === tenant.id && (!req.status || req.status === 'PENDING')
-  );
-  if (hasPendingUpgrade) {
-    blockReasons.push('Tenant đang có yêu cầu nâng cấp gói dịch vụ chờ duyệt.');
+  if (tenant.status === 'ACTIVE' || tenant.status === 'TRIAL') {
+    blockReasons.push(
+      'Tiệm đang hoạt động. Hãy khóa tiệm trước để chắc chắn không ai còn đang làm việc trên đó, rồi mới xóa.'
+    );
   }
 
   return {

@@ -862,7 +862,17 @@ function MetricCard({ icon: Icon, label, value, note, tone }: { icon: typeof Cal
 
 export default function ReceptionistPortal({ account, themeMode, onThemeChange, onLogout }: ReceptionistPortalProps) {
   const tenantName = account.tenantName || 'Nailé Studio';
-  const branchCode: BranchCode = account.branchCode || 'Q3';
+  /*
+    Mã chi nhánh thật đến từ phiên đăng nhập và có tập giá trị mở. Dữ liệu mẫu của cổng lễ tân
+    thì vẫn gắn cứng hai chi nhánh 'Q1' và 'Q3', nên phép thu hẹp ở đây là chỗ nối tạm giữa
+    hai thế giới: mã nào khớp dữ liệu mẫu thì dùng, còn lại lùi về 'Q3'.
+
+    Nó sẽ biến mất ở ngày 8, khi màn chi nhánh lên API và các màn mức C không còn dựng danh
+    sách chi nhánh từ hằng số nữa. Cho tới lúc đó, tên chi nhánh hiển thị vẫn lấy từ phiên
+    (`account.branchName`) nên người dùng luôn thấy đúng tên chi nhánh của mình, kể cả khi mã
+    không nằm trong hai giá trị mẫu.
+  */
+  const branchCode: BranchCode = account.branchCode === 'Q1' ? 'Q1' : 'Q3';
   const branchName = account.branchName || `${tenantName} · Chi nhánh ${branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}`;
   const nextThemeMode = themeMode === 'dark' ? 'light' : 'dark';
   const appointmentStorageKey = `tenant-admin-appointments-v2:${tenantName}`;

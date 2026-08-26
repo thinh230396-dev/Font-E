@@ -181,11 +181,9 @@ export default function TenantAdminSubscription({
     ? { label: 'Tạm ngưng', tone: 'bg-rose-400/15 text-rose-200 ring-rose-300/20' }
     : tenant?.status === 'OVERDUE'
       ? { label: 'Quá hạn thanh toán', tone: 'bg-rose-400/15 text-rose-200 ring-rose-300/20' }
-      : tenant?.status === 'EXPIRING'
-        ? { label: 'Sắp hết hạn', tone: 'bg-amber-400/15 text-amber-200 ring-amber-300/20' }
-        : tenant?.status === 'TRIAL'
-          ? { label: 'Đang dùng thử', tone: 'bg-blue-400/15 text-blue-200 ring-blue-300/20' }
-          : { label: 'Đang hoạt động', tone: 'bg-emerald-400/15 text-emerald-200 ring-emerald-300/20' };
+      : tenant?.status === 'TRIAL'
+        ? { label: 'Đang dùng thử', tone: 'bg-blue-400/15 text-blue-200 ring-blue-300/20' }
+        : { label: 'Đang hoạt động', tone: 'bg-emerald-400/15 text-emerald-200 ring-emerald-300/20' };
 
   const branchPercent = getTenantUsagePercent(branchCount, current.maxSalons, 'branches');
   const staffPercent = getTenantUsagePercent(staffCount, current.maxStaff, 'staff');
@@ -409,7 +407,7 @@ export default function TenantAdminSubscription({
         </div>
       </section>
 
-      {(tenant?.status === 'OVERDUE' || tenant?.status === 'EXPIRING') && <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"><AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" /><div className="flex-1"><p className="text-caption font-black text-amber-900">{tenant.status === 'OVERDUE' ? 'Cần thanh toán để khôi phục toàn bộ chức năng' : 'Gói sắp đến ngày gia hạn'}</p><p className="mt-1 text-caption text-amber-700">Kiểm tra phương thức thanh toán và thông tin xuất hóa đơn trước ngày {date(renewalDate)}.</p></div><button type="button" onClick={() => setActiveTab('billing')} className="h-9 rounded-xl border border-amber-300 bg-white px-4 text-caption font-black text-amber-800">Xử lý ngay</button></section>}
+      {tenant?.status === 'OVERDUE' && <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"><AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" /><div className="flex-1"><p className="text-caption font-black text-amber-900">{tenant.status === 'OVERDUE' ? 'Cần thanh toán để khôi phục toàn bộ chức năng' : 'Gói sắp đến ngày gia hạn'}</p><p className="mt-1 text-caption text-amber-700">Kiểm tra phương thức thanh toán và thông tin xuất hóa đơn trước ngày {date(renewalDate)}.</p></div><button type="button" onClick={() => setActiveTab('billing')} className="h-9 rounded-xl border border-amber-300 bg-white px-4 text-caption font-black text-amber-800">Xử lý ngay</button></section>}
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.72fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="text-sm font-black text-slate-900">Mức sử dụng nổi bật</h2><p className="mt-1 text-caption text-slate-500">Theo chu kỳ hiện tại của toàn tenant.</p></div><button type="button" onClick={() => setActiveTab('usage')} className="flex items-center gap-1 text-caption font-black text-violet-600">Xem chi tiết<ChevronRight className="h-3.5 w-3.5" /></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{usage.slice(0, 4).map((item) => <div key={item.label} className="rounded-2xl bg-slate-50 p-4"><div className="flex items-center justify-between"><p className="text-caption font-bold text-slate-500">{item.label}</p><span className="text-caption font-black text-slate-700">{item.percent ? `${item.percent}%` : '∞'}</span></div><p className="mt-2 text-sm font-black text-slate-900">{item.value}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white"><div className={`h-full rounded-full ${tone[item.tone].bar}`} style={{ width: `${item.percent || 12}%` }} /></div></div>)}</div></div>
