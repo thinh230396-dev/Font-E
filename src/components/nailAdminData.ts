@@ -164,11 +164,14 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
       { label: 'Doanh thu tháng', value: '312,8 triệu', detail: '+15,6% so với tháng trước', tone: 'blue' },
       { label: 'Công suất trung bình', value: '82%', detail: 'Quận 3 cao nhất với 86%', tone: 'amber' }
     ],
-    tabs: ['Tất cả', 'Đang hoạt động', 'Tạm ngưng', 'Chuẩn bị mở'],
-    columns: ['Chi nhánh', 'Giờ hoạt động', 'Quản lý', 'Nhân sự', 'Doanh thu tháng', 'Trạng thái'],
+    // BR-BRANCH-003 — chỉ hai trạng thái, nên không còn tab "Chuẩn bị mở".
+    tabs: ['Tất cả', 'Đang hoạt động', 'Tạm ngưng'],
+    // Sáu cột, khớp đúng những gì máy chủ lưu: cột đầu là tên, cột cuối là trạng
+    // thái, bốn cột giữa ứng với bốn ô `cells` mà `branchDtoToNailRow` dựng ra.
+    columns: ['Chi nhánh', 'Mã chi nhánh', 'Địa chỉ', 'Điện thoại', 'Vai trò', 'Trạng thái'],
     rows: [
-      { id: 'BR-Q3', title: 'Chi nhánh Quận 3', subtitle: 'Chi nhánh chính · 95 Võ Văn Tần', cells: ['08:00–21:00', 'Nguyễn Văn Boss', '17 người', '186,4 triệu'], badge: 'Đang hoạt động', badgeTone: 'emerald', branchCode: 'Q3', details: [d('Mã chi nhánh', 'Q3'), d('Địa chỉ', '95 Võ Văn Tần, Phường 6, Quận 3'), d('Điện thoại', '028 3930 8899'), d('Số ghế', '14 vị trí'), d('Công suất', '86%'), d('Ngày mở cửa', '12/03/2024')], note: 'Chi nhánh chính, phụ trách kho trung tâm và đào tạo kỹ thuật viên.' },
-      { id: 'BR-Q1', title: 'Chi nhánh Quận 1', subtitle: 'Studio trung tâm · 28 Nguyễn Huệ', cells: ['09:00–22:00', 'Trần Ngọc Hà', '11 người', '126,4 triệu'], badge: 'Đang hoạt động', badgeTone: 'emerald', branchCode: 'Q1', details: [d('Mã chi nhánh', 'Q1'), d('Địa chỉ', '28 Nguyễn Huệ, Phường Bến Nghé, Quận 1'), d('Điện thoại', '028 3822 6688'), d('Số ghế', '10 vị trí'), d('Công suất', '76%'), d('Ngày mở cửa', '08/01/2026')], note: 'Tập trung khách du lịch, dịch vụ VIP và khung giờ tối.' }
+      { id: 'BR-Q3', title: 'Chi nhánh Quận 3', subtitle: '95 Võ Văn Tần, Phường 6, Quận 3', cells: ['Q3', '95 Võ Văn Tần, Phường 6, Quận 3', '028 3930 8899', 'Chi nhánh chính'], badge: 'Đang hoạt động', badgeTone: 'emerald', branchCode: 'Q3', details: [d('Mã chi nhánh', 'Q3'), d('Vai trò', 'Chi nhánh chính'), d('Địa chỉ', '95 Võ Văn Tần, Phường 6, Quận 3'), d('Điện thoại', '028 3930 8899')], note: 'Dữ liệu mẫu — chưa nối máy chủ.' },
+      { id: 'BR-Q1', title: 'Chi nhánh Quận 1', subtitle: '28 Nguyễn Huệ, Phường Bến Nghé, Quận 1', cells: ['Q1', '28 Nguyễn Huệ, Phường Bến Nghé, Quận 1', '028 3822 6688', 'Chi nhánh thành viên'], badge: 'Đang hoạt động', badgeTone: 'emerald', branchCode: 'Q1', details: [d('Mã chi nhánh', 'Q1'), d('Vai trò', 'Chi nhánh thành viên'), d('Địa chỉ', '28 Nguyễn Huệ, Phường Bến Nghé, Quận 1'), d('Điện thoại', '028 3822 6688')], note: 'Dữ liệu mẫu — chưa nối máy chủ.' }
     ],
     insightTitle: 'Hiệu suất chuỗi',
     insights: [
@@ -177,27 +180,17 @@ export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscri
       { label: 'Hạn mức gói', value: '2 / 3', detail: 'Có thể mở thêm 1 chi nhánh', tone: 'blue' }
     ],
     checklistTitle: 'Việc quản trị chi nhánh', checklist: ['Duyệt lịch vận hành dịp lễ', 'Đối soát doanh thu Quận 1', 'Phân bổ kho Gel giữa hai chi nhánh', 'Rà soát quyền quản lý chi nhánh'],
+    // Năm ô, đúng bằng hợp đồng của `POST`/`PUT /api/branches` cộng một ô trạng
+    // thái mà giao diện ghép vào cùng nút Lưu. Mười bốn ô của bản trước ngày 8 —
+    // mô hình kinh doanh, tỉnh thành, quản lý, email, giờ mở cửa, ngày khai
+    // trương, số ghế, nhân sự, sức chứa, doanh thu, công suất, mã số thuế, nhóm
+    // dịch vụ, ghi chú — không có cột nào ở database, nên nhập vào là mất trắng.
     formTitle: 'Thêm chi nhánh mới', formFields: [
       { key: 'name', label: 'Tên chi nhánh', type: 'text', placeholder: 'Ví dụ: Chi nhánh Thảo Điền' },
-      { key: 'code', label: 'Mã chi nhánh', type: 'text', placeholder: 'Ví dụ: TD' },
-      { key: 'branchRole', label: 'Vai trò trong tenant', type: 'select', options: ['Chi nhánh thành viên', 'Chi nhánh chính'] },
-      { key: 'branchModel', label: 'Mô hình kinh doanh', type: 'select', options: BRANCH_MODEL_OPTIONS.map((option) => option.label) },
-      { key: 'status', label: 'Trạng thái', type: 'select', options: ['Đang hoạt động', 'Chuẩn bị mở', 'Tạm ngưng'] },
-      { key: 'province', label: 'Tỉnh / Thành phố', type: 'select', options: ['TP. Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Khánh Hòa', 'Cần Thơ', 'Bình Dương'] },
-      { key: 'address', label: 'Địa chỉ đầy đủ', type: 'text', placeholder: 'Số nhà, đường, phường/xã, quận/huyện' },
-      { key: 'manager', label: 'Người quản lý', type: 'text', placeholder: 'Họ và tên quản lý chi nhánh' },
+      { key: 'code', label: 'Mã chi nhánh', type: 'text', placeholder: 'Ví dụ: TD — có thể bỏ trống' },
+      { key: 'address', label: 'Địa chỉ', type: 'text', placeholder: 'Số nhà, đường, phường/xã, quận/huyện' },
       { key: 'phone', label: 'Số điện thoại', type: 'text', placeholder: '028 xxxx xxxx' },
-      { key: 'email', label: 'Email chi nhánh', type: 'text', placeholder: 'branch@salon.vn' },
-      { key: 'openingHours', label: 'Giờ hoạt động', type: 'text', placeholder: '08:00–21:00' },
-      { key: 'openingDate', label: 'Ngày dự kiến khai trương', type: 'date' },
-      { key: 'stations', label: 'Số vị trí phục vụ', type: 'number', placeholder: 'Ví dụ: 12' },
-      { key: 'staffCount', label: 'Nhân sự ban đầu', type: 'number', placeholder: 'Ví dụ: 8' },
-      { key: 'staffCapacity', label: 'Sức chứa nhân sự', type: 'number', placeholder: 'Ví dụ: 20' },
-      { key: 'monthlyRevenue', label: 'Doanh thu tháng hiện tại', type: 'number', placeholder: 'Nhập số tiền VND' },
-      { key: 'capacityPercent', label: 'Công suất hiện tại (%)', type: 'number', placeholder: '0–100' },
-      { key: 'taxCode', label: 'Mã số thuế / đơn vị xuất hóa đơn', type: 'text', placeholder: 'Nhập mã số thuế áp dụng' },
-      { key: 'services', label: 'Nhóm dịch vụ triển khai', type: 'textarea', placeholder: 'Manicure, Pedicure, Nail Art, Acrylic, dịch vụ VIP...' },
-      { key: 'note', label: 'Ghi chú triển khai', type: 'textarea', placeholder: 'Kế hoạch khai trương, thiết bị, kho, phân quyền và lưu ý vận hành...' }
+      { key: 'status', label: 'Trạng thái', type: 'select', options: ['Đang hoạt động', 'Tạm ngưng'] }
     ]
   },
   appointments: {

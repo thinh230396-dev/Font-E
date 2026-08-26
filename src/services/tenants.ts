@@ -148,6 +148,20 @@ export const listTenants = async (): Promise<ApiResult<TenantDetailDto[]>> => {
   return result.status === 'ok' ? { status: 'ok', data: result.data.tenants } : result;
 };
 
+
+/**
+ * Hồ sơ của chính tiệm đang làm việc — nguồn cho cổng chủ tiệm.
+ *
+ * Khác `listTenants` ở đúng một điểm và đó là điểm quan trọng: đường dẫn không
+ * mang mã tiệm, nên không có cách nào hỏi hồ sơ của tiệm khác. Máy chủ lấy tiệm
+ * từ phiên đăng nhập (BR-AUTH-024), còn `GET /api/tenants` thì chỉ Superadmin
+ * gọi được vì nó đọc được mọi tiệm.
+ */
+export const getMyTenant = async (): Promise<ApiResult<TenantDetailDto>> => {
+  const result = await apiGet<{ tenant: TenantDetailDto }>('/api/tenants/me');
+
+  return result.status === 'ok' ? { status: 'ok', data: result.data.tenant } : result;
+};
 export const listPackages = async (): Promise<ApiResult<PackageDto[]>> => {
   const result = await apiGet<{ packages: PackageDto[] }>('/api/packages');
 

@@ -1105,3 +1105,71 @@ Ba điểm nhỏ hơn kết luận thẳng từ source, không hỏi:
 | 4 | Database demo lẫn thêm rác của phiên thử ngày 7: hồ sơ `Ngô Thị Kiểm Thử` (Lumiere) kèm tài khoản `kiemthu.ngay7@lumierehair.vn` đã vô hiệu, và bốn hồ sơ "Nhân viên hạn mức" ở Muse — tất cả đã chuyển `INACTIVE` nên không chiếm hạn mức, nhưng vẫn nên xóa database dựng lại trước khi bảo vệ | Thấp |
 | 5 | §3.1 ghi "`DTOs/` chỉ có bảy tệp" — nay là chín. Vẫn dưới ngưỡng phải chia thư mục, nhưng con số trong tài liệu đã cũ | Thấp |
 | 6 | `PUT /api/staff/{id}` là phép thay trọn hồ sơ: bỏ trống `email` trong thân request thì email trên hồ sơ bị xóa. Đúng ngữ nghĩa của `PUT` và giống hệt `PUT /api/branches/{id}`, nhưng ngày 9 phải nhớ gửi đủ trường | Ghi chú cho ngày 9 |
+
+### Ngày 8 — xong
+
+Bốn quyết định chốt đầu ngày, tất cả theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 34 | Thêm **`GET /api/tenants/me`** thay vì nhét thêm trường vào DTO phiên | Cổng chủ tiệm nhận đủ địa chỉ, hạn dùng và hạn mức; `TenantScopeDto` vẫn chỉ mang thứ tầng phân quyền cần ở mỗi request |
+| 35 | Màn chi nhánh **giữ `BranchesPage`**, chỉ thay nguồn dữ liệu và đường ghi | Giữ được giao diện bảng và thẻ đã dựng; `branches` thành một ca đặc biệt trong hệ thống module chung |
+| 36 | **Gỡ khỏi biểu mẫu và bảng** những ô máy chủ không lưu | Chi nhánh còn 5 ô thay vì 19; dịch vụ còn 6 ô thay vì 16 |
+| 37 | Màn dịch vụ **sửa phẫu**, không dựng lại | Giữ bảng, thẻ, bộ lọc và ngăn chi tiết hiện có |
+
+#### 🔴 Phát hiện quan trọng nhất: cổng chủ tiệm chưa bao giờ có tiệm thật
+
+`App.tsx:295` gọi `useTenants(role === 'SUPERADMIN')`, còn `App.tsx:1290` lại tra `sessionTenant` **trong chính mảng của hook đó**. Chủ tiệm đăng nhập thật thì `tenants` rỗng → `targetTenant` là `undefined` → cổng rơi vào nhánh dữ liệu mẫu. Nghĩa là suốt từ ngày 4 tới hết ngày 7, **toàn bộ cổng Tenant Admin chạy bằng dữ liệu mẫu kể cả khi đã đăng nhập bằng tài khoản thật** — và không ai thấy, vì màn hình vẫn đầy số.
+
+Kèm theo là một lỗi cụ thể: nút lưu chi nhánh gọi `onUpdateTenant(tenant.id, { branches })`, tức `PUT /api/tenants/{id}` — endpoint chỉ Superadmin có ô. Chủ tiệm bấm lưu sẽ nhận `403`.
+
+**Backend — 1 endpoint mới:**
+
+| Hạng mục | Kết quả |
+|---|---|
+| `GET /api/tenants/me` — hồ sơ tiệm của chính phiên. Use case `GetMyTenantUseCase`, dùng lại `TenantReadService.DescribeAsync` | Xong |
+| Nhóm chức năng mới `Feature.OwnTenantProfile`, chỉ chủ tiệm có ô và chỉ mức đọc | Xong. Không đụng ô `Tenants` của Superadmin |
+| `dotnet build` | **0 lỗi, 0 cảnh báo** |
+
+**Frontend — 5 tệp mới, 6 tệp sửa:**
+
+| Hạng mục | Kết quả |
+|---|---|
+| `src/services/branches.ts`, `src/services/salonServices.ts` — tầng gọi API cho hai nhóm endpoint | Mới |
+| `src/hooks/useMyTenant.ts`, `useBranches.ts`, `useSalonServices.ts` — mỗi hook đặt cạnh màn dùng nó, nạp lại khi đổi tiệm | Mới |
+| `App.tsx` — chuỗi tra tiệm theo tên và email của thời `localStorage` biến mất, kèm ba hàm nhận dạng chỉ phục vụ nó | Xong |
+| `NailTenantAdminPortal` — `demoMode` mặc định tắt khi có tiệm thật; `branchDtoToNailRow` thay bản cũ; gỡ `pendingBranchChange` cùng hộp thoại "Bước xác nhận cuối" | Xong |
+| `TenantAdminServices` — nguồn dữ liệu, ba đường ghi, biểu mẫu và bảng đều theo hợp đồng máy chủ | Xong |
+| `npx tsc --noEmit` trên mã ứng dụng | **0 lỗi** |
+
+**Kiểm chứng trên trình duyệt thật — tất cả đạt:**
+
+| # | Phép thử | Kết quả |
+|---|---|---|
+| 1 | Cổng chủ tiệm hiện **tiệm thật** thay vì dữ liệu mẫu, ngay sau khi đăng nhập | Đạt |
+| 2 | Màn chi nhánh hiện **5 chi nhánh thật** của Nailé Studio | Đạt |
+| 3 | Hạn mức đếm **chỉ chi nhánh đang hoạt động** — 2/3, không phải 5/3 | Đạt |
+| 4 | Thêm chi nhánh → lưu xuống máy chủ, danh sách nạp lại, huy hiệu 3/3 | Đạt |
+| 5 | Thêm cái thứ tư → `409 LIMIT_EXCEEDED`, câu chữ máy chủ hiện nguyên văn, **biểu mẫu không đóng** | Đạt |
+| 6 | Tên chi nhánh trùng → `422`, lỗi **gắn đúng ô "Tên chi nhánh"** | Đạt |
+| 7 | Sửa tên + đổi trạng thái → `PUT` rồi `PATCH`, huy hiệu về 2/3 | Đạt |
+| 8 | Màn dịch vụ hiện **9 dịch vụ thật**, nhóm là chuỗi tự do ("Sơn gel", "Combo") | Đạt |
+| 9 | Thêm dịch vụ → `201`, danh sách nạp lại | Đạt |
+| 10 | Tên dịch vụ trùng → lỗi máy chủ hiện trong biểu mẫu | Đạt |
+
+#### Ba điều chệch khỏi kế hoạch, có chủ đích
+
+1. **Phép kiểm hạn mức chi nhánh ở trình duyệt bị gỡ hẳn**, không chỉ sửa. Nó đếm cả chi nhánh đã ngừng hoạt động — thứ không chiếm hạn mức — nên chặn oan một tiệm còn chỗ. BR-BRANCH-005 đã được cưỡng chế ở máy chủ và trả `LIMIT_EXCEEDED` kèm câu chữ dùng được ngay; giữ một bản sao thứ hai chỉ là giữ một chỗ để hai bên nói khác nhau.
+2. **`ServiceStatus` giữ lại `HIDDEN` và `DRAFT`** dù máy chủ không có. Ba màn mức C (`ReceptionistPortal`, `TenantAdminNailGallery`, `TenantAdminPayments`) đang import `serviceSeed` và so sánh với hai giá trị đó. Gỡ khỏi kiểu là phải sửa cả ba màn ngoài phạm vi ngày 8; đã ghi chú rõ trong kiểu rằng màn này không bao giờ sinh ra chúng nữa.
+3. **`ServiceCategory` nới thành `string`.** Kéo theo `InvoiceServiceLine.category` ở `TenantAdminPayments` phải nới theo — một dòng, không đổi hành vi.
+
+### Việc còn treo sau ngày 8
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — treo từ ngày 6, chưa đụng | **Cần sửa** |
+| 2 | `BranchCode = 'Q1' \| 'Q3'` vẫn còn ở các màn mức C. Quyết định 26 hẹn ngày 8, nhưng ngày 8 đã tiêu hết thời gian cho hai màn chính | Trượt lịch |
+| 3 | Cổng chủ tiệm còn nhiều màn mức C hiện số bịa cạnh dữ liệu thật: Tổng quan, Ghế & khu vực, POS, Báo cáo. Nay tiệm đã thật nên chỗ vênh dễ thấy hơn hẳn | **Cần sửa** |
+| 4 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc — không hiện sai, nhưng đọc thì rối | Thấp |
+| 5 | Database demo lẫn thêm rác của phiên ngày 8: chi nhánh `Chi nhánh Ngày 8 (đã sửa)` và dịch vụ `Sơn gel Nhật ngày 8`, cả hai đã chuyển sang ngừng hoạt động | Thấp |
+| 6 | Cấp, sửa, khóa tài khoản **chủ tiệm** vẫn chưa có endpoint và chưa có lịch — treo từ ngày 7 | Chưa có lịch |

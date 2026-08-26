@@ -188,7 +188,8 @@ interface PaymentRecord {
 interface InvoiceServiceLine {
   id: string;
   name: string;
-  category: Exclude<ServiceCategory, 'ALL'>;
+  /** Nhóm dịch vụ là chuỗi tự do do tiệm tự đặt — xem chú thích ở TenantAdminServices. */
+  category: string;
   price: number;
   quantity: number;
   selectedDesignId?: string;

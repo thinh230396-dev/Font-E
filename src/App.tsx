@@ -36,6 +36,7 @@ import {
 } from './utils/packageUpgradeRequests';
 import { resetTenantMockStorage } from './utils/mockDataReset';
 import { describeApiError } from './services/apiClient';
+import useMyTenant from './hooks/useMyTenant';
 import useTenants from './hooks/useTenants';
 import type { CreateTenantInput, UpdateTenantInput } from './services/tenants';
 import {
@@ -70,31 +71,6 @@ const ALERTS_MOCK_SEED_KEY = 'alerts_mock_seed_v2';
  */
 const EXPIRING_SOON_DAYS = 7;
 
-const normalizeAccountIdentity = (value?: string) => (
-  (value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[đĐ]/g, 'd')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-);
-
-const getEmailIdentity = (email?: string) => normalizeAccountIdentity(email?.split('@')[0]);
-
-const tenantMatchesAdminIdentity = (tenant: Tenant, admin: TenantAdminAccount) => {
-  const adminIdentities = new Set([
-    normalizeAccountIdentity(admin.name),
-    normalizeAccountIdentity(admin.username),
-    getEmailIdentity(admin.email)
-  ].filter(Boolean));
-  const tenantIdentities = [
-    normalizeAccountIdentity(tenant.adminName),
-    normalizeAccountIdentity(tenant.adminUsername),
-    getEmailIdentity(tenant.adminEmail)
-  ].filter(Boolean);
-
-  return tenantIdentities.some((identity) => adminIdentities.has(identity));
-};
 
 const loadAlertsWithOneTimeMocks = (): SystemAlert[] => {
   const savedAlerts = loadLocalStorageData<SystemAlert[]>('alerts', []);
@@ -294,6 +270,20 @@ export default function App() {
    */
   const directory = useTenants(session?.account.role === 'SUPERADMIN');
   const { tenants, packages: apiPackages, tenantAdmins } = directory;
+
+  /**
+   * Hồ sơ tiệm cho cổng chủ tiệm — ngày 8.
+   *
+   * Tách khỏi `directory` ở trên vì hai vai trò đọc tiệm bằng hai đường khác
+   * hẳn nhau: Superadmin gọi `GET /api/tenants` và thấy mọi tiệm; chủ tiệm gọi
+   * `GET /api/tenants/me` và chỉ thấy tiệm đang làm việc của phiên mình. Gộp
+   * thành một hook sẽ phải mang theo một nhánh `if` về vai trò ngay giữa tầng
+   * lấy dữ liệu.
+   */
+  const myWorkspace = useMyTenant(
+    session?.account.role === 'TENANT_ADMIN',
+    session?.activeTenantId || null
+  );
 
   /**
    * Số tiệm đang dùng mỗi gói, đếm từ chính danh sách tiệm.
@@ -1284,38 +1274,29 @@ export default function App() {
   }
 
   const defaultTenantAccount = getDemoAccountByRole('TENANT_ADMIN');
-  const targetOwnerIdentity = normalizeAccountIdentity('NguyenVanBoss');
-  const storedTenantId = sessionAccount?.tenantId || '';
-  const storedTenantEmail = (sessionAccount?.email || '').trim().toLowerCase();
-  const sessionTenant = tenants.find((tenant) => tenant.id === storedTenantId)
-    || tenants.find((tenant) => tenant.adminEmail.trim().toLowerCase() === storedTenantEmail);
-  const sessionAdmin = tenantAdmins.find((admin) => admin.email.trim().toLowerCase() === storedTenantEmail);
-  const fallbackAdmin = tenantAdmins.find((admin) => (
-    normalizeAccountIdentity(admin.name) === targetOwnerIdentity
-    || normalizeAccountIdentity(admin.username) === targetOwnerIdentity
-    || getEmailIdentity(admin.email) === targetOwnerIdentity
-  ));
-  const targetAdmin = sessionAdmin
-    || tenantAdmins.find((admin) => Boolean(sessionTenant) && (admin.tenantIds.includes(sessionTenant!.id) || sessionTenant!.tenantAdminId === admin.id))
-    || (!sessionTenant ? fallbackAdmin : undefined);
-  const targetTenant = sessionTenant
-    || tenants.find((tenant) => Boolean(targetAdmin) && (
-      targetAdmin!.tenantIds.includes(tenant.id)
-      || tenant.tenantAdminId === targetAdmin!.id
-      || tenantMatchesAdminIdentity(tenant, targetAdmin!)
-    ))
-    || tenants.find((tenant) => (
-      normalizeAccountIdentity(tenant.adminName) === targetOwnerIdentity
-      || normalizeAccountIdentity(tenant.adminUsername) === targetOwnerIdentity
-      || getEmailIdentity(tenant.adminEmail) === targetOwnerIdentity
-    ));
+  /**
+   * Tiệm mà cổng chủ tiệm đang làm việc — từ ngày 8 là dữ liệu thật của phiên.
+   *
+   * Cả chuỗi tra ngược theo tên hiển thị và email trước đây đã biến mất cùng lý
+   * do sinh ra nó: hồi dữ liệu còn nằm ở `localStorage`, không có gì nối tài
+   * khoản đăng nhập với tiệm nên màn hình phải đoán bằng cách so tên. Nay
+   * `GET /api/tenants/me` trả về đúng tiệm của phiên (BR-AUTH-024), và bảng
+   * `user_tenants` đã trả lời câu hỏi "ai quản tiệm nào" ở máy chủ (BR-AUTH-023).
+   */
+  const targetTenant = myWorkspace.tenant || undefined;
+  /**
+   * Danh tính hiển thị trên cổng chủ tiệm.
+   *
+   * Từ ngày 8 mọi trường đều lấy từ phiên đăng nhập; `defaultTenantAccount` chỉ
+   * còn là lưới an toàn cho lúc phiên chưa nạp xong, không còn là nguồn dữ liệu.
+   */
   const tenantPortalAccount: DemoAccount = {
     ...defaultTenantAccount,
     ...sessionAccount,
-    displayName: sessionAccount?.displayName || targetAdmin?.name || targetTenant?.adminName || defaultTenantAccount.displayName,
-    email: sessionAccount?.email || targetAdmin?.email || targetTenant?.adminEmail || defaultTenantAccount.email,
+    displayName: sessionAccount?.displayName || defaultTenantAccount.displayName,
+    email: sessionAccount?.email || defaultTenantAccount.email,
     tenantId: sessionAccount?.tenantId || targetTenant?.id,
-    tenantName: sessionAccount?.tenantName || targetTenant?.name || targetAdmin?.tenantName || defaultTenantAccount.tenantName
+    tenantName: sessionAccount?.tenantName || targetTenant?.name || defaultTenantAccount.tenantName
   };
   const tenantPortalPackage = targetTenant
     ? getSubscriptionPackageForTenant(packages, targetTenant)
