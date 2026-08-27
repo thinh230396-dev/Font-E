@@ -1414,3 +1414,148 @@ tài khoản lễ tân → khách hàng.
 | 7 | Cấp, sửa, khóa tài khoản **chủ tiệm** vẫn chưa có endpoint và chưa có lịch — treo từ ngày 7 | Chưa có lịch |
 | 8 | §3.1 ghi "`DTOs/` chỉ có bảy tệp" — nay là mười. Vẫn dưới ngưỡng phải chia thư mục, nhưng con số trong tài liệu đã cũ | Thấp |
 | 9 | `saveTenantCustomers` ở `src/utils/tenantCustomers.ts` nay **không còn ai gọi** — màn khách hàng thôi ghi xuống trình duyệt. Kéo theo sự kiện `salonsys_customers_updated` mà màn lịch hẹn đang lắng nghe sẽ không bao giờ phát nữa. Vô hại, nhưng là mã chết; xóa cùng ngày 11 khi màn lịch hẹn được nối | Thấp |
+
+### Ngày 11 — xong (phần backend)
+
+Bốn quyết định chốt đầu ngày, tất cả theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 49 | Ngày 11 **chỉ làm backend**, đúng §4 và §5 | Màn lịch hẹn giữ dải nhãn "Dữ liệu mẫu" tới ngày 14. Ba việc treo số 3, 4 và 9 sau ngày 10 hẹn "sửa ở ngày 11" vì vậy trượt sang ngày 14–15 |
+| 50 | Sửa lịch hẹn là phép **thay trọn** bằng `PUT`, không phải vá từng trường | Thêm `Appointment.Revise` — phương thức domain đầu tiên sinh ra ngoài ngày 2. Đổi được cả kỹ thuật viên và danh sách dịch vụ, đúng thứ biểu mẫu ở `ReceptionistPortal.tsx:1867` đang cần |
+| 51 | `GET /api/appointments` nhận **khoảng ngày** `?from=&to=` | Endpoint đọc đầu tiên không trả trọn danh sách. Cố ý khác quyết định 48 của ngày 10: danh bạ khách có trần tự nhiên, lịch hẹn thì cộng dồn mãi |
+| 52 | `SLOT_CONFLICT` gói đủ thông tin vào **`message`**, không mở rộng contract lỗi | Không đụng `ErrorResponse` mà cả chín module đang dùng, và không phải sửa `apiClient.ts` ở frontend |
+
+#### Vì sao chi nhánh của lịch hẹn không nhận từ client
+
+BR-EMP-003 cho mỗi nhân viên đúng một chi nhánh, nên chi nhánh của một lịch hẹn và chi nhánh của
+người làm vốn là **một sự thật**. Nhận cả hai từ thân request là dựng ra chỗ để chúng nói khác nhau:
+một lịch ghi ở Quận 1 trong khi người làm ngồi ở Quận 3, và bảng lịch của cả hai chi nhánh đều sai
+theo hai hướng ngược nhau. `DemoDataSeeder` đã lấy chi nhánh theo đúng cách này từ ngày 2, nên đây
+là chép lại một quyết định cũ chứ không phải một quyết định mới.
+
+Hệ quả gọn hơn dự tính: phép thu hẹp theo chi nhánh cho lễ tân (BR-APT-002) chỉ cần chặn ở **bước
+chọn kỹ thuật viên**. Lễ tân Quận 3 không chọn được người của Quận 1, nên họ cũng không tạo ra được
+một lịch hẹn ở Quận 1 — kể cả bằng cách sửa một lịch cũ rồi đổi người làm.
+
+**Backend — 14 tệp mới, 5 tệp sửa:**
+
+| Tầng | Hạng mục |
+|---|---|
+| Domain | `IAppointmentRepository` mới; `AppointmentStatusText` mới; `Appointment.Revise` thêm vào entity; `AppointmentSchedulePolicy.BlockingSlot` thêm vào policy. Không đụng `AppointmentLifecyclePolicy` — bảng chuyển trạng thái dựng từ ngày 2 dùng được nguyên vẹn |
+| Application | `AppointmentDtos`, `AppointmentMapper`, `SlotConflictException`; lát cắt `UseCases/Appointments/` gồm 5 use case cùng 2 khối dùng chung `AppointmentScope` và `AppointmentBookingGuard` |
+| Infrastructure | `AppointmentRepository` |
+| API | `AppointmentsController` |
+| Quyền | Không thêm gì: ô `Appointments` cho chủ tiệm và lễ tân đã có trong `PermissionMatrix` từ ngày 3 |
+| Migration | Không có. Bảng `Appointments`, `AppointmentServices` cùng bốn chỉ số đã dựng từ ngày 2 |
+| Build | `dotnet build` — **0 lỗi, 0 cảnh báo** |
+
+**6 endpoint, đúng ngân sách §9.1:**
+
+| Endpoint | Ghi chú |
+|---|---|
+| `GET /api/appointments?from=&to=` | Thiếu tham số thì lấy hôm nay theo giờ Việt Nam. Trần 92 ngày một lần gọi |
+| `GET /api/appointments/{id}` | Cùng hình dạng với một dòng của danh sách — lịch hẹn đã mang sẵn trọn nội dung của nó |
+| `POST /api/appointments` | Trả `201` kèm `warnings` |
+| `PUT /api/appointments/{id}` | Thay trọn, chạy lại đủ bộ kiểm tra của lệnh đặt mới |
+| `PATCH /api/appointments/{id}/schedule` | BR-APT-025, cho thao tác kéo thả trên bảng giờ |
+| `PATCH /api/appointments/{id}/status` | BR-APT-022, và cũng là đường hủy lịch (BR-APT-024) |
+
+#### Chống trùng lịch chỉ có đúng một định nghĩa
+
+BR-APT-011 nằm trong bốn thứ mà §6 đánh dấu tuyệt đối không cắt, nên điều kiện chồng lấn được viết
+**một lần** ở tầng Domain rồi dùng lại ở cả hai nơi cần nó. Vướng mắc là EF Core không dịch được lời
+gọi hàm C# nằm trong biểu thức truy vấn: `AppointmentSchedulePolicy.Overlaps(...)` chạy tốt trong bộ
+nhớ nhưng không thành SQL được. Nếu để nguyên, kho dữ liệu buộc phải chép tay điều kiện ấy vào câu
+LINQ của nó, và luật sẽ có hai bản ở hai tầng — bản thứ hai im lặng khi ai đó sửa bản gốc.
+
+Cách xử: thêm `BlockingSlot(...)` trả về một **cây biểu thức** gộp cả BR-APT-011 lẫn BR-APT-012 và cả
+phép loại chính lịch đang sửa. Kho dữ liệu chỉ việc đưa nó vào `Where(...)`, không viết lấy một vế
+điều kiện nào. Cùng một luật, hai hình dạng, một chỗ để sửa.
+
+**Kiểm chứng qua HTTP thật — 70 phép thử, tất cả đạt:**
+
+| Nhóm | Phép thử tiêu biểu | Kết quả |
+|---|---|---|
+| Đọc | 169 lịch hẹn thật của Nailé trong 30 ngày seed; mỗi dòng có tên khách, số điện thoại, tên kỹ thuật viên, các dòng dịch vụ và `nextStatuses` tính từ sơ đồ §16.1 | Đạt |
+| Khoảng ngày | Quá 92 ngày `422` gắn ô `to`; ngày kết thúc trước ngày bắt đầu `422`; múi giờ `+07:00` giữ nguyên qua database, không bị quy về UTC | Đạt |
+| Mặc định hôm nay | Lúc máy chủ ở `27/08 17:59 UTC`, tức `28/08 00:59` giờ Việt Nam, lời gọi không tham số trả về đúng lịch của **ngày 28** — không phải ngày 27 như khi lấy ngày theo UTC | Đạt |
+| BR-APT-010 | Hai dịch vụ 75+10 và 60+10 → lịch dài đúng 155 phút; chọn cùng một dịch vụ hai lần → 140 phút, không bị gộp làm một | Đạt |
+| **BR-APT-011** | Đặt đè lên lịch có sẵn → `409 SLOT_CONFLICT`, câu chữ nói đủ **ai, mấy giờ, ngày nào, khách nào** và lỗi gắn đúng ô `startAt` | Đạt |
+| So sánh nghiêm ngặt | Đặt đúng lúc lịch cũ kết thúc (11:10 sau 10:00–11:10) → `201`, hai lịch nối đuôi không bị coi là trùng | Đạt |
+| **BR-APT-012** | Hủy lịch đang chiếm chỗ → đặt lại đúng khung giờ đó thì `201`. Trước khi hủy thì `409` | Đạt |
+| BR-APT-005 | Đặt trong quá khứ → `201` kèm `warnings: [APPOINTMENT_IN_PAST]`, và bản ghi mang nhãn `isOverdue` | Đạt |
+| BR-APT-013 | Đặt 07:00 cho người ca 09:00–18:00 → `201` kèm `OUTSIDE_SHIFT`; lịch vắt qua nửa đêm cũng bị tính là ngoài ca | Đạt |
+| Hai cảnh báo | Vừa quá khứ vừa ngoài ca → cả hai cùng về trong một mảng, không cái nào nuốt cái nào | Đạt |
+| Đầu vào | Không dịch vụ nào `422` gắn ô `services`; dịch vụ đã ngừng bán `422` kèm đúng tên; nguồn `FACEBOOK` `422`; cọc âm `422`; tạo thẳng ở `COMPLETED` `422` | Đạt |
+| Sửa trọn | Lưu lại y nguyên `200`, **không tự báo trùng với chính mình**; đổi sang combo dài hơn thì đè lịch sau → `409`; đổi kỹ thuật viên sang Quận 1 thì chi nhánh của lịch **đi theo**; bỏ trống ghi chú và ghế thì hai trường ấy bị xóa | Đạt |
+| Dòng con | Sau khi đổi từ 1 sang 2 dịch vụ, đọc lại thấy **đúng 2 dòng** — dòng cũ bị xóa hẳn, không thành rác | Đạt |
+| Ghi hỏng | `PUT` bị `409` từ chối thì bản ghi giữ nguyên ghi chú và ghế cũ — không có phần nào lọt xuống database | Đạt |
+| Dời lịch | Giữ nguyên 185 phút qua ba lần dời; dời lịch đang `IN_SERVICE` → `422` đúng lý do, không phải lý do trùng giờ | Đạt |
+| BR-APT-022 | `PENDING → CHECKED_IN` bị từ chối; đi đúng đường `PENDING → CONFIRMED → CHECKED_IN → IN_SERVICE` thì `200`, và `nextStatuses` đổi theo từng bước | Đạt |
+| BR-APT-040/041 | `IN_SERVICE → CANCELLED` `422`; `CANCELLED → CONFIRMED` `422`; sửa lịch đã hủy `422` | Đạt |
+| BR-APT-026 | `IN_SERVICE → COMPLETED` `422` — "chỉ hoàn tất khi hóa đơn đã thanh toán đủ" | Đạt |
+| BR-APT-024 | `DELETE /api/appointments/{id}` → `404`, không có động từ này | Đạt |
+| **BR-AUTH-030** | Superadmin đọc danh sách, đọc chi tiết và đặt lịch đều `403` | Đạt |
+| **BR-APT-002** | Lễ tân Quận 3 thấy 4 lịch của mình chứ không phải 10 của cả tiệm; mở lịch Quận 1 `404`; **đặt lịch cho kỹ thuật viên Quận 1 `404`**; sửa lịch Quận 1 `404`; đặt và đổi trạng thái trong chi nhánh mình thì `201`/`200` | Đạt |
+| **Cách ly tiệm** | Ở Muse: đọc, sửa, đổi trạng thái lịch của Nailé đều `404` chứ không `403`; đặt lịch bằng khách của Nailé cũng `404`. Chiều ngược lại y hệt | Đạt |
+| Chặn ghi | Superadmin khóa Muse → chủ tiệm đọc `200`, còn đặt lịch, đổi trạng thái và dời lịch đều `403 TENANT_READONLY` | Đạt |
+| Nhật ký máy chủ | Không một lỗi nào trong suốt 70 lượt gọi | Đạt |
+
+#### 🔴 Hai lỗi bắt được nhờ đọc kỹ câu chữ trả về
+
+1. **Thông báo chuyển trạng thái hiện tên hằng số C#.** Lễ tân nhận được *"Không thể chuyển lịch hẹn
+   từ Pending sang CheckedIn"* — vừa sai ngôn ngữ, vừa dùng những chữ không xuất hiện ở bất kỳ đâu
+   trên màn hình. Trình biên dịch im lặng vì nội suy chuỗi trên một enum là hợp lệ. Vá bằng
+   `AppointmentStatusText` đặt ở tầng Domain, câu chữ khớp với nhãn `StatusBadge` mà giao diện đang
+   dùng, nên một lỗi từ máy chủ và một huy hiệu trên cùng màn hình không gọi một trạng thái bằng hai
+   cái tên.
+
+2. **Sửa một lịch đã hủy lại báo trùng giờ.** Phép chống trùng chạy trước phép kiểm trạng thái, nên
+   câu trả lời là *"đã có lịch 09:30–10:40 với Cao Ngọc Diệp"* thay vì *"lịch đã hủy thì không sửa
+   được"*. Trớ trêu ở chỗ khung giờ ấy trống ra được **chính vì** lịch này đã bị hủy. Vá bằng cách
+   đưa phép kiểm trạng thái lên trước, giống thứ tự mà lệnh dời lịch đã làm sẵn từ đầu.
+
+Cả hai đều là lỗi **câu chữ**, không phải lỗi hành vi: mã trạng thái HTTP đã đúng ngay từ lượt chạy
+đầu. Chúng chỉ lộ ra khi đọc từng dòng thông báo thay vì chỉ đếm số phép thử xanh.
+
+#### Bốn điều chệch khỏi kế hoạch, có chủ đích
+
+1. **`PUT` bị chặn ở cả ba trạng thái cuối, không riêng `COMPLETED`.** BR-APT-023 chỉ nói tới lịch đã
+   hoàn tất. Nhưng sửa một lịch đã hủy hoặc đã ghi khách không đến là dựng lại một lịch hẹn ở cửa
+   sau: nó vẫn mang trạng thái cũ nên không chiếm chỗ của ai, mà nội dung thì đã thành một buổi hẹn
+   khác hẳn — trong khi BR-APT-041 nói ba trạng thái ấy không quay lại được.
+2. **`AppointmentDto` mang tên khách, số điện thoại và tên kỹ thuật viên**, ngược quy ước của
+   `StaffDto` vốn chỉ trả mã. Cùng lý do đã dùng cho `CustomerVisitDto` ở ngày 10: đây là một bản
+   đọc, và bảng lịch trong ngày phải hiện được tên khách ngay trên từng dòng. Bắt nó nạp trọn danh bạ
+   khách của tiệm chỉ để dịch vài chục dòng là một lời gọi rất nặng cho việc mà một phép nối đã làm
+   xong. Mã định danh vẫn trả kèm, vì đó mới là thứ dùng khi bấm vào.
+3. **Các dòng dịch vụ sắp theo tên, không theo thứ tự người dùng chọn.** Bảng `AppointmentServices`
+   không có cột thứ tự, nên thứ tự chèn không phải thứ mà một câu `SELECT` hứa trả lại. Sắp theo tên
+   thì cùng một lịch hẹn luôn đọc ra giống nhau ở mọi màn hình.
+4. **`AppointmentRepository.UpdateAsync` không gọi `db.Appointments.Update(...)`** như bốn kho dữ
+   liệu trước. Hàm đó đánh dấu cả cây đối tượng là đã sửa, nên những dòng dịch vụ mà `Revise` vừa bỏ
+   đi sẽ không được nhận ra là mồ côi và không bị xóa. Bản ghi đọc lên vốn đã nằm trong bộ theo dõi
+   thay đổi, nên chỉ cần lưu là đủ.
+
+#### Một khe hở đã biết và cố ý không vá
+
+Giữa phép kiểm chống trùng và lệnh ghi còn một khoảnh khắc mà hai request đặt cùng giờ cho cùng một
+kỹ thuật viên đều đi lọt. Bịt nó cần khóa hàng hoặc mức cô lập `SERIALIZABLE` — thứ mà §9.4 đã loại
+mọi hạ tầng đồng thời khỏi phạm vi MVP, và một tiệm nail có đúng một quầy lễ tân. Ghi lại ở đây để
+nếu hội đồng hỏi thì trả lời được rằng đây là chỗ đã cân nhắc, không phải chỗ chưa nghĩ tới.
+
+### Việc còn treo sau ngày 11
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — treo từ ngày 6, chưa đụng | **Cần sửa** |
+| 2 | Cổng chủ tiệm còn các màn mức C hiện số bịa cạnh dữ liệu thật: Tổng quan, Ghế & khu vực, POS, Báo cáo | **Cần sửa** |
+| 3 | `BranchCode = 'Q1' \| 'Q3'` vẫn còn trong kiểu của các màn mức C, và `bookCustomerFromProfile` phải truyền cứng `'Q3'`. Ngày 11 chỉ làm backend (quyết định 49) nên việc này dời sang ngày 14–15 | Trượt lịch |
+| 4 | Hợp đồng `bookingRequest` của màn lịch hẹn còn khai `allergies`, `nailCondition`, `favoriteTechnician` là bắt buộc. Dời sang ngày 14–15 cùng lý do trên | Thấp |
+| 5 | `saveTenantCustomers` ở `src/utils/tenantCustomers.ts` không còn ai gọi — mã chết, xóa cùng ngày 14–15 | Thấp |
+| 6 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc | Thấp |
+| 7 | Database demo lẫn rác của năm phiên thử; riêng ngày 11 thêm mười một lịch hẹn ngày 26/08, 28/08 và 02–05/09 ở Nailé — **mười cái đã chuyển sang đã hủy**, còn `APT-46C6B5A2D0AF` kẹt ở `IN_SERVICE` vì BR-APT-040 không cho hủy và BR-APT-026 chưa có hóa đơn để hoàn tất. Nên dựng lại database trước khi bảo vệ | Thấp |
+| 8 | Cấp, sửa, khóa tài khoản **chủ tiệm** vẫn chưa có endpoint và chưa có lịch — treo từ ngày 7 | Chưa có lịch |
+| 9 | §3.1 ghi "`DTOs/` chỉ có bảy tệp" — nay là mười một. Vẫn dưới ngưỡng phải chia thư mục, nhưng con số trong tài liệu đã cũ | Thấp |
+| 10 | `UseCases/Appointments/` có **7 tệp**, nhiều nhất trong các lát cắt. Vẫn là một nhóm trách nhiệm duy nhất nên chưa cần chia, nhưng là thư mục đầu tiên đáng để mắt | Thấp |
