@@ -39,6 +39,7 @@ import { formatCompactMoney, formatMoney as formatCurrency, normalizeMoneyText }
 import useSalonServices from '../hooks/useSalonServices';
 import type { ServiceDto } from '../services/salonServices';
 import { fieldErrorMap } from '../services/apiClient';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 /**
  * Nhóm dịch vụ là **chuỗi tự do** do tiệm tự đặt, không phải danh mục cố định.
@@ -590,7 +591,7 @@ export default function TenantAdminServices({
   tenantId,
   onNotify
 }: TenantAdminServicesProps) {
-  const storageKey = 'tenant-admin-services-v2:' + tenantName;
+  const storageKey = tenantStorageKey('tenant-admin-services-v2');
   const [demoServices, setDemoServices] = useState<SalonService[]>(() => {
     try {
       const saved = localStorage.getItem(storageKey);

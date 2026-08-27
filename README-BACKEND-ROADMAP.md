@@ -1173,3 +1173,92 @@ Kèm theo là một lỗi cụ thể: nút lưu chi nhánh gọi `onUpdateTenant
 | 4 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc — không hiện sai, nhưng đọc thì rối | Thấp |
 | 5 | Database demo lẫn thêm rác của phiên ngày 8: chi nhánh `Chi nhánh Ngày 8 (đã sửa)` và dịch vụ `Sơn gel Nhật ngày 8`, cả hai đã chuyển sang ngừng hoạt động | Thấp |
 | 6 | Cấp, sửa, khóa tài khoản **chủ tiệm** vẫn chưa có endpoint và chưa có lịch — treo từ ngày 7 | Chưa có lịch |
+
+### Ngày 9 — xong
+
+Bốn quyết định chốt đầu ngày, tất cả theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 38 | **Gỡ khỏi biểu mẫu và bảng** mười tám trường máy chủ không lưu | Màn nhân sự chỉ còn thứ tồn tại thật; kiểu `StaffMember` riêng biến mất, màn dùng thẳng `StaffDto` |
+| 39 | Khóa lọc chi nhánh của cổng chủ tiệm **đổi hẳn sang mã định danh** | Gỡ luôn việc treo số 2 sau ngày 8 ở cổng chủ tiệm; ngày 10 và 11 không phải trả giá lần nữa |
+| 40 | Mật khẩu lễ tân **do máy chủ sinh, hiện đúng một lần** | Không có ô mật khẩu trong biểu mẫu; có hộp thoại riêng kèm nút sao chép và lời cảnh báo |
+| 41 | Đổi **trọn 16 tệp** khóa `localStorage` từ tên tiệm sang mã tiệm | Xong một lần, không còn hai quy ước đặt tên song song tới ngày 15 |
+
+#### Vì sao tên tiệm không được làm khóa lưu trữ
+
+Tên tiệm không phải định danh: chủ tiệm đổi tên lúc nào cũng được, và hai tiệm trùng tên là chuyện
+bình thường. Hệ quả là hai lỗi chưa ai gặp nhưng chắc chắn sẽ gặp — đổi tên tiệm là mất sạch dữ liệu
+cục bộ, và hai tiệm trùng tên dùng chung một ngăn ngay trên cùng một trình duyệt.
+
+`src/utils/tenantStorage.ts` là nơi duy nhất dựng ra khóa. Phạm vi tiệm nằm ở tầng module chứ không
+truyền qua prop, và đó là lựa chọn có chủ đích: phạm vi lưu trữ là một sự thật của **phiên**, giống
+hệt nhau ở cả mười tám màn. Truyền xuống mười tám chỗ chỉ mở ra khả năng một màn bị quên, rồi màn đó
+lặng lẽ ghi sang ngăn của tiệm khác — đúng loại lỗi mà lần đổi này đang đi vá. `App.tsx` gọi
+`setTenantStorageScope` ngay trong thân hàm dựng, trước khi cổng con render lần đầu, nên không lần
+render nào đọc nhầm phạm vi cũ.
+
+**Frontend — 3 tệp mới, 22 tệp sửa:**
+
+| Hạng mục | Kết quả |
+|---|---|
+| `src/services/staff.ts`, `src/hooks/useStaff.ts` — tầng gọi API và hook cho năm endpoint nhân viên của ngày 7 | Mới |
+| `src/utils/tenantStorage.ts` — phạm vi và khóa `localStorage` theo mã tiệm | Mới |
+| `TenantAdminStaff` — viết lại: nguồn dữ liệu, bốn đường ghi, biểu mẫu, bảng, thẻ, ngăn chi tiết, hộp cấp tài khoản | Xong |
+| `NailTenantAdminPortal` — `branchDtoToNailRow` trả mã định danh; hộp chọn chi nhánh tách vai "chọn" khỏi vai "đọc"; gỡ hai phép chặn hạn mức nhân sự ở trình duyệt | Xong |
+| `App.tsx` — ghi nhận phạm vi lưu trữ của phiên; xóa dữ liệu mẫu theo mã tiệm thay vì theo tên | Xong |
+| 16 tệp còn lại — mọi khóa `localStorage` đi qua `tenantStorageKey` | Xong |
+| `npx tsc --noEmit` trên mã ứng dụng | **0 lỗi** |
+
+**Kiểm chứng trên trình duyệt thật — tất cả đạt:**
+
+| # | Phép thử | Kết quả |
+|---|---|---|
+| 1 | Phiên cũ còn giữ chi nhánh `Q3` của thời dữ liệu mẫu → cổng tự mở lại hộp chọn chi nhánh thay vì lọc ra rỗng trong im lặng | Đạt |
+| 2 | Ô chọn chi nhánh liệt kê **6 chi nhánh thật**; giá trị là `BRN-LUMIERE-Q3`, nhãn vẫn là tên chi nhánh | Đạt |
+| 3 | Màn nhân sự hiện **4 hồ sơ thật** của Quận 3; đổi sang "Tất cả chi nhánh" thì thành 7 | Đạt |
+| 4 | Cột "Tài khoản" phân biệt đúng ba trạng thái: *Đã cấp*, *Đã khóa*, *Chưa cấp*, và *Không áp dụng* cho kỹ thuật viên | Đạt |
+| 5 | Thêm nhân viên với ca kết thúc trước ca bắt đầu → `422`, lỗi **gắn đúng ô "Kết thúc ca"**, biểu mẫu không đóng | Đạt |
+| 6 | Sửa lại giờ rồi lưu → `201`, danh sách nạp lại, kỹ năng "Sơn gel" và email lưu đúng | Đạt |
+| 7 | Cho nghỉ việc → `PATCH` `200`, hồ sơ chuyển sang khu "Nhân sự ngừng hoạt động" | Đạt |
+| 8 | "Nhận lại" → `PATCH` `200`, hồ sơ về bảng chính ở trạng thái *Chưa vào ca* | Đạt |
+| 9 | Biểu mẫu sửa mở lên đã có sẵn **đủ chín ô**, kể cả email — đúng thứ `PUT` toàn phần đòi hỏi | Đạt |
+| 10 | Đổi vai trò sang lễ tân → `PUT` `200`; nút "Cấp tài khoản đăng nhập" xuất hiện ngay trong ngăn đang mở | Đạt |
+| 11 | Cấp tài khoản → `201`, mật khẩu máy chủ sinh hiện đúng một lần kèm nút sao chép | Đạt |
+| 12 | Sau khi cấp, nút cấp biến mất và ngăn chi tiết hiện email tài khoản kèm *Đang hoạt động* | Đạt |
+| 13 | Cho người vừa cấp nghỉ việc → tài khoản chuyển sang **Đã bị vô hiệu hóa** ngay trên màn hình (quyết định 32) | Đạt |
+| 14 | `localStorage` sau khi đi hết bảy màn mức C: **11 khóa, tất cả gắn `TEN-LUMIERE`**, không khóa nào còn gắn tên tiệm | Đạt |
+| 15 | Tab sạch, tải lại từ đầu, đi vào màn nhân sự: **console không một lỗi nào** | Đạt |
+
+#### Bốn điều chệch khỏi kế hoạch, có chủ đích
+
+1. **Hai phép chặn hạn mức nhân sự ở trình duyệt bị gỡ hẳn**, giống cách ngày 8 xử hạn mức chi nhánh.
+   Chúng đếm bằng `tenant.staffCount` — một con số chụp lúc nạp tiệm, không trừ người đã nghỉ việc — và
+   một trong hai chặn ngay ở **cửa vào màn hình**, tức tiệm đủ người thì không xem nổi danh sách nhân
+   sự của chính mình. BR-EMP-008 đã được cưỡng chế ở `POST /api/staff` và trả `LIMIT_EXCEEDED` kèm câu
+   chữ dùng được ngay.
+2. **Chấm công biến thành đổi trạng thái.** Hai nút "Bắt đầu ca" / "Kết thúc ca" cũ ghi một giờ vào
+   `lastClockIn` / `lastClockOut` — hai trường không có cột nào ở database. Bốn trạng thái của
+   BR-EMP-005 thì có thật, nên ngăn hồ sơ nay là bốn nút trạng thái, và "Cho nghỉ việc" đi qua hộp xác
+   nhận riêng vì nó kéo theo vô hiệu hóa tài khoản.
+3. **Hộp chọn chi nhánh tách `id` khỏi `code`.** Khi khóa lọc đổi sang mã định danh, thẻ chi nhánh hiện
+   thẳng `BRN-D33DC9464FD1` ra cho người dùng — đúng giá trị, nhưng không phải thứ ai đó đọc để nhận ra
+   chi nhánh của mình. Nay `id` là thứ được chọn, `code` là thứ được đọc.
+4. **`inventorySync` và `tenantCustomers` bỏ hẳn tham số tên tiệm** thay vì đổi nó thành mã tiệm. Chúng
+   đã có `tenantStorageKey` để hỏi, nên giữ tham số chỉ là giữ một chỗ cho người gọi truyền sai.
+
+#### Một ghi chú về `.claude/launch.json`
+
+Thêm cấu hình `salonsys-api` để bật backend ASP.NET Core từ trong công cụ, cạnh `salonsys-dev` đã có.
+Thuần túy là tiện ích chạy máy, không đụng gì tới mã ứng dụng.
+
+### Việc còn treo sau ngày 9
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — treo từ ngày 6, chưa đụng | **Cần sửa** |
+| 2 | Cổng chủ tiệm còn nhiều màn mức C hiện số bịa cạnh dữ liệu thật: Tổng quan, Ghế & khu vực, POS, Báo cáo. Từ ngày 9 chúng còn **lọc theo mã chi nhánh thật nên trả về rỗng** khi đăng nhập thật — chỗ vênh nay lộ hẳn ra | **Cần sửa** |
+| 3 | `BranchCode = 'Q1' \| 'Q3'` vẫn còn trong **kiểu** của các màn mức C. Cổng chủ tiệm đã hết phụ thuộc vào nó, nhưng cổng lễ tân thì chưa — dọn cùng ngày 14–15 | Trượt lịch |
+| 4 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc | Thấp |
+| 5 | Database demo lẫn rác của ba phiên thử: `Chi nhánh Ngày 8 (đã sửa)`, dịch vụ `Sơn gel Nhật ngày 8`, hồ sơ `Ngô Thị Kiểm Thử`, và hồ sơ `Lễ Tân Ngày 9` kèm tài khoản `ngay9@lumierehair.vn` — tất cả đã chuyển sang ngừng hoạt động nên không chiếm hạn mức, nhưng nên dựng lại database trước khi bảo vệ | Thấp |
+| 6 | Cấp, sửa, khóa tài khoản **chủ tiệm** vẫn chưa có endpoint và chưa có lịch — treo từ ngày 7 | Chưa có lịch |

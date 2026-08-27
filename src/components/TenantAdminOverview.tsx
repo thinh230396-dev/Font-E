@@ -14,6 +14,7 @@ import type { Tenant } from '../types';
 import type { NailPageId } from './nailAdminData';
 import { formatTenantQuota, isUnlimitedTenantLimit } from '../utils/tenantAdminEntitlements';
 import { formatCompactMoney, formatMoney } from '../utils/money';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 interface TenantAdminOverviewProps {
   branchName: string;
@@ -96,7 +97,7 @@ export default function TenantAdminOverview({
     let realTxMap: Record<string, number> = {};
     if (!demoMode && tenantName) {
       try {
-        const raw = localStorage.getItem(`tenant-admin-finance-v1:${tenantName}:transactions`);
+        const raw = localStorage.getItem(`${tenantStorageKey('tenant-admin-finance-v1')}:transactions`);
         if (raw) {
           const parsed = JSON.parse(raw);
           parsed.forEach((tx: any) => {

@@ -19,6 +19,7 @@ import {
   ProgramType,
   BranchScope,
 } from '../utils/promotionUtils';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 interface TenantAdminLoyaltyProps {
   searchQuery: string; onSearchQueryChange: (value: string) => void;
@@ -72,8 +73,8 @@ function formatTierThreshold(minVal: number, nextMinVal?: number): string {
 const seed = defaultLoyaltyPrograms;
 
 export default function TenantAdminLoyalty({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify }: TenantAdminLoyaltyProps) {
-  const storageKey = `tenant-admin-loyalty-v1:${tenantName}`;
-  const tierStorageKey = `tenant-admin-tiers-v1:${tenantName}`;
+  const storageKey = tenantStorageKey('tenant-admin-loyalty-v1');
+  const tierStorageKey = tenantStorageKey('tenant-admin-tiers-v1');
   const [programs, setPrograms] = useState<LoyaltyProgram[]>(() => { if (typeof window === 'undefined') return getTenantAdminInitialData(null, seed); try { const stored = localStorage.getItem(storageKey); return getTenantAdminInitialData(stored ? JSON.parse(stored) as LoyaltyProgram[] : null, seed); } catch { return getTenantAdminInitialData(null, seed); } });
   const [memberTiers, setMemberTiers] = useState<MemberTier[]>(() => {
     if (typeof window === 'undefined') return defaultMemberTiers;

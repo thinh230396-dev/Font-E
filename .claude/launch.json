@@ -2,6 +2,18 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "salonsys-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "C:\\Users\\letru\\source\\repos\\NailManagement\\NailManagement.API",
+        "--launch-profile",
+        "http"
+      ],
+      "port": 5282
+    },
+    {
       "name": "salonsys-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],

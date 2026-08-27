@@ -1,4 +1,5 @@
 import { getTenantAdminInitialData } from './mockDataReset';
+import { tenantStorageKey } from './tenantStorage';
 
 export type CustomerTier = 'VIP' | 'LOYAL' | 'STANDARD' | 'NEW';
 export type CustomerStatus = 'ACTIVE' | 'CARE' | 'INACTIVE';
@@ -310,14 +311,13 @@ export const defaultCustomerSeed: TenantCustomer[] = [
   },
 ];
 
-export const getTenantCustomerStorageKey = (tenantName: string = 'Nailé Studio') =>
-  `tenant-admin-customers-v1:${tenantName}`;
+export const getTenantCustomerStorageKey = () => tenantStorageKey('tenant-admin-customers-v1');
 
 export const normalizeDigits = (val: string) => val.replace(/\D/g, '');
 
-export function getTenantCustomers(tenantName: string = 'Nailé Studio'): TenantCustomer[] {
+export function getTenantCustomers(): TenantCustomer[] {
   if (typeof window === 'undefined') return defaultCustomerSeed;
-  const key = getTenantCustomerStorageKey(tenantName);
+  const key = getTenantCustomerStorageKey();
   try {
     const stored = localStorage.getItem(key);
     return getTenantAdminInitialData(stored ? (JSON.parse(stored) as TenantCustomer[]) : null, defaultCustomerSeed);
@@ -326,11 +326,11 @@ export function getTenantCustomers(tenantName: string = 'Nailé Studio'): Tenant
   }
 }
 
-export function saveTenantCustomers(tenantName: string = 'Nailé Studio', customers: TenantCustomer[]): void {
+export function saveTenantCustomers(customers: TenantCustomer[]): void {
   if (typeof window === 'undefined') return;
-  const key = getTenantCustomerStorageKey(tenantName);
+  const key = getTenantCustomerStorageKey();
   localStorage.setItem(key, JSON.stringify(customers));
-  window.dispatchEvent(new CustomEvent('salonsys_customers_updated', { detail: { tenantName, customers } }));
+  window.dispatchEvent(new CustomEvent('salonsys_customers_updated', { detail: { key, customers } }));
 }
 
 export function findCustomerByPhoneOrId(

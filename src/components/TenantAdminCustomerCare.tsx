@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import BeautifulSelect from "./BeautifulSelect";
 import { formatMoney as money } from "../utils/money";
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type CampaignType = "REMINDER" | "REVIEW" | "REBOOK" | "WINBACK" | "BROADCAST";
 type CampaignStatus = "AUTOMATED" | "ACTIVE" | "DRAFT" | "PAUSED" | "COMPLETED";
@@ -338,7 +339,7 @@ export default function TenantAdminCustomerCare({
   readOnlyReason = "",
   onNotify,
 }: TenantAdminCustomerCareProps) {
-  const storageKey = `tenant-admin-customer-care-v1:${tenantName}`;
+  const storageKey = tenantStorageKey('tenant-admin-customer-care-v1');
   const [campaigns, setCampaigns] = useState<CareCampaign[]>(() => {
     if (typeof window === "undefined") return getTenantAdminInitialData(null, seed);
     try {

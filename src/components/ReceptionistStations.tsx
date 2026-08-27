@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
 import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader, Pagination } from './ui';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type BranchCode = 'Q1' | 'Q3';
 type StationArea = 'MANICURE' | 'PEDICURE' | 'VIP';
@@ -399,8 +400,8 @@ export default function ReceptionistStations({
   onNotify,
 }: ReceptionistStationsProps) {
   const branch: BranchCode = selectedBranch === 'Q1' ? 'Q1' : 'Q3';
-  const stationStorageKey = `receptionist-stations-v1:${tenantName}`;
-  const appointmentStorageKey = `tenant-admin-appointments-v2:${tenantName}`;
+  const stationStorageKey = tenantStorageKey('receptionist-stations-v1');
+  const appointmentStorageKey = tenantStorageKey('tenant-admin-appointments-v2');
   const today = localDateKey();
   const canManage = accessMode === 'full' && !readOnlyReason;
   const [stations, setStations] = useState<Station[]>(() =>

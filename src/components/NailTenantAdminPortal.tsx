@@ -94,6 +94,7 @@ import { nailModuleConfigs, type BrandInfo, type NailFormField, type NailModuleC
 import { Button, PageHeader } from './ui';
 import type { InterfaceLanguage } from './AccountPreferences';
 import { useT } from '../i18n';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
 const TenantAdminStations = lazy(() => import('./TenantAdminStations'));
@@ -715,7 +716,18 @@ const branchDtoToNailRow = (branch: BranchDto): NailRow => ({
   ],
   badge: branch.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm ngưng',
   badgeTone: branch.status === 'ACTIVE' ? 'emerald' : 'slate',
-  branchCode: branch.code || branch.id,
+  /**
+   * Ở chế độ thật, "mã chi nhánh" mà cả cổng dùng để lọc chính là **mã định danh
+   * của bản ghi**, không phải chuỗi `code` do tiệm tự đặt.
+   *
+   * Trước ngày 9 nó là `branch.code` — thứ tiệm gõ tay, có thể trùng nhau, có thể
+   * bỏ trống, và sửa lúc nào cũng được. `GET /api/staff` trả `branchId`, nên nếu
+   * cổng giữ `code` thì mỗi màn nối vào máy chủ lại phải tự dựng một bảng quy đổi
+   * — và ba màn sẽ dựng ba bảng. Chuỗi `code` vẫn hiện nguyên ở cột "Mã chi nhánh"
+   * cho người đọc; nó chỉ thôi đóng vai khóa. Chế độ dữ liệu mẫu không đụng tới:
+   * dòng mẫu vẫn mang `branchCode` là 'Q1' / 'Q3'.
+   */
+  branchCode: branch.id,
   details: [
     { label: 'Mã chi nhánh', value: branch.code || 'Chưa đặt' },
     { label: 'Vai trò', value: branch.isPrimary ? 'Chi nhánh chính' : 'Chi nhánh thành viên' },
@@ -1089,7 +1101,7 @@ export default function NailTenantAdminPortal({
 }: NailTenantAdminPortalProps) {
   const t = useT();
   const tenantName = tenant?.name || account.tenantName || 'Nailé Studio';
-  const demoStorageKey = `tenant-admin-demo-mode:${tenantName}`;
+  const demoStorageKey = tenantStorageKey('tenant-admin-demo-mode');
   /**
    * Chế độ dữ liệu mẫu.
    *
@@ -1313,9 +1325,34 @@ export default function NailTenantAdminPortal({
     ? (rowsByPage.branches || nailModuleConfigs.branches.rows)
     : branchDirectory.branches.map(branchDtoToNailRow);
 
+  /**
+   * Chi nhánh đang chọn phải là một chi nhánh có thật của tiệm này.
+   *
+   * `sessionStorage` có thể còn giữ 'Q3' của thời dữ liệu mẫu, hoặc mã của một
+   * chi nhánh vừa bị gỡ. Để nguyên thì mọi màn lọc theo chi nhánh cùng trả về
+   * rỗng mà không nói vì sao; ở đây thì người dùng được hỏi lại đúng một câu.
+   */
+  useEffect(() => {
+    if (demoMode || !tenant || branchDirectory.loading || !branchDirectory.branches.length) return;
+    if (branch === 'ALL' || branchDirectory.branches.some((item) => item.id === branch)) return;
+
+    window.sessionStorage.removeItem('tenant-admin-chosen-branch');
+    setShowBranchModal(true);
+  }, [branch, branchDirectory.branches, branchDirectory.loading, demoMode, tenant]);
+
   const branchSelectionList: BranchSelectionItem[] = useMemo(() => {
     return branchRows.map((row) => {
-      const code = row.branchCode || row.id.replace(/^BR-/, '');
+      /**
+       * `id` là thứ được chọn, `code` là thứ được đọc.
+       *
+       * Hai vai này tách nhau từ ngày 9. Trước đó chúng là một, nên khi khóa lọc
+       * đổi sang mã định danh thì hộp chọn chi nhánh hiện thẳng `BRN-D33DC9464FD1`
+       * ra cho người dùng — đúng giá trị, nhưng không phải thứ ai đó đọc để nhận ra
+       * chi nhánh của mình. Nay huy hiệu trên thẻ vẫn là mã ngắn do tiệm tự đặt.
+       */
+      const displayCode = row.details.find((d) => d.label.includes('Mã chi nhánh'))?.value
+        || row.branchCode
+        || row.id.replace(/^BR-/, '');
       const addressDetail = row.details.find((d) => d.label.includes('Địa chỉ'))?.value || row.subtitle;
       const phoneDetail = row.details.find((d) => d.label.includes('Điện thoại'))?.value;
       const managerDetail = row.cells[1] || '';
@@ -1325,8 +1362,8 @@ export default function NailTenantAdminPortal({
       const stationsDetail = row.details.find((d) => d.label.includes('Số ghế'))?.value;
 
       return {
-        code,
-        id: row.id,
+        code: displayCode,
+        id: row.branchCode || row.id,
         name: row.title,
         subtitle: row.subtitle,
         address: addressDetail,
@@ -1343,22 +1380,22 @@ export default function NailTenantAdminPortal({
     });
   }, [branchRows]);
 
-  const handleSelectBranch = (selectedCode: string) => {
-    setBranch(selectedCode);
+  const handleSelectBranch = (selectedId: string) => {
+    setBranch(selectedId);
     if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem('tenant-admin-chosen-branch', selectedCode);
+      window.sessionStorage.setItem('tenant-admin-chosen-branch', selectedId);
     }
     setSearchQuery('');
     setSelectedRow(null);
-    const chosenName = selectedCode === 'ALL'
+    const chosenName = selectedId === 'ALL'
       ? 'Toàn hệ thống (Tất cả chi nhánh)'
-      : branchSelectionList.find((b) => b.code === selectedCode)?.name || `Chi nhánh ${selectedCode}`;
+      : branchSelectionList.find((b) => b.id === selectedId)?.name || `Chi nhánh ${selectedId}`;
     setToast(`Đã chọn: ${chosenName}. Đang hiển thị dữ liệu chi nhánh.`);
   };
 
   const currentActiveBranchTitle = useMemo(() => {
     if (branch === 'ALL') return 'Tất cả chi nhánh';
-    const found = branchSelectionList.find((b) => b.code === branch);
+    const found = branchSelectionList.find((b) => b.id === branch);
     return found ? found.name : `Chi nhánh ${branch}`;
   }, [branch, branchSelectionList]);
 
@@ -1524,10 +1561,11 @@ export default function NailTenantAdminPortal({
       setToast(readOnlyReason);
       return;
     }
-    if (!demoMode && targetPage === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
-      setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + staffLimit + ' nhân sự. Vui lòng nâng cấp gói để mở thêm.');
-      return;
-    }
+    // Hạn mức nhân sự KHÔNG được kiểm ở đây nữa, cùng lý do với hạn mức chi nhánh
+    // ở ngày 8: BR-EMP-008 cưỡng chế tại `POST /api/staff` và trả `LIMIT_EXCEEDED`
+    // kèm câu chữ dùng được ngay. Bản sao ở trình duyệt đếm bằng `tenant.staffCount`
+    // — con số chụp lúc nạp tiệm, không trừ người đã nghỉ việc — nên nó chặn oan một
+    // tiệm còn chỗ, và chặn ngay ở cửa vào màn hình chứ không phải ở nút lưu.
     if (targetPage !== 'branches' && branchScopedCreatePages.has(targetPage) && branch === 'ALL') {
       setToast('Vui lòng chọn một chi nhánh cụ thể trước khi tạo dữ liệu vận hành.');
       return;
@@ -1657,10 +1695,6 @@ export default function NailTenantAdminPortal({
     }
     if (resolvePageAccess(currentConfig.id) !== 'full') {
       showPageGate(currentConfig.id);
-      return;
-    }
-    if (!demoMode && currentConfig.id === 'staff' && !isUnlimitedTenantLimit(staffLimit, 'staff') && staffUsage >= staffLimit) {
-      setToast('Gói ' + currentPackage.name + ' đã đạt giới hạn ' + staffLimit + ' nhân sự. Vui lòng nâng cấp gói để mở thêm.');
       return;
     }
     const fields = currentConfig.formFields;
@@ -2303,6 +2337,8 @@ export default function NailTenantAdminPortal({
                 accessMode={currentAccessMode}
                 readOnlyReason={readOnlyReason}
                 onNotify={setToast}
+                tenantId={demoMode ? undefined : tenant?.id}
+                branches={demoMode ? undefined : branchDirectory.branches}
               />
             </Suspense>
           ) : activePage === 'services' ? (

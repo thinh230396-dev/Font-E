@@ -69,6 +69,7 @@ import { validateAndCalculatePromotion, type LoyaltyProgram } from '../utils/pro
 import { serviceSeed, type SalonService } from './TenantAdminServices';
 import { designSeed, colorSeed, type NailDesign, type PolishColor } from './TenantAdminNailGallery';
 import { Button, Field, Modal, PageHeader, StatusBadge } from './ui';
+import { tenantStorageKey, tenantStorageScope } from '../utils/tenantStorage';
 
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
 const TenantAdminCustomers = lazy(() => import('./TenantAdminCustomers'));
@@ -875,19 +876,19 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const branchCode: BranchCode = account.branchCode === 'Q1' ? 'Q1' : 'Q3';
   const branchName = account.branchName || `${tenantName} · Chi nhánh ${branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}`;
   const nextThemeMode = themeMode === 'dark' ? 'light' : 'dark';
-  const appointmentStorageKey = `tenant-admin-appointments-v2:${tenantName}`;
-  const paymentStorageKey = `tenant-admin-payments-v1:${tenantName}`;
-  const technicianStorageKey = `receptionist-technicians-v1:${tenantName}`;
+  const appointmentStorageKey = tenantStorageKey('tenant-admin-appointments-v2');
+  const paymentStorageKey = tenantStorageKey('tenant-admin-payments-v1');
+  const technicianStorageKey = tenantStorageKey('receptionist-technicians-v1');
   const shiftStorageKey = `receptionist-shift-v1:${account.email}`;
-  const servicesStorageKey = `tenant-admin-services-v2:${tenantName}`;
-  const designsStorageKey = `tenant-admin-nail-designs-v1:${tenantName}`;
-  const colorsStorageKey = `tenant-admin-nail-colors-v1:${tenantName}`;
+  const servicesStorageKey = tenantStorageKey('tenant-admin-services-v2');
+  const designsStorageKey = tenantStorageKey('tenant-admin-nail-designs-v1');
+  const colorsStorageKey = tenantStorageKey('tenant-admin-nail-colors-v1');
 
   // Đọc đồng bộ dữ liệu dịch vụ, mẫu vẽ, màu sơn từ Tenant Admin
   const [servicesData, setServicesData] = useState<SalonService[]>(() => {
     const v2 = readStorage<SalonService[] | null>(servicesStorageKey, null);
     if (v2 && Array.isArray(v2) && v2.length > 0) return v2;
-    const v1 = readStorage<SalonService[] | null>(`tenant-admin-services-v1:${tenantName}`, null);
+    const v1 = readStorage<SalonService[] | null>(tenantStorageKey('tenant-admin-services-v1'), null);
     if (v1 && Array.isArray(v1) && v1.length > 0) return v1;
     return serviceSeed;
   });
@@ -1156,8 +1157,8 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [deletingAppointment, setDeletingAppointment] = useState<ReceptionAppointment | null>(null);
   const [shiftModal, setShiftModal] = useState<'OPEN' | 'CLOSE' | null>(null);
   const [toast, setToast] = useState('');
-  const loyaltyStorageKey = `tenant-admin-loyalty-v1:${tenantName}`;
-  const invoiceDraftsStorageKey = `receptionist-invoice-drafts-v1:${tenantName}:${branchCode}`;
+  const loyaltyStorageKey = tenantStorageKey('tenant-admin-loyalty-v1');
+  const invoiceDraftsStorageKey = `${tenantStorageKey('receptionist-invoice-drafts-v1')}:${branchCode}`;
   const [loyaltyPrograms, setLoyaltyPrograms] = useState<LoyaltyProgram[]>(() => readStorage(loyaltyStorageKey, []));
   const [selectedPromoId, setSelectedPromoId] = useState<string>('');
   const [promoFeedback, setPromoFeedback] = useState<{ isError: boolean; text: string } | null>(null);
@@ -1535,7 +1536,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setPaymentForm({ method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
     setSearchQuery('');
     setFormError('');
-    resetTenantMockStorage(tenantName);
+    resetTenantMockStorage(tenantStorageScope());
     setToast(`Đã nạp ${nextAppointments.length} lịch hẹn, ${nextPayments.length} hóa đơn và reset mock data toàn bộ chức năng tenant.`);
   };
 

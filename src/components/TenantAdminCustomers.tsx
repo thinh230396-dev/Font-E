@@ -35,6 +35,7 @@ import BeautifulSelect from './BeautifulSelect';
 import { formatMoney as money } from '../utils/money';
 
 import type { TenantCustomer, CustomerTier, CustomerStatus, BranchCode, ServiceVisit } from '../utils/tenantCustomers';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 interface LinkedAppointment {
   id: string;
@@ -449,8 +450,8 @@ export default function TenantAdminCustomers({
   onNotify,
   onBookCustomer,
 }: TenantAdminCustomersProps) {
-  const storageKey = `tenant-admin-customers-v1:${tenantName}`;
-  const appointmentStorageKey = `tenant-admin-appointments-v2:${tenantName}`;
+  const storageKey = tenantStorageKey('tenant-admin-customers-v1');
+  const appointmentStorageKey = tenantStorageKey('tenant-admin-appointments-v2');
   const isReceptionist = roleLabel.toLowerCase().startsWith('receptionist');
   const assignedBranch = selectedBranch === 'Q1' ? 'Q1' : 'Q3';
   const [customers, setCustomers] = useState<TenantCustomer[]>(() => {

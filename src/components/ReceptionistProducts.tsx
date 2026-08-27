@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
 import { PageHeader, Pagination } from './ui';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type BranchCode = 'Q1' | 'Q3';
 type ProductCategory = 'POLISH' | 'CHEMICAL' | 'CARE' | 'DISPOSABLE' | 'ACCESSORY';
@@ -519,8 +520,8 @@ export default function ReceptionistProducts({
   readOnlyReason = '',
   onNotify,
 }: ReceptionistProductsProps) {
-  const productStorageKey = `receptionist-products-v1:${tenantName}`;
-  const reportStorageKey = `receptionist-product-reports-v1:${tenantName}`;
+  const productStorageKey = tenantStorageKey('receptionist-products-v1');
+  const reportStorageKey = tenantStorageKey('receptionist-product-reports-v1');
   const assignedBranch: BranchCode = selectedBranch === 'Q1' ? 'Q1' : 'Q3';
   const canManage = accessMode === 'full' && !readOnlyReason;
   const [products, setProducts] = useState<ReceptionProduct[]>(() => {

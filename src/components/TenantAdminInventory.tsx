@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import BeautifulSelect from "./BeautifulSelect";
 import { formatCompactMoney, formatMoney as money } from "../utils/money";
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type BranchCode = "Q1" | "Q3";
 export type InventoryCategory =
@@ -715,7 +716,7 @@ export default function TenantAdminInventory({
   readOnlyReason,
   onNotify,
 }: TenantAdminInventoryProps) {
-  const storageKey = `tenant-admin-inventory-v1:${tenantName}`;
+  const storageKey = tenantStorageKey('tenant-admin-inventory-v1');
   const [items, setItems] = useState<InventoryItem[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(storageKey) || "null");

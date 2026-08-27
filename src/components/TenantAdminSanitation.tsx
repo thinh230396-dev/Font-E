@@ -36,6 +36,7 @@ import {
   X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type BranchCode = 'Q1' | 'Q3';
 type SafetyTab = 'OVERVIEW' | 'CHECKLISTS' | 'INCIDENTS' | 'COMPLIANCE';
@@ -106,7 +107,7 @@ const normalizeChecklists = (items: ChecklistItem[]) =>
   });
 
 export default function TenantAdminSanitation({ searchQuery, onSearchQueryChange, selectedBranch, tenantName = 'Lumière Nail Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason, onNotify }: TenantAdminSanitationProps) {
-  const storageKey = `tenant-admin-sanitation-v1:${tenantName}`;
+  const storageKey = tenantStorageKey('tenant-admin-sanitation-v1');
   const [checklists, setChecklists] = useState<ChecklistItem[]>(() => { try { const value = localStorage.getItem(`${storageKey}:checklists`); return normalizeChecklists(getTenantAdminInitialData(value ? JSON.parse(value) : null, checklistSeed)); } catch { return normalizeChecklists(getTenantAdminInitialData(null, checklistSeed)); } });
   const [batches, setBatches] = useState<SterilizationBatch[]>(() => { try { const value = localStorage.getItem(`${storageKey}:batches`); return getTenantAdminInitialData(value ? JSON.parse(value) : null, batchSeed); } catch { return getTenantAdminInitialData(null, batchSeed); } });
   const [incidents, setIncidents] = useState<SafetyIncident[]>(() => { try { const value = localStorage.getItem(`${storageKey}:incidents`); return getTenantAdminInitialData(value ? JSON.parse(value) : null, incidentSeed); } catch { return getTenantAdminInitialData(null, incidentSeed); } });

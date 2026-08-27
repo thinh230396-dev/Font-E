@@ -40,6 +40,7 @@ import { formatMoney as formatCurrency } from '../utils/money';
 import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader } from './ui';
 import type { DataTableColumn } from './ui';
 import { getTenantCustomers, type TenantCustomer, tierMeta } from '../utils/tenantCustomers';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'REFUNDED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
@@ -407,7 +408,7 @@ export default function TenantAdminAppointments({
   bookingRequest,
   onBookingRequestHandled
 }: TenantAdminAppointmentsProps) {
-  const storageKey = `tenant-admin-appointments-v2:${tenantName}`;
+  const storageKey = tenantStorageKey('tenant-admin-appointments-v2');
   const todayDate = toIsoDate(new Date());
   const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
     if (typeof window === 'undefined') return generateAppointmentSeed();
@@ -460,7 +461,7 @@ export default function TenantAdminAppointments({
   const currentMinuteOfDay = now.getHours() * 60 + now.getMinutes();
 
   // Đồng bộ danh sách khách hàng từ hồ sơ Salon (Tenant Customers)
-  const [customerList, setCustomerList] = useState<TenantCustomer[]>(() => getTenantCustomers(tenantName));
+  const [customerList, setCustomerList] = useState<TenantCustomer[]>(() => getTenantCustomers());
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
@@ -468,7 +469,7 @@ export default function TenantAdminAppointments({
 
   useEffect(() => {
     const handleCustomersUpdated = () => {
-      setCustomerList(getTenantCustomers(tenantName));
+      setCustomerList(getTenantCustomers());
     };
     window.addEventListener('salonsys_customers_updated', handleCustomersUpdated);
     window.addEventListener('storage', handleCustomersUpdated);

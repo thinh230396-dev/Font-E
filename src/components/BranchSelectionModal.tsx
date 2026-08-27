@@ -62,6 +62,7 @@ export default function BranchSelectionModal({
     return (
       branch.name.toLowerCase().includes(query) ||
       branch.code.toLowerCase().includes(query) ||
+      branch.id.toLowerCase().includes(query) ||
       (branch.address && branch.address.toLowerCase().includes(query)) ||
       (branch.manager && branch.manager.toLowerCase().includes(query))
     );
@@ -111,17 +112,17 @@ export default function BranchSelectionModal({
         {/* Branch Cards Grid */}
         <div className="grid gap-3 sm:grid-cols-2">
           {filteredBranches.map((item) => {
-            const isCurrent = selectedBranch === item.code;
+            const isCurrent = selectedBranch === item.id;
             return (
               <div
                 key={item.id || item.code}
-                onClick={() => handleSelect(item.code)}
+                onClick={() => handleSelect(item.id)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    handleSelect(item.code);
+                    handleSelect(item.id);
                   }
                 }}
                 className={`group relative flex flex-col justify-between rounded-2xl border p-4.5 text-left transition-all duration-200 cursor-pointer shadow-xs ${

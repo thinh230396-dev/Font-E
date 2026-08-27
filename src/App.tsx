@@ -35,6 +35,7 @@ import {
   savePackageUpgradeRequests
 } from './utils/packageUpgradeRequests';
 import { resetTenantMockStorage } from './utils/mockDataReset';
+import { setTenantStorageScope } from './utils/tenantStorage';
 import { describeApiError } from './services/apiClient';
 import useMyTenant from './hooks/useMyTenant';
 import useTenants from './hooks/useTenants';
@@ -639,15 +640,16 @@ export default function App() {
   /**
    * Xóa tiệm — BR-TENANT-020/021, xóa mềm ở máy chủ.
    *
-   * Dữ liệu mẫu của cổng chủ tiệm trong `localStorage` vẫn được dọn theo, vì nó gắn theo tên
-   * tiệm và sẽ hiện nhầm cho tiệm khác trùng tên sau này.
+   * Dữ liệu mẫu của cổng chủ tiệm trong `localStorage` vẫn được dọn theo. Từ ngày 9 nó được
+   * dọn theo **mã tiệm**: khóa lưu trữ không còn gắn theo tên nữa, nên dọn theo tên sẽ trượt
+   * hết — và trước đó thì nó dọn nhầm sang một tiệm khác trùng tên.
    */
   const handleDeleteTenant = async (id: string) => {
     const target = tenants.find((tenant) => tenant.id === id);
     const result = await directory.deleteTenant(id);
 
     if (result.status === 'ok' && target) {
-      resetTenantMockStorage(target.name);
+      resetTenantMockStorage(target.id);
       showToast(`Đã xóa tiệm "${target.name}".`, 'success', {
         description: 'Mã tiệm vẫn được giữ chỗ; tài khoản chủ tiệm không bị xóa theo.'
       });
@@ -1298,6 +1300,18 @@ export default function App() {
     tenantId: sessionAccount?.tenantId || targetTenant?.id,
     tenantName: sessionAccount?.tenantName || targetTenant?.name || defaultTenantAccount.tenantName
   };
+
+  /**
+   * Ghi nhận tiệm của phiên trước khi hai cổng con render.
+   *
+   * Đặt ngay trong thân hàm chứ không trong `useEffect`: hiệu ứng chỉ chạy SAU lần render đầu,
+   * mà lần render đầu chính là lúc mỗi màn dựng khóa lưu trữ và đọc `localStorage`. Chậm một
+   * nhịp ở đây nghĩa là đọc nhầm ngăn của tiệm trước rồi mới sửa lại — thấy được bằng mắt.
+   */
+  setTenantStorageScope(
+    portalRole === 'RECEPTIONIST' ? sessionAccount?.tenantId : tenantPortalAccount.tenantId
+  );
+
   const tenantPortalPackage = targetTenant
     ? getSubscriptionPackageForTenant(packages, targetTenant)
     : packages.find((pkg) => pkg.name === 'Premium') || packages[0];

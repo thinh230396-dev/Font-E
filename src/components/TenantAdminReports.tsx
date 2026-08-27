@@ -30,6 +30,7 @@ import BeautifulSelect from './BeautifulSelect';
 import { formatMoney as money } from '../utils/money';
 import { Button, DataTable, Field, Modal, StatusBadge, PageHeader } from './ui';
 import type { DataTableColumn } from './ui';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type BranchCode = 'Q1' | 'Q3';
 type ReportTab = 'REVENUE' | 'OPERATIONS' | 'CUSTOMERS' | 'STAFF' | 'EXPORTS';
@@ -526,7 +527,7 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
   const canManage = accessMode === 'full';
   const requireManage = () => { if (canManage) return true; const message = readOnlyReason || 'Gói hiện tại chỉ cho phép xem báo cáo cơ bản.'; setNotice(message); onNotify?.(message); return false; };
   const filteredTemplates = useMemo(() => { const query = searchQuery.trim().toLocaleLowerCase('vi'); return getTenantAdminInitialData(null, templates).filter((item) => groupFilter === 'ALL' || item.group === groupFilter).filter((item) => !favoriteOnly || item.favorite).filter((item) => !query || `${item.id} ${item.name} ${item.group} ${item.description}`.toLocaleLowerCase('vi').includes(query)); }, [favoriteOnly, groupFilter, searchQuery]);
-  const storageKey = `tenant-admin-finance-v1:${tenantName}:transactions`;
+  const storageKey = `${tenantStorageKey('tenant-admin-finance-v1')}:transactions`;
   const [completedTx, setCompletedTx] = useState<any[]>(() => {
     try {
       const raw = localStorage.getItem(storageKey);

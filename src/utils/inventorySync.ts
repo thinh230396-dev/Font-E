@@ -1,5 +1,6 @@
 import { InventoryItem } from "../components/TenantAdminInventory";
 import { getTenantAdminInitialData } from "./mockDataReset";
+import { tenantStorageKey } from './tenantStorage';
 
 export type ColorStatus = "ACTIVE" | "LOW" | "OUT";
 
@@ -25,10 +26,8 @@ export interface PolishColor {
   dosagePerServiceMl?: number;
 }
 
-export const getInventoryStorageKey = (tenantName: string) =>
-  `tenant-admin-inventory-v1:${tenantName}`;
-export const getColorStorageKey = (tenantName: string) =>
-  `tenant-admin-nail-colors-v1:${tenantName}`;
+export const getInventoryStorageKey = () => tenantStorageKey('tenant-admin-inventory-v1');
+export const getColorStorageKey = () => tenantStorageKey('tenant-admin-nail-colors-v1');
 
 /**
  * Synchronize Polish Colors with linked Inventory Items
@@ -70,10 +69,10 @@ export function syncColorsWithInventory(
 /**
  * Load fresh Inventory from localStorage
  */
-export function loadInventoryItems(tenantName: string, seed: InventoryItem[]): InventoryItem[] {
+export function loadInventoryItems(seed: InventoryItem[]): InventoryItem[] {
   if (typeof window === "undefined") return seed;
   try {
-    const raw = localStorage.getItem(getInventoryStorageKey(tenantName));
+    const raw = localStorage.getItem(getInventoryStorageKey());
     return getTenantAdminInitialData(raw ? JSON.parse(raw) : null, seed);
   } catch {
     return seed;
@@ -83,10 +82,10 @@ export function loadInventoryItems(tenantName: string, seed: InventoryItem[]): I
 /**
  * Load fresh Polish Colors from localStorage
  */
-export function loadPolishColors(tenantName: string, seed: PolishColor[]): PolishColor[] {
+export function loadPolishColors(seed: PolishColor[]): PolishColor[] {
   if (typeof window === "undefined") return seed;
   try {
-    const raw = localStorage.getItem(getColorStorageKey(tenantName));
+    const raw = localStorage.getItem(getColorStorageKey());
     return getTenantAdminInitialData(raw ? JSON.parse(raw) : null, seed);
   } catch {
     return seed;
@@ -97,15 +96,14 @@ export function loadPolishColors(tenantName: string, seed: PolishColor[]): Polis
  * Save updated Inventory & Colors to localStorage and notify other components
  */
 export function saveInventoryAndColors(
-  tenantName: string,
   inventory: InventoryItem[],
   colors: PolishColor[]
 ) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(getInventoryStorageKey(tenantName), JSON.stringify(inventory));
+    localStorage.setItem(getInventoryStorageKey(), JSON.stringify(inventory));
     const syncedColors = syncColorsWithInventory(colors, inventory);
-    localStorage.setItem(getColorStorageKey(tenantName), JSON.stringify(syncedColors));
+    localStorage.setItem(getColorStorageKey(), JSON.stringify(syncedColors));
     window.dispatchEvent(new Event("salonsys_inventory_updated"));
   } catch (err) {
     console.error("Error saving inventory and colors:", err);
@@ -118,7 +116,6 @@ export function saveInventoryAndColors(
  *          New Stock = Current Stock + (Dosage * Quantity) [if RESTORE]
  */
 export function updateInventoryForColorUsage(params: {
-  tenantName: string;
   colorId: string;
   serviceQuantity?: number;
   action: "DEDUCT" | "RESTORE";
@@ -128,7 +125,6 @@ export function updateInventoryForColorUsage(params: {
   actorName?: string;
 }): { success: boolean; message: string; newStock?: number } {
   const {
-    tenantName,
     colorId,
     serviceQuantity = 1,
     action,
@@ -140,8 +136,8 @@ export function updateInventoryForColorUsage(params: {
 
   if (typeof window === "undefined") return { success: false, message: "Server environment" };
 
-  const inventory = loadInventoryItems(tenantName, inventorySeed);
-  const colors = loadPolishColors(tenantName, colorSeed);
+  const inventory = loadInventoryItems(inventorySeed);
+  const colors = loadPolishColors(colorSeed);
 
   const color = colors.find((c) => c.id === colorId);
   if (!color) {
@@ -219,7 +215,7 @@ export function updateInventoryForColorUsage(params: {
   // Sync colors
   const updatedColors = syncColorsWithInventory(colors, inventory);
 
-  saveInventoryAndColors(tenantName, inventory, updatedColors);
+  saveInventoryAndColors(inventory, updatedColors);
 
   return {
     success: true,

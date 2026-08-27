@@ -19,6 +19,7 @@ import {
   InvoiceItemForDiscount,
   LoyaltyProgram,
 } from '../utils/promotionUtils';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type PaymentStatus = 'PAID' | 'PARTIAL' | 'PENDING' | 'REFUNDED' | 'FAILED';
 type PaymentMethod = 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
@@ -308,9 +309,9 @@ const clampTaxRate = (value: number) => Math.min(TAX_RATE_MAX, Math.max(TAX_RATE
 
 export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, branchLocked = false, tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify }: TenantAdminPaymentsProps) {
   const isReceptionist = /receptionist|lễ tân/i.test(roleLabel);
-  const storageKey = `tenant-admin-payments-v1:${tenantName}`;
-  const loyaltyStorageKey = `tenant-admin-loyalty-v1:${tenantName}`;
-  const expenseStorageKey = `tenant-admin-expenses-v1:${tenantName}`;
+  const storageKey = tenantStorageKey('tenant-admin-payments-v1');
+  const loyaltyStorageKey = tenantStorageKey('tenant-admin-loyalty-v1');
+  const expenseStorageKey = tenantStorageKey('tenant-admin-expenses-v1');
   const [records, setRecords] = useState<PaymentRecord[]>(() => { if (typeof window === 'undefined') return getTenantAdminInitialData(null, seed); try { const stored = localStorage.getItem(storageKey); return getTenantAdminInitialData(stored ? JSON.parse(stored) as PaymentRecord[] : null, seed); } catch { return getTenantAdminInitialData(null, seed); } });
   const [expenses, setExpenses] = useState<ExpenseRecord[]>(() => {
     if (typeof window === 'undefined') return initialExpenseSeed;
@@ -374,8 +375,8 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const [refund, setRefund] = useState({ amount: '', reason: '' });
   const canManage = accessMode === 'full' && !readOnlyReason;
 
-  const designStorageKey = `tenant-admin-nail-designs-v1:${tenantName}`;
-  const serviceStorageKey = `tenant-admin-services-v1:${tenantName}`;
+  const designStorageKey = tenantStorageKey('tenant-admin-nail-designs-v1');
+  const serviceStorageKey = tenantStorageKey('tenant-admin-services-v1');
 
   const [salonServices, setSalonServices] = useState<SalonService[]>(() => {
     if (typeof window === 'undefined') return serviceSeed;
@@ -406,7 +407,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     try {
       const value = localStorage.getItem(colorStorageKey);
       const raw = getTenantAdminInitialData(value ? JSON.parse(value) : null, colorSeed);
-      const inv = loadInventoryItems(tenantName, inventorySeed);
+      const inv = loadInventoryItems(inventorySeed);
       return syncColorsWithInventory(raw, inv);
     } catch (e) {
       console.error('Failed to parse stored nail colors in payments', e);
@@ -433,7 +434,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
         }
         const cVal = localStorage.getItem(colorStorageKey);
         const rawColors = getTenantAdminInitialData(cVal ? JSON.parse(cVal) : null, colorSeed);
-        const inv = loadInventoryItems(tenantName, inventorySeed);
+        const inv = loadInventoryItems(inventorySeed);
         setNailColors(syncColorsWithInventory(rawColors, inv));
       } catch (e) {
         console.error('Failed to reload services, designs and colors on create open', e);
@@ -446,7 +447,7 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       try {
         const cVal = localStorage.getItem(colorStorageKey);
         const rawColors = getTenantAdminInitialData(cVal ? JSON.parse(cVal) : null, colorSeed);
-        const inv = loadInventoryItems(tenantName, inventorySeed);
+        const inv = loadInventoryItems(inventorySeed);
         setNailColors(syncColorsWithInventory(rawColors, inv));
       } catch (e) {
         console.error('Sync error in payments', e);
@@ -790,7 +791,6 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       invoiceItems.forEach((item) => {
         if (item.selectedColorId) {
           updateInventoryForColorUsage({
-            tenantName,
             colorId: item.selectedColorId,
             serviceQuantity: item.quantity,
             action: 'DEDUCT',
@@ -846,7 +846,6 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       target.items?.forEach((item) => {
         if (item.polishColorId) {
           updateInventoryForColorUsage({
-            tenantName,
             colorId: item.polishColorId,
             serviceQuantity: item.quantity || 1,
             action: 'DEDUCT',
@@ -881,7 +880,6 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
     selected.items?.forEach((item) => {
       if (item.polishColorId) {
         updateInventoryForColorUsage({
-          tenantName,
           colorId: item.polishColorId,
           serviceQuantity: item.quantity || 1,
           action: 'RESTORE',
@@ -965,7 +963,6 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
       target.items?.forEach((item) => {
         if (!item.polishColorId) return;
         updateInventoryForColorUsage({
-          tenantName,
           colorId: item.polishColorId,
           serviceQuantity: item.quantity || 1,
           action: isPaid ? 'DEDUCT' : 'RESTORE',

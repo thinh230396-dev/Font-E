@@ -42,6 +42,7 @@ import {
 import BeautifulSelect from './BeautifulSelect';
 import { formatMoney as money } from '../utils/money';
 import { SalonService, serviceSeed } from './TenantAdminServices';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type BranchCode = 'Q1' | 'Q3';
 type LibraryTab = 'DESIGNS' | 'COLORS';
@@ -173,9 +174,9 @@ export default function TenantAdminNailGallery({
   readOnlyReason,
   onNotify
 }: TenantAdminNailGalleryProps) {
-  const designStorageKey = `tenant-admin-nail-designs-v1:${tenantName}`;
-  const colorStorageKey = `tenant-admin-nail-colors-v1:${tenantName}`;
-  const serviceStorageKey = `tenant-admin-services-v1:${tenantName}`;
+  const designStorageKey = tenantStorageKey('tenant-admin-nail-designs-v1');
+  const colorStorageKey = tenantStorageKey('tenant-admin-nail-colors-v1');
+  const serviceStorageKey = tenantStorageKey('tenant-admin-services-v1');
 
   const [baseServices] = useState<SalonService[]>(() => {
     if (typeof window === 'undefined') return serviceSeed;
@@ -187,7 +188,7 @@ export default function TenantAdminNailGallery({
     }
   });
 
-  const [inventory, setInventory] = useState<InventoryItem[]>(() => loadInventoryItems(tenantName, inventorySeed));
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => loadInventoryItems(inventorySeed));
 
   const [designs, setDesigns] = useState<NailDesign[]>(() => {
     try {
@@ -206,7 +207,7 @@ export default function TenantAdminNailGallery({
     } catch {
       rawColors = getTenantAdminInitialData(null, colorSeed);
     }
-    const currentInv = loadInventoryItems(tenantName, inventorySeed);
+    const currentInv = loadInventoryItems(inventorySeed);
     return syncColorsWithInventory(rawColors, currentInv);
   });
 
@@ -354,7 +355,7 @@ export default function TenantAdminNailGallery({
 
   useEffect(() => {
     const handleSync = () => {
-      const freshInv = loadInventoryItems(tenantName, inventorySeed);
+      const freshInv = loadInventoryItems(inventorySeed);
       setInventory(freshInv);
       setColors((current) => syncColorsWithInventory(current, freshInv));
     };

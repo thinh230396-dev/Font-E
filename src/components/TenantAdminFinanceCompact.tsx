@@ -55,6 +55,7 @@ import BeautifulSelect from './BeautifulSelect';
 import { formatCompactMoney, formatMoney as money } from '../utils/money';
 import Modal from './Modal';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 export type TransactionType = 'INCOME' | 'EXPENSE';
 export type TransactionStatus = 'POSTED' | 'PENDING' | 'DRAFT' | 'VOID';
@@ -826,7 +827,7 @@ export default function TenantAdminFinanceCompact({
   readOnlyReason,
   onNotify,
 }: TenantAdminFinanceProps) {
-  const storageKey = `tenant-admin-finance-v1:${tenantName}:transactions`;
+  const storageKey = `${tenantStorageKey('tenant-admin-finance-v1')}:transactions`;
 
   // Local storage state
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => {

@@ -45,41 +45,41 @@ export const getTenantAdminInitialData = <T>(
   ];
 };
 
-export const getTenantMockStorageKeys = (tenantName: string) => {
+export const getTenantMockStorageKeys = (tenantScope: string) => {
   const tenantBaseKeys = [
-    `tenant-admin-appointments-v2:${tenantName}`,
-    `tenant-admin-payments-v1:${tenantName}`,
-    `tenant-admin-customers-v1:${tenantName}`,
-    `tenant-admin-stations-v2:${tenantName}`,
-    `tenant-admin-staff-v2:${tenantName}`,
-    `receptionist-technicians-v1:${tenantName}`,
-    `receptionist-products-v1:${tenantName}`,
-    `receptionist-product-reports-v1:${tenantName}`,
-    `receptionist-stations-v1:${tenantName}`,
-    `tenant-admin-services-v2:${tenantName}`,
-    `tenant-admin-inventory-v1:${tenantName}`,
-    `tenant-admin-loyalty-v1:${tenantName}`,
-    `tenant-admin-customer-care-v1:${tenantName}`,
-    `tenant-admin-finance-v1:${tenantName}:transactions`,
-    `tenant-admin-finance-v1:${tenantName}:cashbooks`,
-    `tenant-admin-finance-v1:${tenantName}:debts`,
-    `tenant-admin-finance-v1:${tenantName}:budgets`,
-    `tenant-admin-online-booking-v1:${tenantName}:channels`,
-    `tenant-admin-online-booking-v1:${tenantName}:services`,
-    `tenant-admin-sanitation-v1:${tenantName}:checklists`,
-    `tenant-admin-sanitation-v1:${tenantName}:batches`,
-    `tenant-admin-sanitation-v1:${tenantName}:incidents`,
-    `tenant-admin-sanitation-v1:${tenantName}:certificates`,
-    `tenant-admin-nail-designs-v1:${tenantName}`,
-    `tenant-admin-nail-colors-v1:${tenantName}`,
+    `tenant-admin-appointments-v2:${tenantScope}`,
+    `tenant-admin-payments-v1:${tenantScope}`,
+    `tenant-admin-customers-v1:${tenantScope}`,
+    `tenant-admin-stations-v2:${tenantScope}`,
+    `tenant-admin-staff-v3:${tenantScope}`,
+    `receptionist-technicians-v1:${tenantScope}`,
+    `receptionist-products-v1:${tenantScope}`,
+    `receptionist-product-reports-v1:${tenantScope}`,
+    `receptionist-stations-v1:${tenantScope}`,
+    `tenant-admin-services-v2:${tenantScope}`,
+    `tenant-admin-inventory-v1:${tenantScope}`,
+    `tenant-admin-loyalty-v1:${tenantScope}`,
+    `tenant-admin-customer-care-v1:${tenantScope}`,
+    `tenant-admin-finance-v1:${tenantScope}:transactions`,
+    `tenant-admin-finance-v1:${tenantScope}:cashbooks`,
+    `tenant-admin-finance-v1:${tenantScope}:debts`,
+    `tenant-admin-finance-v1:${tenantScope}:budgets`,
+    `tenant-admin-online-booking-v1:${tenantScope}:channels`,
+    `tenant-admin-online-booking-v1:${tenantScope}:services`,
+    `tenant-admin-sanitation-v1:${tenantScope}:checklists`,
+    `tenant-admin-sanitation-v1:${tenantScope}:batches`,
+    `tenant-admin-sanitation-v1:${tenantScope}:incidents`,
+    `tenant-admin-sanitation-v1:${tenantScope}:certificates`,
+    `tenant-admin-nail-designs-v1:${tenantScope}`,
+    `tenant-admin-nail-colors-v1:${tenantScope}`,
   ];
 
   return tenantBaseKeys;
 };
 
-export const resetTenantMockStorage = (tenantName: string) => {
+export const resetTenantMockStorage = (tenantScope: string) => {
   if (typeof window === 'undefined') return 0;
-  const keys = getTenantMockStorageKeys(tenantName);
+  const keys = getTenantMockStorageKeys(tenantScope);
   keys.forEach((key) => window.localStorage.removeItem(key));
   return keys.length;
 };
@@ -90,6 +90,6 @@ export const resetSystemMockStorage = () => {
   return SYSTEM_MOCK_STORAGE_KEYS.length;
 };
 
-export const resetAllMockStorage = (tenantName: string) => (
-  resetSystemMockStorage() + resetTenantMockStorage(tenantName)
+export const resetAllMockStorage = (tenantScope: string) => (
+  resetSystemMockStorage() + resetTenantMockStorage(tenantScope)
 );

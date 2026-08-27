@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
 import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader } from './ui';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 type StationArea = string;
 type StationStatus = 'READY' | 'OCCUPIED' | 'RESERVED' | 'CLEANING' | 'MAINTENANCE' | 'OUT_OF_SERVICE';
@@ -162,8 +163,8 @@ export default function TenantAdminStations({
   searchQuery, onSearchQueryChange, selectedBranch, onSelectedBranchChange, branchLocked = false,
   tenantName = 'Nailé Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason = '', onNotify
 }: TenantAdminStationsProps) {
-  const storageKey = `tenant-admin-stations-v2:${tenantName}`;
-  const areaStorageKey = `tenant-admin-station-areas-v1:${tenantName}`;
+  const storageKey = tenantStorageKey('tenant-admin-stations-v2');
+  const areaStorageKey = tenantStorageKey('tenant-admin-station-areas-v1');
   const [stations, setStations] = useState<TenantStation[]>(() => {
     if (typeof window === 'undefined') return getTenantAdminInitialData(null, stationSeed);
     try { const stored = window.localStorage.getItem(storageKey); return getTenantAdminInitialData(stored ? JSON.parse(stored) as TenantStation[] : null, stationSeed); } catch { return getTenantAdminInitialData(null, stationSeed); }

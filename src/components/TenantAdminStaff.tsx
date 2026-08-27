@@ -3,87 +3,62 @@ import { PageHeader, Pagination } from './ui';
 import { getTenantAdminInitialData } from "../utils/mockDataReset";
 import {
   Archive,
-  ArrowRight,
-  Award,
-  BriefcaseBusiness,
-  CalendarDays,
   Check,
   ChevronDown,
   ChevronUp,
-  CircleDollarSign,
   Clock3,
+  Copy,
   Download,
   Filter,
+  KeyRound,
   LayoutGrid,
   LayoutList,
   Mail,
   MapPin,
-  MessageCircle,
   Pencil,
+  Percent,
   Phone,
-  Plus,
   RotateCcw,
   Search,
   ShieldCheck,
   Sparkles,
-  Star,
-  Target,
-  TrendingUp,
   UserCog,
   UserPlus,
   UserRound,
   UsersRound,
-  WalletCards,
   X,
 } from "lucide-react";
 import BeautifulSelect from "./BeautifulSelect";
-import { formatCompactMoney, formatMoney as formatCurrency } from "../utils/money";
+import useStaff from "../hooks/useStaff";
+import { tenantStorageKey } from "../utils/tenantStorage";
+import type { ApiError } from "../services/apiClient";
+import type { BranchDto } from "../services/branches";
+import type {
+  SaveStaffInput,
+  StaffApiRole,
+  StaffApiStatus,
+  StaffDto,
+} from "../services/staff";
 
-type StaffRole = "RECEPTIONIST" | "TECHNICIAN";
-type StaffStatus = "WORKING" | "OFF_SHIFT" | "LEAVE" | "INACTIVE";
+type StaffRole = StaffApiRole;
+type StaffStatus = StaffApiStatus;
 type ActiveStaffStatus = Exclude<StaffStatus, "INACTIVE">;
-type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT";
-type BranchCode = "Q1" | "Q3";
 type StaffView = "TABLE" | "CARDS";
-type ShiftAction = "START" | "END";
 
-interface ScheduleDay {
-  day: string;
-  date: string;
-  shift: string;
-  status: "WORK" | "OFF" | "LEAVE";
-}
+/**
+ * Hồ sơ nhân viên như màn hình dùng — chính là `StaffDto` của máy chủ.
+ *
+ * Ngày 9 bỏ hẳn kiểu `StaffMember` riêng của thời dữ liệu mẫu. Kiểu đó mang
+ * mười tám trường không có cột nào ở database — chấm công, doanh thu, đánh giá,
+ * công suất, mục tiêu tháng, số lần trễ, quỹ phép, ngày sinh, ngày vào làm,
+ * loại hợp đồng, lịch tuần, ghi chú và danh sách quyền — nên giữ nó là giữ một
+ * biểu mẫu cho người dùng gõ vào rồi mất trắng sau lần tải trang kế tiếp.
+ */
+type StaffRecord = StaffDto;
 
-interface StaffMember {
+interface BranchOption {
   id: string;
   name: string;
-  phone: string;
-  email: string;
-  birthday: string;
-  branch: BranchCode;
-  role: StaffRole;
-  status: StaffStatus;
-  employmentType: EmploymentType;
-  startDate: string;
-  shiftStart: string;
-  shiftEnd: string;
-  appointments: number;
-  completed: number;
-  revenue: number;
-  rating: number;
-  utilization: number;
-  commissionRate: number;
-  commissionEarned: number;
-  target: number;
-  attendance: number;
-  lateCount: number;
-  leaveBalance: number;
-  lastClockIn?: string;
-  lastClockOut?: string;
-  skills: string[];
-  permissions: string[];
-  notes: string;
-  schedule: ScheduleDay[];
 }
 
 interface TenantAdminStaffProps {
@@ -96,39 +71,36 @@ interface TenantAdminStaffProps {
   accessMode?: "full" | "limited" | "locked";
   readOnlyReason?: string;
   onNotify?: (message: string) => void;
+  /** Có mã tiệm nghĩa là phiên đang làm việc với dữ liệu thật; rỗng là chế độ mẫu. */
+  tenantId?: string;
+  /** Chi nhánh thật của tiệm, do cổng chủ tiệm nạp sẵn bằng `GET /api/branches`. */
+  branches?: BranchDto[];
 }
 
+/** Đúng chín ô máy chủ nhận. Hoa hồng giữ dạng chuỗi phần trăm để gõ cho tự nhiên. */
 interface StaffFormState {
-  name: string;
+  fullName: string;
   phone: string;
   email: string;
-  birthday: string;
-  branch: BranchCode;
+  branchId: string;
   role: StaffRole;
-  status: StaffStatus;
-  employmentType: EmploymentType;
-  startDate: string;
   shiftStart: string;
   shiftEnd: string;
-  commissionRate: string;
-  notes: string;
-  canManageAppointments: boolean;
-  canViewCustomers: boolean;
-  canCollectPayment: boolean;
+  /** Người dùng gõ theo phần trăm (15), máy chủ nhận theo tỷ lệ (0,15). */
+  commissionPercent: string;
+  skills: string[];
 }
 
-interface RolePermissionPreset {
-  canManageAppointments: boolean;
-  canViewCustomers: boolean;
-  canCollectPayment: boolean;
-  summary: string;
-  permissions: string[];
+interface GrantAccountFormState {
+  email: string;
+  username: string;
+  displayName: string;
 }
 
-const branchLabels: Record<BranchCode, string> = {
-  Q1: "Chi nhánh Quận 1",
-  Q3: "Chi nhánh Quận 3",
-};
+const DEMO_BRANCHES: BranchOption[] = [
+  { id: "Q3", name: "Chi nhánh Quận 3" },
+  { id: "Q1", name: "Chi nhánh Quận 1" },
+];
 
 const roleMeta: Record<
   StaffRole,
@@ -145,43 +117,6 @@ const roleMeta: Record<
     avatar: "bg-blue-100 text-blue-700",
   },
 };
-
-const rolePermissionPresets: Record<StaffRole, RolePermissionPreset> = {
-  RECEPTIONIST: {
-    canManageAppointments: true,
-    canViewCustomers: true,
-    canCollectPayment: true,
-    summary:
-      "Tiếp nhận lịch hẹn, tra cứu hồ sơ khách và xử lý thanh toán tại quầy.",
-    permissions: [
-      "Quản lý toàn bộ lịch hẹn",
-      "Xem và cập nhật hồ sơ khách",
-      "Thu tiền tại quầy",
-    ],
-  },
-  TECHNICIAN: {
-    canManageAppointments: true,
-    canViewCustomers: false,
-    canCollectPayment: false,
-    summary:
-      "Thực hiện dịch vụ kỹ thuật, quản lý lịch làm việc và ca làm cá nhân.",
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-  },
-};
-
-const normalizeStaffPermissions = (members: StaffMember[]) =>
-  members.map((member) => {
-    const rawRole = String(member.role);
-    const role: StaffRole =
-      rawRole === "RECEPTIONIST" ? "RECEPTIONIST" : "TECHNICIAN";
-    const preset =
-      rolePermissionPresets[role] || rolePermissionPresets.TECHNICIAN;
-    return {
-      ...member,
-      role,
-      permissions: [...preset.permissions],
-    };
-  });
 
 const statusMeta: Record<
   StaffStatus,
@@ -209,340 +144,19 @@ const statusMeta: Record<
   },
 };
 
-const employmentLabels: Record<EmploymentType, string> = {
-  FULL_TIME: "Toàn thời gian",
-  PART_TIME: "Bán thời gian",
-  CONTRACT: "Cộng tác viên",
+/** BR-EMP-005 — bốn trạng thái, kèm câu giải thích hệ quả của mỗi lần đổi. */
+const statusChangeNotes: Record<StaffStatus, string> = {
+  WORKING: "Nhân viên được đánh dấu đang trong ca và sẵn sàng nhận lịch hẹn.",
+  OFF_SHIFT: "Nhân viên ngoài ca. Lịch đã phân công vẫn giữ nguyên.",
+  LEAVE: "Nhân viên đang nghỉ phép và không được đề xuất cho lịch mới.",
+  INACTIVE:
+    "Hồ sơ chuyển sang ngừng hoạt động và tài khoản đăng nhập của nhân viên (nếu có) bị vô hiệu hóa ngay. Nhận lại người cũ sẽ KHÔNG tự cấp lại quyền đăng nhập.",
 };
-
-const createWeek = (
-  shift: string,
-  offIndex: number,
-  leaveIndex = -1,
-): ScheduleDay[] =>
-  ["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((day, index) => ({
-    day,
-    date: `${13 + index}/07`,
-    shift: index === offIndex || index === leaveIndex ? "—" : shift,
-    status:
-      index === leaveIndex ? "LEAVE" : index === offIndex ? "OFF" : "WORK",
-  }));
-
-const staffSeed: StaffMember[] = [
-  {
-    id: "STF-001",
-    name: "Lê Hoàng Nam",
-    phone: "0903 228 118",
-    email: "nam.le@naile.vn",
-    birthday: "1987-04-18",
-    branch: "Q3",
-    role: "RECEPTIONIST",
-    status: "WORKING",
-    employmentType: "FULL_TIME",
-    startDate: "2022-03-01",
-    shiftStart: "08:00",
-    shiftEnd: "18:00",
-    appointments: 12,
-    completed: 12,
-    revenue: 18_600_000,
-    rating: 4.9,
-    utilization: 72,
-    commissionRate: 5,
-    commissionEarned: 930_000,
-    target: 20_000_000,
-    attendance: 100,
-    lateCount: 0,
-    leaveBalance: 10,
-    skills: ["Lễ tân quầy", "Tư vấn dịch vụ", "Xử lý thanh toán"],
-    permissions: [
-      "Quản lý toàn bộ lịch hẹn",
-      "Xem và cập nhật hồ sơ khách",
-      "Thu tiền tại quầy",
-    ],
-    notes: "Lễ tân trưởng phụ trách đón tiếp và xếp lịch tại salon.",
-    schedule: createWeek("08:00–18:00", 6),
-  },
-  {
-    id: "STF-002",
-    name: "Thảo Nguyễn",
-    phone: "0918 440 226",
-    email: "thao.nguyen@naile.vn",
-    birthday: "1991-09-12",
-    branch: "Q3",
-    role: "TECHNICIAN",
-    status: "WORKING",
-    employmentType: "FULL_TIME",
-    startDate: "2022-05-16",
-    shiftStart: "08:00",
-    shiftEnd: "18:00",
-    appointments: 38,
-    completed: 36,
-    revenue: 42_800_000,
-    rating: 4.9,
-    utilization: 92,
-    commissionRate: 18,
-    commissionEarned: 7_704_000,
-    target: 45_000_000,
-    attendance: 98,
-    lateCount: 1,
-    leaveBalance: 7.5,
-    skills: [
-      "Kỹ thuật Nail Art",
-      "Acrylic",
-      "Gel Extension",
-      "Đào tạo kỹ thuật",
-    ],
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-    notes: "Kỹ thuật viên chính dịch vụ làm móng cao cấp.",
-    schedule: createWeek("08:00–18:00", 1),
-  },
-  {
-    id: "STF-003",
-    name: "Minh Khang",
-    phone: "0937 510 884",
-    email: "khang.minh@naile.vn",
-    birthday: "1994-12-03",
-    branch: "Q3",
-    role: "TECHNICIAN",
-    status: "WORKING",
-    employmentType: "FULL_TIME",
-    startDate: "2023-02-06",
-    shiftStart: "09:00",
-    shiftEnd: "20:00",
-    appointments: 34,
-    completed: 32,
-    revenue: 36_500_000,
-    rating: 4.8,
-    utilization: 87,
-    commissionRate: 16,
-    commissionEarned: 5_840_000,
-    target: 40_000_000,
-    attendance: 97,
-    lateCount: 2,
-    leaveBalance: 8,
-    skills: ["Gel Manicure", "Dặm gel", "Sửa form", "Nail Art cơ bản"],
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-    notes: "Kỹ thuật viên có tỷ lệ khách quay lại cao.",
-    schedule: createWeek("09:00–20:00", 2),
-  },
-  {
-    id: "STF-004",
-    name: "Quốc Bảo",
-    phone: "0906 771 423",
-    email: "bao.quoc@naile.vn",
-    birthday: "1990-06-24",
-    branch: "Q3",
-    role: "TECHNICIAN",
-    status: "WORKING",
-    employmentType: "FULL_TIME",
-    startDate: "2023-08-14",
-    shiftStart: "08:00",
-    shiftEnd: "17:00",
-    appointments: 41,
-    completed: 39,
-    revenue: 28_700_000,
-    rating: 4.8,
-    utilization: 84,
-    commissionRate: 15,
-    commissionEarned: 4_305_000,
-    target: 30_000_000,
-    attendance: 99,
-    lateCount: 0,
-    leaveBalance: 6,
-    skills: ["Pedicure Spa", "Chăm sóc gót", "Massage chân", "Sơn gel"],
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-    notes: "Kỹ thuật viên phụ trách nhóm dịch vụ chăm sóc chân.",
-    schedule: createWeek("08:00–17:00", 3),
-  },
-  {
-    id: "STF-005",
-    name: "Thuỳ Dương",
-    phone: "0972 804 115",
-    email: "duong.thuy@naile.vn",
-    birthday: "1998-02-19",
-    branch: "Q3",
-    role: "TECHNICIAN",
-    status: "WORKING",
-    employmentType: "FULL_TIME",
-    startDate: "2024-01-08",
-    shiftStart: "10:00",
-    shiftEnd: "20:00",
-    appointments: 29,
-    completed: 28,
-    revenue: 18_200_000,
-    rating: 4.7,
-    utilization: 79,
-    commissionRate: 10,
-    commissionEarned: 1_820_000,
-    target: 20_000_000,
-    attendance: 96,
-    lateCount: 2,
-    leaveBalance: 9,
-    skills: ["Chuẩn bị dụng cụ", "Sơn gel cơ bản", "Khử khuẩn thiết bị"],
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-    notes: "Nhân viên kỹ thuật đang hoàn thiện nâng cao tay nghề.",
-    schedule: createWeek("10:00–20:00", 4),
-  },
-  {
-    id: "STF-006",
-    name: "Yến Nhi",
-    phone: "0909 366 282",
-    email: "nhi.yen@naile.vn",
-    birthday: "1996-07-30",
-    branch: "Q3",
-    role: "RECEPTIONIST",
-    status: "LEAVE",
-    employmentType: "FULL_TIME",
-    startDate: "2023-11-20",
-    shiftStart: "08:00",
-    shiftEnd: "17:00",
-    appointments: 0,
-    completed: 0,
-    revenue: 0,
-    rating: 4.8,
-    utilization: 0,
-    commissionRate: 2,
-    commissionEarned: 720_000,
-    target: 0,
-    attendance: 95,
-    lateCount: 1,
-    leaveBalance: 5.5,
-    skills: ["Tiếp đón", "Quản lý lịch", "Chăm sóc khách", "Thu ngân"],
-    permissions: [
-      "Quản lý toàn bộ lịch hẹn",
-      "Xem và cập nhật hồ sơ khách",
-      "Thu tiền tại quầy",
-    ],
-    notes: "Lễ tân ca sáng - nghỉ phép ngày 16–17/07.",
-    schedule: createWeek("08:00–17:00", 6, 3),
-  },
-  {
-    id: "STF-007",
-    name: "Hà My",
-    phone: "0988 120 496",
-    email: "my.ha@naile.vn",
-    birthday: "1989-11-21",
-    branch: "Q1",
-    role: "TECHNICIAN",
-    status: "WORKING",
-    employmentType: "FULL_TIME",
-    startDate: "2022-09-01",
-    shiftStart: "08:00",
-    shiftEnd: "18:00",
-    appointments: 35,
-    completed: 34,
-    revenue: 39_400_000,
-    rating: 4.9,
-    utilization: 89,
-    commissionRate: 18,
-    commissionEarned: 7_092_000,
-    target: 42_000_000,
-    attendance: 99,
-    lateCount: 0,
-    leaveBalance: 8.5,
-    skills: ["Nail Art", "Gel Extension", "Form Almond", "Đào tạo kỹ thuật"],
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-    notes: "Trưởng nhóm nhân viên kỹ thuật chi nhánh Quận 1.",
-    schedule: createWeek("08:00–18:00", 2),
-  },
-  {
-    id: "STF-008",
-    name: "Gia Huy",
-    phone: "0914 822 631",
-    email: "huy.gia@naile.vn",
-    birthday: "1995-03-08",
-    branch: "Q1",
-    role: "TECHNICIAN",
-    status: "WORKING",
-    employmentType: "FULL_TIME",
-    startDate: "2024-02-12",
-    shiftStart: "09:00",
-    shiftEnd: "20:00",
-    appointments: 31,
-    completed: 29,
-    revenue: 27_900_000,
-    rating: 4.7,
-    utilization: 82,
-    commissionRate: 15,
-    commissionEarned: 4_185_000,
-    target: 32_000_000,
-    attendance: 97,
-    lateCount: 1,
-    leaveBalance: 9,
-    skills: ["Manicure", "Gel đơn sắc", "French", "Dặm gel"],
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-    notes: "Nhân viên kỹ thuật chuyên gel đơn sắc và French.",
-    schedule: createWeek("09:00–20:00", 1),
-  },
-  {
-    id: "STF-009",
-    name: "Hoàng Anh",
-    phone: "0962 418 507",
-    email: "anh.hoang@naile.vn",
-    birthday: "1999-08-15",
-    branch: "Q1",
-    role: "TECHNICIAN",
-    status: "OFF_SHIFT",
-    employmentType: "PART_TIME",
-    startDate: "2025-01-06",
-    shiftStart: "14:00",
-    shiftEnd: "20:00",
-    appointments: 18,
-    completed: 18,
-    revenue: 9_600_000,
-    rating: 4.6,
-    utilization: 68,
-    commissionRate: 8,
-    commissionEarned: 768_000,
-    target: 12_000_000,
-    attendance: 94,
-    lateCount: 3,
-    leaveBalance: 4,
-    skills: ["Chuẩn bị bàn Nail", "Khử khuẩn", "Sơn gel cơ bản"],
-    permissions: ["Quản lý lịch và ca làm cá nhân"],
-    notes: "Nhân viên kỹ thuật bán thời gian ca chiều.",
-    schedule: createWeek("14:00–20:00", 3),
-  },
-  {
-    id: "STF-010",
-    name: "Khánh Vy",
-    phone: "0901 778 540",
-    email: "vy.khanh@naile.vn",
-    birthday: "1993-05-27",
-    branch: "Q1",
-    role: "RECEPTIONIST",
-    status: "WORKING",
-    employmentType: "FULL_TIME",
-    startDate: "2024-06-03",
-    shiftStart: "10:00",
-    shiftEnd: "20:00",
-    appointments: 0,
-    completed: 0,
-    revenue: 0,
-    rating: 4.8,
-    utilization: 0,
-    commissionRate: 2,
-    commissionEarned: 680_000,
-    target: 0,
-    attendance: 98,
-    lateCount: 1,
-    leaveBalance: 7,
-    skills: ["Tiếp đón", "Chăm sóc khách", "Thu ngân"],
-    permissions: [
-      "Quản lý toàn bộ lịch hẹn",
-      "Xem và cập nhật hồ sơ khách",
-      "Thu tiền tại quầy",
-    ],
-    notes: "Lễ tân ca tối tại Quận 1.",
-    schedule: createWeek("10:00–20:00", 5),
-  },
-];
 
 const inputClass =
   "h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-body font-medium text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100";
-const dateInputClass = `${inputClass} staff-date-input pl-10 pr-3`;
-const formatDate = (value: string) =>
-  new Date(`${value}T00:00:00`).toLocaleDateString("vi-VN");
+const errorInputClass =
+  "h-11 w-full rounded-xl border border-rose-300 bg-rose-50/60 px-3 text-body font-medium text-slate-800 outline-none transition focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100";
 const initials = (name: string) =>
   name
     .split(" ")
@@ -550,163 +164,240 @@ const initials = (name: string) =>
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-const performanceTone = (value: number) =>
-  value >= 90
-    ? "text-emerald-600"
-    : value >= 75
-      ? "text-violet-600"
-      : "text-amber-600";
 
-const emptyForm = (branch: string): StaffFormState => {
-  const preset = rolePermissionPresets.TECHNICIAN;
-  return {
-    name: "",
-    phone: "",
-    email: "",
-    birthday: "",
-    branch: branch === "Q1" ? "Q1" : "Q3",
-    role: "TECHNICIAN",
-    status: "OFF_SHIFT",
-    employmentType: "FULL_TIME",
-    startDate: "2026-07-16",
-    shiftStart: "09:00",
-    shiftEnd: "18:00",
-    commissionRate: "15",
-    notes: "",
-    canManageAppointments: preset.canManageAppointments,
-    canViewCustomers: preset.canViewCustomers,
-    canCollectPayment: preset.canCollectPayment,
-  };
+/** Giờ ca ở dạng `HH:mm`; đọc ra số giờ để vẽ thanh ca trên trục 08:00–20:00. */
+const hourOf = (value: string) => {
+  const [hour, minute] = value.split(":");
+  return Number(hour) + Number(minute || 0) / 60;
 };
+
+const emptyForm = (branchId: string): StaffFormState => ({
+  fullName: "",
+  phone: "",
+  email: "",
+  branchId,
+  role: "TECHNICIAN",
+  shiftStart: "09:00",
+  shiftEnd: "18:00",
+  commissionPercent: "15",
+  skills: [],
+});
+
+/**
+ * Mười hồ sơ mẫu cho tài khoản demo, đã thu về đúng hình dạng máy chủ trả.
+ *
+ * `tenantId` để rỗng và mốc thời gian là hằng số: chúng chỉ tồn tại để hai
+ * nhánh dữ liệu dùng chung một kiểu, không chỗ nào trên màn hình đọc tới.
+ */
+const demoStamp = "2026-07-01T00:00:00+07:00";
+const demoStaff = (
+  id: string,
+  fullName: string,
+  branchId: string,
+  role: StaffRole,
+  status: StaffStatus,
+  shiftStart: string,
+  shiftEnd: string,
+  commissionRate: number,
+  skills: string[],
+  phone: string,
+  email: string,
+  account?: StaffRecord["account"]
+): StaffRecord => ({
+  id,
+  tenantId: "",
+  branchId,
+  fullName,
+  phone,
+  email,
+  role,
+  status,
+  shiftStart,
+  shiftEnd,
+  commissionRate,
+  skills,
+  account,
+  createdAt: demoStamp,
+  updatedAt: demoStamp,
+});
+
+const staffSeed: StaffRecord[] = [
+  demoStaff("STF-001", "Trần Yến Nhi", "Q3", "RECEPTIONIST", "WORKING", "08:00", "17:00", 0.08, ["Tư vấn khách", "Chốt lịch hẹn"], "0901 234 567", "yennhi@naile.vn", { id: "USR-DEMO-01", email: "yennhi@naile.vn", username: "yennhi", status: "ACTIVE" }),
+  demoStaff("STF-002", "Nguyễn Minh Khang", "Q3", "TECHNICIAN", "WORKING", "09:00", "18:00", 0.18, ["Sơn gel", "Vẽ nail nghệ thuật"], "0902 345 678", "minhkhang@naile.vn"),
+  demoStaff("STF-003", "Lê Hà My", "Q3", "TECHNICIAN", "OFF_SHIFT", "12:00", "20:00", 0.16, ["Đắp bột", "Chăm sóc móng"], "0903 456 789", "hamy@naile.vn"),
+  demoStaff("STF-004", "Phạm Thu Trang", "Q3", "TECHNICIAN", "LEAVE", "09:00", "18:00", 0.15, ["Sơn gel", "Nối mi"], "0904 567 890", "thutrang@naile.vn"),
+  demoStaff("STF-005", "Đỗ Bảo Ngọc", "Q3", "TECHNICIAN", "WORKING", "10:00", "19:00", 0.17, ["Vẽ nail nghệ thuật", "Đính đá"], "0905 678 901", "baongoc@naile.vn"),
+  demoStaff("STF-006", "Vũ Kim Chi", "Q1", "RECEPTIONIST", "WORKING", "08:00", "17:00", 0.08, ["Tư vấn khách", "Thu ngân"], "0906 789 012", "kimchi@naile.vn", { id: "USR-DEMO-02", email: "kimchi@naile.vn", username: "kimchi", status: "ACTIVE" }),
+  demoStaff("STF-007", "Hoàng Anh Thư", "Q1", "TECHNICIAN", "WORKING", "09:00", "18:00", 0.18, ["Đắp bột", "Sơn gel"], "0907 890 123", "anhthu@naile.vn"),
+  demoStaff("STF-008", "Bùi Thanh Vy", "Q1", "TECHNICIAN", "OFF_SHIFT", "12:00", "20:00", 0.15, ["Chăm sóc móng", "Massage tay"], "0908 901 234", "thanhvy@naile.vn"),
+  demoStaff("STF-009", "Ngô Gia Hân", "Q1", "TECHNICIAN", "WORKING", "10:00", "19:00", 0.16, ["Vẽ nail nghệ thuật"], "0909 012 345", "giahan@naile.vn"),
+  demoStaff("STF-010", "Trịnh Mai Lan", "Q3", "TECHNICIAN", "INACTIVE", "09:00", "18:00", 0.15, ["Sơn gel"], "0910 123 456", "mailan@naile.vn"),
+];
 
 export default function TenantAdminStaff({
   searchQuery,
   onSearchQueryChange,
   selectedBranch,
   onSelectedBranchChange,
-  tenantName = "Nailé Studio",
-  roleLabel = "Owner · Tenant Admin",
   accessMode = "full",
   readOnlyReason = "",
   onNotify,
+  tenantId,
+  branches,
 }: TenantAdminStaffProps) {
-  const storageKey = `tenant-admin-staff-v2:${tenantName}`;
-  const [staff, setStaff] = useState<StaffMember[]>(() => {
-    if (typeof window === "undefined")
-      return normalizeStaffPermissions(getTenantAdminInitialData(null, staffSeed));
+  const storageKey = tenantStorageKey("tenant-admin-staff-v3");
+  const [demoStaffList, setDemoStaffList] = useState<StaffRecord[]>(() => {
+    if (typeof window === "undefined") return staffSeed;
     try {
       const stored = localStorage.getItem(storageKey);
-      const members = getTenantAdminInitialData(stored ? (JSON.parse(stored) as StaffMember[]) : null, staffSeed);
-      return normalizeStaffPermissions(members);
+      const parsed = stored ? (JSON.parse(stored) as StaffRecord[]) : null;
+      return getTenantAdminInitialData(Array.isArray(parsed) ? parsed : null, staffSeed);
     } catch {
-      return normalizeStaffPermissions(getTenantAdminInitialData(null, staffSeed));
+      return staffSeed;
     }
   });
+
+  /**
+   * Hồ sơ thật của tiệm đang làm việc.
+   *
+   * Chạy song song với `demoStaffList` chứ không thay thế: tài khoản demo vẫn
+   * cần một đường dữ liệu mẫu. Khi có `tenantId` thì màn này chuyển hẳn sang
+   * máy chủ và KHÔNG ghi bản sao nào xuống trình duyệt.
+   */
+  const isLive = Boolean(tenantId);
+  const directory = useStaff(isLive, tenantId || null);
+  const staff = isLive ? directory.staff : demoStaffList;
+
+  const branchOptions: BranchOption[] = useMemo(() => {
+    if (!isLive) return DEMO_BRANCHES;
+    return (branches || []).map((branch) => ({ id: branch.id, name: branch.name }));
+  }, [branches, isLive]);
+
+  /**
+   * Chi nhánh mở cho ô chọn trong biểu mẫu.
+   *
+   * Chi nhánh đã ngừng hoạt động vẫn phải hiện ở bảng và ngăn chi tiết — người
+   * cũ của nó còn đó — nhưng không nhận người mới, nên biểu mẫu chỉ mở những
+   * chi nhánh đang hoạt động.
+   */
+  const assignableBranches: BranchOption[] = useMemo(() => {
+    if (!isLive) return DEMO_BRANCHES;
+    return (branches || [])
+      .filter((branch) => branch.status === "ACTIVE")
+      .map((branch) => ({ id: branch.id, name: branch.name }));
+  }, [branches, isLive]);
+
+  const branchName = (branchId: string) =>
+    branchOptions.find((option) => option.id === branchId)?.name || "Chi nhánh đã gỡ";
+
   const [roleFilter, setRoleFilter] = useState<"ALL" | StaffRole>("ALL");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | ActiveStaffStatus>(
-    "ALL",
-  );
-  const [employmentFilter, setEmploymentFilter] = useState<
-    "ALL" | EmploymentType
-  >("ALL");
-  const [sortBy, setSortBy] = useState<
-    "REVENUE" | "UTILIZATION" | "RATING" | "NAME"
-  >("REVENUE");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | ActiveStaffStatus>("ALL");
+  const [accountFilter, setAccountFilter] = useState<"ALL" | "HAS" | "NONE">("ALL");
+  const [sortBy, setSortBy] = useState<"NAME" | "SHIFT" | "COMMISSION">("NAME");
   const [viewMode, setViewMode] = useState<StaffView>("TABLE");
   const [showFilters, setShowFilters] = useState(false);
-  const [isInactiveSectionExpanded, setIsInactiveSectionExpanded] =
-    useState(true);
-  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+  const [isInactiveSectionExpanded, setIsInactiveSectionExpanded] = useState(true);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<"CREATE" | "EDIT" | null>(null);
-  const [form, setForm] = useState<StaffFormState>(() =>
-    emptyForm(selectedBranch),
-  );
+  const [form, setForm] = useState<StaffFormState>(() => emptyForm(selectedBranch));
+  const [skillDraft, setSkillDraft] = useState("");
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
-  const [shiftAction, setShiftAction] = useState<{
-    type: ShiftAction;
-    staff: StaffMember;
-  } | null>(null);
+  const [statusTarget, setStatusTarget] = useState<{ staff: StaffRecord; status: StaffStatus } | null>(null);
+  const [grantTarget, setGrantTarget] = useState<StaffRecord | null>(null);
+  const [grantForm, setGrantForm] = useState<GrantAccountFormState>({ email: "", username: "", displayName: "" });
+  const [grantedPassword, setGrantedPassword] = useState<{ staffName: string; email: string; password: string } | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
   const canManage = accessMode === "full" && !readOnlyReason;
+
+  /**
+   * Hồ sơ đang mở tra theo mã chứ không giữ một bản sao trong state.
+   *
+   * Sau mỗi lần ghi, hook nạp lại danh sách và trả về đối tượng MỚI. Giữ bản sao
+   * thì ngăn chi tiết sẽ còn hiện dữ liệu trước khi sửa cho tới lúc người dùng
+   * đóng nó ra và mở lại.
+   */
+  const selectedStaff = useMemo(
+    () => staff.find((member) => member.id === selectedStaffId) || null,
+    [selectedStaffId, staff]
+  );
+
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(staff));
-  }, [staff, storageKey]);
+    // Chế độ thật KHÔNG ghi vào localStorage: máy chủ là nguồn duy nhất.
+    if (isLive) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(demoStaffList));
+    } catch {
+      // Local storage is optional; the page remains usable when it is unavailable.
+    }
+  }, [demoStaffList, isLive, storageKey]);
+
   useEffect(() => {
-    if (!selectedStaff && !formMode && !shiftAction) return;
+    if (!selectedStaffId && !formMode && !statusTarget && !grantTarget && !grantedPassword) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (shiftAction) setShiftAction(null);
+      if (grantedPassword) setGrantedPassword(null);
+      else if (grantTarget) setGrantTarget(null);
+      else if (statusTarget) setStatusTarget(null);
       else if (formMode) setFormMode(null);
-      else setSelectedStaff(null);
+      else setSelectedStaffId(null);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [formMode, selectedStaff, shiftAction]);
+  }, [formMode, grantTarget, grantedPassword, selectedStaffId, statusTarget]);
+
   const requireManage = () => {
     if (canManage) return true;
-    onNotify?.(
-      readOnlyReason || "Gói hiện tại chỉ cho phép xem dữ liệu nhân sự.",
-    );
+    onNotify?.(readOnlyReason || "Tài khoản hiện chỉ có quyền xem dữ liệu nhân sự.");
     return false;
   };
 
   const branchStaff = useMemo(
-    () =>
-      staff.filter(
-        (member) =>
-          selectedBranch === "ALL" || member.branch === selectedBranch,
-      ),
-    [selectedBranch, staff],
+    () => staff.filter((member) => selectedBranch === "ALL" || member.branchId === selectedBranch),
+    [selectedBranch, staff]
   );
   const activeBranchStaff = useMemo(
     () => branchStaff.filter((member) => member.status !== "INACTIVE"),
-    [branchStaff],
+    [branchStaff]
   );
   const inactiveBranchStaff = useMemo(
     () => branchStaff.filter((member) => member.status === "INACTIVE"),
-    [branchStaff],
+    [branchStaff]
   );
   const filteredStaff = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return activeBranchStaff
       .filter((member) => roleFilter === "ALL" || member.role === roleFilter)
-      .filter(
-        (member) => statusFilter === "ALL" || member.status === statusFilter,
-      )
-      .filter(
-        (member) =>
-          employmentFilter === "ALL" ||
-          member.employmentType === employmentFilter,
+      .filter((member) => statusFilter === "ALL" || member.status === statusFilter)
+      .filter((member) =>
+        accountFilter === "ALL"
+          ? true
+          : accountFilter === "HAS"
+            ? Boolean(member.account)
+            : !member.account
       )
       .filter(
         (member) =>
           !query ||
-          `${member.id} ${member.name} ${member.phone} ${member.email} ${member.skills.join(" ")}`
+          `${member.id} ${member.fullName} ${member.phone || ""} ${member.email || ""} ${member.skills.join(" ")}`
             .toLowerCase()
-            .includes(query),
+            .includes(query)
       )
       .sort((a, b) =>
-        sortBy === "UTILIZATION"
-          ? b.utilization - a.utilization
-          : sortBy === "RATING"
-            ? b.rating - a.rating
-            : sortBy === "NAME"
-              ? a.name.localeCompare(b.name, "vi")
-              : b.revenue - a.revenue,
+        sortBy === "SHIFT"
+          ? a.shiftStart.localeCompare(b.shiftStart)
+          : sortBy === "COMMISSION"
+            ? b.commissionRate - a.commissionRate
+            : a.fullName.localeCompare(b.fullName, "vi")
       );
-  }, [
-    activeBranchStaff,
-    employmentFilter,
-    roleFilter,
-    searchQuery,
-    sortBy,
-    statusFilter,
-  ]);
+  }, [accountFilter, activeBranchStaff, roleFilter, searchQuery, sortBy, statusFilter]);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -718,215 +409,296 @@ export default function TenantAdminStaff({
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, selectedBranch, roleFilter, statusFilter, employmentFilter, sortBy]);
+  }, [searchQuery, selectedBranch, roleFilter, statusFilter, accountFilter, sortBy]);
 
-  const workingCount = activeBranchStaff.filter(
-    (member) => member.status === "WORKING",
-  ).length;
-  const receptionistCount = activeBranchStaff.filter(
-    (member) => member.role === "RECEPTIONIST",
-  ).length;
-  const technicianCount = activeBranchStaff.filter(
-    (member) => member.role === "TECHNICIAN",
-  ).length;
-  const activeFilterCount = [
-    roleFilter !== "ALL",
-    statusFilter !== "ALL",
-    employmentFilter !== "ALL",
-  ].filter(Boolean).length;
-  const serviceStaff = activeBranchStaff.filter(
-    (member) => member.role === "TECHNICIAN",
-  );
-  const averageUtilization = serviceStaff.length
-    ? Math.round(
-        serviceStaff.reduce((sum, member) => sum + member.utilization, 0) /
-          serviceStaff.length,
-      )
-    : 0;
-  const totalRevenue = activeBranchStaff.reduce(
-    (sum, member) => sum + member.revenue,
-    0,
-  );
-  const totalCommission = activeBranchStaff.reduce(
-    (sum, member) => sum + member.commissionEarned,
-    0,
-  );
+  const workingCount = activeBranchStaff.filter((member) => member.status === "WORKING").length;
+  const receptionistCount = activeBranchStaff.filter((member) => member.role === "RECEPTIONIST").length;
+  const technicianCount = activeBranchStaff.filter((member) => member.role === "TECHNICIAN").length;
+  const accountCount = activeBranchStaff.filter((member) => Boolean(member.account)).length;
+  const activeFilterCount = [roleFilter !== "ALL", statusFilter !== "ALL", accountFilter !== "ALL"].filter(Boolean).length;
+
+  /** Gắn lỗi máy chủ vào đúng ô nhập; phần không gắn được thì hiện ở đầu biểu mẫu. */
+  const applyApiError = (error: ApiError) => {
+    const mapped: Record<string, string> = {};
+    error.fields.forEach((item) => {
+      mapped[item.field] = item.message;
+    });
+    setFieldErrors(mapped);
+    setFormError(error.fields.length ? "" : error.message);
+  };
 
   const openCreate = () => {
     if (!requireManage()) return;
-    setForm(emptyForm(selectedBranch));
+    const fallbackBranch =
+      selectedBranch !== "ALL" && assignableBranches.some((branch) => branch.id === selectedBranch)
+        ? selectedBranch
+        : assignableBranches[0]?.id || "";
+    setForm(emptyForm(fallbackBranch));
+    setSkillDraft("");
     setFormError("");
+    setFieldErrors({});
     setFormMode("CREATE");
   };
-  const openEdit = (member: StaffMember) => {
+
+  const openEdit = (member: StaffRecord) => {
     if (!requireManage()) return;
-    const preset = rolePermissionPresets[member.role];
     setForm({
-      name: member.name,
-      phone: member.phone,
-      email: member.email,
-      birthday: member.birthday,
-      branch: member.branch,
+      fullName: member.fullName,
+      phone: member.phone || "",
+      email: member.email || "",
+      branchId: member.branchId,
       role: member.role,
-      status: member.status,
-      employmentType: member.employmentType,
-      startDate: member.startDate,
       shiftStart: member.shiftStart,
       shiftEnd: member.shiftEnd,
-      commissionRate: String(member.commissionRate),
-      notes: member.notes,
-      canManageAppointments: preset.canManageAppointments,
-      canViewCustomers: preset.canViewCustomers,
-      canCollectPayment: preset.canCollectPayment,
+      commissionPercent: String(Math.round(member.commissionRate * 1000) / 10),
+      skills: [...member.skills],
     });
+    setSelectedStaffId(member.id);
+    setSkillDraft("");
     setFormError("");
+    setFieldErrors({});
     setFormMode("EDIT");
   };
 
-  const submitStaff = (event: FormEvent) => {
-    event.preventDefault();
-    if (!requireManage()) return;
-    if (!form.name.trim() || !form.phone.trim() || !form.email.trim()) {
-      setFormError("Vui lòng nhập họ tên, số điện thoại và email nhân viên.");
+  const addSkill = () => {
+    const skill = skillDraft.trim();
+    if (!skill || form.skills.includes(skill)) {
+      setSkillDraft("");
       return;
     }
-    const duplicate = staff.find(
-      (member) =>
-        (member.phone.replace(/\s/g, "") === form.phone.replace(/\s/g, "") ||
-          member.email.toLowerCase() === form.email.toLowerCase()) &&
-        member.id !== selectedStaff?.id,
-    );
-    if (duplicate) {
-      setFormError(
-        `Thông tin liên hệ đã thuộc hồ sơ ${duplicate.name} (${duplicate.id}).`,
-      );
-      return;
-    }
-    const existing = formMode === "EDIT" ? selectedStaff : null;
-    const id =
+    setForm((current) => ({ ...current, skills: [...current.skills, skill] }));
+    setSkillDraft("");
+  };
+
+  /**
+   * Thân request gửi đi.
+   *
+   * `PUT /api/staff/{id}` là phép thay TRỌN hồ sơ, nên biểu mẫu sửa gửi đủ chín
+   * ô kể cả những ô người dùng không đụng tới — bỏ trống `email` ở đây là xóa
+   * email trên hồ sơ.
+   */
+  const toSaveInput = (): SaveStaffInput => ({
+    branchId: form.branchId,
+    fullName: form.fullName.trim(),
+    phone: form.phone.trim() || undefined,
+    email: form.email.trim() || undefined,
+    role: form.role,
+    shiftStart: form.shiftStart,
+    shiftEnd: form.shiftEnd,
+    commissionRate: Math.max(0, Number(form.commissionPercent) || 0) / 100,
+    skills: form.skills,
+  });
+
+  /** Nhánh dữ liệu mẫu: chỉ ghi vào bộ nhớ trình duyệt, không gọi máy chủ. */
+  const submitDemoStaff = () => {
+    const existing = formMode === "EDIT" ? demoStaffList.find((member) => member.id === selectedStaffId) : null;
+    const nextId =
       existing?.id ||
-      `STF-${String(Math.max(...staff.map((member) => Number(member.id.replace("STF-", "")))) + 1).padStart(3, "0")}`;
-    const permissions = [...rolePermissionPresets[form.role].permissions];
-    const payload: StaffMember = {
-      id,
-      name: form.name.trim(),
+      `STF-${String(
+        demoStaffList.reduce((max, member) => Math.max(max, Number(member.id.replace("STF-", "")) || 0), 0) + 1
+      ).padStart(3, "0")}`;
+    const payload: StaffRecord = {
+      ...(existing || demoStaff(nextId, "", form.branchId, form.role, "WORKING", form.shiftStart, form.shiftEnd, 0, [], "", "")),
+      id: nextId,
+      branchId: form.branchId,
+      fullName: form.fullName.trim(),
       phone: form.phone.trim(),
       email: form.email.trim(),
-      birthday: form.birthday,
-      branch: form.branch,
       role: form.role,
-      status: form.status,
-      employmentType: form.employmentType,
-      startDate: form.startDate,
       shiftStart: form.shiftStart,
       shiftEnd: form.shiftEnd,
-      commissionRate: Math.max(0, Number(form.commissionRate) || 0),
-      notes: form.notes.trim(),
-      permissions,
-      appointments: existing?.appointments || 0,
-      completed: existing?.completed || 0,
-      revenue: existing?.revenue || 0,
-      rating: existing?.rating || 0,
-      utilization: existing?.utilization || 0,
-      commissionEarned: existing?.commissionEarned || 0,
-      target: existing?.target || 20_000_000,
-      attendance: existing?.attendance || 100,
-      lateCount: existing?.lateCount || 0,
-      leaveBalance: existing?.leaveBalance || 12,
-      skills: existing?.skills || ["Đang cập nhật"],
-      schedule:
-        existing?.schedule ||
-        createWeek(`${form.shiftStart}–${form.shiftEnd}`, 6),
+      commissionRate: Math.max(0, Number(form.commissionPercent) || 0) / 100,
+      skills: form.skills,
     };
-    setStaff((current) =>
-      formMode === "EDIT"
-        ? current.map((member) => (member.id === id ? payload : member))
-        : [payload, ...current],
+    setDemoStaffList((current) =>
+      existing ? current.map((member) => (member.id === nextId ? payload : member)) : [payload, ...current]
     );
-    setSelectedStaff(payload.status === "INACTIVE" ? null : payload);
+    setSelectedStaffId(nextId);
+    setFormMode(null);
+    setNotice(existing ? `Đã cập nhật hồ sơ ${payload.fullName}.` : `Đã tạo hồ sơ ${payload.fullName}.`);
+  };
+
+  const submitStaff = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!requireManage() || saving) return;
+    setFormError("");
+    setFieldErrors({});
+
+    if (!form.fullName.trim()) {
+      setFieldErrors({ fullName: "Vui lòng nhập họ và tên nhân viên." });
+      return;
+    }
+    if (!form.branchId) {
+      setFieldErrors({ branchId: "Chọn chi nhánh nơi nhân viên làm việc." });
+      return;
+    }
+
+    if (!isLive) {
+      submitDemoStaff();
+      return;
+    }
+
+    setSaving(true);
+    const input = toSaveInput();
+    const result = formMode === "EDIT" && selectedStaffId
+      ? await directory.updateStaff(selectedStaffId, input)
+      : await directory.createStaff(input);
+    setSaving(false);
+
+    if (result.status === "error") {
+      applyApiError(result.error);
+      return;
+    }
+
+    setSelectedStaffId(result.data.id);
     setFormMode(null);
     setNotice(
-      payload.status === "INACTIVE"
-        ? `Đã chuyển hồ sơ ${payload.name} vào khu nhân sự ngừng hoạt động.`
-        : formMode === "CREATE"
-          ? `Đã tạo hồ sơ ${payload.name}.`
-          : `Đã cập nhật hồ sơ ${payload.name}.`,
+      formMode === "CREATE"
+        ? `Đã tạo hồ sơ ${result.data.fullName}.`
+        : `Đã cập nhật hồ sơ ${result.data.fullName}.`
     );
   };
 
-  const updateStaff = (id: string, patch: Partial<StaffMember>) => {
-    if (!requireManage()) return;
-    setStaff((current) =>
-      current.map((member) =>
-        member.id === id ? { ...member, ...patch } : member,
-      ),
-    );
-    setSelectedStaff((current) =>
-      current?.id === id ? { ...current, ...patch } : current,
-    );
-  };
-  const confirmShiftAction = () => {
-    if (!shiftAction || !requireManage()) return;
-    const time = new Date().toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    if (shiftAction.type === "START") {
-      updateStaff(shiftAction.staff.id, {
-        status: "WORKING",
-        lastClockIn: time,
-      });
-      setNotice(`${shiftAction.staff.name} đã bắt đầu ca lúc ${time}.`);
-    } else {
-      updateStaff(shiftAction.staff.id, {
-        status: "OFF_SHIFT",
-        lastClockOut: time,
-      });
-      setNotice(`${shiftAction.staff.name} đã kết thúc ca lúc ${time}.`);
+  const confirmStatusChange = async () => {
+    if (!statusTarget || !requireManage() || saving) return;
+    const { staff: member, status } = statusTarget;
+
+    if (!isLive) {
+      setDemoStaffList((current) =>
+        current.map((item) => (item.id === member.id ? { ...item, status } : item))
+      );
+      setStatusTarget(null);
+      setNotice(`${member.fullName} · ${statusMeta[status].label}.`);
+      return;
     }
-    setShiftAction(null);
-  };
-  const reactivateStaff = (member: StaffMember) => {
-    if (!requireManage()) return;
-    updateStaff(member.id, { status: "OFF_SHIFT" });
+
+    setSaving(true);
+    const result = await directory.changeStaffStatus(member.id, status);
+    setSaving(false);
+    setStatusTarget(null);
+
+    if (result.status === "error") {
+      onNotify?.(result.error.message);
+      setNotice(result.error.message);
+      return;
+    }
+
     setNotice(
-      `Đã kích hoạt lại hồ sơ ${member.name}. Nhân viên được đưa về danh sách chính ở trạng thái chưa vào ca.`,
+      status === "INACTIVE"
+        ? `Đã cho ${member.fullName} nghỉ việc. Tài khoản đăng nhập của nhân viên đã bị vô hiệu hóa.`
+        : `${member.fullName} · ${statusMeta[status].label}.`
     );
   };
+
+  const openGrantAccount = (member: StaffRecord) => {
+    if (!requireManage()) return;
+    setGrantTarget(member);
+    setGrantForm({ email: member.email || "", username: "", displayName: member.fullName });
+    setFormError("");
+    setFieldErrors({});
+  };
+
+  const submitGrantAccount = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!grantTarget || !requireManage() || saving) return;
+    setFormError("");
+    setFieldErrors({});
+
+    if (!isLive) {
+      setFormError("Chế độ dữ liệu mẫu không cấp được tài khoản đăng nhập thật.");
+      return;
+    }
+
+    setSaving(true);
+    const result = await directory.grantStaffAccount(grantTarget.id, {
+      email: grantForm.email.trim() || undefined,
+      username: grantForm.username.trim() || undefined,
+      displayName: grantForm.displayName.trim() || undefined,
+    });
+    setSaving(false);
+
+    if (result.status === "error") {
+      applyApiError(result.error);
+      return;
+    }
+
+    const staffName = result.data.staff.fullName;
+    setGrantTarget(null);
+    setPasswordCopied(false);
+
+    if (result.data.generatedPassword) {
+      setGrantedPassword({
+        staffName,
+        email: result.data.staff.account?.email || grantForm.email.trim(),
+        password: result.data.generatedPassword,
+      });
+      return;
+    }
+
+    setNotice(`Đã cấp tài khoản đăng nhập cho ${staffName}.`);
+  };
+
+  const copyPassword = async () => {
+    if (!grantedPassword) return;
+    try {
+      await navigator.clipboard.writeText(grantedPassword.password);
+      setPasswordCopied(true);
+    } catch {
+      // Trình duyệt từ chối quyền ghi clipboard — mật khẩu vẫn hiện nguyên trên màn hình để chép tay.
+      setPasswordCopied(false);
+    }
+  };
+
   const resetFilters = () => {
     setRoleFilter("ALL");
     setStatusFilter("ALL");
-    setEmploymentFilter("ALL");
+    setAccountFilter("ALL");
     onSearchQueryChange("");
   };
+
   const exportStaff = () => {
     if (!requireManage()) return;
     const rows = filteredStaff.map((member) =>
       [
         member.id,
-        member.name,
+        member.fullName,
         roleMeta[member.role].label,
-        branchLabels[member.branch],
-        member.phone,
-        member.email,
-        member.appointments,
-        member.revenue,
-        member.utilization,
+        branchName(member.branchId),
+        member.phone || "",
+        member.email || "",
+        `${member.shiftStart}-${member.shiftEnd}`,
+        `${Math.round(member.commissionRate * 1000) / 10}%`,
+        member.account ? member.account.email : "Chưa cấp",
         statusMeta[member.status].label,
-      ].join(","),
+      ].join(",")
     );
     const blob = new Blob(
       [
-        `Mã nhân viên,Tên,Vai trò,Chi nhánh,Số điện thoại,Email,Lịch hẹn,Doanh thu,Công suất,Trạng thái\n${rows.join("\n")}`,
+        `Mã nhân viên,Họ tên,Vai trò,Chi nhánh,Số điện thoại,Email,Ca làm,Hoa hồng,Tài khoản đăng nhập,Trạng thái\n${rows.join("\n")}`,
       ],
-      { type: "text/csv;charset=utf-8" },
+      { type: "text/csv;charset=utf-8" }
     );
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = "danh-sach-nhan-su.csv";
     link.click();
     URL.revokeObjectURL(link.href);
+  };
+
+  const accountBadge = (member: StaffRecord) => {
+    if (member.account) {
+      const active = member.account.status === "ACTIVE";
+      return (
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${active ? "bg-violet-50 text-violet-700 ring-violet-200" : "bg-slate-100 text-slate-500 ring-slate-200"}`}>
+          <KeyRound className="h-3 w-3" />
+          {active ? "Đã cấp" : "Đã khóa"}
+        </span>
+      );
+    }
+    if (member.role !== "RECEPTIONIST") {
+      return <span className="text-caption text-slate-400">Không áp dụng</span>;
+    }
+    return <span className="text-caption font-bold text-slate-500">Chưa cấp</span>;
   };
 
   return (
@@ -951,71 +723,85 @@ export default function TenantAdminStaff({
       <PageHeader
         title="Nhân sự"
         actions={(
-          <>
-<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <BeautifulSelect
-            value={selectedBranch}
-            onChange={(event) => onSelectedBranchChange(event.target.value)}
-            aria-label="Chọn chi nhánh"
-            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold text-slate-700 shadow-sm sm:w-48"
-          >
-            <option value="Q3">Chi nhánh Quận 3</option>
-            <option value="Q1">Chi nhánh Quận 1</option>
-            <option value="ALL">Tất cả chi nhánh</option>
-          </BeautifulSelect>
-          <button
-            type="button"
-            onClick={exportStaff}
-            disabled={!canManage}
-            className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
-            Xuất danh sách
-          </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            disabled={!canManage}
-            className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
-          >
-            <UserPlus className="h-4 w-4" />
-            Thêm nhân viên
-          </button>
-        </div>
-          </>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <BeautifulSelect
+              value={selectedBranch}
+              onChange={(event) => onSelectedBranchChange(event.target.value)}
+              aria-label="Chọn chi nhánh"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold text-slate-700 shadow-sm sm:w-56"
+            >
+              {branchOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+              <option value="ALL">Tất cả chi nhánh</option>
+            </BeautifulSelect>
+            <button
+              type="button"
+              onClick={exportStaff}
+              disabled={!canManage}
+              className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              Xuất danh sách
+            </button>
+            <button
+              type="button"
+              onClick={openCreate}
+              disabled={!canManage}
+              className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-lg shadow-violet-200 disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"
+            >
+              <UserPlus className="h-4 w-4" />
+              Thêm nhân viên
+            </button>
+          </div>
         )}
       />
 
+      {isLive && directory.error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4">
+          <p className="text-caption font-black text-rose-800">Không tải được danh sách nhân sự</p>
+          <p className="mt-1 text-caption text-rose-700">{directory.error.message}</p>
+          <button
+            type="button"
+            onClick={directory.reload}
+            className="mt-3 border border-rose-200 bg-white px-3 text-caption font-bold text-rose-700 shadow-sm"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
-            label: "Tổng nhân sự",
+            label: "Nhân sự đang làm việc",
             value: String(activeBranchStaff.length),
-            detail: `${receptionistCount} Lễ tân · ${technicianCount} Kỹ thuật viên (${workingCount} trong ca)`,
+            detail: `${technicianCount} kỹ thuật viên · ${receptionistCount} lễ tân`,
             icon: UsersRound,
             tone: "bg-blue-50 text-blue-600",
           },
           {
-            label: "Công suất trung bình",
-            value: `${averageUtilization}%`,
-            detail: "+5,2% so với tháng trước",
-            icon: Target,
-            tone: "bg-violet-50 text-violet-600",
-          },
-          {
-            label: "Doanh thu đội ngũ",
-            value: formatCompactMoney(totalRevenue),
-            detail: "74,5% mục tiêu tháng",
-            icon: CircleDollarSign,
+            label: "Đang trong ca",
+            value: String(workingCount),
+            detail: "Theo trạng thái ca hiện tại",
+            icon: Clock3,
             tone: "bg-emerald-50 text-emerald-600",
           },
           {
-            label: "Hoa hồng dự kiến",
-            value: formatCompactMoney(totalCommission),
-            detail: "Chốt kỳ vào 31/07/2026",
-            icon: WalletCards,
-            tone: "bg-amber-50 text-amber-600",
+            label: "Tài khoản đăng nhập",
+            value: String(accountCount),
+            detail: "Chỉ lễ tân được cấp quyền vào quầy",
+            icon: KeyRound,
+            tone: "bg-violet-50 text-violet-600",
+          },
+          {
+            label: "Ngừng hoạt động",
+            value: String(inactiveBranchStaff.length),
+            detail: "Hồ sơ giữ lại cho lịch hẹn và hóa đơn cũ",
+            icon: Archive,
+            tone: "bg-slate-100 text-slate-600",
           },
         ].map(({ label, value, detail, icon: Icon, tone }) => (
           <article
@@ -1025,139 +811,84 @@ export default function TenantAdminStaff({
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-caption font-bold text-slate-500">{label}</p>
-                <p className="ta-metric-value mt-1.5 text-slate-950">
-                  {value}
-                </p>
+                <p className="ta-metric-value mt-1.5 text-slate-950">{value}</p>
               </div>
-              <span
-                className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}
-              >
+              <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}>
                 <Icon className="h-4.5 w-4.5" />
               </span>
             </div>
-            <p className="mt-2 flex items-center gap-1.5 text-caption font-semibold text-slate-400">
-              <TrendingUp className="h-3 w-3 text-emerald-500" />
-              {detail}
-            </p>
+            <p className="mt-2 text-caption font-semibold text-slate-400">{detail}</p>
           </article>
         ))}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.45fr_0.8fr]">
-        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
-            <div>
-              <h2 className="text-xs font-black text-slate-900">
-                Phân bổ ca hôm nay
-              </h2>
-              <p className="mt-1 text-caption text-slate-400">
-                Theo khung giờ hoạt động 08:00–20:00
-              </p>
-            </div>
-            <Clock3 className="h-4.5 w-4.5 text-violet-500" />
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 className="text-xs font-black text-slate-900">Ca làm mặc định</h2>
+            <p className="mt-1 text-caption text-slate-400">
+              Mỗi nhân viên có một ca cố định. Trục giờ 08:00–20:00.
+            </p>
           </div>
+          <Clock3 className="h-4.5 w-4.5 text-violet-500" />
+        </div>
+        {activeBranchStaff.length ? (
           <div className="overflow-x-auto p-4">
             <div className="min-w-[760px]">
               <div className="ml-36 grid grid-cols-7 text-center text-caption font-bold text-slate-400">
-                {[
-                  "08:00",
-                  "10:00",
-                  "12:00",
-                  "14:00",
-                  "16:00",
-                  "18:00",
-                  "20:00",
-                ].map((time) => (
+                {["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"].map((time) => (
                   <span key={time}>{time}</span>
                 ))}
               </div>
               <div className="mt-2 space-y-2">
-                {activeBranchStaff
-                  .slice(0, 6)
-                  .map((member) => {
-                    const start = Number(member.shiftStart.split(":")[0]);
-                    const end = Number(member.shiftEnd.split(":")[0]);
-                    const left = Math.max(0, ((start - 8) / 12) * 100);
-                    const width = Math.max(8, ((end - start) / 12) * 100);
-                    return (
-                      <button
-                        key={member.id}
-                        type="button"
-                        onClick={() => setSelectedStaff(member)}
-                        className="grid h-auto w-full grid-cols-[132px_1fr] items-center gap-2 border-0 bg-transparent p-0 text-left shadow-none"
-                      >
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-caption font-black ${roleMeta[member.role].avatar}`}
-                          >
-                            {initials(member.name)}
+                {activeBranchStaff.slice(0, 8).map((member) => {
+                  const start = hourOf(member.shiftStart);
+                  const end = hourOf(member.shiftEnd);
+                  const left = Math.max(0, ((start - 8) / 12) * 100);
+                  const width = Math.max(8, Math.min(100 - left, ((end - start) / 12) * 100));
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => setSelectedStaffId(member.id)}
+                      className="grid h-auto w-full grid-cols-[132px_1fr] items-center gap-2 border-0 bg-transparent p-0 text-left shadow-none"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-caption font-black ${roleMeta[member.role].avatar}`}>
+                          {initials(member.fullName)}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-caption font-black text-slate-700">
+                            {member.fullName}
                           </span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-caption font-black text-slate-700">
-                              {member.name}
-                            </span>
-                            <span className="mt-0.5 block text-caption text-slate-400">
-                              {roleMeta[member.role].label}
-                            </span>
+                          <span className="mt-0.5 block text-caption text-slate-400">
+                            {roleMeta[member.role].label}
                           </span>
                         </span>
-                        <span className="relative block h-8 overflow-hidden rounded-lg bg-slate-100">
-                          <span
-                            className={`absolute inset-y-1 rounded-md ${member.status === "LEAVE" ? "bg-amber-200" : member.status === "OFF_SHIFT" ? "bg-slate-300" : "bg-gradient-to-r from-violet-500 to-indigo-500"}`}
-                            style={{ left: `${left}%`, width: `${width}%` }}
-                          >
-                            <span
-                              className={`flex h-full items-center justify-center text-caption font-black ${member.status === "WORKING" ? "text-white" : "text-slate-600"}`}
-                            >
-                              {member.status === "LEAVE"
-                                ? "Nghỉ phép"
-                                : `${member.shiftStart}–${member.shiftEnd}`}
-                            </span>
+                      </span>
+                      <span className="relative block h-8 overflow-hidden rounded-lg bg-slate-100">
+                        <span
+                          className={`absolute inset-y-1 rounded-md ${member.status === "LEAVE" ? "bg-amber-200" : member.status === "OFF_SHIFT" ? "bg-slate-300" : "bg-violet-500"}`}
+                          style={{ left: `${left}%`, width: `${width}%` }}
+                        >
+                          <span className={`flex h-full items-center justify-center text-caption font-black ${member.status === "WORKING" ? "text-white" : "text-slate-600"}`}>
+                            {member.status === "LEAVE" ? "Nghỉ phép" : `${member.shiftStart}–${member.shiftEnd}`}
                           </span>
                         </span>
-                      </button>
-                    );
-                  })}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
-        </article>
-        <article className="rounded-2xl bg-gradient-to-br from-[#19152e] to-[#292148] p-5 text-white shadow-xl shadow-violet-950/10">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-caption font-bold uppercase tracking-[0.14em] text-violet-300">
-                Mức độ phủ ca
-              </p>
-              <p className="mt-2 text-2xl font-black">86%</p>
-            </div>
-            <CalendarDays className="h-5 w-5 text-violet-300" />
+        ) : (
+          <div className="px-5 py-10 text-center">
+            <Clock3 className="mx-auto h-6 w-6 text-slate-300" />
+            <p className="mt-2 text-caption font-black text-slate-600">Chưa có nhân viên nào đang làm việc</p>
+            <p className="mt-1 text-caption text-slate-400">Thêm hồ sơ đầu tiên để thấy phân bổ ca.</p>
           </div>
-          <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full w-[86%] rounded-full bg-gradient-to-r from-violet-400 to-cyan-300" />
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-caption text-slate-400">Trong ca</p>
-              <p className="mt-1 text-sm font-black">{workingCount}</p>
-            </div>
-            <div>
-              <p className="text-caption text-slate-400">Nghỉ phép</p>
-              <p className="mt-1 text-sm font-black">
-                {
-                  activeBranchStaff.filter((member) => member.status === "LEAVE")
-                    .length
-                }
-              </p>
-            </div>
-            <div>
-              <p className="text-caption text-slate-400">Trễ ca</p>
-              <p className="mt-1 text-sm font-black">2</p>
-            </div>
-          </div>
-          <p className="mt-5 text-caption leading-4 text-slate-400">
-            Khung 18:00–20:00 tại Quận 3 còn thiếu 1 nhân sự hỗ trợ kỹ thuật.
-          </p>
-        </article>
+        )}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -1197,16 +928,13 @@ export default function TenantAdminStaff({
             </button>
             <BeautifulSelect
               value={sortBy}
-              onChange={(event) =>
-                setSortBy(event.target.value as typeof sortBy)
-              }
+              onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
               aria-label="Sắp xếp nhân sự"
-              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
+              className="h-10 w-44 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
             >
-              <option value="REVENUE">Doanh thu cao nhất</option>
-              <option value="UTILIZATION">Công suất cao nhất</option>
-              <option value="RATING">Đánh giá cao nhất</option>
               <option value="NAME">Tên A–Z</option>
+              <option value="SHIFT">Ca bắt đầu sớm nhất</option>
+              <option value="COMMISSION">Hoa hồng cao nhất</option>
             </BeautifulSelect>
             <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1">
               <button
@@ -1232,14 +960,10 @@ export default function TenantAdminStaff({
         {showFilters && (
           <div className="grid gap-3 border-b border-slate-100 bg-violet-50/40 p-4 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
             <label>
-              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">
-                Vai trò
-              </span>
+              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">Vai trò</span>
               <BeautifulSelect
                 value={roleFilter}
-                onChange={(event) =>
-                  setRoleFilter(event.target.value as "ALL" | StaffRole)
-                }
+                onChange={(event) => setRoleFilter(event.target.value as "ALL" | StaffRole)}
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Tất cả vai trò</option>
@@ -1251,47 +975,32 @@ export default function TenantAdminStaff({
               </BeautifulSelect>
             </label>
             <label>
-              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">
-                Trạng thái ca
-              </span>
+              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">Trạng thái ca</span>
               <BeautifulSelect
                 value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(
-                    event.target.value as "ALL" | ActiveStaffStatus,
-                  )
-                }
+                onChange={(event) => setStatusFilter(event.target.value as "ALL" | ActiveStaffStatus)}
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
                 <option value="ALL">Tất cả trạng thái</option>
                 {Object.entries(statusMeta)
                   .filter(([value]) => value !== "INACTIVE")
                   .map(([value, meta]) => (
-                  <option key={value} value={value}>
-                    {meta.label}
-                  </option>
+                    <option key={value} value={value}>
+                      {meta.label}
+                    </option>
                   ))}
               </BeautifulSelect>
             </label>
             <label>
-              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">
-                Loại hợp đồng
-              </span>
+              <span className="mb-1.5 block text-caption font-black uppercase text-slate-500">Tài khoản đăng nhập</span>
               <BeautifulSelect
-                value={employmentFilter}
-                onChange={(event) =>
-                  setEmploymentFilter(
-                    event.target.value as "ALL" | EmploymentType,
-                  )
-                }
+                value={accountFilter}
+                onChange={(event) => setAccountFilter(event.target.value as "ALL" | "HAS" | "NONE")}
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               >
-                <option value="ALL">Tất cả loại hợp đồng</option>
-                {Object.entries(employmentLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                <option value="ALL">Tất cả hồ sơ</option>
+                <option value="HAS">Đã cấp tài khoản</option>
+                <option value="NONE">Chưa cấp tài khoản</option>
               </BeautifulSelect>
             </label>
             <button
@@ -1309,8 +1018,7 @@ export default function TenantAdminStaff({
             const count =
               status === "ALL"
                 ? activeBranchStaff.length
-                : activeBranchStaff.filter((member) => member.status === status)
-                    .length;
+                : activeBranchStaff.filter((member) => member.status === status).length;
             return (
               <button
                 key={status}
@@ -1318,127 +1026,79 @@ export default function TenantAdminStaff({
                 onClick={() => setStatusFilter(status)}
                 className={`flex h-7 min-h-0 items-center gap-1.5 border-0 bg-transparent px-0 text-caption font-bold shadow-none ${statusFilter === status ? "text-violet-700" : "text-slate-500"}`}
               >
-                {status !== "ALL" && (
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${statusMeta[status].dot}`}
-                  />
-                )}
+                {status !== "ALL" && <span className={`h-1.5 w-1.5 rounded-full ${statusMeta[status].dot}`} />}
                 {status === "ALL" ? "Tất cả nhân sự" : statusMeta[status].label}
-                <span
-                  className={`rounded-full px-1.5 py-0.5 ${statusFilter === status ? "bg-violet-100" : "bg-slate-100"}`}
-                >
+                <span className={`rounded-full px-1.5 py-0.5 ${statusFilter === status ? "bg-violet-100" : "bg-slate-100"}`}>
                   {count}
                 </span>
               </button>
             );
           })}
-          <span className="ml-auto text-caption text-slate-400">
-            {filteredStaff.length} hồ sơ phù hợp
-          </span>
+          <span className="ml-auto text-caption text-slate-400">{filteredStaff.length} hồ sơ phù hợp</span>
         </div>
 
-        {viewMode === "TABLE" ? (
+        {isLive && directory.loading ? (
+          <div className="px-6 py-14 text-center">
+            <p className="text-caption font-black text-slate-500">Đang tải hồ sơ nhân sự...</p>
+          </div>
+        ) : viewMode === "TABLE" ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1160px] border-collapse text-left">
+            <table className="w-full min-w-[1100px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/70 text-caption font-black uppercase tracking-wide text-slate-400">
                   <th className="px-5 py-3">Nhân viên</th>
                   <th className="px-4 py-3">Vai trò</th>
-                  <th className="px-4 py-3">Ca hôm nay</th>
-                  <th className="px-4 py-3">Lịch hẹn</th>
-                  <th className="px-4 py-3">Doanh thu</th>
-                  <th className="px-4 py-3">Hiệu suất</th>
+                  <th className="px-4 py-3">Chi nhánh</th>
+                  <th className="px-4 py-3">Ca làm</th>
+                  <th className="px-4 py-3">Liên hệ</th>
+                  <th className="px-4 py-3">Tài khoản</th>
                   <th className="px-4 py-3">Trạng thái</th>
                   <th className="px-5 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {pagedStaff.map((member) => (
-                  <tr
-                    key={member.id}
-                    className="text-caption text-slate-600 hover:bg-slate-50/70"
-                  >
+                  <tr key={member.id} className="text-caption text-slate-600 hover:bg-slate-50/70">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <span
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-caption font-black ${roleMeta[member.role].avatar}`}
-                        >
-                          {initials(member.name)}
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-caption font-black ${roleMeta[member.role].avatar}`}>
+                          {initials(member.fullName)}
                         </span>
                         <div>
-                          <p className="font-black text-slate-800">
-                            {member.name}
-                          </p>
-                          <p className="mt-1 text-caption text-slate-400">
-                            {member.id} · {branchLabels[member.branch]}
-                          </p>
+                          <p className="font-black text-slate-800">{member.fullName}</p>
+                          <p className="mt-1 text-caption text-slate-400">{member.id}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${roleMeta[member.role].badge}`}
-                      >
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${roleMeta[member.role].badge}`}>
                         {roleMeta[member.role].label}
                       </span>
-                      <p className="mt-1.5 text-caption text-slate-400">
-                        {employmentLabels[member.employmentType]}
-                      </p>
                     </td>
+                    <td className="px-4 py-3.5">{branchName(member.branchId)}</td>
                     <td className="px-4 py-3.5">
                       <p className="font-black text-slate-800">
                         {member.shiftStart}–{member.shiftEnd}
                       </p>
                       <p className="mt-1 text-caption text-slate-400">
-                        Chấm công {member.attendance}%
+                        Hoa hồng {Math.round(member.commissionRate * 1000) / 10}%
                       </p>
                     </td>
                     <td className="px-4 py-3.5">
-                      <p className="font-black text-slate-800">
-                        {member.appointments} lịch
-                      </p>
-                      <p className="mt-1 text-caption text-slate-400">
-                        {member.completed} hoàn thành
-                      </p>
+                      <p className="text-slate-700">{member.phone || "Chưa có số điện thoại"}</p>
+                      <p className="mt-1 truncate text-caption text-slate-400">{member.email || "Chưa có email"}</p>
                     </td>
+                    <td className="px-4 py-3.5">{accountBadge(member)}</td>
                     <td className="px-4 py-3.5">
-                      <p className="font-black text-slate-800">
-                        {formatCurrency(member.revenue)}
-                      </p>
-                      <div className="mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full rounded-full bg-violet-500"
-                          style={{
-                            width: `${Math.min(100, member.target ? (member.revenue / member.target) * 100 : 0)}%`,
-                          }}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <p
-                        className={`font-black ${performanceTone(member.utilization)}`}
-                      >
-                        {member.utilization}% công suất
-                      </p>
-                      <p className="mt-1 flex items-center gap-1 text-caption text-amber-600">
-                        <Star className="h-3 w-3 fill-amber-400" />
-                        {member.rating || "—"} · Trễ {member.lateCount} lần
-                      </p>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[member.status].badge}`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${statusMeta[member.status].dot}`}
-                        />
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${statusMeta[member.status].badge}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusMeta[member.status].dot}`} />
                         {statusMeta[member.status].label}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <button
                         type="button"
-                        onClick={() => setSelectedStaff(member)}
+                        onClick={() => setSelectedStaffId(member.id)}
                         className="border border-slate-200 bg-white px-3 text-caption font-bold text-slate-600 shadow-sm"
                       >
                         Xem hồ sơ
@@ -1452,15 +1112,21 @@ export default function TenantAdminStaff({
               <div className="px-6 py-14 text-center">
                 <Search className="mx-auto h-7 w-7 text-slate-300" />
                 <p className="mt-3 text-caption font-black text-slate-600">
-                  Không tìm thấy nhân sự phù hợp
+                  {staff.length ? "Không tìm thấy nhân sự phù hợp" : "Tiệm chưa có hồ sơ nhân viên nào"}
                 </p>
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="mt-2 border-0 bg-transparent px-2 text-caption font-bold text-violet-600 shadow-none"
-                >
-                  Xóa tìm kiếm và bộ lọc
-                </button>
+                {staff.length ? (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="mt-2 border-0 bg-transparent px-2 text-caption font-bold text-violet-600 shadow-none"
+                  >
+                    Xóa tìm kiếm và bộ lọc
+                  </button>
+                ) : (
+                  <p className="mt-1 text-caption text-slate-400">
+                    Bấm “Thêm nhân viên” để tạo hồ sơ đầu tiên.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1470,74 +1136,51 @@ export default function TenantAdminStaff({
               <button
                 key={member.id}
                 type="button"
-                onClick={() => setSelectedStaff(member)}
-                className="h-auto min-h-60 border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-violet-200 hover:shadow-md"
+                onClick={() => setSelectedStaffId(member.id)}
+                className="h-auto min-h-52 border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-violet-200 hover:shadow-md"
               >
                 <div className="flex items-start gap-3">
-                  <span
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-caption font-black ${roleMeta[member.role].avatar}`}
-                  >
-                    {initials(member.name)}
+                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-caption font-black ${roleMeta[member.role].avatar}`}>
+                    {initials(member.fullName)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-caption font-black text-slate-800">
-                      {member.name}
-                    </p>
+                    <p className="truncate text-caption font-black text-slate-800">{member.fullName}</p>
                     <p className="mt-1 text-caption text-slate-400">
-                      {roleMeta[member.role].label} ·{" "}
-                      {branchLabels[member.branch]}
+                      {roleMeta[member.role].label} · {branchName(member.branchId)}
                     </p>
                   </div>
-                  <span
-                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-caption font-bold ring-1 ${statusMeta[member.status].badge}`}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${statusMeta[member.status].dot}`}
-                    />
+                  <span className={`flex items-center gap-1 rounded-full px-2 py-1 text-caption font-bold ring-1 ${statusMeta[member.status].badge}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${statusMeta[member.status].dot}`} />
                     {statusMeta[member.status].label}
                   </span>
                 </div>
-                <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3">
-                  <div>
-                    <p className="text-caption text-slate-400">Lịch hẹn</p>
-                    <p className="mt-1 text-caption font-black text-slate-800">
-                      {member.appointments}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-caption text-slate-400">Doanh thu</p>
-                    <p className="mt-1 truncate text-caption font-black text-slate-800">
-                      {formatCompactMoney(member.revenue)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-caption text-slate-400">Công suất</p>
-                    <p
-                      className={`mt-1 text-caption font-black ${performanceTone(member.utilization)}`}
-                    >
-                      {member.utilization}%
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center justify-between text-caption">
-                  <span className="text-slate-400">
+                <div className="mt-4 space-y-1.5 text-caption text-slate-500">
+                  <p className="flex items-center gap-2">
+                    <Clock3 className="h-3.5 w-3.5 text-slate-400" />
                     Ca {member.shiftStart}–{member.shiftEnd}
-                  </span>
-                  <span className="flex items-center gap-1 font-bold text-amber-600">
-                    <Star className="h-3 w-3 fill-amber-400" />
-                    {member.rating || "—"}
-                  </span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <Phone className="h-3.5 w-3.5 text-slate-400" />
+                    {member.phone || "Chưa có số điện thoại"}
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <KeyRound className="h-3.5 w-3.5 text-slate-400" />
+                    {member.account
+                      ? `Tài khoản ${member.account.email}`
+                      : member.role === "RECEPTIONIST"
+                        ? "Chưa cấp tài khoản đăng nhập"
+                        : "Không cấp tài khoản đăng nhập"}
+                  </p>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {member.skills.slice(0, 3).map((skill) => (
-                    <span
-                      key={skill}
-                      className="rounded-md bg-violet-50 px-2 py-1 text-caption font-bold text-violet-600"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
+                {member.skills.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    {member.skills.slice(0, 3).map((skill) => (
+                      <span key={skill} className="rounded-md bg-violet-50 px-2 py-1 text-caption font-bold text-violet-600">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </button>
             ))}
           </div>
@@ -1555,13 +1198,10 @@ export default function TenantAdminStaff({
             itemLabel="hồ sơ"
             variant="violet"
           />
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-caption text-slate-400">
-            <span>Kỳ hiệu suất tháng 07/2026</span>
+          <div className="mt-2 flex items-center justify-end text-caption text-slate-400">
             <span className="flex items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5" />
-              {selectedBranch === "ALL"
-                ? "Tất cả chi nhánh"
-                : branchLabels[selectedBranch as BranchCode]}
+              {selectedBranch === "ALL" ? "Tất cả chi nhánh" : branchName(selectedBranch)}
             </span>
           </div>
         </div>
@@ -1575,263 +1215,85 @@ export default function TenantAdminStaff({
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xs font-black text-slate-900">
-                  Nhân sự ngừng hoạt động
-                </h2>
+                <h2 className="text-xs font-black text-slate-900">Nhân sự ngừng hoạt động</h2>
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-caption font-black text-slate-600 ring-1 ring-slate-200">
                   {inactiveBranchStaff.length}
                 </span>
               </div>
               <p className="mt-1 text-caption leading-4 text-slate-500">
-                Hồ sơ được lưu riêng, không xuất hiện trong danh sách nhân viên,
-                lịch phân ca, xếp hạng hoặc chỉ số đội ngũ.
+                Hồ sơ được giữ lại để tên nhân viên còn hiện đúng trong lịch hẹn và hóa đơn cũ. Không
+                chiếm hạn mức nhân sự của gói.
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="w-fit rounded-full bg-rose-50 px-3 py-1.5 text-caption font-bold text-rose-700 ring-1 ring-rose-200">
-              Kho hồ sơ nội bộ
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                setIsInactiveSectionExpanded((current) => !current)
-              }
-              aria-expanded={isInactiveSectionExpanded}
-              aria-controls="inactive-staff-list"
-              className="flex h-9 items-center gap-1.5 border border-slate-200 bg-white px-3 text-caption font-black text-slate-600 shadow-sm"
-            >
-              {isInactiveSectionExpanded ? (
-                <ChevronUp className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
-              )}
-              {isInactiveSectionExpanded ? "Thu gọn" : "Mở rộng"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsInactiveSectionExpanded((current) => !current)}
+            aria-expanded={isInactiveSectionExpanded}
+            aria-controls="inactive-staff-list"
+            className="flex h-9 w-fit items-center gap-1.5 border border-slate-200 bg-white px-3 text-caption font-black text-slate-600 shadow-sm"
+          >
+            {isInactiveSectionExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {isInactiveSectionExpanded ? "Thu gọn" : "Mở rộng"}
+          </button>
         </div>
 
         <div id="inactive-staff-list">
-        {isInactiveSectionExpanded && (inactiveBranchStaff.length ? (
-          <div className="grid gap-3 p-4 lg:grid-cols-2">
-            {inactiveBranchStaff.map((member) => (
-              <article
-                key={member.id}
-                className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center"
-              >
-                <button
-                  type="button"
-                  onClick={() => setSelectedStaff(member)}
-                  className="flex h-auto min-w-0 flex-1 items-center gap-3 border-0 bg-transparent p-0 text-left shadow-none"
-                >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-caption font-black text-slate-600">
-                    {initials(member.name)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-caption font-black text-slate-800">
-                      {member.name}
-                    </span>
-                    <span className="mt-1 block text-caption text-slate-500">
-                      {member.id} · {roleMeta[member.role].label}
-                    </span>
-                    <span className="mt-1 block text-caption text-slate-400">
-                      {branchLabels[member.branch]} · Bắt đầu {formatDate(member.startDate)}
-                    </span>
-                  </span>
-                </button>
-                <div className="flex shrink-0 items-center gap-2 sm:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedStaff(member)}
-                    className="border border-slate-200 bg-white px-3 text-caption font-bold text-slate-600 shadow-sm"
+          {isInactiveSectionExpanded &&
+            (inactiveBranchStaff.length ? (
+              <div className="grid gap-3 p-4 lg:grid-cols-2">
+                {inactiveBranchStaff.map((member) => (
+                  <article
+                    key={member.id}
+                    className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center"
                   >
-                    Xem hồ sơ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => reactivateStaff(member)}
-                    disabled={!canManage}
-                    className="flex items-center gap-1.5 border border-violet-200 bg-violet-50 px-3 text-caption font-black text-violet-700 shadow-sm disabled:opacity-50"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Kích hoạt lại
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="px-5 py-8 text-center">
-            <Archive className="mx-auto h-6 w-6 text-slate-300" />
-            <p className="mt-2 text-caption font-black text-slate-600">
-              Chưa có hồ sơ ngừng hoạt động
-            </p>
-            <p className="mt-1 text-caption text-slate-400">
-              Khi đổi trạng thái một nhân viên, hồ sơ sẽ tự động chuyển vào đây.
-            </p>
-          </div>
-        ))}
-        </div>
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-3">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xs font-black text-slate-900">
-                Bảng xếp hạng tháng
-              </h2>
-              <p className="mt-1 text-caption text-slate-400">
-                Theo doanh thu dịch vụ
-              </p>
-            </div>
-            <Award className="h-4.5 w-4.5 text-amber-500" />
-          </div>
-          <div className="mt-3 space-y-1">
-            {[...serviceStaff]
-              .sort((a, b) => b.revenue - a.revenue)
-              .slice(0, 3)
-              .map((member, index) => (
-                <button
-                  key={member.id}
-                  type="button"
-                  onClick={() => setSelectedStaff(member)}
-                  className="flex h-auto w-full items-center gap-3 border-0 bg-transparent px-0 py-2.5 text-left shadow-none"
-                >
-                  <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-caption font-black ${index === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}
-                  >
-                    {index + 1}
-                  </span>
-                  <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg text-caption font-black ${roleMeta[member.role].avatar}`}
-                  >
-                    {initials(member.name)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-caption font-black text-slate-700">
-                      {member.name}
-                    </span>
-                    <span className="mt-1 block text-caption text-slate-400">
-                      {member.appointments} lịch · {member.utilization}% công
-                      suất
-                    </span>
-                  </span>
-                  <span className="text-caption font-black text-slate-800">
-                    {formatCompactMoney(member.revenue)}
-                  </span>
-                </button>
-              ))}
-          </div>
-        </article>
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xs font-black text-slate-900">
-                Nghỉ phép sắp tới
-              </h2>
-              <p className="mt-1 text-caption text-slate-400">
-                Yêu cầu đã duyệt trong 14 ngày
-              </p>
-            </div>
-            <CalendarDays className="h-4.5 w-4.5 text-violet-500" />
-          </div>
-          <div className="mt-4 space-y-3">
-            {[
-              {
-                name: "Yến Nhi",
-                day: "16–17",
-                month: "THG 07",
-                fullDate: "16–17/07/2026",
-                reason: "Việc gia đình",
-                days: "2 ngày",
-              },
-              {
-                name: "Minh Khang",
-                day: "22",
-                month: "THG 07",
-                fullDate: "22/07/2026",
-                reason: "Nghỉ phép năm",
-                days: "1 ngày",
-              },
-              {
-                name: "Hà My",
-                day: "27–28",
-                month: "THG 07",
-                fullDate: "27–28/07/2026",
-                reason: "Nghỉ phép năm",
-                days: "2 ngày",
-              },
-            ]
-              .filter((item) =>
-                activeBranchStaff.some((member) => member.name === item.name),
-              )
-              .map((item) => (
-              <div
-                key={`${item.name}-${item.fullDate}`}
-                className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3"
-              >
-                <span
-                  className="flex h-14 w-16 shrink-0 flex-col items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 px-1 text-center text-white shadow-md shadow-violet-100"
-                  aria-label={item.fullDate}
-                >
-                  <span className="whitespace-nowrap text-caption font-black leading-none">
-                    {item.day}
-                  </span>
-                  <span className="mt-1 whitespace-nowrap text-caption font-bold uppercase tracking-wide text-violet-100">
-                    {item.month}
-                  </span>
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-caption font-black text-slate-700">
-                    {item.name}
-                  </p>
-                  <p className="mt-1 text-caption text-slate-400">
-                    {item.reason}
-                  </p>
-                </div>
-                <span className="text-caption font-bold text-slate-500">
-                  {item.days}
-                </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStaffId(member.id)}
+                      className="flex h-auto min-w-0 flex-1 items-center gap-3 border-0 bg-transparent p-0 text-left shadow-none"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-caption font-black text-slate-600">
+                        {initials(member.fullName)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-caption font-black text-slate-800">{member.fullName}</span>
+                        <span className="mt-1 block text-caption text-slate-500">
+                          {member.id} · {roleMeta[member.role].label}
+                        </span>
+                        <span className="mt-1 block text-caption text-slate-400">{branchName(member.branchId)}</span>
+                      </span>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-2 sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStaffId(member.id)}
+                        className="border border-slate-200 bg-white px-3 text-caption font-bold text-slate-600 shadow-sm"
+                      >
+                        Xem hồ sơ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStatusTarget({ staff: member, status: "OFF_SHIFT" })}
+                        disabled={!canManage}
+                        className="flex items-center gap-1.5 border border-violet-200 bg-violet-50 px-3 text-caption font-black text-violet-700 shadow-sm disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Nhận lại
+                      </button>
+                    </div>
+                  </article>
+                ))}
               </div>
-              ))}
-          </div>
-        </article>
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xs font-black text-slate-900">
-                Sức khỏe đội ngũ
-              </h2>
-              <p className="mt-1 text-caption text-slate-400">
-                Chỉ số nhân sự tháng 07/2026
-              </p>
-            </div>
-            <Sparkles className="h-4.5 w-4.5 text-emerald-500" />
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-caption text-slate-400">Đúng giờ</p>
-              <p className="mt-1 text-lg font-black text-slate-900">96%</p>
-            </div>
-            <div>
-              <p className="text-caption text-slate-400">Ổn định</p>
-              <p className="mt-1 text-lg font-black text-slate-900">94%</p>
-            </div>
-            <div>
-              <p className="text-caption text-slate-400">CSAT</p>
-              <p className="mt-1 text-lg font-black text-emerald-600">4.8</p>
-            </div>
-          </div>
-          <div className="mt-4 rounded-xl bg-emerald-50 p-3">
-            <p className="text-caption font-black text-emerald-800">
-              Gợi ý đào tạo
-            </p>
-            <p className="mt-1 text-caption leading-4 text-emerald-700">
-              3 nhân viên phù hợp khóa nâng cao kỹ thuật màu và tư vấn bán thêm.
-            </p>
-          </div>
-        </article>
+            ) : (
+              <div className="px-5 py-8 text-center">
+                <Archive className="mx-auto h-6 w-6 text-slate-300" />
+                <p className="mt-2 text-caption font-black text-slate-600">Chưa có hồ sơ ngừng hoạt động</p>
+                <p className="mt-1 text-caption text-slate-400">
+                  Khi cho một nhân viên nghỉ việc, hồ sơ sẽ tự động chuyển vào đây.
+                </p>
+              </div>
+            ))}
+        </div>
       </section>
 
       {selectedStaff && (
@@ -1839,37 +1301,30 @@ export default function TenantAdminStaff({
           <button
             type="button"
             aria-label="Đóng hồ sơ nhân viên"
-            onClick={() => setSelectedStaff(null)}
+            onClick={() => setSelectedStaffId(null)}
             className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
           />
-          <aside className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <aside className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
               <div className="flex min-w-0 items-center gap-3">
-                <span
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-caption font-black ${roleMeta[selectedStaff.role].avatar}`}
-                >
-                  {initials(selectedStaff.name)}
+                <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-caption font-black ${roleMeta[selectedStaff.role].avatar}`}>
+                  {initials(selectedStaff.fullName)}
                 </span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h2 className="truncate text-base font-black text-slate-900">
-                      {selectedStaff.name}
-                    </h2>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${statusMeta[selectedStaff.status].badge}`}
-                    >
+                    <h2 className="truncate text-base font-black text-slate-900">{selectedStaff.fullName}</h2>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${statusMeta[selectedStaff.status].badge}`}>
                       {statusMeta[selectedStaff.status].label}
                     </span>
                   </div>
                   <p className="mt-1 text-caption text-slate-400">
-                    {selectedStaff.id} · {roleMeta[selectedStaff.role].label} ·{" "}
-                    {branchLabels[selectedStaff.branch]}
+                    {selectedStaff.id} · {roleMeta[selectedStaff.role].label} · {branchName(selectedStaff.branchId)}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedStaff(null)}
+                onClick={() => setSelectedStaffId(null)}
                 aria-label="Đóng"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
               >
@@ -1877,410 +1332,354 @@ export default function TenantAdminStaff({
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-caption text-slate-400">Lịch hẹn</p>
-                  <p className="mt-1 text-lg font-black text-slate-900">
-                    {selectedStaff.appointments}
-                  </p>
+              <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                <div>
+                  <dt className="text-caption text-slate-400">Số điện thoại</dt>
+                  <dd className="mt-1 flex items-center gap-2 text-caption font-bold text-slate-700">
+                    <Phone className="h-3.5 w-3.5 text-slate-400" />
+                    {selectedStaff.phone || "Chưa có"}
+                  </dd>
                 </div>
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-caption text-slate-400">Doanh thu</p>
-                  <p className="ta-money mt-1 text-right text-body font-black text-slate-900">
-                    {formatCompactMoney(selectedStaff.revenue)}
-                  </p>
+                <div className="min-w-0">
+                  <dt className="text-caption text-slate-400">Email</dt>
+                  <dd className="mt-1 flex items-center gap-2 truncate text-caption font-bold text-slate-700">
+                    <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    {selectedStaff.email || "Chưa có"}
+                  </dd>
                 </div>
-                <div className="rounded-xl bg-violet-50 p-3">
-                  <p className="text-caption text-violet-400">Công suất</p>
-                  <p className="mt-1 text-lg font-black text-violet-700">
-                    {selectedStaff.utilization}%
-                  </p>
-                </div>
-                <div className="rounded-xl bg-amber-50 p-3">
-                  <p className="text-caption text-amber-500">Đánh giá</p>
-                  <p className="mt-1 flex items-center gap-1 text-lg font-black text-amber-700">
-                    <Star className="h-3.5 w-3.5 fill-amber-400" />
-                    {selectedStaff.rating || "—"}
-                  </p>
-                </div>
-              </div>
-              <div
-                className={`mt-4 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${selectedStaff.status === "WORKING" ? "border-emerald-200 bg-emerald-50/70" : selectedStaff.status === "OFF_SHIFT" ? "border-slate-200 bg-slate-50" : selectedStaff.status === "INACTIVE" ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`}
-              >
-                <div className="flex items-start gap-3">
-                  <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${selectedStaff.status === "WORKING" ? "bg-emerald-600 text-white" : selectedStaff.status === "OFF_SHIFT" ? "bg-slate-200 text-slate-600" : selectedStaff.status === "INACTIVE" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}
-                  >
-                    <Clock3 className="h-4.5 w-4.5" />
-                  </span>
-                  <div>
-                    <p className="text-caption font-black uppercase tracking-wide text-slate-500">
-                      Trạng thái ca hôm nay
-                    </p>
-                    <p className="mt-1 text-body font-black text-slate-900">
-                      {selectedStaff.status === "WORKING"
-                        ? "Đang trong ca làm việc"
-                        : selectedStaff.status === "OFF_SHIFT"
-                          ? "Ngoài ca làm việc"
-                          : selectedStaff.status === "LEAVE"
-                            ? "Đang nghỉ phép"
-                            : "Nhân sự ngừng hoạt động"}
-                    </p>
-                    <p className="mt-1 text-caption leading-4 text-slate-500">
-                      {selectedStaff.status === "WORKING"
-                        ? `Ghi nhận bắt đầu lúc ${selectedStaff.lastClockIn || selectedStaff.shiftStart}. Nhân viên đang sẵn sàng nhận lịch.`
-                        : selectedStaff.status === "OFF_SHIFT"
-                          ? selectedStaff.lastClockOut
-                            ? `Đã kết thúc ca gần nhất lúc ${selectedStaff.lastClockOut}.`
-                            : "Chưa bắt đầu ca hôm nay hoặc ca đã kết thúc."
-                          : selectedStaff.status === "LEAVE"
-                            ? "Không thể bắt đầu ca khi hồ sơ đang ở trạng thái nghỉ phép."
-                            : "Cần kích hoạt lại hồ sơ trước khi chấm công."}
-                    </p>
-                  </div>
-                </div>
-                <div className="shrink-0 rounded-xl border border-white/80 bg-white px-4 py-3 text-left shadow-sm sm:text-right">
-                  <p className="text-caption font-bold text-slate-400">
-                    Ca được phân công
-                  </p>
-                  <p className="mt-1 text-caption font-black text-slate-800">
+                <div>
+                  <dt className="text-caption text-slate-400">Ca làm mặc định</dt>
+                  <dd className="mt-1 flex items-center gap-2 text-caption font-bold text-slate-700">
+                    <Clock3 className="h-3.5 w-3.5 text-slate-400" />
                     {selectedStaff.shiftStart}–{selectedStaff.shiftEnd}
-                  </p>
+                  </dd>
                 </div>
-              </div>
-              <div className="mt-5 rounded-2xl border border-slate-200 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-caption font-black uppercase tracking-wide text-slate-400">
-                    Thông tin nhân sự
+                <div>
+                  <dt className="text-caption text-slate-400">Hoa hồng dịch vụ</dt>
+                  <dd className="mt-1 flex items-center gap-2 text-caption font-bold text-slate-700">
+                    <Percent className="h-3.5 w-3.5 text-slate-400" />
+                    {Math.round(selectedStaff.commissionRate * 1000) / 10}% doanh thu dịch vụ nhân viên thực hiện
+                  </dd>
+                </div>
+              </dl>
+
+              <div className="mt-6 border-t border-slate-100 pt-5">
+                <p className="text-caption font-black uppercase tracking-wide text-slate-400">Kỹ năng chuyên môn</p>
+                {selectedStaff.skills.length ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {selectedStaff.skills.map((skill) => (
+                      <span key={skill} className="rounded-md bg-fuchsia-50 px-2 py-1 text-caption font-bold text-fuchsia-700">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-caption text-slate-400">
+                    Chưa ghi nhận kỹ năng. Kỹ năng chỉ để tham khảo khi phân công, hệ thống không cưỡng chế.
                   </p>
-                  <div className="flex gap-2">
-                    <a
-                      href={`tel:${selectedStaff.phone.replace(/\s/g, "")}`}
-                      aria-label="Gọi nhân viên"
-                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"
-                    >
-                      <Phone className="h-4 w-4" />
-                    </a>
+                )}
+              </div>
+
+              <div className="mt-6 border-t border-slate-100 pt-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-caption font-black uppercase tracking-wide text-slate-400">Tài khoản đăng nhập</p>
+                    {selectedStaff.account ? (
+                      <div className="mt-2">
+                        <p className="text-caption font-bold text-slate-700">{selectedStaff.account.email}</p>
+                        <p className="mt-1 text-caption text-slate-400">
+                          {selectedStaff.account.username ? `Tên đăng nhập ${selectedStaff.account.username} · ` : ""}
+                          {selectedStaff.account.status === "ACTIVE" ? "Đang hoạt động" : "Đã bị vô hiệu hóa"}
+                        </p>
+                      </div>
+                    ) : selectedStaff.role === "RECEPTIONIST" ? (
+                      <p className="mt-2 max-w-md text-caption leading-5 text-slate-500">
+                        Hồ sơ này chưa có quyền vào quầy lễ tân. Cấp tài khoản để nhân viên đăng nhập
+                        được vào cổng lễ tân.
+                      </p>
+                    ) : (
+                      <p className="mt-2 max-w-md text-caption leading-5 text-slate-500">
+                        Chỉ hồ sơ lễ tân mới được cấp tài khoản đăng nhập. Kỹ thuật viên làm việc theo
+                        lịch do lễ tân và chủ tiệm phân công.
+                      </p>
+                    )}
+                  </div>
+                  {!selectedStaff.account && selectedStaff.role === "RECEPTIONIST" && selectedStaff.status !== "INACTIVE" && (
                     <button
                       type="button"
-                      aria-label="Nhắn tin"
-                      className="flex h-9 w-9 items-center justify-center border-0 bg-violet-50 p-0 text-violet-600 shadow-none"
+                      onClick={() => openGrantAccount(selectedStaff)}
+                      disabled={!canManage}
+                      className="flex h-10 items-center gap-2 border border-violet-200 bg-violet-50 px-4 text-caption font-black text-violet-700 shadow-sm disabled:opacity-50"
                     >
-                      <MessageCircle className="h-4 w-4" />
+                      <KeyRound className="h-3.5 w-3.5" />
+                      Cấp tài khoản đăng nhập
                     </button>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="flex gap-2">
-                    <Phone className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
-                    <div>
-                      <p className="text-caption text-slate-400">Số điện thoại</p>
-                      <p className="mt-1 text-caption font-bold text-slate-700">
-                        {selectedStaff.phone}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Mail className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
-                    <div className="min-w-0">
-                      <p className="text-caption text-slate-400">Email</p>
-                      <p className="mt-1 truncate text-caption font-bold text-slate-700">
-                        {selectedStaff.email}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <BriefcaseBusiness className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
-                    <div>
-                      <p className="text-caption text-slate-400">Hợp đồng</p>
-                      <p className="mt-1 text-caption font-bold text-slate-700">
-                        {employmentLabels[selectedStaff.employmentType]} · từ{" "}
-                        {formatDate(selectedStaff.startDate)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Clock3 className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
-                    <div>
-                      <p className="text-caption text-slate-400">Ca mặc định</p>
-                      <p className="mt-1 text-caption font-bold text-slate-700">
-                        {selectedStaff.shiftStart}–{selectedStaff.shiftEnd}
-                      </p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
-              <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-caption font-bold text-slate-400">
-                      Mục tiêu doanh thu tháng
-                    </p>
-                    <p className="mt-1 text-lg font-black">
-                      {formatCurrency(selectedStaff.target)}
-                    </p>
-                  </div>
-                  <Target className="h-4.5 w-4.5 text-violet-300" />
-                </div>
-                <div className="mt-3 flex items-center justify-between text-caption text-slate-400">
-                  <span>
-                    Đã đạt{" "}
-                    {selectedStaff.target
-                      ? Math.round(
-                          (selectedStaff.revenue / selectedStaff.target) * 100,
-                        )
-                      : 0}
-                    %
-                  </span>
-                  <span>{formatCurrency(selectedStaff.revenue)}</span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-violet-400 to-cyan-300"
-                    style={{
-                      width: `${Math.min(100, selectedStaff.target ? (selectedStaff.revenue / selectedStaff.target) * 100 : 0)}%`,
-                    }}
-                  />
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-3">
-                  <div>
-                    <p className="text-caption text-slate-500">Hoa hồng</p>
-                    <p className="mt-1 text-caption font-black">
-                      {selectedStaff.commissionRate}%
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-caption text-slate-500">Tạm tính</p>
-                    <p className="mt-1 text-caption font-black">
-                      {formatCurrency(selectedStaff.commissionEarned)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-caption text-slate-500">Chấm công</p>
-                    <p className="mt-1 text-caption font-black">
-                      {selectedStaff.attendance}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-caption font-black text-slate-800">
-                      Lịch làm việc tuần này
-                    </h3>
-                    <p className="mt-1 text-caption font-medium text-slate-500">
-                      13/07–19/07/2026
-                    </p>
-                  </div>
-                  <CalendarDays className="h-4 w-4 text-violet-500" />
-                </div>
-                <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-7">
-                  {selectedStaff.schedule.map((day) => (
-                    <div
-                      key={day.day}
-                      className={`flex min-h-20 flex-col items-center justify-center rounded-xl px-2 py-3 text-center ${day.status === "WORK" ? "bg-violet-50" : day.status === "LEAVE" ? "bg-amber-50" : "bg-slate-100"}`}
+
+              <div className="mt-6 border-t border-slate-100 pt-5">
+                <p className="text-caption font-black uppercase tracking-wide text-slate-400">Trạng thái làm việc</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(Object.keys(statusMeta) as StaffStatus[]).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setStatusTarget({ staff: selectedStaff, status })}
+                      disabled={!canManage || selectedStaff.status === status}
+                      className={`flex h-9 items-center gap-1.5 border px-3 text-caption font-bold shadow-sm disabled:opacity-45 ${
+                        selectedStaff.status === status
+                          ? "border-violet-200 bg-violet-50 text-violet-700"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
                     >
-                      <p className="text-caption font-black text-slate-600">
-                        {day.day}
-                      </p>
-                      <p className="mt-1 text-caption font-medium text-slate-400">
-                        {day.date}
-                      </p>
-                      <p
-                        className={`mt-2 whitespace-nowrap text-caption font-black leading-none ${day.status === "WORK" ? "text-violet-700" : day.status === "LEAVE" ? "text-amber-700" : "text-slate-500"}`}
-                      >
-                        {day.status === "WORK"
-                          ? day.shift.replace(":00", "h").replace(":00", "h")
-                          : day.status === "LEAVE"
-                            ? "Nghỉ phép"
-                            : "Nghỉ"}
-                      </p>
-                    </div>
+                      <span className={`h-1.5 w-1.5 rounded-full ${statusMeta[status].dot}`} />
+                      {status === "INACTIVE" ? "Cho nghỉ việc" : statusMeta[status].label}
+                    </button>
                   ))}
                 </div>
-              </div>
-              <div className="mt-5">
-                <p className="text-caption font-black uppercase tracking-wide text-slate-400">
-                  Kỹ năng chuyên môn
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {selectedStaff.skills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="rounded-md bg-fuchsia-50 px-2 py-1 text-caption font-bold text-fuchsia-700"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-5 rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
-                <div className="flex items-start gap-3">
-                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-                  <div>
-                    <p className="text-caption font-black text-violet-800">
-                      Quyền truy cập
-                    </p>
-                    <p className="mt-1 text-caption leading-4 text-violet-600">
-                      {selectedStaff.permissions.length
-                        ? selectedStaff.permissions.join(" · ")
-                        : "Chưa cấp quyền nghiệp vụ"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-                <p className="text-caption font-black uppercase tracking-wide text-slate-400">
-                  Ghi chú quản lý
-                </p>
-                <p className="mt-2 text-caption leading-5 text-slate-600">
-                  {selectedStaff.notes || "Chưa có ghi chú cho nhân viên này."}
-                </p>
+                <p className="mt-2 text-caption leading-4 text-slate-400">{statusChangeNotes[selectedStaff.status]}</p>
               </div>
             </div>
             <div className="border-t border-slate-100 bg-slate-50 p-4 sm:px-6">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => openEdit(selectedStaff)}
-                  disabled={!canManage}
-                  className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Chỉnh sửa
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShiftAction({
-                      type:
-                        selectedStaff.status === "WORKING" ? "END" : "START",
-                      staff: selectedStaff,
-                    })
-                  }
-                  disabled={
-                    !canManage ||
-                    !["WORKING", "OFF_SHIFT"].includes(selectedStaff.status)
-                  }
-                  className={`flex h-11 flex-1 items-center justify-center gap-2 border px-4 text-caption font-black text-white shadow-lg disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none ${selectedStaff.status === "WORKING" ? "border-rose-700 bg-rose-600 shadow-rose-100" : "border-violet-700 bg-violet-600 shadow-violet-200"}`}
-                >
-                  <Clock3 className="h-4 w-4" />
-                  {selectedStaff.status === "WORKING"
-                    ? "Kết thúc ca"
-                    : selectedStaff.status === "OFF_SHIFT"
-                      ? "Bắt đầu ca"
-                      : selectedStaff.status === "LEAVE"
-                        ? "Đang nghỉ phép"
-                        : "Hồ sơ ngừng hoạt động"}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => openEdit(selectedStaff)}
+                disabled={!canManage}
+                className="flex h-11 w-full items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none sm:w-auto"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Chỉnh sửa hồ sơ
+              </button>
             </div>
           </aside>
         </div>
       )}
 
-      {shiftAction && (
+      {statusTarget && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
           <button
             type="button"
-            aria-label="Đóng xác nhận ca làm"
-            onClick={() => setShiftAction(null)}
+            aria-label="Đóng xác nhận đổi trạng thái"
+            onClick={() => setStatusTarget(null)}
             className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
           />
           <section
             role="alertdialog"
             aria-modal="true"
-            aria-labelledby="shift-action-title"
+            aria-labelledby="staff-status-title"
             className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
           >
             <header className="flex items-start gap-3 border-b border-slate-100 p-5">
-              <span
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${shiftAction.type === "START" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}
-              >
-                <Clock3 className="h-5 w-5" />
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${statusTarget.status === "INACTIVE" ? "bg-rose-50 text-rose-600" : "bg-violet-50 text-violet-600"}`}>
+                {statusTarget.status === "INACTIVE" ? <Archive className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-caption font-black uppercase tracking-wide text-slate-400">
-                  Xác nhận chấm công
-                </p>
-                <h2
-                  id="shift-action-title"
-                  className="mt-1 text-base font-black text-slate-900"
-                >
-                  {shiftAction.type === "START"
-                    ? "Bắt đầu ca làm việc?"
-                    : "Kết thúc ca làm việc?"}
+                <p className="text-caption font-black uppercase tracking-wide text-slate-400">Đổi trạng thái nhân sự</p>
+                <h2 id="staff-status-title" className="mt-1 text-base font-black text-slate-900">
+                  {statusTarget.status === "INACTIVE"
+                    ? `Cho ${statusTarget.staff.fullName} nghỉ việc?`
+                    : `Chuyển sang “${statusMeta[statusTarget.status].label}”?`}
                 </h2>
                 <p className="mt-1 text-caption font-bold text-slate-500">
-                  {shiftAction.staff.name} · {shiftAction.staff.shiftStart}–
-                  {shiftAction.staff.shiftEnd}
+                  {statusTarget.staff.fullName} · {branchName(statusTarget.staff.branchId)}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShiftAction(null)}
+                onClick={() => setStatusTarget(null)}
                 aria-label="Đóng"
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-400 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             </header>
-            <div className="space-y-4 p-5">
-              <div
-                className={`rounded-2xl border p-4 ${shiftAction.type === "START" ? "border-emerald-100 bg-emerald-50" : "border-rose-100 bg-rose-50"}`}
-              >
-                <p
-                  className={`text-caption font-black ${shiftAction.type === "START" ? "text-emerald-800" : "text-rose-800"}`}
-                >
-                  {shiftAction.type === "START"
-                    ? "Nhân viên sẽ được đánh dấu đang trong ca"
-                    : "Nhân viên sẽ được đánh dấu ngoài ca"}
-                </p>
-                <p
-                  className={`mt-2 text-caption leading-4 ${shiftAction.type === "START" ? "text-emerald-700" : "text-rose-700"}`}
-                >
-                  {shiftAction.type === "START"
-                    ? "Hệ thống ghi nhận giờ vào ca thực tế và cho phép phân công lịch mới cho nhân viên trong ngày."
-                    : "Hệ thống ghi nhận giờ ra ca thực tế và ngừng đề xuất nhân viên cho các lịch mới. Những lịch đã phân công vẫn được giữ nguyên."}
+            <div className="p-5">
+              <div className={`rounded-2xl border p-4 ${statusTarget.status === "INACTIVE" ? "border-rose-100 bg-rose-50" : "border-slate-100 bg-slate-50"}`}>
+                <p className={`text-caption leading-5 ${statusTarget.status === "INACTIVE" ? "text-rose-700" : "text-slate-600"}`}>
+                  {statusChangeNotes[statusTarget.status]}
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4">
-                <div>
-                  <p className="text-caption font-bold text-slate-400">
-                    Chi nhánh
-                  </p>
-                  <p className="mt-1 text-caption font-black text-slate-700">
-                    {branchLabels[shiftAction.staff.branch]}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-caption font-bold text-slate-400">
-                    Thời điểm ghi nhận
-                  </p>
-                  <p className="mt-1 text-caption font-black text-slate-700">
-                    Theo giờ hệ thống hiện tại
-                  </p>
-                </div>
-              </div>
+              {statusTarget.status !== "INACTIVE" && statusTarget.staff.status === "INACTIVE" && (
+                <p className="mt-3 text-caption leading-4 text-slate-500">
+                  Nhận lại người cũ vẫn tính vào hạn mức nhân sự của gói. Nếu gói đã đủ chỗ, máy chủ
+                  sẽ từ chối và báo lại ngay.
+                </p>
+              )}
             </div>
             <footer className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4">
               <button
                 type="button"
-                onClick={() => setShiftAction(null)}
+                onClick={() => setStatusTarget(null)}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 type="button"
-                onClick={confirmShiftAction}
-                className={`flex h-10 items-center gap-2 rounded-xl border px-5 text-caption font-black text-white shadow-lg cursor-pointer transition-colors ${shiftAction.type === "START" ? "border-emerald-700 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100" : "border-rose-700 bg-rose-600 hover:bg-rose-700 shadow-rose-100"}`}
+                onClick={confirmStatusChange}
+                disabled={saving}
+                className={`flex h-10 items-center gap-2 rounded-xl border px-5 text-caption font-black text-white shadow-lg cursor-pointer transition-colors disabled:opacity-60 ${statusTarget.status === "INACTIVE" ? "border-rose-700 bg-rose-600 hover:bg-rose-700 shadow-rose-100" : "border-violet-700 bg-violet-600 hover:bg-violet-700 shadow-violet-200"}`}
               >
-                <Clock3 className="h-4 w-4" />
-                {shiftAction.type === "START"
-                  ? "Xác nhận bắt đầu ca"
-                  : "Xác nhận kết thúc ca"}
+                {saving ? "Đang lưu..." : statusTarget.status === "INACTIVE" ? "Xác nhận cho nghỉ việc" : "Xác nhận đổi trạng thái"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {grantTarget && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <button
+            type="button"
+            aria-label="Đóng biểu mẫu cấp tài khoản"
+            onClick={() => setGrantTarget(null)}
+            className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+          />
+          <form
+            onSubmit={submitGrantAccount}
+            className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"
+          >
+            <div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
+              <div>
+                <h2 className="text-base font-black text-slate-900">Cấp tài khoản đăng nhập</h2>
+                <p className="mt-1 text-caption text-slate-500">
+                  {grantTarget.fullName} · {roleMeta[grantTarget.role].label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGrantTarget(null)}
+                aria-label="Đóng"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white p-0 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5 sm:p-6">
+              {formError && (
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">{formError}</div>
+              )}
+              <div className="flex items-start gap-3 rounded-xl border border-violet-100 bg-violet-50/70 p-3">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                <p className="text-caption leading-4 text-violet-700">
+                  Mật khẩu do máy chủ sinh và chỉ hiện <b>đúng một lần</b> ngay sau khi cấp. Hệ thống
+                  không gửi email và không có đường đọc lại.
+                </p>
+              </div>
+              <label className="block">
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Email đăng nhập *</span>
+                <input
+                  type="email"
+                  value={grantForm.email}
+                  onChange={(event) => setGrantForm((current) => ({ ...current, email: event.target.value }))}
+                  className={fieldErrors.email ? errorInputClass : inputClass}
+                  placeholder="letan@naile.vn"
+                />
+                {fieldErrors.email && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.email}</span>}
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">Tên đăng nhập</span>
+                  <input
+                    value={grantForm.username}
+                    onChange={(event) => setGrantForm((current) => ({ ...current, username: event.target.value }))}
+                    className={fieldErrors.username ? errorInputClass : inputClass}
+                    placeholder="Không bắt buộc"
+                  />
+                  {fieldErrors.username && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.username}</span>}
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-caption font-bold text-slate-600">Tên hiển thị</span>
+                  <input
+                    value={grantForm.displayName}
+                    onChange={(event) => setGrantForm((current) => ({ ...current, displayName: event.target.value }))}
+                    className={fieldErrors.displayName ? errorInputClass : inputClass}
+                  />
+                  {fieldErrors.displayName && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.displayName}</span>}
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6">
+              <button
+                type="button"
+                onClick={() => setGrantTarget(null)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex h-10 items-center gap-2 rounded-xl border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 cursor-pointer transition-colors disabled:opacity-60"
+              >
+                <KeyRound className="h-4 w-4" />
+                {saving ? "Đang cấp..." : "Cấp tài khoản"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {grantedPassword && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="granted-password-title"
+            className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
+          >
+            <header className="flex items-start gap-3 border-b border-slate-100 p-5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                <Sparkles className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-caption font-black uppercase tracking-wide text-slate-400">Đã cấp tài khoản</p>
+                <h2 id="granted-password-title" className="mt-1 text-base font-black text-slate-900">
+                  {grantedPassword.staffName} đăng nhập được ngay
+                </h2>
+              </div>
+            </header>
+            <div className="space-y-4 p-5">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-caption font-black text-amber-800">Chép mật khẩu trước khi đóng</p>
+                <p className="mt-1 text-caption leading-4 text-amber-700">
+                  Đây là lần duy nhất chuỗi này hiện ra. Đóng hộp thoại là không đọc lại được — muốn có
+                  mật khẩu khác thì phải cấp lại tài khoản.
+                </p>
+              </div>
+              <div>
+                <p className="text-caption text-slate-400">Email đăng nhập</p>
+                <p className="mt-1 text-caption font-bold text-slate-700">{grantedPassword.email}</p>
+              </div>
+              <div>
+                <p className="text-caption text-slate-400">Mật khẩu</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <code className="flex-1 rounded-xl bg-slate-900 px-4 py-3 text-body font-black tracking-wider text-white">
+                    {grantedPassword.password}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={copyPassword}
+                    className="flex h-12 w-12 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm"
+                    aria-label="Sao chép mật khẩu"
+                  >
+                    {passwordCopied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+                {passwordCopied && <p className="mt-1 text-caption font-bold text-emerald-600">Đã chép vào clipboard.</p>}
+              </div>
+            </div>
+            <footer className="flex justify-end border-t border-slate-100 bg-slate-50 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setNotice(`Đã cấp tài khoản đăng nhập cho ${grantedPassword.staffName}.`);
+                  setGrantedPassword(null);
+                }}
+                className="flex h-10 items-center gap-2 rounded-xl border border-slate-900 bg-slate-900 px-5 text-caption font-black text-white shadow-lg cursor-pointer transition-colors hover:bg-slate-800"
+              >
+                Tôi đã lưu mật khẩu
               </button>
             </footer>
           </section>
@@ -2302,12 +1701,10 @@ export default function TenantAdminStaff({
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6">
               <div>
                 <h2 className="text-base font-black text-slate-900">
-                  {formMode === "CREATE"
-                    ? "Thêm nhân viên mới"
-                    : `Chỉnh sửa ${selectedStaff?.id}`}
+                  {formMode === "CREATE" ? "Thêm nhân viên mới" : `Chỉnh sửa ${selectedStaffId}`}
                 </h2>
                 <p className="mt-1 text-caption text-slate-500">
-                  Thiết lập hồ sơ, vai trò, ca làm và quyền nghiệp vụ.
+                  Hồ sơ, chi nhánh, vai trò và ca làm cố định của nhân viên.
                 </p>
               </div>
               <button
@@ -2321,133 +1718,83 @@ export default function TenantAdminStaff({
             </div>
             <div className="space-y-5 p-5 sm:p-6">
               {formError && (
-                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">
-                  {formError}
-                </div>
+                <div className="rounded-xl bg-rose-50 p-3 text-caption font-bold text-rose-700">{formError}</div>
               )}
               <fieldset>
                 <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
                     <UserRound className="h-3.5 w-3.5" />
                   </span>
-                  Thông tin cá nhân
+                  Thông tin liên hệ
                 </legend>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Họ và tên *
-                    </span>
+                  <label className="sm:col-span-2">
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Họ và tên *</span>
                     <input
-                      value={form.name}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          name: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
+                      value={form.fullName}
+                      onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
+                      className={fieldErrors.fullName ? errorInputClass : inputClass}
                       placeholder="Nguyễn Minh Anh"
                     />
+                    {fieldErrors.fullName && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.fullName}</span>}
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Số điện thoại *
-                    </span>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Số điện thoại</span>
                     <input
                       value={form.phone}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          phone: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
+                      onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                      className={fieldErrors.phone ? errorInputClass : inputClass}
                       placeholder="09xx xxx xxx"
                     />
+                    {fieldErrors.phone && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.phone}</span>}
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Email công việc *
-                    </span>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Email công việc</span>
                     <input
                       type="email"
                       value={form.email}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          email: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
+                      onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                      className={fieldErrors.email ? errorInputClass : inputClass}
                       placeholder="ten@naile.vn"
                     />
-                  </label>
-                  <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Ngày sinh
-                    </span>
-                    <div className="relative">
-                      <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-500" />
-                      <input
-                        type="date"
-                        value={form.birthday}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            birthday: event.target.value,
-                          }))
-                        }
-                        className={dateInputClass}
-                      />
-                    </div>
+                    {fieldErrors.email && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.email}</span>}
                   </label>
                 </div>
+                <p className="mt-2 text-caption leading-4 text-slate-400">
+                  Email trên hồ sơ được dùng làm email đăng nhập mặc định khi cấp tài khoản lễ tân.
+                </p>
               </fieldset>
+
               <fieldset className="border-t border-slate-100 pt-5">
                 <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                    <BriefcaseBusiness className="h-3.5 w-3.5" />
+                    <UserCog className="h-3.5 w-3.5" />
                   </span>
-                  Công việc & hợp đồng
+                  Công việc
                 </legend>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Chi nhánh
-                    </span>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Chi nhánh *</span>
                     <BeautifulSelect
-                      value={form.branch}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          branch: event.target.value as BranchCode,
-                        }))
-                      }
-                      className={inputClass}
+                      value={form.branchId}
+                      onChange={(event) => setForm((current) => ({ ...current, branchId: event.target.value }))}
+                      className={fieldErrors.branchId ? errorInputClass : inputClass}
                     >
-                      <option value="Q3">Chi nhánh Quận 3</option>
-                      <option value="Q1">Chi nhánh Quận 1</option>
+                      <option value="">— Chọn chi nhánh —</option>
+                      {assignableBranches.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.name}
+                        </option>
+                      ))}
                     </BeautifulSelect>
+                    {fieldErrors.branchId && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.branchId}</span>}
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Vai trò
-                    </span>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Vai trò *</span>
                     <BeautifulSelect
                       value={form.role}
-                      onChange={(event) => {
-                        const role = event.target.value as StaffRole;
-                        const preset = rolePermissionPresets[role];
-                        setForm((current) => ({
-                          ...current,
-                          role,
-                          canManageAppointments:
-                            preset.canManageAppointments,
-                          canViewCustomers: preset.canViewCustomers,
-                          canCollectPayment: preset.canCollectPayment,
-                        }));
-                      }}
-                      className={inputClass}
+                      onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as StaffRole }))}
+                      className={fieldErrors.role ? errorInputClass : inputClass}
                     >
                       {Object.entries(roleMeta).map(([value, meta]) => (
                         <option key={value} value={value}>
@@ -2455,211 +1802,106 @@ export default function TenantAdminStaff({
                         </option>
                       ))}
                     </BeautifulSelect>
+                    {fieldErrors.role && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.role}</span>}
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Loại hợp đồng
-                    </span>
-                    <BeautifulSelect
-                      value={form.employmentType}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          employmentType: event.target.value as EmploymentType,
-                        }))
-                      }
-                      className={inputClass}
-                    >
-                      {Object.entries(employmentLabels).map(
-                        ([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ),
-                      )}
-                    </BeautifulSelect>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Bắt đầu ca *</span>
+                    <input
+                      type="time"
+                      value={form.shiftStart}
+                      onChange={(event) => setForm((current) => ({ ...current, shiftStart: event.target.value }))}
+                      className={fieldErrors.shiftStart ? errorInputClass : inputClass}
+                    />
+                    {fieldErrors.shiftStart && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.shiftStart}</span>}
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Ngày bắt đầu
-                    </span>
-                    <div className="relative">
-                      <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-500" />
-                      <input
-                        type="date"
-                        value={form.startDate}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            startDate: event.target.value,
-                          }))
-                        }
-                        className={dateInputClass}
-                      />
-                    </div>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Kết thúc ca *</span>
+                    <input
+                      type="time"
+                      value={form.shiftEnd}
+                      onChange={(event) => setForm((current) => ({ ...current, shiftEnd: event.target.value }))}
+                      className={fieldErrors.shiftEnd ? errorInputClass : inputClass}
+                    />
+                    {fieldErrors.shiftEnd && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.shiftEnd}</span>}
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Trạng thái
-                    </span>
-                    <BeautifulSelect
-                      value={form.status}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          status: event.target.value as StaffStatus,
-                        }))
-                      }
-                      className={inputClass}
-                    >
-                      {Object.entries(statusMeta).map(([value, meta]) => (
-                        <option key={value} value={value}>
-                          {meta.label}
-                        </option>
-                      ))}
-                    </BeautifulSelect>
-                  </label>
-                  <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Hoa hồng dịch vụ (%)
-                    </span>
+                    <span className="mb-1.5 block text-caption font-bold text-slate-600">Hoa hồng dịch vụ (%)</span>
                     <input
                       type="number"
                       min="0"
                       max="100"
-                      value={form.commissionRate}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          commissionRate: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
+                      step="0.5"
+                      value={form.commissionPercent}
+                      onChange={(event) => setForm((current) => ({ ...current, commissionPercent: event.target.value }))}
+                      className={fieldErrors.commissionRate ? errorInputClass : inputClass}
                     />
+                    {fieldErrors.commissionRate && <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.commissionRate}</span>}
                   </label>
                 </div>
+                {formMode === "EDIT" && (
+                  <p className="mt-2 text-caption leading-4 text-slate-400">
+                    Trạng thái làm việc đổi ở ngăn hồ sơ, không đổi trong biểu mẫu này — để việc cho một
+                    người nghỉ việc không bao giờ xảy ra như tác dụng phụ của một lần sửa tên.
+                  </p>
+                )}
               </fieldset>
-              <fieldset className="border-t border-slate-100 pt-5">
-                <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                    <Clock3 className="h-3.5 w-3.5" />
-                  </span>
-                  Ca làm mặc định
-                </legend>
-                <div className="grid grid-cols-2 gap-3">
-                  <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Bắt đầu ca
-                    </span>
-                    <input
-                      type="time"
-                      value={form.shiftStart}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          shiftStart: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
-                    />
-                  </label>
-                  <label>
-                    <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                      Kết thúc ca
-                    </span>
-                    <input
-                      type="time"
-                      value={form.shiftEnd}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          shiftEnd: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
-                    />
-                  </label>
-                </div>
-              </fieldset>
+
               <fieldset className="border-t border-slate-100 pt-5">
                 <legend className="mb-3 flex items-center gap-2 text-caption font-black text-slate-800">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600">
-                    <ShieldCheck className="h-3.5 w-3.5" />
+                    <Sparkles className="h-3.5 w-3.5" />
                   </span>
-                  Quyền nghiệp vụ
+                  Kỹ năng chuyên môn
                 </legend>
-                <div className="mb-3 flex items-start gap-3 rounded-xl border border-violet-100 bg-violet-50/70 p-3">
-                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-                  <div>
-                    <p className="text-caption font-black text-violet-800">
-                      Quyền tự động theo vai trò {roleMeta[form.role].label}
-                    </p>
-                    <p className="mt-1 text-caption leading-4 text-violet-600">
-                      {rolePermissionPresets[form.role].summary}
-                    </p>
-                  </div>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {[
-                    {
-                      key: "canManageAppointments" as const,
-                      label: ["OWNER", "MANAGER", "RECEPTIONIST"].includes(
-                        form.role,
-                      )
-                        ? "Quản lý lịch hẹn"
-                        : "Lịch & ca làm cá nhân",
-                    },
-                    {
-                      key: "canViewCustomers" as const,
-                      label: "Xem hồ sơ khách",
-                    },
-                    {
-                      key: "canCollectPayment" as const,
-                      label: "Thu tiền tại quầy",
-                    },
-                  ].map((permission) => (
-                    <div
-                      key={permission.key}
-                      className={`flex items-center gap-3 rounded-xl border p-3 ${form[permission.key] ? "border-violet-200 bg-violet-50/70" : "border-slate-200 bg-slate-50"}`}
-                    >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${form[permission.key] ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-400"}`}
-                      >
-                        {form[permission.key] ? (
-                          <Check className="h-3.5 w-3.5" />
-                        ) : (
-                          <X className="h-3.5 w-3.5" />
-                        )}
-                      </span>
-                      <span>
-                        <span className="block text-caption font-bold text-slate-700">
-                          {permission.label}
-                        </span>
-                        <span
-                          className={`mt-0.5 block text-caption font-bold ${form[permission.key] ? "text-violet-600" : "text-slate-400"}`}
-                        >
-                          {form[permission.key] ? "Được cấp" : "Không được cấp"}
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <label className="mt-3 block">
-                  <span className="mb-1.5 block text-caption font-bold text-slate-600">
-                    Ghi chú quản lý
-                  </span>
-                  <textarea
-                    value={form.notes}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        notes: event.target.value,
-                      }))
-                    }
-                    className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
-                    placeholder="Năng lực, kế hoạch đào tạo, lưu ý công việc..."
+                <div className="flex gap-2">
+                  <input
+                    value={skillDraft}
+                    onChange={(event) => setSkillDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      addSkill();
+                    }}
+                    className={inputClass}
+                    placeholder="Sơn gel, đắp bột, vẽ nail..."
                   />
-                </label>
+                  <button
+                    type="button"
+                    onClick={addSkill}
+                    className="h-11 shrink-0 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm"
+                  >
+                    Thêm
+                  </button>
+                </div>
+                {form.skills.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {form.skills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="flex items-center gap-1.5 rounded-md bg-fuchsia-50 px-2 py-1 text-caption font-bold text-fuchsia-700"
+                      >
+                        {skill}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((current) => ({
+                              ...current,
+                              skills: current.skills.filter((item) => item !== skill),
+                            }))
+                          }
+                          aria-label={`Bỏ kỹ năng ${skill}`}
+                          className="flex h-4 w-4 items-center justify-center border-0 bg-transparent p-0 text-fuchsia-500 shadow-none"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 text-caption leading-4 text-slate-400">
+                  Kỹ năng chỉ để tham khảo khi phân công. Hệ thống không chặn việc gán một kỹ thuật
+                  viên cho dịch vụ ngoài danh sách này.
+                </p>
               </fieldset>
             </div>
             <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6">
@@ -2672,10 +1914,11 @@ export default function TenantAdminStaff({
               </button>
               <button
                 type="submit"
-                className="flex h-10 items-center gap-2 rounded-xl border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 cursor-pointer transition-colors"
+                disabled={saving}
+                className="flex h-10 items-center gap-2 rounded-xl border border-violet-700 bg-violet-600 px-5 text-caption font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 cursor-pointer transition-colors disabled:opacity-60"
               >
                 <UserCog className="h-4 w-4" />
-                {formMode === "CREATE" ? "Tạo hồ sơ" : "Lưu thay đổi"}
+                {saving ? "Đang lưu..." : formMode === "CREATE" ? "Tạo hồ sơ" : "Lưu thay đổi"}
               </button>
             </div>
           </form>

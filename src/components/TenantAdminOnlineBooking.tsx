@@ -48,6 +48,7 @@ import Modal from './Modal';
 import BeautifulSelect from './BeautifulSelect';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import { formatMoney as money, normalizeMoneyText } from '../utils/money';
+import { tenantStorageKey } from '../utils/tenantStorage';
 
 export type BranchCode = 'Q1' | 'Q3';
 
@@ -632,7 +633,7 @@ export default function TenantAdminOnlineBooking({
   readOnlyReason,
   onNotify,
 }: TenantAdminOnlineBookingProps) {
-  const storageKey = `mobile-app-bookings-v2:${tenantName}`;
+  const storageKey = tenantStorageKey('mobile-app-bookings-v2');
 
   const [bookings, setBookings] = useState<MobileAppBooking[]>(() => {
     try {
