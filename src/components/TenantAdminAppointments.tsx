@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
+  AlertTriangle,
   Award,
   CalendarCheck2,
   CalendarDays,
@@ -1430,6 +1431,18 @@ export default function TenantAdminAppointments({
           </div>
         )}
       />
+      {/*
+        Màn này vẫn chạy bằng dữ liệu mẫu trong `localStorage` — §9.2 xếp nó vào mức B, và
+        API lịch hẹn phải tới ngày 11 mới có. Dải nhãn được kéo sớm về đây ở ngày 10 vì kể
+        từ khi màn khách hàng nối máy chủ, hai màn hiện hai danh sách khách khác nhau: một
+        bên là khách thật của tiệm, một bên là chín hồ sơ mẫu. Không nói rõ thì đó là loại
+        nhầm lẫn khó phát hiện nhất.
+      */}
+      <p className="flex items-center gap-2 rounded-card border border-amber-200 bg-amber-50 px-4 py-2.5 text-caption font-bold text-amber-800">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        Dữ liệu mẫu — màn lịch hẹn chưa nối máy chủ. Danh sách khách ở đây không phải danh bạ
+        thật của tiệm.
+      </p>
       <section className={`isolate border border-brand-outline bg-brand-surface ${isScheduleExpanded ? 'ui-fullscreen-layer fixed inset-0 flex flex-col rounded-none' : 'overflow-hidden rounded-card shadow-card'}`}>
         {/* Thanh điều khiển hai hàng, chia theo nhóm việc: hàng trên là "đang xem
             ngày nào", hàng dưới là "làm gì với ngày đó". Trước đây tất cả dồn vào

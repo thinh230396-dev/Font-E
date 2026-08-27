@@ -1508,19 +1508,19 @@ export default function NailTenantAdminPortal({
     return true;
   };
 
+  /**
+   * Chuyển từ hồ sơ khách sang màn đặt lịch, mang theo đúng ba thứ hồ sơ còn giữ.
+   *
+   * Dị ứng, tình trạng móng, kỹ thuật viên ruột, hạng khách và điểm thưởng đã bị gỡ khỏi
+   * hồ sơ ở ngày 10 (quyết định 44) vì không có cột nào lưu chúng. Màn đặt lịch vẫn khai
+   * ba trường đầu là bắt buộc nên chúng được truyền rỗng — nó là màn dữ liệu mẫu, và ngày
+   * 11 sẽ viết lại hợp đồng này khi lịch hẹn có API thật.
+   */
   const bookCustomerFromProfile = (customer: {
     id: string;
-    name: string;
+    fullName?: string | null;
     phone: string;
-    branch: 'Q1' | 'Q3';
-    note: string;
-    allergies: string;
-    nailCondition: string;
-    favoriteTechnician: string;
-    tier?: string;
-    points?: number;
-    totalSpent?: number;
-    visits?: number;
+    note?: string | null;
   }) => {
     const appointmentAccess = resolvePageAccess('appointments');
     if (appointmentAccess !== 'full') {
@@ -1532,21 +1532,16 @@ export default function NailTenantAdminPortal({
       return;
     }
     if (!navigate('appointments')) return;
-    setBranch(customer.branch);
     setAppointmentBookingRequest({
       requestId: Date.now(),
       customerId: customer.id,
-      name: customer.name,
+      name: customer.fullName?.trim() || customer.phone,
       phone: customer.phone,
-      branch: customer.branch,
-      note: customer.note,
-      allergies: customer.allergies,
-      nailCondition: customer.nailCondition,
-      favoriteTechnician: customer.favoriteTechnician,
-      tier: customer.tier,
-      points: customer.points,
-      totalSpent: customer.totalSpent,
-      visits: customer.visits,
+      branch: 'Q3',
+      note: customer.note || '',
+      allergies: '',
+      nailCondition: '',
+      favoriteTechnician: '',
     });
   };
 
@@ -2298,16 +2293,17 @@ export default function NailTenantAdminPortal({
             </Suspense>
           ) : activePage === 'customers' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-caption font-bold text-slate-400">Đang tải hồ sơ khách hàng...</div>}>
+              {/* Không truyền chi nhánh: BR-CUS-001 — khách thuộc tiệm và dùng chung cho
+                  mọi chi nhánh, nên bộ lọc chi nhánh của cổng không áp lên màn này. */}
               <TenantAdminCustomers
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
-                selectedBranch={branch}
-                onSelectedBranchChange={(value) => { setBranch(value); setSelectedRow(null); }}
                 tenantName={tenantName}
                 roleLabel="Owner · Tenant Admin"
                 accessMode={currentAccessMode}
                 readOnlyReason={readOnlyReason}
                 onNotify={setToast}
+                tenantId={demoMode ? undefined : tenant?.id}
                 onBookCustomer={bookCustomerFromProfile}
               />
             </Suspense>

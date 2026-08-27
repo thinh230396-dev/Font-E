@@ -1262,3 +1262,155 @@ Thuần túy là tiện ích chạy máy, không đụng gì tới mã ứng d�
 | 4 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc | Thấp |
 | 5 | Database demo lẫn rác của ba phiên thử: `Chi nhánh Ngày 8 (đã sửa)`, dịch vụ `Sơn gel Nhật ngày 8`, hồ sơ `Ngô Thị Kiểm Thử`, và hồ sơ `Lễ Tân Ngày 9` kèm tài khoản `ngay9@lumierehair.vn` — tất cả đã chuyển sang ngừng hoạt động nên không chiếm hạn mức, nhưng nên dựng lại database trước khi bảo vệ | Thấp |
 | 6 | Cấp, sửa, khóa tài khoản **chủ tiệm** vẫn chưa có endpoint và chưa có lịch — treo từ ngày 7 | Chưa có lịch |
+
+### Ngày 10 — xong → **Mốc ② đạt**
+
+Bảy quyết định chốt đầu ngày, tất cả theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 42 | Tổng chi tiêu tính từ **hóa đơn đã trả đủ**, số lượt ghé là số hóa đơn ấy | Một câu `GROUP BY` cho cả danh sách. Cố ý khác công thức doanh thu ngày 16 (BR-REV-001 trừ tip) vì đây là "khách đã trả bao nhiêu", không phải "tiệm thu được bao nhiêu" |
+| 43 | Endpoint thứ năm là **`GET /api/customers/{id}`**, trả hồ sơ kèm mười lần ghé gần nhất | Ngăn chi tiết có lịch sử dịch vụ **thật** ngay hôm nay thay vì chờ ngày 13 |
+| 44 | **Gỡ khỏi biểu mẫu và bảng** mười lăm trường máy chủ không lưu | Biểu mẫu còn năm ô, đúng năm cột bảng `Customers` có. Dị ứng và lưu ý về móng dồn vào ô Ghi chú |
+| 45 | **Bỏ hẳn chi nhánh** khỏi màn khách hàng | Chủ tiệm và lễ tân thấy đúng cùng một danh sách — BR-ISO-004, và là phép thử số 4 mà ngày 12 sẽ viết |
+| 46 | Gỡ hai khối số liệu dựa vào lịch hẹn, **giữ nút "Đặt lịch"** | Nút chỉ còn truyền tên, số điện thoại và ghi chú; ngăn chi tiết dùng lịch sử hóa đơn thật thay cho khối lịch hẹn |
+| 47 | Màn lịch hẹn **để nguyên, gắn dải nhãn "Dữ liệu mẫu"** | Đúng phạm vi ngày 10, và ngày 11 sẽ đụng vào chính màn đó. Dải nhãn là việc của ngày 18, kéo sớm về đây |
+| 48 | `GET /api/customers` trả **toàn bộ**, lọc và phân trang ở trình duyệt | Cùng khuôn với chi nhánh, dịch vụ và nhân viên |
+
+#### Vì sao khách hàng là module đầu tiên không có ranh giới chi nhánh
+
+Bốn module trước đều có: chi nhánh là chính nó, dịch vụ dùng chung cả tiệm nhưng lập theo tiệm,
+nhân viên thuộc đúng một chi nhánh và lễ tân chỉ xem được người của mình. Khách hàng thì khác hẳn —
+BR-CUS-001 nói khách thuộc **tiệm**, và dữ liệu mẫu chứng minh vì sao: hồ sơ `CUS-LUMIERE-003` có
+lịch sử trải trên cả hai chi nhánh Quận 1 và Quận 3 trong cùng một tháng. Lọc theo chi nhánh nghĩa là
+lễ tân Quận 3 không tra được một khách vừa đến Quận 1 tuần trước, rồi lập cho họ một hồ sơ trùng —
+đúng thứ mà ràng buộc số điện thoại duy nhất đang đi ngăn.
+
+Đó cũng là lý do màn này là màn đầu tiên **không nhận `selectedBranch`** từ cổng, và cổng lễ tân phải
+gọi nó bằng danh sách prop tường minh thay vì cụm `commonProps` dùng chung — cụm ấy mang theo
+`branchLocked`, thứ mà ở đây sẽ lọc ra danh sách rỗng.
+
+**Backend — 8 tệp mới, 2 tệp sửa:**
+
+| Tầng | Hạng mục |
+|---|---|
+| Domain | `ICustomerRepository` mới, kèm hai bản ghi kết quả truy vấn `CustomerSpendSummary` và `CustomerVisit`. Không đụng `Customer`, `CustomerTierPolicy` hay `CustomerConfiguration` — cả ba đã dựng đủ từ ngày 2 |
+| Application | `CustomerDtos`, `CustomerMapper`; lát cắt `UseCases/Customers/` (5 use case) |
+| Infrastructure | `CustomerRepository` — chỗ **duy nhất** định nghĩa "khách đã chi bao nhiêu" |
+| API | `CustomersController` |
+| Quyền | Không thêm gì: ô `Customers` cho chủ tiệm và lễ tân đã có sẵn trong `PermissionMatrix` từ ngày 3 |
+| Migration | Không có. Bảng `Customers` cùng chỉ số duy nhất `(TenantId, Phone)` đã dựng từ ngày 2 |
+| Build | `dotnet build` — **0 lỗi, 0 cảnh báo** |
+
+**5 endpoint, đúng ngân sách §9.1:**
+
+| Endpoint | Nhóm quyền | Ghi chú |
+|---|---|---|
+| `GET /api/customers` | `Customers` | Chủ tiệm và lễ tân nhận **cùng một danh sách** — BR-CUS-001 |
+| `GET /api/customers/{id}` | `Customers` | Kèm mười lần ghé gần nhất, đọc từ hóa đơn đã trả đủ |
+| `POST /api/customers` | `Customers` ghi | BR-CUS-003 — chỉ số điện thoại là bắt buộc |
+| `PUT /api/customers/{id}` | `Customers` ghi | Thay trọn hồ sơ, gồm cả đổi số điện thoại |
+| `PATCH /api/customers/{id}/status` | `Customers` ghi | Không có động từ `DELETE`, BR-DEL-001 |
+
+**Hai bẫy EF Core đã vấp và đã vá** — cả hai chỉ nổ lúc chạy, trình biên dịch im lặng:
+
+1. `OrderBy(c => c.FullName ?? c.Phone.Value)` không dịch được. `CustomerConfiguration` đã cảnh báo
+   đúng ca này từ ngày 2: không được gọi vào bên trong một value object đã đi qua bộ chuyển đổi.
+   Thay bằng ba mệnh đề `ThenBy` so cả đối tượng.
+2. `TotalsByCustomer(...).FirstOrDefault(row => row.CustomerId == id)` không dịch được: phép lọc nằm
+   **sau** lệnh gom nhóm nên SQL Server phải lọc trên kết quả đã gom. Sửa bằng cách đẩy bộ lọc vào
+   trước `GroupBy`, và để hàm gom nhận nguồn từ bên ngoài — nhờ vậy danh sách và ngăn chi tiết vẫn
+   dùng chung đúng một phép gom, không thể nói hai con số khác nhau.
+
+**Kiểm chứng qua HTTP thật — 52 phép thử, tất cả đạt:**
+
+| Nhóm | Phép thử tiêu biểu | Kết quả |
+|---|---|---|
+| Danh sách | 20 khách mẫu, mỗi hồ sơ có hạng suy từ hóa đơn thật (3 Thân thiết, 17 Tiêu chuẩn) | Đạt |
+| Ngăn chi tiết | Hồ sơ kèm 6 lần ghé thật, mỗi dòng có tên dịch vụ, tên chi nhánh, tên kỹ thuật viên và số hóa đơn; cắt đúng ở 10 dòng | Đạt |
+| Thêm khách | Chỉ số điện thoại `201`; `0909 000 111` được chuẩn hóa thành `0909000111`; khách mới ở hạng `NEW`, 0 lượt | Đạt |
+| Ràng buộc | Trùng số trong tiệm `422` gắn ô `phone`; số sai định dạng `422`; ngày sinh `03/04/1995` `422` gắn ô `birthDate`; bỏ trống số `422` | Đạt |
+| Sửa hồ sơ | Lưu đủ năm ô; **bỏ trống `email` thì email bị xóa** — đúng ngữ nghĩa `PUT` toàn phần; đổi sang số của khách khác `422`; lưu lại mà không đổi số `200` | Đạt |
+| Ngừng và bật lại | `PATCH` `200`; hồ sơ đã ngừng **vẫn còn trong danh sách** (BR-DEL-003); trạng thái `CARE` bị từ chối `422` (BR-CUS-005); không có động từ `DELETE` | Đạt |
+| Phân quyền | **Superadmin đọc và ghi khách hàng đều `403`** (BR-AUTH-030); lễ tân đọc, thêm, sửa, ngừng đều được | Đạt |
+| Cách ly tiệm | Lễ tân thấy **toàn bộ** khách của tiệm, đúng bằng số chủ tiệm thấy (BR-ISO-004); đổi sang Muse thì đọc và sửa hồ sơ của Nailé đều `404` chứ không `403` | Đạt |
+| BR-CUS-002 | Cùng một số điện thoại tạo được ở **cả hai tiệm** — ràng buộc là ghép `(tiệm, số)` chứ không phải riêng số | Đạt |
+| Chặn ghi | Superadmin khóa Muse → chủ tiệm ghi `403 TENANT_READONLY`, đọc vẫn `200` | Đạt |
+
+**Frontend — 2 tệp mới, 5 tệp sửa:**
+
+| Hạng mục | Kết quả |
+|---|---|
+| `src/services/customers.ts`, `src/hooks/useCustomers.ts` — tầng gọi API và hook cho năm endpoint | Mới |
+| `TenantAdminCustomers` — viết lại: nguồn dữ liệu, ba đường ghi, biểu mẫu, bảng, thẻ, ngăn chi tiết kèm lịch sử hóa đơn thật | Xong |
+| `NailTenantAdminPortal` — truyền `tenantId`, thôi truyền chi nhánh; `bookCustomerFromProfile` rút còn ba trường | Xong |
+| `ReceptionistPortal` — màn khách hàng gọi bằng prop tường minh thay vì `commonProps`, và nhận `tenantId` từ phiên | Xong |
+| `TenantAdminAppointments` — dải nhãn "Dữ liệu mẫu — chưa nối máy chủ" (quyết định 47) | Xong |
+| `TenantAdminPortal` (mã chết) — bỏ hai prop chi nhánh cho khớp hợp đồng mới | Xong |
+| `npx tsc --noEmit` trên mã ứng dụng | **0 lỗi** |
+
+#### 🔴 Một vòng lặp gọi API, bắt được nhờ đọc nhật ký mạng
+
+Ngăn chi tiết đứng mãi ở "Đang tải lịch sử...". Nhật ký mạng cho thấy hàng chục lời gọi
+`GET /api/customers/CUS-LUMIERE-003` liên tiếp: hiệu ứng nạp lịch sử khai `directory` trong danh sách
+phụ thuộc, mà `useCustomers` trả về một **đối tượng mới ở mỗi lần render**, nên hiệu ứng chạy lại sau
+mỗi lần render — và chính nó gọi `setVisits`, nên vòng lặp tự nuôi mình.
+
+Đáng chú ý vì màn hình **không báo lỗi gì**: nó chỉ hiện mãi dòng "đang tải", còn máy chủ vẫn trả
+`200` cho từng lời gọi. Vá bằng cách khai đúng hàm `getCustomer` — thứ đã được `useCallback` giữ ổn
+định — thay vì cả đối tượng. Sau khi vá: đúng **một** lời gọi cho mỗi lần mở hồ sơ.
+
+Đây là bẫy chung của mọi hook trong dự án, không riêng hook này. Ba hook trước không vấp vì chúng chỉ
+nạp trong hiệu ứng của chính mình, chưa hook nào bị một component khác đưa vào danh sách phụ thuộc.
+
+**Kiểm chứng trên trình duyệt thật — tất cả đạt:**
+
+| # | Phép thử | Kết quả |
+|---|---|---|
+| 1 | Cổng chủ tiệm: màn khách hàng hiện **24 hồ sơ thật**, kèm hạng, số lượt, tổng chi tiêu và ngày ghé gần nhất | Đạt |
+| 2 | Bốn ô chỉ số đều là số thật: 20 đang hoạt động, 3 Thân thiết & VIP, 4 chưa phát sinh hóa đơn, 71.310.000 ₫ tổng chi tiêu | Đạt |
+| 3 | Ngăn chi tiết hiện **10 lần ghé thật**, có dòng ở Quận 1 và dòng ở Quận 3 trong cùng một hồ sơ — bằng chứng sống cho BR-CUS-001 | Đạt |
+| 4 | Thêm khách trùng số → `422`, câu chữ máy chủ **gắn đúng ô "Số điện thoại"**, biểu mẫu không đóng | Đạt |
+| 5 | Thêm khách mới với số có khoảng trắng → `201`, số được chuẩn hóa, ngày sinh và ghi chú lưu đúng | Đạt |
+| 6 | Biểu mẫu sửa mở lên đã có sẵn **đủ năm ô** — đúng thứ `PUT` toàn phần đòi hỏi | Đạt |
+| 7 | Sửa tên và thêm email → `200`, danh sách nạp lại | Đạt |
+| 8 | Ngừng hoạt động → tổng vẫn 25, số đang hoạt động về 20 (BR-DEL-003) | Đạt |
+| 9 | Cổng lễ tân: thấy **đúng 25 hồ sơ**, bằng số chủ tiệm thấy, không lọc theo chi nhánh | Đạt |
+| 10 | Lễ tân không có nút "Xuất danh sách"; thêm khách mới thì `201` | Đạt |
+| 11 | Nút "Đặt lịch" chuyển sang màn lịch hẹn và điền sẵn **tên và số điện thoại thật** | Đạt |
+| 12 | Màn lịch hẹn hiện dải nhãn "Dữ liệu mẫu — chưa nối máy chủ" | Đạt |
+| 13 | Console không một lỗi JavaScript nào; chỉ có `401` của lần dò phiên trước khi đăng nhập và `422` của phép thử trùng số | Đạt |
+
+**Mốc ② đạt:** dựng được trọn một tiệm bằng dữ liệu thật — tiệm → chi nhánh → dịch vụ → nhân viên →
+tài khoản lễ tân → khách hàng.
+
+#### Bốn điều chệch khỏi kế hoạch, có chủ đích
+
+1. **Endpoint danh sách không có tham số `?query=`.** Quyết định 43 có nhắc tới nó, nhưng quyết định
+   48 chốt lọc ở trình duyệt — giữ cả hai nghĩa là để lại một tham số không ai gọi. Việc "tra cứu
+   theo số điện thoại" ở §9.1 vẫn có thật: nó nằm ở ô tìm kiếm trên danh sách đã nạp, và ở phép kiểm
+   trùng số lúc tạo hồ sơ.
+2. **`CustomerVisitDto` mang tên chi nhánh và tên kỹ thuật viên, không mang mã** — ngược quy ước của
+   `StaffDto` ở ngày 7. Lý do: đây là bản đọc lịch sử, và bắt ngăn chi tiết nạp thêm hai danh sách chỉ
+   để dịch vài dòng là ba lời gọi mạng cho một việc mà một phép nối đã làm xong.
+3. **Chế độ dữ liệu mẫu thôi ghi xuống `localStorage`.** Khóa `tenant-admin-customers-v1` giữ hình
+   dạng `TenantCustomer` cũ — thứ mang đủ mười lăm trường vừa bị gỡ. Giữ một đường ghi cho nó là dựng
+   lại chính những trường ấy ở cửa sau. Nay chế độ mẫu giữ danh sách trong bộ nhớ của component, còn
+   `src/utils/tenantCustomers.ts` ở lại nguyên vẹn cho màn lịch hẹn dùng (quyết định 47).
+4. **Nhãn hạng `VIP Diamond` rút còn `VIP`.** "Diamond" là tên một chương trình khách hàng thân thiết
+   không tồn tại — BR-CUS-008 nói rõ hạng khách không ảnh hưởng giá và không có điểm thưởng. Ba hạng
+   còn lại giữ nguyên câu chữ cũ.
+
+### Việc còn treo sau ngày 10
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — treo từ ngày 6, chưa đụng | **Cần sửa** |
+| 2 | Cổng chủ tiệm còn các màn mức C hiện số bịa cạnh dữ liệu thật: Tổng quan, Ghế & khu vực, POS, Báo cáo. Màn Lịch hẹn nay đã có dải nhãn, bốn màn này thì chưa | **Cần sửa** |
+| 3 | `BranchCode = 'Q1' \| 'Q3'` vẫn còn trong kiểu của các màn mức C, và `bookCustomerFromProfile` phải truyền cứng `'Q3'` vì hợp đồng của màn lịch hẹn còn đòi nó — dọn cùng ngày 11 và 14–15 | Trượt lịch |
+| 4 | Hợp đồng `bookingRequest` của màn lịch hẹn còn khai `allergies`, `nailCondition`, `favoriteTechnician` là **bắt buộc**, nên hai cổng đang truyền chuỗi rỗng. Sửa hợp đồng ở ngày 11 khi màn ấy được nối | Thấp |
+| 5 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc | Thấp |
+| 6 | Database demo lẫn rác của bốn phiên thử; riêng ngày 10 thêm `Khách Ngày 10 (đã sửa)` và `Khách quầy ngày 10` ở Nailé cùng vài hồ sơ số `09xx` của bộ kiểm thử HTTP — tất cả đã chuyển sang ngừng hoạt động, nhưng nên dựng lại database trước khi bảo vệ | Thấp |
+| 7 | Cấp, sửa, khóa tài khoản **chủ tiệm** vẫn chưa có endpoint và chưa có lịch — treo từ ngày 7 | Chưa có lịch |
+| 8 | §3.1 ghi "`DTOs/` chỉ có bảy tệp" — nay là mười. Vẫn dưới ngưỡng phải chia thư mục, nhưng con số trong tài liệu đã cũ | Thấp |
+| 9 | `saveTenantCustomers` ở `src/utils/tenantCustomers.ts` nay **không còn ai gọi** — màn khách hàng thôi ghi xuống trình duyệt. Kéo theo sự kiện `salonsys_customers_updated` mà màn lịch hẹn đang lắng nghe sẽ không bao giờ phát nữa. Vô hại, nhưng là mã chết; xóa cùng ngày 11 khi màn lịch hẹn được nối | Thấp |

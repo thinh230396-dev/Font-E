@@ -224,8 +224,6 @@ export default function TenantAdminPortal({ account, onLogout }: TenantAdminPort
             <TenantAdminCustomers
               searchQuery={searchQuery}
               onSearchQueryChange={setSearchQuery}
-              selectedBranch={selectedBranch}
-              onSelectedBranchChange={setSelectedBranch}
             />
           ) : activePage === 'Nhân sự' ? (
             <TenantAdminStaff

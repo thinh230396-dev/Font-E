@@ -3300,27 +3300,36 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       );
     }
     if (page === 'customers') {
+      // BR-CUS-001 — khách thuộc tiệm chứ không thuộc chi nhánh, nên màn này KHÔNG nhận
+      // `selectedBranch` và `branchLocked` như các màn khác của quầy: lễ tân Quận 3 phải
+      // tra được khách hôm qua đến Quận 1 (BR-ISO-004).
       return (
         <TenantAdminCustomers
-          {...commonProps}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          tenantName={tenantName}
+          roleLabel={`Receptionist · ${account.displayName} · ${branchName}`}
+          accessMode="full"
+          onNotify={setToast}
+          tenantId={account.tenantId}
           onBookCustomer={(customer) => {
+            const name = customer.fullName?.trim() || customer.phone;
             setAppointmentBookingRequest({
               requestId: Date.now(),
               customerId: customer.id,
-              name: customer.name,
+              name,
               phone: customer.phone,
-              branch: customer.branch || branchCode,
-              note: customer.note,
-              allergies: customer.allergies,
-              nailCondition: customer.nailCondition,
-              favoriteTechnician: customer.favoriteTechnician,
-              tier: customer.tier,
-              points: customer.points,
-              totalSpent: customer.totalSpent,
-              visits: customer.visits,
+              branch: branchCode,
+              note: customer.note || '',
+              // Ba trường này đã bị gỡ khỏi hồ sơ khách ở ngày 10 (quyết định 44) vì không
+              // có cột nào lưu chúng. Màn đặt lịch vẫn khai chúng là bắt buộc nên truyền
+              // rỗng; nó là màn dữ liệu mẫu và sẽ được viết lại ở ngày 11.
+              allergies: '',
+              nailCondition: '',
+              favoriteTechnician: '',
             });
             setPage('appointments');
-            setToast(`Đã tự động điền thông tin ${customer.name} (Tích luỹ: ${customer.points.toLocaleString('vi-VN')} điểm).`);
+            setToast(`Đã tự động điền thông tin ${name}.`);
           }}
         />
       );

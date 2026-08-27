@@ -1,23 +1,24 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+/**
+ * Danh bạ khách hàng của tiệm — màn hình dùng chung cho cả cổng chủ tiệm và cổng lễ tân.
+ *
+ * BR-CUS-001 — khách thuộc TIỆM chứ không thuộc chi nhánh, nên màn này cố ý không có bộ
+ * lọc chi nhánh: lễ tân Quận 3 phải tra được khách hôm qua đến Quận 1. Đó cũng là điểm
+ * khác màn nhân sự, nơi lễ tân chỉ thấy người của chi nhánh mình.
+ *
+ * Hạng khách, tổng chi tiêu và số lượt ghé đều do máy chủ suy ra từ hóa đơn đã trả đủ
+ * (BR-CUS-007/009). Màn hình chỉ hiển thị, không tính lại và cũng không sửa được — biểu
+ * mẫu vì vậy chỉ có năm ô, đúng năm cột mà bảng `Customers` có.
+ */
+
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Pagination } from './ui';
-import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertTriangle,
-  BadgeCheck,
-  BellRing,
-  Cake,
   CalendarClock,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Clock3,
   Download,
-  Gift,
-  HeartHandshake,
-  Mail,
-  MapPin,
-  MessageCircle,
   Phone,
   Plus,
   Search,
@@ -25,7 +26,6 @@ import {
   Sparkles,
   Star,
   TrendingUp,
-  UserCheck,
   UserRound,
   UsersRound,
   WalletCards,
@@ -33,59 +33,50 @@ import {
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
 import { formatMoney as money } from '../utils/money';
-
-import type { TenantCustomer, CustomerTier, CustomerStatus, BranchCode, ServiceVisit } from '../utils/tenantCustomers';
-import { tenantStorageKey } from '../utils/tenantStorage';
-
-interface LinkedAppointment {
-  id: string;
-  customerId?: string;
-  customer: string;
-  phone: string;
-  date: string;
-  start: string;
-  duration: number;
-  service: string;
-  staff: string;
-  branch: BranchCode;
-  status: string;
-  price: number;
-  deposit: number;
-  note: string;
-  station?: string;
-}
+import useCustomers from '../hooks/useCustomers';
+import type { ApiError } from '../services/apiClient';
+import type {
+  CustomerApiStatus,
+  CustomerApiTier,
+  CustomerDto,
+  CustomerVisitDto,
+  SaveCustomerInput,
+} from '../services/customers';
+import { defaultCustomerSeed } from '../utils/tenantCustomers';
 
 interface TenantAdminCustomersProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
-  selectedBranch: string;
-  onSelectedBranchChange: (value: string) => void;
-  branchLocked?: boolean;
   tenantName?: string;
   roleLabel?: string;
   accessMode?: 'full' | 'limited' | 'locked';
   readOnlyReason?: string;
   onNotify?: (message: string) => void;
-  onBookCustomer?: (customer: TenantCustomer) => void;
+  /** Có mã tiệm nghĩa là phiên đang làm việc với dữ liệu thật; rỗng là chế độ mẫu. */
+  tenantId?: string;
+  onBookCustomer?: (customer: CustomerDto) => void;
 }
 
-interface CustomerForm {
-  name: string;
+/** Đúng năm ô máy chủ nhận. Không có hạng, không có điểm, không có chi nhánh. */
+interface CustomerFormState {
   phone: string;
+  fullName: string;
   email: string;
-  birthday: string;
-  branch: BranchCode;
-  tier: CustomerTier;
-  source: string;
-  favoriteTechnician: string;
-  preferences: string;
-  allergies: string;
-  nailCondition: string;
+  /** Dạng `yyyy-MM-dd` — chính là thứ ô `<input type="date">` sinh ra. */
+  birthDate: string;
   note: string;
-  consent: string[];
 }
+
+const emptyForm = (): CustomerFormState => ({
+  phone: '',
+  fullName: '',
+  email: '',
+  birthDate: '',
+  note: '',
+});
 
 const phoneDigits = (value: string) => value.replace(/\D/g, '');
+
 const initials = (name: string) =>
   name
     .trim()
@@ -95,435 +86,242 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase();
 
-const localDateKey = () => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${value.year}-${value.month}-${value.day}`;
+/** Tên hiển thị của một hồ sơ. BR-CUS-003 cho phép tạo khách chỉ với số điện thoại. */
+const displayName = (customer: CustomerDto) => customer.fullName?.trim() || customer.phone;
+
+/**
+ * `yyyy-MM-dd` sang `dd/MM/yyyy` để đọc.
+ *
+ * Máy chủ và màn hình cố ý dùng hai định dạng khác nhau: trên đường truyền phải là dạng
+ * không mơ hồ, còn trên màn hình phải là dạng người Việt quen đọc.
+ */
+const readableDate = (value?: string | null) => {
+  if (!value) return '';
+  const [year, month, day] = value.slice(0, 10).split('-');
+  return year && month && day ? `${day}/${month}/${year}` : value;
 };
 
-const activityTime = () =>
-  new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date());
+const readableDateTime = (value?: string | null) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(parsed);
+};
 
-const branchName = (branch: BranchCode | string) =>
-  branch === 'Q3' ? 'Quận 3' : branch === 'Q1' ? 'Quận 1' : 'Tất cả chi nhánh';
+/** `dd/MM/yyyy` của bộ dữ liệu mẫu cũ sang `yyyy-MM-dd` mà hợp đồng máy chủ dùng. */
+const isoFromLegacyBirthday = (value: string) => {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+};
 
-const tierMeta: Record<CustomerTier, { label: string; badge: string; avatar: string }> = {
+const tierMeta: Record<CustomerApiTier, { label: string; badge: string; avatar: string; hint: string }> = {
   VIP: {
-    label: 'VIP Diamond',
+    label: 'VIP',
     badge: 'bg-violet-50 text-violet-700 ring-violet-200',
     avatar: 'from-violet-500 to-fuchsia-500',
+    hint: 'Đã chi từ 20 triệu trở lên',
   },
   LOYAL: {
     label: 'Thân thiết',
     badge: 'bg-blue-50 text-blue-700 ring-blue-200',
     avatar: 'from-blue-500 to-cyan-500',
+    hint: 'Đã chi từ 5 đến dưới 20 triệu',
   },
   STANDARD: {
     label: 'Tiêu chuẩn',
     badge: 'bg-slate-100 text-slate-700 ring-slate-200',
     avatar: 'from-slate-500 to-slate-700',
+    hint: 'Đã chi dưới 5 triệu',
   },
   NEW: {
     label: 'Khách mới',
     badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     avatar: 'from-emerald-500 to-teal-500',
+    hint: 'Chưa phát sinh hóa đơn nào',
   },
 };
 
-const statusMeta: Record<CustomerStatus, { label: string; badge: string; dot: string }> = {
-  ACTIVE: {
-    label: 'Đang hoạt động',
-    badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    dot: 'bg-emerald-500',
-  },
-  CARE: {
-    label: 'Cần chăm sóc',
-    badge: 'bg-amber-50 text-amber-700 ring-amber-200',
-    dot: 'bg-amber-500',
-  },
-  INACTIVE: {
-    label: 'Không hoạt động',
-    badge: 'bg-slate-100 text-slate-600 ring-slate-200',
-    dot: 'bg-slate-400',
-  },
+const statusMeta: Record<CustomerApiStatus, { label: string; className: string }> = {
+  ACTIVE: { label: 'Đang hoạt động', className: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  INACTIVE: { label: 'Ngừng hoạt động', className: 'bg-slate-100 text-slate-500 ring-slate-200' },
 };
 
-interface CustomerStatusDropdownProps {
-  status: CustomerStatus;
+const inputClass =
+  'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100';
+const errorInputClass =
+  'h-11 w-full rounded-xl border border-rose-300 bg-rose-50/60 px-3 text-caption outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-100';
+
+/**
+ * Bộ chọn trạng thái ngay trên dòng — BR-CUS-006, "xóa khách" chính là chuyển sang
+ * `INACTIVE`. Hai lựa chọn, không hơn: `CARE` của bản giao diện cũ đã bị BR-CUS-005 bỏ.
+ */
+function CustomerStatusDropdown({
+  status,
+  disabled,
+  onStatusChange,
+}: {
+  status: CustomerApiStatus;
   disabled?: boolean;
-  onStatusChange: (newStatus: CustomerStatus) => void;
-}
-
-function CustomerStatusDropdown({ status, disabled = false, onStatusChange }: CustomerStatusDropdownProps) {
+  onStatusChange: (status: CustomerApiStatus) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const meta = statusMeta[status];
 
   useEffect(() => {
     if (!isOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    const close = () => setIsOpen(false);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
   }, [isOpen]);
 
-  const meta = statusMeta[status];
-
   return (
-    <div ref={dropdownRef} className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
+    <div className="relative inline-block">
       <button
         type="button"
         disabled={disabled}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!disabled) setIsOpen((prev) => !prev);
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsOpen((current) => !current);
         }}
-        /* ui-badge-button: các quy tắc `.role-shell* button` ép mọi <button> về
-           khổ control (36px, bo 8px) nên nếu không nói lại, ô trạng thái sẽ to gấp
-           rưỡi badge hạng khách ngay bên cạnh và phá nhịp của cả bảng. */
-        className={`ui-badge-button inline-flex items-center gap-1.5 whitespace-nowrap border-0 px-2.5 py-1 font-bold shadow-none ring-1 transition-all focus:outline-none ${meta.badge} ${
-          disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:ring-2'
-        }`}
-        title={disabled ? 'Không có quyền thay đổi' : 'Bấm để đổi trạng thái'}
+        className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 text-caption font-bold ring-1 disabled:opacity-60 ${meta.className}`}
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-        <span>{meta.label}</span>
-        {!disabled && <ChevronDown className={`h-3 w-3 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />}
+        {meta.label}
+        {!disabled && <ChevronDown className="h-3 w-3" />}
       </button>
-
       {isOpen && (
-        <div className="absolute left-0 z-[120] mt-1.5 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5">
-          <p className="px-2.5 py-1 text-caption font-black uppercase tracking-wider text-slate-400">Đổi trạng thái</p>
-          {(Object.keys(statusMeta) as CustomerStatus[]).map((key) => {
-            const itemMeta = statusMeta[key];
-            const isCurrent = key === status;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isCurrent) {
-                    onStatusChange(key);
-                  }
-                  setIsOpen(false);
-                }}
-                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-caption font-bold transition ${
-                  isCurrent ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-caption font-bold ring-1 ${itemMeta.badge}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${itemMeta.dot}`} />
-                  {itemMeta.label}
-                </span>
-                {isCurrent && <Check className="h-3 w-3 text-emerald-600" />}
-              </button>
-            );
-          })}
+        <div className="absolute right-0 z-30 mt-1 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          {(Object.keys(statusMeta) as CustomerApiStatus[]).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsOpen(false);
+                if (value !== status) onStatusChange(value);
+              }}
+              className="flex h-9 w-full items-center gap-2 border-0 bg-transparent px-3 text-left text-caption font-bold text-slate-600 shadow-none hover:bg-slate-50"
+            >
+              {value === status && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+              <span className={value === status ? '' : 'ml-5'}>{statusMeta[value].label}</span>
+            </button>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-const appointmentStatus: Record<string, { label: string; className: string }> = {
-  PENDING: { label: 'Chờ xác nhận', className: 'bg-amber-50 text-amber-700 ring-amber-200' },
-  CONFIRMED: { label: 'Đã xác nhận', className: 'bg-blue-50 text-blue-700 ring-blue-200' },
-  CHECKED_IN: { label: 'Đã đến', className: 'bg-cyan-50 text-cyan-700 ring-cyan-200' },
-  IN_SERVICE: { label: 'Đang phục vụ', className: 'bg-violet-50 text-violet-700 ring-violet-200' },
-  COMPLETED: { label: 'Hoàn tất', className: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-  CANCELLED: { label: 'Đã hủy', className: 'bg-slate-100 text-slate-600 ring-slate-200' },
-  NO_SHOW: { label: 'Không đến', className: 'bg-rose-50 text-rose-700 ring-rose-200' },
-};
-
-const visit = (
-  date: string,
-  service: string,
-  technician: string,
-  amount: number,
-  rating?: number,
-): ServiceVisit => ({ date, service, technician, amount, rating });
-
-const seed: TenantCustomer[] = [
-  {
-    id: 'CUS-1842',
-    name: 'Nguyễn Minh Anh',
-    phone: '0912 884 206',
-    email: 'minhanh@gmail.com',
-    birthday: '12/08/1994',
-    branch: 'Q3',
-    tier: 'VIP',
-    status: 'ACTIVE',
-    source: 'Khách giới thiệu',
-    visits: 18,
-    totalSpent: 24850000,
-    points: 2485,
-    lastVisit: '16/07/2026',
-    nextAppointment: '23/07 · 08:15',
-    favoriteTechnician: 'Thảo Nguyễn',
-    preferences: ['French', 'Tông nude', 'Form Almond', 'Sơn không HEMA'],
-    allergies: 'Không ghi nhận',
-    nailCondition: 'Móng ngón trỏ yếu, cần hạn chế mài sâu',
-    note: 'Ưu tiên lịch sáng cuối tuần và phòng VIP khi có thể.',
-    consent: ['Zalo', 'SMS', 'Email'],
-    tags: ['Chi tiêu cao', 'Hay đặt cuối tuần'],
-    history: [
-      visit('16/07/2026', 'Nail Art Premium', 'Thảo Nguyễn', 1250000, 5),
-      visit('28/06/2026', 'Gel Manicure', 'Thảo Nguyễn', 680000, 5),
-      visit('06/06/2026', 'Combo VIP', 'Hà My', 1650000, 5),
-    ],
-    activity: [
-      '16/07 · Hoàn thành APT-1041 và cộng 125 điểm',
-      '09/07 · Đã gửi voucher sinh nhật',
-      '28/06 · Đánh giá dịch vụ 5 sao',
-    ],
-  },
-  {
-    id: 'CUS-1796',
-    name: 'Trần Thu Hà',
-    phone: '0908 337 912',
-    email: 'thuha91@gmail.com',
-    birthday: '28/07/1991',
-    branch: 'Q3',
-    tier: 'LOYAL',
-    status: 'ACTIVE',
-    source: 'Google',
-    visits: 11,
-    totalSpent: 12480000,
-    points: 1248,
-    lastVisit: '16/07/2026',
-    nextAppointment: '23/07 · 09:30',
-    favoriteTechnician: 'Minh Châu',
-    preferences: ['Pedicure', 'Đỏ rượu', 'Móng vuông ngắn'],
-    allergies: 'Tinh dầu bạc hà',
-    nailCondition: 'Bình thường',
-    note: 'Không dùng tinh dầu bạc hà trong bước ngâm chân.',
-    consent: ['Zalo', 'Email'],
-    tags: ['Sắp sinh nhật', 'Cần lưu ý dị ứng'],
-    history: [
-      visit('16/07/2026', 'Pedicure Spa + Sơn gel', 'Minh Châu', 780000, 5),
-      visit('25/06/2026', 'Pedicure chuyên sâu', 'Minh Châu', 920000, 4),
-    ],
-    activity: ['16/07 · Tái đặt lịch sau 7 ngày', '12/07 · Mở tin nhắn ưu đãi sinh nhật'],
-  },
-  {
-    id: 'CUS-2011',
-    name: 'Lê Ngọc Mai',
-    phone: '0936 221 557',
-    email: 'ngocmai97@gmail.com',
-    birthday: '06/11/1997',
-    branch: 'Q1',
-    tier: 'NEW',
-    status: 'ACTIVE',
-    source: 'Instagram',
-    visits: 1,
-    totalSpent: 1250000,
-    points: 125,
-    lastVisit: '16/07/2026',
-    favoriteTechnician: 'Chưa xác định',
-    preferences: ['Ombre', 'Đính đá nhỏ', 'Form Coffin'],
-    allergies: 'Chưa khai báo',
-    nailCondition: 'Móng mỏng',
-    note: 'Cần hỏi lại dị ứng trước lần phục vụ tiếp theo.',
-    consent: ['Instagram', 'Email'],
-    tags: ['Hồ sơ thiếu dị ứng'],
-    history: [visit('16/07/2026', 'Ombre Premium', 'Thảo Nguyễn', 1250000, 5)],
-    activity: ['16/07 · Tạo hồ sơ từ POS', '16/07 · Hoàn thành lần ghé đầu tiên'],
-  },
-  {
-    id: 'CUS-1224',
-    name: 'Bùi Thanh Trúc',
-    phone: '0938 400 176',
-    email: 'thanhtruc@gmail.com',
-    birthday: '19/07/1988',
-    branch: 'Q3',
-    tier: 'LOYAL',
-    status: 'CARE',
-    source: 'Khách giới thiệu',
-    visits: 13,
-    totalSpent: 9860000,
-    points: 986,
-    lastVisit: '28/05/2026',
-    nextAppointment: '23/07 · 14:00',
-    favoriteTechnician: 'Thuỳ Dương',
-    preferences: ['Gel đơn sắc', 'Móng ngắn', 'Tông lạnh'],
-    allergies: 'Không ghi nhận',
-    nailCondition: 'Khô nhẹ quanh viền móng',
-    note: 'Đã vắng trên 45 ngày; ưu tiên gửi ưu đãi quay lại.',
-    consent: ['SMS', 'Email'],
-    tags: ['Vắng 52 ngày', 'Sinh nhật trong tháng'],
-    history: [
-      visit('28/05/2026', 'Sơn gel Hàn Quốc', 'Thuỳ Dương', 620000, 4),
-      visit('05/05/2026', 'Manicure cơ bản', 'Thuỳ Dương', 420000, 5),
-    ],
-    activity: ['19/07 · Đã gửi lời chúc sinh nhật', '12/07 · Thêm vào nhóm khách cần chăm sóc'],
-  },
-  {
-    id: 'CUS-0740',
-    name: 'Hoàng Mỹ Hạnh',
-    phone: '0907 311 840',
-    email: 'myhanh86@gmail.com',
-    birthday: '25/01/1986',
-    branch: 'Q1',
-    tier: 'STANDARD',
-    status: 'INACTIVE',
-    source: 'Khách vãng lai',
-    visits: 5,
-    totalSpent: 3650000,
-    points: 365,
-    lastVisit: '18/11/2025',
-    favoriteTechnician: 'Hà My',
-    preferences: ['Manicure cơ bản', 'Màu pastel'],
-    allergies: 'Acetone nồng độ cao',
-    nailCondition: 'Móng giòn',
-    note: 'Chỉ nhận email; không gọi điện chăm sóc.',
-    consent: ['Email'],
-    tags: ['Không SMS', 'Vắng trên 6 tháng'],
-    history: [visit('18/11/2025', 'Manicure cơ bản', 'Hà My', 450000, 4)],
-    activity: ['02/07 · Email quay lại chưa mở', '18/11 · Hoàn thành dịch vụ gần nhất'],
-  },
-  {
-    id: 'CUS-2050',
-    name: 'Đinh Gia Hân',
-    phone: '0902 826 114',
-    email: 'giahan@gmail.com',
-    birthday: '03/03/1995',
-    branch: 'Q1',
-    tier: 'LOYAL',
-    status: 'ACTIVE',
-    source: 'TikTok',
-    visits: 9,
-    totalSpent: 8720000,
-    points: 872,
-    lastVisit: '12/07/2026',
-    nextAppointment: '23/07 · 09:00',
-    favoriteTechnician: 'Hà My',
-    preferences: ['Chrome', 'Form Oval', 'Khu VIP'],
-    allergies: 'Không ghi nhận',
-    nailCondition: 'Bình thường',
-    note: 'Thường đi cùng bạn; thích phòng yên tĩnh.',
-    consent: ['Zalo', 'SMS'],
-    tags: ['Sắp nâng hạng'],
-    history: [visit('12/07/2026', 'Summer Chrome', 'Hà My', 1180000, 5)],
-    activity: ['18/07 · Xác nhận lịch qua Zalo', '12/07 · Cộng 118 điểm'],
-  },
-];
-
-const emptyForm = (branch: BranchCode): CustomerForm => ({
-  name: '',
-  phone: '',
-  email: '',
-  birthday: '',
-  branch,
-  tier: 'NEW',
-  source: 'Khách vãng lai',
-  favoriteTechnician: '',
-  preferences: '',
-  allergies: '',
-  nailCondition: '',
-  note: '',
-  consent: ['SMS'],
-});
+/**
+ * Bộ dữ liệu mẫu cho tài khoản demo, chuyển sang đúng hình dạng máy chủ trả về.
+ *
+ * Chỉ giữ lại những trường thật sự tồn tại; mười lăm trường còn lại của bản cũ — điểm
+ * thưởng, nguồn khách, sở thích, dị ứng, kênh liên lạc, nhãn... — biến mất ở đây đúng như
+ * chúng đã biến mất khỏi biểu mẫu.
+ */
+const demoSeed: CustomerDto[] = defaultCustomerSeed.map((customer) => ({
+    id: customer.id,
+    tenantId: 'DEMO',
+    phone: customer.phone.replace(/\s/g, ''),
+    fullName: customer.name,
+    email: customer.email || null,
+    birthDate: isoFromLegacyBirthday(customer.birthday) || null,
+    note: customer.note || null,
+    status: customer.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+    tier: customer.tier,
+    visits: customer.visits,
+    totalSpent: customer.totalSpent,
+    lastVisitAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }));
 
 export default function TenantAdminCustomers({
   searchQuery,
   onSearchQueryChange,
-  selectedBranch,
-  onSelectedBranchChange,
-  branchLocked = false,
   tenantName = 'Nailé Studio',
   roleLabel = 'Owner · Tenant Admin',
   accessMode = 'full',
   readOnlyReason = '',
   onNotify,
+  tenantId,
   onBookCustomer,
 }: TenantAdminCustomersProps) {
-  const storageKey = tenantStorageKey('tenant-admin-customers-v1');
-  const appointmentStorageKey = tenantStorageKey('tenant-admin-appointments-v2');
   const isReceptionist = roleLabel.toLowerCase().startsWith('receptionist');
-  const assignedBranch = selectedBranch === 'Q1' ? 'Q1' : 'Q3';
-  const [customers, setCustomers] = useState<TenantCustomer[]>(() => {
-    if (typeof window === 'undefined') return getTenantAdminInitialData(null, seed);
-    try {
-      const stored = localStorage.getItem(storageKey);
-      return getTenantAdminInitialData(stored ? (JSON.parse(stored) as TenantCustomer[]) : null, seed);
-    } catch {
-      return getTenantAdminInitialData(null, seed);
-    }
-  });
-  const [appointments, setAppointments] = useState<LinkedAppointment[]>([]);
-  const [tierFilter, setTierFilter] = useState<'ALL' | CustomerTier>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | CustomerStatus>('ALL');
-  const [selected, setSelected] = useState<TenantCustomer | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formError, setFormError] = useState('');
-  const [form, setForm] = useState<CustomerForm>(() => emptyForm(assignedBranch));
   const canManage = accessMode === 'full' && !readOnlyReason;
   const canExport = canManage && !isReceptionist;
-  const today = localDateKey();
 
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(customers));
-    window.dispatchEvent(new CustomEvent('salonsys_customers_updated', { detail: { storageKey, customers } }));
-  }, [customers, storageKey]);
+  /**
+   * Danh bạ thật của tiệm đang làm việc.
+   *
+   * Chạy song song với `demoList` chứ không thay thế: tài khoản demo vẫn cần một đường dữ
+   * liệu mẫu. Khi có `tenantId` thì màn này chuyển hẳn sang máy chủ và KHÔNG ghi bản sao
+   * nào xuống trình duyệt.
+   */
+  const isLive = Boolean(tenantId);
+  const directory = useCustomers(isLive, tenantId || null);
+  /**
+   * Tách riêng hàm đọc hồ sơ ra khỏi `directory`.
+   *
+   * `useCustomers` trả về một đối tượng MỚI ở mỗi lần render, nên đặt cả `directory` vào
+   * danh sách phụ thuộc của hiệu ứng bên dưới sẽ khiến nó chạy lại sau mỗi lần render —
+   * và vì chính hiệu ứng đó gọi `setVisits`, vòng lặp không bao giờ dừng. Bản thân hàm
+   * này thì ổn định: nó đã được `useCallback` giữ nguyên qua các lần render.
+   */
+  const fetchCustomer = directory.getCustomer;
+  const [demoList, setDemoList] = useState<CustomerDto[]>(demoSeed);
+  const customers = isLive ? directory.customers : demoList;
 
+  const [tierFilter, setTierFilter] = useState<'ALL' | CustomerApiTier>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | CustomerApiStatus>('ALL');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [visits, setVisits] = useState<CustomerVisitDto[] | null>(null);
+  const [visitsLoading, setVisitsLoading] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<CustomerFormState>(emptyForm);
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const selected = useMemo(
+    () => customers.find((customer) => customer.id === selectedId) || null,
+    [customers, selectedId],
+  );
+
+  /**
+   * Lịch sử ghé của hồ sơ đang mở, lấy từ `GET /api/customers/{id}`.
+   *
+   * Chỉ gọi khi người dùng thật sự mở ngăn chi tiết: lịch sử của cả danh sách là hai mươi
+   * phép nối cho một màn hình mỗi lần chỉ xem một hồ sơ.
+   */
   useEffect(() => {
-    const syncCustomers = () => {
-      try {
-        const stored = localStorage.getItem(storageKey);
-        if (stored) {
-          setCustomers(JSON.parse(stored));
-        }
-      } catch {
-        // ignore
-      }
-    };
-    const handleUpdated = (e: Event) => {
-      const customEvent = e as CustomEvent<{ storageKey?: string; customers?: TenantCustomer[] }>;
-      if (customEvent.detail?.customers) {
-        setCustomers(customEvent.detail.customers);
-      } else {
-        syncCustomers();
-      }
-    };
-    window.addEventListener('salonsys_customers_updated', handleUpdated);
-    window.addEventListener('storage', syncCustomers);
+    if (!selectedId || !isLive) {
+      setVisits(null);
+      return;
+    }
+
+    let active = true;
+    setVisitsLoading(true);
+
+    void fetchCustomer(selectedId)
+      .then((result) => {
+        if (!active) return;
+        setVisits(result.status === 'ok' ? result.data.visits : []);
+      })
+      .finally(() => {
+        if (active) setVisitsLoading(false);
+      });
+
     return () => {
-      window.removeEventListener('salonsys_customers_updated', handleUpdated);
-      window.removeEventListener('storage', syncCustomers);
+      active = false;
     };
-  }, [storageKey]);
-
-  useEffect(() => {
-    const syncAppointments = () => {
-      try {
-        const stored = localStorage.getItem(appointmentStorageKey);
-        setAppointments(stored ? (JSON.parse(stored) as LinkedAppointment[]) : []);
-      } catch {
-        setAppointments([]);
-      }
-    };
-    syncAppointments();
-    window.addEventListener('focus', syncAppointments);
-    window.addEventListener('storage', syncAppointments);
-    return () => {
-      window.removeEventListener('focus', syncAppointments);
-      window.removeEventListener('storage', syncAppointments);
-    };
-  }, [appointmentStorageKey]);
+  }, [selectedId, isLive, fetchCustomer]);
 
   useEffect(() => {
     if (!selected && !formOpen) return;
@@ -531,7 +329,7 @@ export default function TenantAdminCustomers({
     document.body.style.overflow = 'hidden';
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setSelected(null);
+        setSelectedId(null);
         setFormOpen(false);
       }
     };
@@ -542,236 +340,185 @@ export default function TenantAdminCustomers({
     };
   }, [formOpen, selected]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, tierFilter, statusFilter]);
+
   const requireManage = () => {
     if (canManage) return true;
     onNotify?.(readOnlyReason || 'Bạn chỉ được xem hồ sơ khách hàng.');
     return false;
   };
 
-  const scoped = useMemo(
-    () => customers.filter((customer) => selectedBranch === 'ALL' || customer.branch === selectedBranch),
-    [customers, selectedBranch],
-  );
-
-  const scopedAppointments = useMemo(
-    () => appointments.filter((item) => selectedBranch === 'ALL' || item.branch === selectedBranch),
-    [appointments, selectedBranch],
-  );
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  /** Gắn lỗi máy chủ vào đúng ô nhập; phần không gắn được thì hiện ở đầu biểu mẫu. */
+  const applyApiError = (error: ApiError) => {
+    const mapped: Record<string, string> = {};
+    error.fields.forEach((item) => {
+      mapped[item.field] = item.message;
+    });
+    setFieldErrors(mapped);
+    setFormError(error.fields.length ? '' : error.message);
+  };
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const normalizedQuery = phoneDigits(query);
-    return scoped
+    const digits = phoneDigits(query);
+
+    return customers
       .filter((customer) => tierFilter === 'ALL' || customer.tier === tierFilter)
       .filter((customer) => statusFilter === 'ALL' || customer.status === statusFilter)
       .filter((customer) => {
         if (!query) return true;
-        const searchable = `${customer.id} ${customer.name} ${customer.phone} ${customer.email} ${customer.tags.join(' ')}`.toLowerCase();
-        return searchable.includes(query) || (!!normalizedQuery && phoneDigits(customer.phone).includes(normalizedQuery));
+        const searchable = `${customer.id} ${customer.fullName || ''} ${customer.phone} ${customer.email || ''}`.toLowerCase();
+        return searchable.includes(query) || (!!digits && phoneDigits(customer.phone).includes(digits));
       });
-  }, [scoped, searchQuery, statusFilter, tierFilter]);
+  }, [customers, searchQuery, statusFilter, tierFilter]);
 
   const pagedCustomers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, currentPage, pageSize]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, tierFilter, statusFilter, selectedBranch]);
-
-  const todayAppointments = scopedAppointments.filter(
-    (item) => item.date === today && !['CANCELLED', 'NO_SHOW'].includes(item.status),
-  );
-  const todayCustomerCount = new Set(todayAppointments.map((item) => phoneDigits(item.phone))).size;
-  const safetyAlerts = scoped.filter(
-    (customer) =>
-      !['', 'Không ghi nhận'].includes(customer.allergies) ||
-      /mỏng|yếu|giòn|tổn thương|khô/i.test(customer.nailCondition),
-  ).length;
-  const careCustomers = scoped.filter((customer) => customer.status === 'CARE').length;
-
-  const selectedAppointments = useMemo(() => {
-    if (!selected) return [];
-    const selectedPhone = phoneDigits(selected.phone);
-    return scopedAppointments
-      .filter(
-        (item) =>
-          item.customerId === selected.id || (!!selectedPhone && phoneDigits(item.phone) === selectedPhone),
-      )
-      .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
-  }, [scopedAppointments, selected]);
-
-  const selectedTodayAppointment = selectedAppointments.find(
-    (item) => item.date === today && !['CANCELLED', 'NO_SHOW'].includes(item.status),
-  );
-  const selectedNextAppointment = selectedAppointments.find(
-    (item) => `${item.date} ${item.start}` >= `${today} 00:00` && !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(item.status),
-  );
-  const selectedOutstanding = selectedTodayAppointment
-    ? Math.max(0, selectedTodayAppointment.price - selectedTodayAppointment.deposit)
-    : 0;
-
-  const handleStatusChange = (customerId: string, newStatus: CustomerStatus) => {
-    if (!requireManage()) return;
-    const targetCustomer = customers.find((c) => c.id === customerId);
-    if (!targetCustomer) return;
-    if (targetCustomer.status === newStatus) return;
-
-    const newLabel = statusMeta[newStatus].label;
-
-    setCustomers((current) =>
-      current.map((item) => {
-        if (item.id === customerId) {
-          return {
-            ...item,
-            status: newStatus,
-            activity: [
-              `${activityTime()} · Chuyển trạng thái sang "${newLabel}"`,
-              ...item.activity,
-            ],
-          };
-        }
-        return item;
-      }),
-    );
-
-    setSelected((current) => {
-      if (current?.id === customerId) {
-        return {
-          ...current,
-          status: newStatus,
-          activity: [
-            `${activityTime()} · Chuyển trạng thái sang "${newLabel}"`,
-            ...current.activity,
-          ],
-        };
-      }
-      return current;
-    });
-
-    onNotify?.(`Đã cập nhật trạng thái của ${targetCustomer.name} thành "${newLabel}".`);
-  };
+  const activeCount = customers.filter((customer) => customer.status === 'ACTIVE').length;
+  const loyalCount = customers.filter((customer) => ['VIP', 'LOYAL'].includes(customer.tier)).length;
+  const newCount = customers.filter((customer) => customer.tier === 'NEW').length;
+  const totalSpent = customers.reduce((sum, customer) => sum + customer.totalSpent, 0);
 
   const openCreate = () => {
     if (!requireManage()) return;
     setEditingId(null);
-    setForm(emptyForm(assignedBranch));
+    setForm(emptyForm());
     setFormError('');
+    setFieldErrors({});
     setFormOpen(true);
   };
 
-  const openEdit = (customer: TenantCustomer) => {
+  const openEdit = (customer: CustomerDto) => {
     if (!requireManage()) return;
     setEditingId(customer.id);
     setForm({
-      name: customer.name,
       phone: customer.phone,
-      email: customer.email,
-      birthday: customer.birthday,
-      branch: customer.branch,
-      tier: customer.tier,
-      source: customer.source,
-      favoriteTechnician: customer.favoriteTechnician && customer.favoriteTechnician !== 'Chưa xác định' ? customer.favoriteTechnician : '',
-      preferences: customer.preferences.join(', '),
-      allergies: customer.allergies,
-      nailCondition: customer.nailCondition,
-      note: customer.note,
-      consent: customer.consent,
+      fullName: customer.fullName || '',
+      email: customer.email || '',
+      birthDate: customer.birthDate || '',
+      note: customer.note || '',
     });
-    setSelected(null);
+    setSelectedId(null);
     setFormError('');
+    setFieldErrors({});
     setFormOpen(true);
   };
 
-  const toggleConsent = (channel: string) => {
-    setForm((current) => ({
-      ...current,
-      consent: current.consent.includes(channel)
-        ? current.consent.filter((item) => item !== channel)
-        : [...current.consent, channel],
-    }));
+  const submitForm = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!requireManage() || saving) return;
+    setFormError('');
+    setFieldErrors({});
+
+    // BR-CUS-003 — chỉ số điện thoại là bắt buộc. Mọi phép kiểm còn lại nằm ở máy chủ
+    // (BR-VAL-002); ở đây chỉ chặn trường hợp gửi một biểu mẫu rỗng hoàn toàn.
+    if (!form.phone.trim()) {
+      setFieldErrors({ phone: 'Vui lòng nhập số điện thoại của khách.' });
+      return;
+    }
+
+    const input: SaveCustomerInput = {
+      phone: form.phone.trim(),
+      fullName: form.fullName.trim() || undefined,
+      email: form.email.trim() || undefined,
+      birthDate: form.birthDate || undefined,
+      note: form.note.trim() || undefined,
+    };
+
+    if (!isLive) {
+      const now = new Date().toISOString();
+      if (editingId) {
+        setDemoList((current) =>
+          current.map((customer) =>
+            customer.id === editingId
+              ? {
+                  ...customer,
+                  phone: input.phone,
+                  fullName: input.fullName ?? null,
+                  email: input.email ?? null,
+                  birthDate: input.birthDate ?? null,
+                  note: input.note ?? null,
+                  updatedAt: now,
+                }
+              : customer,
+          ),
+        );
+        onNotify?.('Đã cập nhật hồ sơ khách hàng.');
+      } else {
+        const created: CustomerDto = {
+          id: `CUS-DEMO-${Date.now().toString().slice(-6)}`,
+          tenantId: 'DEMO',
+          phone: input.phone,
+          fullName: input.fullName ?? null,
+          email: input.email ?? null,
+          birthDate: input.birthDate ?? null,
+          note: input.note ?? null,
+          status: 'ACTIVE',
+          tier: 'NEW',
+          visits: 0,
+          totalSpent: 0,
+          lastVisitAt: null,
+          createdAt: now,
+          updatedAt: now,
+        };
+        setDemoList((current) => [created, ...current]);
+        setSelectedId(created.id);
+        onNotify?.(`Đã tạo hồ sơ ${displayName(created)}.`);
+      }
+      setFormOpen(false);
+      return;
+    }
+
+    setSaving(true);
+    const result = editingId
+      ? await directory.updateCustomer(editingId, input)
+      : await directory.createCustomer(input);
+    setSaving(false);
+
+    if (result.status === 'error') {
+      applyApiError(result.error);
+      return;
+    }
+
+    setFormOpen(false);
+    setSelectedId(result.data.id);
+    onNotify?.(
+      editingId
+        ? `Đã cập nhật hồ sơ ${displayName(result.data)}.`
+        : `Đã tạo hồ sơ ${displayName(result.data)}.`,
+    );
   };
 
-  const submitForm = (event: FormEvent) => {
-    event.preventDefault();
-    const normalizedPhone = phoneDigits(form.phone);
-    if (!form.name.trim() || normalizedPhone.length < 9 || normalizedPhone.length > 11) {
-      setFormError('Vui lòng nhập họ tên và số điện thoại từ 9–11 chữ số.');
-      return;
-    }
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      setFormError('Email chưa đúng định dạng.');
-      return;
-    }
-    if (form.birthday && !/^\d{2}\/\d{2}\/\d{4}$/.test(form.birthday)) {
-      setFormError('Ngày sinh cần đúng định dạng DD/MM/YYYY.');
-      return;
-    }
-    if (
-      customers.some(
-        (customer) => customer.id !== editingId && phoneDigits(customer.phone) === normalizedPhone,
-      )
-    ) {
-      setFormError('Số điện thoại đã tồn tại. Hãy mở hồ sơ hiện có thay vì tạo trùng.');
-      return;
-    }
+  const changeStatus = async (customer: CustomerDto, status: CustomerApiStatus) => {
+    if (!requireManage() || saving) return;
 
-    const preferences = form.preferences
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const safeTier = isReceptionist && editingId
-      ? customers.find((customer) => customer.id === editingId)?.tier ?? 'NEW'
-      : form.tier;
-
-    if (editingId) {
-      setCustomers((current) =>
-        current.map((customer) =>
-          customer.id === editingId
-            ? {
-                ...customer,
-                ...form,
-                tier: safeTier,
-                favoriteTechnician: form.favoriteTechnician.trim() || 'Chưa xác định',
-                preferences,
-                allergies: form.allergies.trim() || 'Chưa khai báo',
-                nailCondition: form.nailCondition.trim() || 'Chưa đánh giá',
-                activity: [
-                  `${activityTime()} · ${isReceptionist ? 'Lễ tân' : roleLabel} cập nhật hồ sơ`,
-                  ...customer.activity,
-                ],
-              }
-            : customer,
-        ),
+    if (!isLive) {
+      setDemoList((current) =>
+        current.map((item) => (item.id === customer.id ? { ...item, status } : item)),
       );
-      onNotify?.('Đã cập nhật hồ sơ và lưu nhật ký thao tác.');
-    } else {
-      const customer: TenantCustomer = {
-        id: `CUS-${Date.now().toString().slice(-4)}`,
-        ...form,
-        tier: 'NEW',
-        favoriteTechnician: form.favoriteTechnician.trim() || 'Chưa xác định',
-        preferences,
-        allergies: form.allergies.trim() || 'Chưa khai báo',
-        nailCondition: form.nailCondition.trim() || 'Chưa đánh giá',
-        status: 'ACTIVE',
-        visits: 0,
-        totalSpent: 0,
-        points: 0,
-        lastVisit: 'Chưa phát sinh',
-        tags: ['Khách mới tại quầy'],
-        history: [],
-        activity: [`${activityTime()} · Tạo hồ sơ bởi ${isReceptionist ? 'Lễ tân' : roleLabel}`],
-      };
-      setCustomers((current) => [customer, ...current]);
-      setSelected(customer);
-      onNotify?.(`Đã tạo hồ sơ ${customer.name}. Có thể đặt lịch ngay.`);
+      onNotify?.(`${displayName(customer)} · ${statusMeta[status].label}.`);
+      return;
     }
-    setFormOpen(false);
+
+    setSaving(true);
+    const result = await directory.changeCustomerStatus(customer.id, status);
+    setSaving(false);
+
+    if (result.status === 'error') {
+      onNotify?.(result.error.message);
+      return;
+    }
+
+    onNotify?.(
+      status === 'INACTIVE'
+        ? `Đã ngừng hồ sơ ${displayName(customer)}. Lịch sử dịch vụ và hóa đơn vẫn giữ nguyên.`
+        : `Đã mở lại hồ sơ ${displayName(customer)}.`,
+    );
   };
 
   const exportCustomers = () => {
@@ -779,17 +526,18 @@ export default function TenantAdminCustomers({
       onNotify?.('Lễ tân không có quyền xuất dữ liệu khách hàng hàng loạt.');
       return;
     }
-    const header = 'Ma,Ho ten,So dien thoai,Email,Hang,Luot ghe,Tong chi tieu,Trang thai';
+    const header = 'Ma,Ho ten,So dien thoai,Email,Hang,Luot ghe,Tong chi tieu,Lan ghe gan nhat,Trang thai';
     const body = filtered
       .map((customer) =>
         [
           customer.id,
-          customer.name,
+          customer.fullName || '',
           customer.phone,
-          customer.email,
+          customer.email || '',
           tierMeta[customer.tier].label,
           customer.visits,
           customer.totalSpent,
+          readableDateTime(customer.lastVisitAt) || 'Chua phat sinh',
           statusMeta[customer.status].label,
         ].join(','),
       )
@@ -803,11 +551,17 @@ export default function TenantAdminCustomers({
     onNotify?.('Đã xuất danh sách theo bộ lọc hiện tại.');
   };
 
-  const bookCustomer = (customer: TenantCustomer) => {
+  const bookCustomer = (customer: CustomerDto) => {
     if (!requireManage()) return;
     onBookCustomer?.(customer);
-    setSelected(null);
+    setSelectedId(null);
   };
+
+  const listMessage = directory.error
+    ? directory.error.message
+    : isLive && directory.loading
+      ? 'Đang tải danh bạ khách hàng...'
+      : '';
 
   return (
     <div className="space-y-5">
@@ -842,34 +596,32 @@ export default function TenantAdminCustomers({
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
-            label: isReceptionist ? 'Khách có lịch hôm nay' : 'Khách trong phạm vi',
-            value: isReceptionist ? todayCustomerCount : scoped.length,
-            detail: isReceptionist
-              ? `${todayAppointments.length} lịch đang hiệu lực`
-              : `${scoped.filter((item) => item.status === 'ACTIVE').length} đang hoạt động`,
+            label: 'Khách của tiệm',
+            value: customers.length,
+            detail: `${activeCount} đang hoạt động`,
             icon: UsersRound,
             tone: 'bg-blue-50 text-blue-600',
           },
           {
-            label: 'Hồ sơ cần lưu ý',
-            value: safetyAlerts,
-            detail: 'Dị ứng hoặc tình trạng móng đặc biệt',
-            icon: AlertTriangle,
-            tone: safetyAlerts ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600',
-          },
-          {
-            label: 'Khách thân thiết & VIP',
-            value: scoped.filter((item) => ['VIP', 'LOYAL'].includes(item.tier)).length,
-            detail: 'Nhận diện quyền lợi trước khi phục vụ',
+            label: 'Thân thiết & VIP',
+            value: loyalCount,
+            detail: 'Suy từ tổng chi tiêu, không nâng hạng tay',
             icon: Star,
             tone: 'bg-violet-50 text-violet-600',
           },
           {
-            label: 'Cần chăm sóc lại',
-            value: careCustomers,
-            detail: 'Vắng lâu, sinh nhật hoặc cần theo dõi',
-            icon: HeartHandshake,
+            label: 'Chưa phát sinh hóa đơn',
+            value: newCount,
+            detail: 'Hồ sơ đã lập nhưng chưa từng thanh toán',
+            icon: UserRound,
             tone: 'bg-amber-50 text-amber-600',
+          },
+          {
+            label: 'Tổng chi tiêu đã ghi nhận',
+            value: money(totalSpent),
+            detail: 'Cộng từ hóa đơn đã trả đủ',
+            icon: TrendingUp,
+            tone: 'bg-emerald-50 text-emerald-600',
           },
         ].map(({ label, value, detail, icon: Icon, tone }) => (
           <article
@@ -877,9 +629,9 @@ export default function TenantAdminCustomers({
             className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]"
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-caption font-bold text-slate-500">{label}</p>
-                <p className="ta-metric-value mt-1.5 text-slate-950">{value}</p>
+                <p className="ta-metric-value mt-1.5 truncate text-slate-950">{value}</p>
               </div>
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
                 <Icon className="h-4.5 w-4.5" />
@@ -897,7 +649,7 @@ export default function TenantAdminCustomers({
             <input
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
-              placeholder={isReceptionist ? 'Nhập tên, số điện thoại hoặc mã khách...' : 'Tìm tên, SĐT, email, nhãn...'}
+              placeholder="Tìm theo số điện thoại, tên, email hoặc mã khách..."
               autoComplete="off"
               inputMode="search"
               aria-label="Tìm kiếm khách hàng"
@@ -914,28 +666,22 @@ export default function TenantAdminCustomers({
               </button>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <BeautifulSelect
-              value={selectedBranch}
-              onChange={(event) => onSelectedBranchChange(event.target.value)}
-              disabled={branchLocked}
-              aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'}
-              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
-            >
-              <option value="ALL">Tất cả chi nhánh</option>
-              <option value="Q3">Chi nhánh Quận 3</option>
-              <option value="Q1">Chi nhánh Quận 1</option>
-            </BeautifulSelect>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* BR-CUS-001 — khách dùng chung cho mọi chi nhánh, nên ở đây cố ý không có
+                bộ lọc chi nhánh. Câu này thay chỗ của nó để người dùng biết đó là chủ ý. */}
+            <span className="text-caption font-semibold text-slate-400">
+              Danh bạ dùng chung cho mọi chi nhánh
+            </span>
             <BeautifulSelect
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as 'ALL' | CustomerStatus)}
-              className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
+              onChange={(event) => setStatusFilter(event.target.value as 'ALL' | CustomerApiStatus)}
+              className="h-10 w-44 rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold"
               aria-label="Lọc trạng thái khách hàng"
             >
               <option value="ALL">Mọi trạng thái</option>
-              {Object.entries(statusMeta).map(([key, meta]) => (
+              {(Object.keys(statusMeta) as CustomerApiStatus[]).map((key) => (
                 <option key={key} value={key}>
-                  {meta.label}
+                  {statusMeta[key].label}
                 </option>
               ))}
             </BeautifulSelect>
@@ -948,6 +694,7 @@ export default function TenantAdminCustomers({
               key={value}
               type="button"
               onClick={() => setTierFilter(value)}
+              title={value === 'ALL' ? undefined : tierMeta[value].hint}
               className={`h-8 shrink-0 border px-3 text-caption font-black shadow-sm ${
                 tierFilter === value
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
@@ -956,144 +703,114 @@ export default function TenantAdminCustomers({
             >
               {value === 'ALL' ? 'Tất cả khách hàng' : tierMeta[value].label}
               <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-caption">
-                {value === 'ALL' ? scoped.length : scoped.filter((item) => item.tier === value).length}
+                {value === 'ALL'
+                  ? customers.length
+                  : customers.filter((item) => item.tier === value).length}
               </span>
             </button>
           ))}
         </div>
 
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[1080px] text-left">
+          <table className="w-full min-w-[1020px] text-left">
             <thead>
               <tr className="border-b border-slate-100 text-caption font-black uppercase tracking-wide text-slate-400">
                 <th className="px-5 py-3">Khách hàng</th>
-                <th className="px-4 py-3">Hạng & điểm</th>
-                <th className="px-4 py-3">Lần ghé / lịch hẹn</th>
-                <th className="px-4 py-3">Sở thích & an toàn</th>
-                {/* Chốt bề ngang hai cột cuối: nhãn trạng thái dài ngắn khác nhau
-                    ("Cần chăm sóc" và "Không hoạt động" lệch nhau ~40px) nên nếu để
-                    bảng tự co, cụm tác vụ ở mỗi dòng lại nằm một chỗ. */}
+                <th className="px-4 py-3">Hạng</th>
+                <th className="px-4 py-3">Lượt ghé & chi tiêu</th>
+                <th className="px-4 py-3">Lần ghé gần nhất</th>
+                {/* Chốt bề ngang hai cột cuối: nhãn trạng thái dài ngắn khác nhau nên nếu
+                    để bảng tự co, cụm tác vụ ở mỗi dòng lại nằm một chỗ. */}
                 <th className="w-44 px-4 py-3">Trạng thái</th>
                 <th className="w-52 px-5 py-3 text-right">Tác vụ tại quầy</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {pagedCustomers.map((customer) => {
-                const customerPhone = phoneDigits(customer.phone);
-                const liveAppointment = scopedAppointments.find(
-                  (item) =>
-                    item.date === today &&
-                    (item.customerId === customer.id || phoneDigits(item.phone) === customerPhone) &&
-                    !['CANCELLED', 'NO_SHOW'].includes(item.status),
-                );
-                const hasSafetyAlert =
-                  !['', 'Không ghi nhận'].includes(customer.allergies) ||
-                  /mỏng|yếu|giòn|tổn thương|khô/i.test(customer.nailCondition);
-                return (
-                  <tr
-                    key={customer.id}
-                    onClick={() => setSelected(customer)}
-                    className="cursor-pointer text-caption text-slate-600 transition hover:bg-emerald-50/30"
-                  >
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-caption font-black text-white ${tierMeta[customer.tier].avatar}`}
-                        >
-                          {initials(customer.name)}
-                        </span>
-                        <div>
-                          <p className="font-black text-slate-900">{customer.name}</p>
-                          <p className="mt-1 text-caption text-slate-400">
-                            {customer.id} · {customer.phone}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${tierMeta[customer.tier].badge}`}>
-                        {tierMeta[customer.tier].label}
-                      </span>
-                      <p className="mt-2 text-caption text-slate-400">
-                        {customer.points.toLocaleString('vi-VN')} điểm
-                      </p>
-                    </td>
-                    <td className="px-4 py-4">
-                      {liveAppointment ? (
-                        <>
-                          <p className="flex items-center gap-1.5 font-black text-emerald-700">
-                            <Clock3 className="h-3.5 w-3.5" />
-                            Hôm nay · {liveAppointment.start}
-                          </p>
-                          <p className="mt-1 max-w-44 truncate text-caption text-slate-400">
-                            {liveAppointment.service}
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="font-black text-slate-800">{customer.visits} lượt ghé</p>
-                          <p className="mt-1 text-caption text-slate-400">Gần nhất {customer.lastVisit}</p>
-                        </>
-                      )}
-                    </td>
-                    <td className="max-w-[250px] px-4 py-4">
-                      <p className="truncate font-bold text-slate-700">
-                        {customer.preferences.slice(0, 3).join(' · ') || 'Chưa ghi nhận sở thích'}
-                      </p>
-                      <p
-                        className={`mt-1 flex items-center gap-1 truncate text-caption ${
-                          hasSafetyAlert ? 'font-black text-rose-600' : 'text-emerald-600'
-                        }`}
+              {pagedCustomers.map((customer) => (
+                <tr
+                  key={customer.id}
+                  onClick={() => setSelectedId(customer.id)}
+                  className="cursor-pointer text-caption text-slate-600 transition hover:bg-emerald-50/30"
+                >
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-caption font-black text-white ${tierMeta[customer.tier].avatar}`}
                       >
-                        {hasSafetyAlert ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <CheckCircle2 className="h-3 w-3 shrink-0" />}
-                        {customer.allergies || 'Chưa khai báo'}
-                      </p>
-                    </td>
-                    <td className="px-4 py-4" onClick={(event) => event.stopPropagation()}>
-                      <CustomerStatusDropdown
-                        status={customer.status}
-                        disabled={!canManage}
-                        onStatusChange={(newStatus) => handleStatusChange(customer.id, newStatus)}
-                      />
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <a
-                          href={`tel:${phoneDigits(customer.phone)}`}
-                          onClick={(event) => event.stopPropagation()}
-                          aria-label={`Gọi ${customer.name}`}
-                          className="ui-row-action ui-row-action-icon flex shrink-0 items-center justify-center border border-slate-200 bg-white text-slate-500 transition hover:border-emerald-200 hover:text-emerald-700"
-                        >
-                          <Phone className="h-3.5 w-3.5" />
-                        </a>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            bookCustomer(customer);
-                          }}
-                          disabled={!canManage}
-                          className="ui-row-action flex shrink-0 items-center gap-1.5 border border-emerald-200 bg-emerald-50 px-2.5 font-bold text-emerald-700 disabled:opacity-50"
-                        >
-                          <CalendarClock className="h-3.5 w-3.5" />
-                          Đặt lịch
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelected(customer);
-                          }}
-                          className="ui-row-action ui-row-action-icon flex shrink-0 items-center justify-center border border-slate-200 bg-white text-slate-500 transition hover:border-emerald-200 hover:text-emerald-700"
-                          aria-label={`Xem hồ sơ ${customer.name}`}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
+                        {initials(displayName(customer))}
+                      </span>
+                      <div>
+                        <p className="font-black text-slate-900">{displayName(customer)}</p>
+                        <p className="mt-1 text-caption text-slate-400">
+                          {customer.phone}
+                          {customer.email ? ` · ${customer.email}` : ''}
+                        </p>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${tierMeta[customer.tier].badge}`}
+                      title={tierMeta[customer.tier].hint}
+                    >
+                      {tierMeta[customer.tier].label}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <p className="font-black text-slate-800">{customer.visits} lượt ghé</p>
+                    <p className="mt-1 text-caption text-slate-400">{money(customer.totalSpent)}</p>
+                  </td>
+                  <td className="px-4 py-4">
+                    {customer.lastVisitAt ? (
+                      <p className="font-bold text-slate-700">{readableDateTime(customer.lastVisitAt)}</p>
+                    ) : (
+                      <p className="text-caption text-slate-400">Chưa phát sinh</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-4" onClick={(event) => event.stopPropagation()}>
+                    <CustomerStatusDropdown
+                      status={customer.status}
+                      disabled={!canManage}
+                      onStatusChange={(status) => void changeStatus(customer, status)}
+                    />
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <a
+                        href={`tel:${phoneDigits(customer.phone)}`}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Gọi ${displayName(customer)}`}
+                        className="ui-row-action ui-row-action-icon flex shrink-0 items-center justify-center border border-slate-200 bg-white text-slate-500 transition hover:border-emerald-200 hover:text-emerald-700"
+                      >
+                        <Phone className="h-3.5 w-3.5" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          bookCustomer(customer);
+                        }}
+                        disabled={!canManage}
+                        className="ui-row-action flex shrink-0 items-center gap-1.5 border border-emerald-200 bg-emerald-50 px-2.5 font-bold text-emerald-700 disabled:opacity-50"
+                      >
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        Đặt lịch
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedId(customer.id);
+                        }}
+                        className="ui-row-action ui-row-action-icon flex shrink-0 items-center justify-center border border-slate-200 bg-white text-slate-500 transition hover:border-emerald-200 hover:text-emerald-700"
+                        aria-label={`Xem hồ sơ ${displayName(customer)}`}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -1104,11 +821,11 @@ export default function TenantAdminCustomers({
               key={customer.id}
               role="button"
               tabIndex={0}
-              onClick={() => setSelected(customer)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setSelected(customer);
+              onClick={() => setSelectedId(customer.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelectedId(customer.id);
                 }
               }}
               className="block h-auto w-full cursor-pointer rounded-none border-0 bg-white p-4 text-left shadow-none transition hover:bg-slate-50/80"
@@ -1117,16 +834,16 @@ export default function TenantAdminCustomers({
                 <span
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-caption font-black text-white ${tierMeta[customer.tier].avatar}`}
                 >
-                  {initials(customer.name)}
+                  {initials(displayName(customer))}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
                     <span>
                       <span className="block truncate text-caption font-black text-slate-900">
-                        {customer.name}
+                        {displayName(customer)}
                       </span>
                       <span className="mt-1 block text-caption text-slate-400">
-                        {customer.phone} · {branchName(customer.branch)}
+                        {customer.phone} · {customer.visits} lượt ghé
                       </span>
                     </span>
                     <ChevronRight className="h-4 w-4 text-slate-300" />
@@ -1139,11 +856,11 @@ export default function TenantAdminCustomers({
                       <CustomerStatusDropdown
                         status={customer.status}
                         disabled={!canManage}
-                        onStatusChange={(newStatus) => handleStatusChange(customer.id, newStatus)}
+                        onStatusChange={(status) => void changeStatus(customer, status)}
                       />
                     </span>
                     <span className="truncate text-caption font-bold text-slate-600">
-                      {customer.preferences.slice(0, 2).join(' · ') || 'Chưa có sở thích'}
+                      {money(customer.totalSpent)}
                     </span>
                   </span>
                 </span>
@@ -1155,11 +872,15 @@ export default function TenantAdminCustomers({
         {!filtered.length && (
           <div className="py-16 text-center">
             <UsersRound className="mx-auto h-8 w-8 text-slate-300" />
-            <p className="mt-3 text-caption font-black text-slate-600">Không tìm thấy hồ sơ phù hợp</p>
-            <p className="mt-1 text-caption text-slate-400">
-              Kiểm tra lại số điện thoại hoặc tạo khách mới nếu chưa có hồ sơ.
+            <p className="mt-3 text-caption font-black text-slate-600">
+              {listMessage || (customers.length ? 'Không tìm thấy hồ sơ phù hợp' : 'Tiệm chưa có khách hàng nào')}
             </p>
-            {canManage && (
+            <p className="mt-1 text-caption text-slate-400">
+              {customers.length
+                ? 'Kiểm tra lại số điện thoại hoặc tạo khách mới nếu chưa có hồ sơ.'
+                : 'Hồ sơ đầu tiên thường được lập ngay tại quầy, chỉ cần số điện thoại.'}
+            </p>
+            {canManage && !directory.loading && (
               <button
                 type="button"
                 onClick={openCreate}
@@ -1197,14 +918,14 @@ export default function TenantAdminCustomers({
           <button
             type="button"
             aria-label="Đóng chi tiết khách hàng"
-            onClick={() => setSelected(null)}
+            onClick={() => setSelectedId(null)}
             className="absolute inset-0 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none"
           />
           <aside
             role="dialog"
             aria-modal="true"
             aria-labelledby="customer-detail-title"
-            className="reception-customer-detail relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/15 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
+            className="reception-customer-detail relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-white/15 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
           >
             <header className="customer-detail-header border-b border-slate-100 bg-[linear-gradient(125deg,#ecfdf5_0%,#ffffff_65%)] px-5 py-5 sm:px-7">
               <div className="flex items-start justify-between gap-4">
@@ -1212,24 +933,27 @@ export default function TenantAdminCustomers({
                   <span
                     className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-caption font-black text-white ${tierMeta[selected.tier].avatar}`}
                   >
-                    {initials(selected.name)}
+                    {initials(displayName(selected))}
                   </span>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-caption font-black uppercase tracking-wide text-emerald-700">
                         {selected.id}
                       </span>
-                      <span className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${tierMeta[selected.tier].badge}`}>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-caption font-bold ring-1 ${tierMeta[selected.tier].badge}`}
+                        title={tierMeta[selected.tier].hint}
+                      >
                         {tierMeta[selected.tier].label}
                       </span>
                       <CustomerStatusDropdown
                         status={selected.status}
                         disabled={!canManage}
-                        onStatusChange={(newStatus) => handleStatusChange(selected.id, newStatus)}
+                        onStatusChange={(status) => void changeStatus(selected, status)}
                       />
                     </div>
                     <h2 id="customer-detail-title" className="mt-2 truncate text-xl font-black text-slate-950">
-                      {selected.name}
+                      {displayName(selected)}
                     </h2>
                     <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-slate-500">
                       <span>{selected.phone}</span>
@@ -1240,38 +964,20 @@ export default function TenantAdminCustomers({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelected(null)}
+                  onClick={() => setSelectedId(null)}
                   aria-label="Đóng"
                   className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-white p-0 text-slate-500 shadow-sm"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 <a
                   href={`tel:${phoneDigits(selected.phone)}`}
                   className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-caption font-black text-white shadow-sm"
                 >
                   <Phone className="h-3.5 w-3.5" />
                   Gọi khách
-                </a>
-                <a
-                  href={selected.consent.includes('SMS') ? `sms:${phoneDigits(selected.phone)}` : undefined}
-                  aria-disabled={!selected.consent.includes('SMS')}
-                  onClick={(event) => {
-                    if (!selected.consent.includes('SMS')) {
-                      event.preventDefault();
-                      onNotify?.('Khách chưa đồng ý nhận SMS.');
-                    }
-                  }}
-                  className={`flex h-10 items-center justify-center gap-2 rounded-xl text-caption font-black ${
-                    selected.consent.includes('SMS')
-                      ? 'border border-blue-200 bg-blue-50 text-blue-700'
-                      : 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
-                  }`}
-                >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  Nhắn SMS
                 </a>
                 <button
                   type="button"
@@ -1287,131 +993,19 @@ export default function TenantAdminCustomers({
 
             <div className="customer-detail-body min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
               <div className="space-y-5">
-                {selectedTodayAppointment ? (
-                  <section className="customer-detail-highlight rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex items-start gap-3">
-                        <span className="customer-detail-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm">
-                          <CalendarClock className="h-4 w-4" />
-                        </span>
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-caption font-black uppercase tracking-wide text-emerald-700">
-                              Lịch hẹn hôm nay · {selectedTodayAppointment.start}
-                            </p>
-                            <span
-                              className={`rounded-full px-2 py-1 text-caption font-bold ring-1 ${
-                                appointmentStatus[selectedTodayAppointment.status]?.className ||
-                                'bg-slate-100 text-slate-600 ring-slate-200'
-                              }`}
-                            >
-                              {appointmentStatus[selectedTodayAppointment.status]?.label ||
-                                selectedTodayAppointment.status}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-body font-black text-slate-900">
-                            {selectedTodayAppointment.service}
-                          </p>
-                          <p className="mt-1 text-caption text-slate-500">
-                            {selectedTodayAppointment.staff}
-                            {selectedTodayAppointment.station
-                              ? ` · Ghế ${selectedTodayAppointment.station}`
-                              : ' · Chưa xếp ghế'}
-                            {' · '}
-                            {selectedTodayAppointment.duration} phút
-                          </p>
-                        </div>
-                      </div>
-                      <div className="customer-detail-amount rounded-xl bg-white px-3 py-2 text-right shadow-sm">
-                        <p className="text-caption font-bold text-slate-400">Còn dự kiến thu</p>
-                        <p className="mt-1 text-caption font-black text-slate-900">
-                          {money(selectedOutstanding)}
-                        </p>
-                        <p className="mt-1 text-caption text-emerald-600">
-                          Đã cọc {money(selectedTodayAppointment.deposit)}
-                        </p>
-                      </div>
-                    </div>
-                  </section>
-                ) : selectedNextAppointment ? (
-                  <section className="customer-detail-highlight flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                    <span className="customer-detail-icon flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-600">
-                      <CalendarClock className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="text-caption font-black uppercase text-blue-600">Lịch hẹn sắp tới</p>
-                      <p className="mt-1.5 text-body font-black text-slate-900">
-                        {selectedNextAppointment.date} · {selectedNextAppointment.start}
-                      </p>
-                      <p className="mt-1 text-caption text-slate-500">{selectedNextAppointment.service}</p>
-                    </div>
-                  </section>
-                ) : (
-                  <section className="customer-detail-empty flex items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
-                    <div>
-                      <p className="text-caption font-black text-slate-700">Chưa có lịch hẹn sắp tới</p>
-                      <p className="mt-1 text-caption text-slate-400">Có thể tạo lịch trực tiếp từ hồ sơ này.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => bookCustomer(selected)}
-                      disabled={!canManage}
-                      className="shrink-0 border border-emerald-200 bg-emerald-50 px-3 text-caption font-black text-emerald-700 shadow-sm disabled:opacity-50"
-                    >
-                      Đặt lịch
-                    </button>
-                  </section>
-                )}
-
-                <section
-                  className={`customer-detail-safety rounded-2xl border p-4 ${
-                    !['', 'Không ghi nhận'].includes(selected.allergies)
-                      ? 'border-rose-200 bg-rose-50'
-                      : 'border-emerald-200 bg-emerald-50'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={`customer-detail-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white ${
-                        !['', 'Không ghi nhận'].includes(selected.allergies)
-                          ? 'text-rose-600'
-                          : 'text-emerald-600'
-                      }`}
-                    >
-                      <AlertTriangle className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-caption font-black text-slate-800">Kiểm tra an toàn trước phục vụ</p>
-                        <span className="customer-detail-chip rounded-full bg-white px-2.5 py-1 text-caption font-black text-slate-600 ring-1 ring-slate-200">
-                          Bắt buộc đọc
-                        </span>
-                      </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <div className="customer-detail-subcard rounded-xl bg-white/75 p-3">
-                          <p className="text-caption font-bold uppercase text-slate-400">Dị ứng / cần tránh</p>
-                          <p className="mt-1.5 text-caption font-black text-slate-800">{selected.allergies}</p>
-                        </div>
-                        <div className="customer-detail-subcard rounded-xl bg-white/75 p-3">
-                          <p className="text-caption font-bold uppercase text-slate-400">Tình trạng móng</p>
-                          <p className="mt-1.5 text-caption font-black text-slate-800">
-                            {selected.nailCondition}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
                 <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[
                     { label: 'Tổng chi tiêu', value: money(selected.totalSpent), icon: TrendingUp },
-                    { label: 'Lượt ghé', value: selected.visits, icon: UsersRound },
-                    { label: 'Điểm hiện có', value: selected.points.toLocaleString('vi-VN'), icon: Gift },
+                    { label: 'Lượt ghé', value: String(selected.visits), icon: UsersRound },
                     {
-                      label: 'Chi tiêu TB',
+                      label: 'Chi tiêu trung bình',
                       value: money(Math.round(selected.totalSpent / Math.max(1, selected.visits))),
                       icon: WalletCards,
+                    },
+                    {
+                      label: 'Lần ghé gần nhất',
+                      value: readableDateTime(selected.lastVisitAt) || 'Chưa phát sinh',
+                      icon: CalendarClock,
                     },
                   ].map(({ label, value, icon: Icon }) => (
                     <div key={label} className="customer-detail-stat rounded-2xl border border-slate-100 bg-slate-50 p-3">
@@ -1422,123 +1016,69 @@ export default function TenantAdminCustomers({
                   ))}
                 </section>
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <section className="customer-detail-card rounded-2xl border border-slate-200 p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-caption font-black text-slate-800">Sở thích phục vụ</p>
-                        <p className="mt-1 text-caption text-slate-400">Giúp cá nhân hóa trải nghiệm tại quầy</p>
-                      </div>
-                      <Sparkles className="h-4 w-4 text-violet-500" />
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selected.preferences.length ? (
-                        selected.preferences.map((item) => (
-                          <span key={item} className="rounded-lg bg-violet-50 px-2.5 py-1.5 text-caption font-bold text-violet-700">
-                            {item}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-caption text-slate-400">Chưa ghi nhận</span>
-                      )}
-                    </div>
-                    <div className="customer-detail-subcard mt-4 rounded-xl bg-slate-50 p-3">
-                      <p className="text-caption font-bold uppercase text-slate-400">Ghi chú cho nhân viên</p>
-                      <p className="mt-1.5 text-caption leading-4 text-slate-600">
-                        {selected.note || 'Chưa có ghi chú phục vụ.'}
+                <section className="customer-detail-card rounded-2xl border border-slate-200 p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-caption font-black text-slate-800">Ghi chú phục vụ</p>
+                      <p className="mt-1 text-caption text-slate-400">
+                        Nơi ghi dị ứng, lưu ý về móng và mọi điều cần nhớ trước khi phục vụ
                       </p>
                     </div>
-                  </section>
-
-                  <section className="customer-detail-card rounded-2xl border border-slate-200 p-4">
-                    <p className="text-caption font-black text-slate-800">Thông tin & đồng ý liên hệ</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <div className="customer-detail-subcard rounded-xl bg-slate-50 p-3">
-                        <Cake className="h-3.5 w-3.5 text-pink-500" />
-                        <p className="mt-2 text-caption text-slate-400">Ngày sinh</p>
-                        <p className="mt-1 font-black text-slate-700">{selected.birthday || 'Chưa có'}</p>
-                      </div>
-                      <div className="customer-detail-subcard rounded-xl bg-slate-50 p-3">
-                        <MapPin className="h-3.5 w-3.5 text-blue-500" />
-                        <p className="mt-2 text-caption text-slate-400">Chi nhánh chính</p>
-                        <p className="mt-1 font-black text-slate-700">{branchName(selected.branch)}</p>
-                      </div>
-                      <div className="customer-detail-subcard col-span-2 rounded-xl bg-emerald-50/70 border border-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-900/50 p-3">
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                          <p className="text-caption font-bold text-emerald-950 dark:text-emerald-200">Kỹ thuật viên yêu thích (KTV ruột)</p>
-                        </div>
-                        <p className="mt-1 text-caption font-black text-emerald-800 dark:text-emerald-300">
-                          {selected.favoriteTechnician && selected.favoriteTechnician !== 'Chưa xác định'
-                            ? selected.favoriteTechnician
-                            : 'Chưa có KTV ruột (Sẽ cập nhật sau lần phục vụ)'}
-                        </p>
-                      </div>
+                    <Sparkles className="h-4 w-4 text-violet-500" />
+                  </div>
+                  <p className="mt-3 whitespace-pre-line text-caption leading-5 text-slate-600">
+                    {selected.note || 'Chưa có ghi chú phục vụ.'}
+                  </p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    <div className="customer-detail-subcard rounded-xl bg-slate-50 p-3">
+                      <p className="text-caption font-bold uppercase text-slate-400">Ngày sinh</p>
+                      <p className="mt-1.5 font-black text-slate-700">
+                        {readableDate(selected.birthDate) || 'Khách chưa khai'}
+                      </p>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selected.consent.length ? (
-                        selected.consent.map((item) => (
-                          <span key={item} className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1.5 text-caption font-bold text-emerald-700">
-                            <Check className="h-3 w-3" />
-                            Cho phép {item}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="rounded-lg bg-rose-50 px-2 py-1.5 text-caption font-bold text-rose-700">
-                          Không đồng ý nhận tin
-                        </span>
-                      )}
+                    <div className="customer-detail-subcard rounded-xl bg-slate-50 p-3">
+                      <p className="text-caption font-bold uppercase text-slate-400">Lập hồ sơ</p>
+                      <p className="mt-1.5 font-black text-slate-700">
+                        {readableDateTime(selected.createdAt) || '—'}
+                      </p>
                     </div>
-                  </section>
-                </div>
+                  </div>
+                </section>
 
                 <section className="customer-detail-card overflow-hidden rounded-2xl border border-slate-200">
                   <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                     <div>
                       <p className="text-caption font-black text-slate-800">Lịch sử dịch vụ</p>
                       <p className="mt-1 text-caption text-slate-400">
-                        {selected.visits} lượt ghé · Gần nhất {selected.lastVisit}
+                        Đọc từ hóa đơn đã trả đủ · tối đa 10 lần gần nhất
                       </p>
                     </div>
                     <Sparkles className="h-4 w-4 text-emerald-500" />
                   </div>
                   <div className="divide-y divide-slate-100">
-                    {selected.history.length ? (
-                      selected.history.map((item) => (
-                        <div key={`${item.date}-${item.service}`} className="flex items-start justify-between gap-3 px-4 py-3">
-                          <div>
-                            <p className="text-caption font-black text-slate-700">{item.service}</p>
-                            <p className="mt-1 text-caption text-slate-400">
-                              {item.date} · {item.technician}
+                    {visitsLoading ? (
+                      <p className="px-4 py-8 text-center text-caption text-slate-400">Đang tải lịch sử...</p>
+                    ) : visits && visits.length ? (
+                      visits.map((visit) => (
+                        <div key={visit.invoiceId} className="flex items-start justify-between gap-3 px-4 py-3">
+                          <div className="min-w-0">
+                            <p className="text-caption font-black text-slate-700">
+                              {visit.serviceNames.join(' · ') || 'Không có dòng dịch vụ'}
                             </p>
-                            {item.rating && (
-                              <p className="mt-1 flex items-center gap-1 text-caption font-bold text-amber-500">
-                                <Star className="h-3 w-3 fill-current" />
-                                {item.rating}/5
-                              </p>
-                            )}
+                            <p className="mt-1 text-caption text-slate-400">
+                              {readableDateTime(visit.issuedAt)} · {visit.branchName}
+                              {visit.staffName ? ` · ${visit.staffName}` : ''}
+                            </p>
+                            <p className="mt-1 text-caption text-slate-400">{visit.invoiceCode}</p>
                           </div>
-                          <p className="text-caption font-black text-slate-800">{money(item.amount)}</p>
+                          <p className="shrink-0 text-caption font-black text-slate-800">{money(visit.total)}</p>
                         </div>
                       ))
                     ) : (
-                      <p className="px-4 py-8 text-center text-caption text-slate-400">Chưa phát sinh dịch vụ</p>
+                      <p className="px-4 py-8 text-center text-caption text-slate-400">
+                        {isLive ? 'Khách chưa phát sinh hóa đơn nào' : 'Chế độ dữ liệu mẫu chưa có lịch sử hóa đơn'}
+                      </p>
                     )}
-                  </div>
-                </section>
-
-                <section className="customer-detail-card rounded-2xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-caption font-black text-slate-800">Nhật ký hồ sơ</p>
-                    <BadgeCheck className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <div className="mt-3 space-y-3">
-                    {selected.activity.map((item, index) => (
-                      <div key={`${item}-${index}`} className="flex gap-3">
-                        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${index === 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                        <p className="text-caption leading-4 text-slate-500">{item}</p>
-                      </div>
-                    ))}
                   </div>
                 </section>
               </div>
@@ -1573,7 +1113,7 @@ export default function TenantAdminCustomers({
           />
           <form
             onSubmit={submitForm}
-            className="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+            className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
           >
             <header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-5 sm:px-6">
               <div>
@@ -1581,10 +1121,10 @@ export default function TenantAdminCustomers({
                   {isReceptionist ? 'Hồ sơ tại quầy' : 'Hồ sơ khách hàng'}
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-900">
-                  {editingId ? 'Cập nhật thông tin phục vụ' : 'Thêm khách hàng mới'}
+                  {editingId ? 'Cập nhật hồ sơ khách' : 'Thêm khách hàng mới'}
                 </h2>
                 <p className="mt-1 text-caption text-slate-500">
-                  Số điện thoại là định danh duy nhất. Tránh tạo hồ sơ trùng lặp.
+                  Chỉ số điện thoại là bắt buộc, và nó là định danh duy nhất trong tiệm.
                 </p>
               </div>
               <button
@@ -1605,171 +1145,82 @@ export default function TenantAdminCustomers({
                 </div>
               )}
 
-              {[
-                { key: 'name', label: 'Họ và tên *', placeholder: 'Nguyễn Văn A', type: 'text' },
-                { key: 'phone', label: 'Số điện thoại *', placeholder: '0901 234 567', type: 'tel' },
-                { key: 'email', label: 'Email', placeholder: 'customer@email.com', type: 'email' },
-                { key: 'birthday', label: 'Ngày sinh', placeholder: 'DD/MM/YYYY', type: 'text' },
-              ].map((field) => (
-                <label key={field.key}>
-                  <span className="mb-1.5 block text-caption font-bold text-slate-600">{field.label}</span>
-                  <input
-                    type={field.type}
-                    value={form[field.key as keyof Pick<CustomerForm, 'name' | 'phone' | 'email' | 'birthday'>]}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, [field.key]: event.target.value }))
-                    }
-                    placeholder={field.placeholder}
-                    autoComplete={field.key === 'name' ? 'name' : field.key === 'phone' ? 'tel' : field.key}
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                  />
-                </label>
-              ))}
-
               <label>
-                <span className="mb-1.5 block text-caption font-bold text-slate-600">Chi nhánh chính</span>
-                <BeautifulSelect
-                  value={form.branch}
-                  disabled={branchLocked}
-                  aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, branch: event.target.value as BranchCode }))
-                  }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
-                >
-                  <option value="Q3">Chi nhánh Quận 3</option>
-                  <option value="Q1">Chi nhánh Quận 1</option>
-                </BeautifulSelect>
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Số điện thoại *</span>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                  placeholder="0901234567"
+                  autoComplete="tel"
+                  className={fieldErrors.phone ? errorInputClass : inputClass}
+                />
+                {fieldErrors.phone && (
+                  <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.phone}</span>
+                )}
               </label>
 
               <label>
-                <span className="mb-1.5 flex items-center justify-between gap-2 text-caption font-bold text-slate-600">
-                  Phân hạng
-                  {isReceptionist && (
-                    <span className="text-caption font-black text-amber-600">Tự động · Không được sửa</span>
-                  )}
-                </span>
-                <BeautifulSelect
-                  value={form.tier}
-                  disabled={isReceptionist}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, tier: event.target.value as CustomerTier }))
-                  }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
-                  aria-label="Phân hạng khách hàng"
-                >
-                  {Object.entries(tierMeta).map(([key, meta]) => (
-                    <option key={key} value={key}>
-                      {meta.label}
-                    </option>
-                  ))}
-                </BeautifulSelect>
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Họ và tên</span>
+                <input
+                  type="text"
+                  value={form.fullName}
+                  onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
+                  placeholder="Nguyễn Văn A"
+                  autoComplete="name"
+                  className={fieldErrors.fullName ? errorInputClass : inputClass}
+                />
+                {fieldErrors.fullName && (
+                  <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.fullName}</span>
+                )}
+              </label>
+
+              <label>
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Email</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                  placeholder="khach@email.com"
+                  autoComplete="email"
+                  className={fieldErrors.email ? errorInputClass : inputClass}
+                />
+                {fieldErrors.email && (
+                  <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.email}</span>
+                )}
+              </label>
+
+              <label>
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Ngày sinh</span>
+                <input
+                  type="date"
+                  value={form.birthDate}
+                  onChange={(event) => setForm((current) => ({ ...current, birthDate: event.target.value }))}
+                  className={fieldErrors.birthDate ? errorInputClass : inputClass}
+                />
+                {fieldErrors.birthDate && (
+                  <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.birthDate}</span>
+                )}
               </label>
 
               <label className="sm:col-span-2">
-                <span className="mb-1.5 block text-caption font-bold text-slate-600">Nguồn khách</span>
-                <BeautifulSelect
-                  value={form.source}
-                  onChange={(event) => setForm((current) => ({ ...current, source: event.target.value }))}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
-                  aria-label="Nguồn khách hàng"
-                >
-                  <option>Khách giới thiệu</option>
-                  <option>Google</option>
-                  <option>Instagram</option>
-                  <option>TikTok</option>
-                  <option>Khách vãng lai</option>
-                </BeautifulSelect>
+                <span className="mb-1.5 block text-caption font-bold text-slate-600">Ghi chú phục vụ</span>
+                <textarea
+                  value={form.note}
+                  onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
+                  placeholder="Dị ứng, tình trạng móng, sở thích, cách xưng hô, thói quen đặt lịch..."
+                  className="min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                />
+                {fieldErrors.note && (
+                  <span className="mt-1 block text-caption font-bold text-rose-600">{fieldErrors.note}</span>
+                )}
               </label>
-
-              <label className="sm:col-span-2">
-                <span className="mb-1.5 block text-caption font-bold text-slate-600">Kỹ thuật viên yêu thích (KTV ruột)</span>
-                <BeautifulSelect
-                  value={form.favoriteTechnician}
-                  onChange={(event) => setForm((current) => ({ ...current, favoriteTechnician: event.target.value }))}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption"
-                  aria-label="Kỹ thuật viên yêu thích"
-                >
-                  <option value="">Chưa chỉ định KTV ruột</option>
-                  <option value="Thảo Nguyễn">Thảo Nguyễn (Chuyên Nail Art & Đắp bột)</option>
-                  <option value="Minh Châu">Minh Châu (Chuyên Chăm sóc Móng & Spa)</option>
-                  <option value="Hà My">Hà My (Chuyên Design & Sơn gel Hàn Quốc)</option>
-                  <option value="Thuỳ Dương">Thuỳ Dương (Chuyên Pedicure & Massage)</option>
-                  <option value="Phương Vy">Phương Vy (Chuyên Vẽ Gel & Ombre)</option>
-                  <option value="Bảo Trâm">Bảo Trâm (Chuyên Đính đá & Form móng)</option>
-                </BeautifulSelect>
-              </label>
-
-              <fieldset className="rounded-2xl border border-slate-200 p-4 sm:col-span-2">
-                <legend className="px-2 text-caption font-black text-slate-700">Đồng ý nhận thông tin</legend>
-                <p className="mb-3 text-caption text-slate-400">Chỉ chọn kênh khách đã đồng ý. Có thể bỏ chọn toàn bộ.</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { channel: 'SMS', icon: MessageCircle },
-                    { channel: 'Zalo', icon: BellRing },
-                    { channel: 'Email', icon: Mail },
-                  ].map(({ channel, icon: Icon }) => {
-                    const active = form.consent.includes(channel);
-                    return (
-                      <button
-                        key={channel}
-                        type="button"
-                        onClick={() => toggleConsent(channel)}
-                        aria-pressed={active}
-                        className={`flex h-10 items-center justify-center gap-2 border px-2 text-caption font-black shadow-sm ${
-                          active
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-slate-200 bg-white text-slate-400'
-                        }`}
-                      >
-                        {active ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
-                        {channel}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-
-              {[
-                {
-                  key: 'preferences',
-                  label: 'Sở thích Nail',
-                  placeholder: 'Màu nude, form Almond, French... (ngăn cách bằng dấu phẩy)',
-                },
-                {
-                  key: 'allergies',
-                  label: 'Dị ứng / thành phần cần tránh',
-                  placeholder: 'Ghi “Không ghi nhận” nếu đã hỏi và xác minh',
-                },
-                {
-                  key: 'nailCondition',
-                  label: 'Tình trạng móng',
-                  placeholder: 'Móng mỏng, giòn, tổn thương...',
-                },
-                {
-                  key: 'note',
-                  label: 'Ghi chú phục vụ',
-                  placeholder: 'Thói quen đặt lịch, yêu cầu riêng, cách xưng hô...',
-                },
-              ].map((field) => (
-                <label key={field.key} className="sm:col-span-2">
-                  <span className="mb-1.5 block text-caption font-bold text-slate-600">{field.label}</span>
-                  <textarea
-                    value={form[field.key as keyof Pick<CustomerForm, 'preferences' | 'allergies' | 'nailCondition' | 'note'>]}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, [field.key]: event.target.value }))
-                    }
-                    placeholder={field.placeholder}
-                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-caption leading-5 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                  />
-                </label>
-              ))}
             </div>
 
             <footer className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <p className="flex items-center gap-1.5 text-caption text-slate-400">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Mọi cập nhật đều được ghi vào nhật ký hồ sơ
+                Hạng khách và tổng chi tiêu do hệ thống tính từ hóa đơn, không nhập tay
               </p>
               <div className="flex justify-end gap-2">
                 <button
@@ -1781,10 +1232,11 @@ export default function TenantAdminCustomers({
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-caption font-black text-white shadow-lg shadow-emerald-200"
+                  disabled={saving}
+                  className="flex items-center gap-2 border border-emerald-700 bg-emerald-600 px-5 text-caption font-black text-white shadow-lg shadow-emerald-200 disabled:opacity-60"
                 >
                   <Check className="h-4 w-4" />
-                  {editingId ? 'Lưu thay đổi' : 'Tạo hồ sơ'}
+                  {saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi' : 'Tạo hồ sơ'}
                 </button>
               </div>
             </footer>
