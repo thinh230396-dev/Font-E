@@ -234,7 +234,6 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
   dữ liệu mẫu, còn tab Doanh thu là thật, nên một dải nhãn chung cho cả trang sẽ nói sai.
 */
 const MOCK_DATA_REASONS: Record<string, string> = {
-  appointments: 'Màn lịch hẹn của chủ tiệm chưa nối máy chủ. Lịch hẹn THẬT nằm ở cổng lễ tân — danh sách khách ở đây không phải danh bạ khách thật của tiệm.',
   loyalty: 'Thành viên & ưu đãi nằm ngoài phạm vi 9 module lõi (§9.4), nên hạng thẻ và điểm tích lũy ở đây chỉ lưu trên trình duyệt này.',
   inventory: 'Kho vật tư nằm ngoài phạm vi backend MVP, nên tồn kho, định mức và phiếu nhập ở đây là dữ liệu mẫu.',
   gallery: 'Thư viện màu & mẫu nail nằm ngoài phạm vi backend MVP, nên ảnh và bộ sưu tập chỉ lưu trên trình duyệt này.',
@@ -2413,6 +2412,8 @@ export default function NailTenantAdminPortal({
                 onNotify={setToast}
                 bookingRequest={appointmentBookingRequest}
                 onBookingRequestHandled={() => setAppointmentBookingRequest(null)}
+                activeTenantId={demoMode ? null : tenant?.id}
+                branches={branchDirectory.branches.map((item) => ({ id: item.id, name: item.name, code: item.code }))}
               />
             </Suspense>
           ) : activePage === 'stations' ? (

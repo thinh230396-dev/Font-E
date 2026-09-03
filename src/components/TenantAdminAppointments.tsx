@@ -1,5 +1,15 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
+import { useAppointmentRange } from '../hooks/useAppointments';
+import useCustomers from '../hooks/useCustomers';
+import useSalonServices from '../hooks/useSalonServices';
+import useStaff from '../hooks/useStaff';
+import type {
+  AppointmentApiStatus,
+  AppointmentDto,
+  AppointmentWarning,
+  SaveAppointmentInput
+} from '../services/appointments';
 import {
   Award,
   CalendarCheck2,
@@ -83,6 +93,100 @@ interface TenantAppointment {
   createdAt: string;
 }
 
+/**
+ * Phần của một lịch hẹn mà **máy chủ cố ý không có cột để lưu**.
+ *
+ * Ba nhóm, ba lý do khác nhau — và không nhóm nào là sơ suất của lược đồ:
+ *
+ * 1. `reminderSent`, `firstVisit`, `createdBy` — nhắc lịch nằm ở mức D của §9.4,
+ *    bỏ hẳn khỏi MVP. Hai trường còn lại là nhãn hiển thị, suy được từ hồ sơ
+ *    khách chứ không phải thuộc tính của buổi hẹn.
+ * 2. Bốn trường `cancellation*` — `PATCH /status` chỉ nhận trạng thái, không
+ *    nhận lý do. BR-APT-024 định nghĩa việc hủy, không định nghĩa việc khai báo
+ *    vì sao hủy.
+ * 3. Chín trường `refund*` cùng cờ `refunded` — đây là nhóm đáng nói nhất.
+ *    `services/appointments.ts` ghi rõ: **hoàn tiền là chuyện của hóa đơn**, nên
+ *    `REFUNDED` đã bị gỡ khỏi bảy trạng thái của lịch hẹn và đường hoàn tiền
+ *    thật nằm ở `IssueRefundUseCase` của hóa đơn bán hàng. Màn này giữ lại khối
+ *    hoàn tiền đã dựng, nhưng nó **chỉ sống trên máy này** — và khối ấy mang một
+ *    câu nói rõ điều đó, thay vì để người dùng tưởng số tiền đã vào sổ.
+ *
+ * Giữ chúng trong một bản đồ riêng theo mã lịch hẹn, thay vì nhét vào `note` của
+ * máy chủ: nhét vào đó là biến một ô ghi chú cho người đọc thành một định dạng
+ * dữ liệu mà không ai khai báo ở đâu cả. Cùng cách cổng lễ tân đã làm ở ngày 14.
+ */
+interface TenantAppointmentExtras {
+  reminderSent?: boolean;
+  firstVisit?: boolean;
+  createdBy?: string;
+  cancellationReason?: string;
+  cancellationNote?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  /** Cờ dựng lại trạng thái `REFUNDED` — máy chủ không có trạng thái ấy. */
+  refunded?: boolean;
+  refundAmount?: number;
+  refundReason?: string;
+  refundMethod?: 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
+  refundNote?: string;
+  refundedAt?: string;
+  refundedBy?: string;
+}
+
+/**
+ * Một lịch hẹn của máy chủ, mặc lại hình dạng mà cây render đang dùng.
+ *
+ * Cùng lý do và cùng khuôn với `toReceptionAppointment` ở cổng lễ tân: file này
+ * hơn ba nghìn dòng và đọc `appointment.start`, `appointment.duration`,
+ * `appointment.staff` ở hàng trăm chỗ. Đổi hình dạng nghĩa là sửa từng chỗ ấy —
+ * dài, rủi ro, và không mua lại được gì cho người dùng.
+ *
+ * @param price Tổng giá lấy từ danh mục dịch vụ. Lịch hẹn ở máy chủ **không lưu
+ *   giá**: BR-SVC-009 chốt giá tại thời điểm lập hóa đơn, nên con số ở đây là
+ *   giá dự kiến theo bảng giá hiện hành, không phải số tiền đã thu.
+ */
+const toTenantAppointment = (
+  dto: AppointmentDto,
+  price: number,
+  extras: TenantAppointmentExtras
+): TenantAppointment => {
+  const start = new Date(dto.startAt);
+  const pad = (value: number) => String(value).padStart(2, '0');
+
+  return {
+    id: dto.id,
+    customerId: dto.customerId,
+    customer: dto.customerName || dto.customerPhone,
+    phone: dto.customerPhone,
+    date: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+    start: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+    duration: dto.totalMinutes,
+    service: dto.services[0]?.serviceName || 'Dịch vụ',
+    services: dto.services.map((line) => line.serviceName),
+    staff: dto.staffName,
+    branch: dto.branchId,
+    source: dto.source,
+    // Cờ `refunded` phải phủ sau cùng: nó là trạng thái duy nhất của màn này mà
+    // máy chủ không biết tới, nên nó chỉ tồn tại bằng cách đè lên trạng thái thật.
+    status: extras.refunded ? 'REFUNDED' : dto.status,
+    price,
+    deposit: dto.deposit,
+    note: dto.note || '',
+    station: dto.station || undefined,
+    // Cây render in thẳng `createdAt` ra màn hình, và bộ mẫu vốn chứa sẵn chuỗi
+    // đã định dạng. Đưa nguyên chuỗi ISO của máy chủ vào thì dòng "Tạo lúc" hiện
+    // `2026-09-03T07:22:43.933369+00:00` — đúng dữ liệu, sai chỗ đọc.
+    createdAt: new Date(dto.createdAt).toLocaleString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }),
+    ...extras
+  };
+};
+
 interface TenantAdminAppointmentsProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
@@ -110,6 +214,13 @@ interface TenantAdminAppointmentsProps {
     visits?: number;
   } | null;
   onBookingRequestHandled?: () => void;
+  /**
+   * Tiệm đang làm việc. Rỗng thì màn chạy bằng dữ liệu mẫu — chế độ trình bày
+   * và chế độ chưa chọn tiệm dùng chung một đường này, giống `TenantAdminReports`.
+   */
+  activeTenantId?: string | null;
+  /** Chi nhánh thật của tiệm, để đổi mã bản ghi thành tên đọc được. */
+  branches?: Array<{ id: string; name: string; code?: string }>;
 }
 
 interface AppointmentFormState {
@@ -407,7 +518,9 @@ export default function TenantAdminAppointments({
   readOnlyReason = '',
   onNotify,
   bookingRequest,
-  onBookingRequestHandled
+  onBookingRequestHandled,
+  activeTenantId,
+  branches = []
 }: TenantAdminAppointmentsProps) {
   /**
    * Mã chi nhánh dùng để LỌC, quy về `'ALL'` khi nó không phải mã của dữ liệu mẫu.
@@ -422,11 +535,64 @@ export default function TenantAdminAppointments({
    * **màn hình nói dối về chính bộ mẫu của nó**: bộ mẫu có lịch, trang thì bảo không có. Không
    * biết lọc theo một chi nhánh thì hiện tất cả, đừng hiện rỗng.
    */
-  const branchFilter = selectedBranch in branchLabels ? selectedBranch : 'ALL';
+  /** Đã chọn tiệm thì màn chạy dữ liệu thật; chưa chọn thì rơi về bộ mẫu. */
+  const live = Boolean(activeTenantId);
+
+  /**
+   * Nhãn chi nhánh — thật khi đã chọn tiệm, mẫu khi chưa.
+   *
+   * Đây chính là chỗ chữa lỗi mà chú thích ngay trên đã tả: bộ mẫu mang mã `'Q1'`
+   * và `'Q3'`, còn cổng chủ tiệm truyền xuống mã bản ghi kiểu `BRN-LUMIERE-Q3`.
+   * Trước đây không mã nào khớp nên phép lọc loại sạch. Nay hai chế độ có hai
+   * bảng nhãn riêng, và `branchFilter` hỏi đúng bảng của chế độ đang chạy.
+   */
+  const branchNames = useMemo<Record<string, string>>(() => (
+    live && branches.length
+      ? Object.fromEntries(branches.map((branch) => [branch.id, branch.name]))
+      : branchLabels
+  ), [live, branches]);
+
+  /**
+   * Nhãn **ngắn** của chi nhánh, cho những chỗ chỉ có chiều ngang của một con chip.
+   *
+   * Bộ mẫu vốn dùng mã hai ký tự (`Q1`, `Q3`) nên chip vừa vặn. Chi nhánh thật
+   * mang mã bản ghi kiểu `BRN-LUMIERE-Q3`: đặt nguyên nó vào chip thì chip đẩy
+   * hết bề ngang và **tên kỹ thuật viên bên cạnh bị cắt sạch** — đầu cột hóa ra
+   * chỉ còn mã chi nhánh, đúng lỗi lộ ra lúc chạy thử. Nên ở đây ưu tiên mã do
+   * tiệm tự đặt, rồi mới tới tên, và cuối cùng mới tới mã bản ghi.
+   */
+  const branchShortNames = useMemo<Record<string, string>>(() => (
+    live && branches.length
+      ? Object.fromEntries(branches.map((branch) => [branch.id, branch.code || branch.name]))
+      : branchLabels
+  ), [live, branches]);
+
+  const branchFilter = selectedBranch in branchNames ? selectedBranch : 'ALL';
 
   const storageKey = tenantStorageKey('tenant-admin-appointments-v2');
+  const extrasStorageKey = tenantStorageKey('tenant-admin-appointment-extras-v1');
   const todayDate = toIsoDate(new Date());
-  const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
+  const [selectedDate, setSelectedDate] = useState(todayDate);
+
+  /**
+   * Nạp trọn **tuần** chứ không phải ngày đang chọn.
+   *
+   * Dải chọn ngày ở đầu bảng vẽ vạch mật độ cho cả bảy ngày, nên nạp một ngày
+   * thì sáu ngày còn lại luôn hiện "0 lịch" — trang nói sai về chính nó. Nạp
+   * theo tuần cũng làm việc bấm qua lại giữa các ngày trong cùng tuần không phải
+   * gọi mạng lần nào.
+   */
+  const weekRange = useMemo(() => {
+    const dates = getWeekDates(selectedDate);
+    return { from: `${dates[0]}T00:00:00+07:00`, to: `${dates[6]}T23:59:59+07:00` };
+  }, [selectedDate]);
+
+  const board = useAppointmentRange(live, activeTenantId || null, weekRange.from, weekRange.to);
+  const staffDirectoryLive = useStaff(live, activeTenantId || null);
+  const serviceDirectoryLive = useSalonServices(live, activeTenantId || null);
+  const customerDirectoryLive = useCustomers(live, activeTenantId || null);
+
+  const [mockAppointments, setMockAppointments] = useState<TenantAppointment[]>(() => {
     if (typeof window === 'undefined') return generateAppointmentSeed();
     try {
       const stored = window.localStorage.getItem(storageKey);
@@ -439,8 +605,106 @@ export default function TenantAdminAppointments({
       return generateAppointmentSeed();
     }
   });
-  const initialDate = getInitialScheduleDate(appointments, branchFilter, todayDate);
-  const [selectedDate, setSelectedDate] = useState(initialDate);
+
+  const [appointmentExtras, setAppointmentExtras] = useState<Record<string, TenantAppointmentExtras>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      return JSON.parse(window.localStorage.getItem(extrasStorageKey) || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  /** Bảng giá hiện hành, tra theo mã dịch vụ — máy chủ không gửi giá kèm lịch hẹn. */
+  const livePriceByServiceId = useMemo(() => (
+    new Map(serviceDirectoryLive.services.map((service) => [service.id, service.price]))
+  ), [serviceDirectoryLive.services]);
+
+  /**
+   * Ba danh mục mà biểu mẫu đọc — dịch vụ, kỹ thuật viên, khách — mỗi cái một
+   * bảng cho chế độ thật và một bảng cho bộ mẫu.
+   *
+   * Cả ba đều mang thêm `id` bên cạnh `name`. Biểu mẫu ở màn này giữ **tên** chứ
+   * không giữ mã, ở hàng chục chỗ; đổi nó thành mã là viết lại biểu mẫu. Nên
+   * `id` đi kèm để lúc gửi lên máy chủ còn dịch ngược được từ tên sang mã, và
+   * cây render không phải biết chuyện đó.
+   *
+   * Thời lượng của một dịch vụ là **thời gian làm cộng thời gian dọn dẹp**
+   * (BR-SVC-003, BR-APT-010) — đúng con số mà phép chống trùng lịch ở máy chủ
+   * tính trên. Lấy thiếu vế sau thì giao diện vẽ một buổi hẹn ngắn hơn chỗ nó
+   * thật sự chiếm, và người xếp lịch sẽ tưởng còn trống.
+   */
+  const serviceCatalog = useMemo(() => (
+    live
+      ? serviceDirectoryLive.services
+        .filter((service) => service.status === 'ACTIVE')
+        .map((service) => ({
+          id: service.id,
+          name: service.name,
+          duration: service.durationMinutes + service.bufferMinutes,
+          price: service.price
+        }))
+      : services.map((service) => ({ id: service.name, ...service }))
+  ), [live, serviceDirectoryLive.services]);
+
+  const staffRoster = useMemo(() => (
+    live
+      ? staffDirectoryLive.staff
+        .filter((staff) => staff.role === 'TECHNICIAN' && staff.status !== 'INACTIVE')
+        .map((staff) => ({
+          id: staff.id,
+          name: staff.fullName,
+          branch: staff.branchId as BranchCode,
+          initials: staff.fullName.trim().split(/\s+/).slice(-2).map((part) => part.charAt(0).toUpperCase()).join('') || 'NV',
+          role: 'Kỹ thuật viên',
+          shift: `${staff.shiftStart}–${staff.shiftEnd}`
+        }))
+      : staffDirectory.map((staff) => ({ id: staff.name, ...staff }))
+  ), [live, staffDirectoryLive.staff]);
+
+  /**
+   * Ghế và khu vực nằm ở mức C của §9.3 — không có bảng, không có endpoint.
+   *
+   * Bộ mẫu khóa theo mã `'Q1'`/`'Q3'`, còn chi nhánh thật mang mã bản ghi, nên ở
+   * chế độ thật phép tra luôn trượt. Trả mảng rỗng thay vì để `undefined` chạy
+   * tiếp: chỗ gọi cũ lấy thẳng phần tử `[0]` và sẽ ném lỗi giữa lúc mở biểu mẫu.
+   */
+  const stationsFor = useCallback((branch: string): string[] => (
+    live ? [] : stationDirectory[branch] || []
+  ), [live]);
+
+  const appointments = useMemo<TenantAppointment[]>(() => {
+    if (!live) return mockAppointments;
+
+    return board.appointments.map((dto) => toTenantAppointment(
+      dto,
+      dto.services.reduce((sum, line) => sum + (livePriceByServiceId.get(line.serviceId) || 0), 0),
+      appointmentExtras[dto.id] || {}
+    ));
+  }, [live, mockAppointments, board.appointments, livePriceByServiceId, appointmentExtras]);
+
+  const initialDate = todayDate;
+
+  /**
+   * Ngăn chi tiết luôn đọc bản mới nhất của lịch hẹn đang mở.
+   *
+   * Mỗi lần ghi thành công, hook nạp lại cả tuần — và `endAt`, `totalMinutes`,
+   * `nextStatuses` đều do máy chủ suy ra nên bản vừa nạp mới là bản đúng. Không
+   * đồng bộ lại thì ngăn chi tiết giữ ảnh chụp lúc bấm, và nếu máy chủ từ chối
+   * bước chuyển trạng thái thì nó vẫn hiện trạng thái mà người dùng tưởng là đã
+   * đổi được.
+   */
+  useEffect(() => {
+    if (!live) return;
+
+    setSelectedAppointment((current) => {
+      if (!current) return current;
+
+      const fresh = appointments.find((appointment) => appointment.id === current.id);
+
+      return fresh || current;
+    });
+  }, [live, appointments]);
   const [didAutoLocateSchedule, setDidAutoLocateSchedule] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('SCHEDULE');
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
@@ -457,6 +721,32 @@ export default function TenantAdminAppointments({
   const [showFilters, setShowFilters] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<TenantAppointment | null>(null);
   const [formMode, setFormMode] = useState<'CREATE' | 'EDIT' | null>(null);
+  /**
+   * Biểu mẫu trống, điền sẵn bằng danh mục **đang thật sự có**.
+   *
+   * `emptyForm` ở tầng module chép cứng dịch vụ, kỹ thuật viên, chi nhánh và ghế
+   * của bộ mẫu. Ở chế độ dữ liệu thật không cái nào tồn tại: ô dịch vụ hiện
+   * "1 đã chọn" mà không ô nào được tick, ô kỹ thuật viên rỗng, và chi nhánh trỏ
+   * vào một mã không có trong danh sách. Nên ở chế độ ấy phải điền lại bằng phần
+   * tử đầu của từng danh mục thật.
+   */
+  const makeEmptyForm = useCallback((date: string, branch: string): AppointmentFormState => {
+    const base = emptyForm(date, branch);
+
+    if (!live) return base;
+
+    const targetBranch = branch in branchNames ? branch : Object.keys(branchNames)[0] || '';
+    const firstStaff = staffRoster.find((staff) => staff.branch === targetBranch);
+
+    return {
+      ...base,
+      services: serviceCatalog.length ? [serviceCatalog[0].name] : [],
+      staff: firstStaff?.name || '',
+      branch: targetBranch,
+      station: ''
+    };
+  }, [live, branchNames, staffRoster, serviceCatalog]);
+
   const [form, setForm] = useState<AppointmentFormState>(() => emptyForm(initialDate, selectedBranch));
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -477,15 +767,60 @@ export default function TenantAdminAppointments({
   const currentMinuteOfDay = now.getHours() * 60 + now.getMinutes();
 
   // Đồng bộ danh sách khách hàng từ hồ sơ Salon (Tenant Customers)
-  const [customerList, setCustomerList] = useState<TenantCustomer[]>(() => getTenantCustomers());
+  const [mockCustomerList, setMockCustomerList] = useState<TenantCustomer[]>(() => getTenantCustomers());
+
+  /**
+   * Danh bạ khách cho ô chọn khách của biểu mẫu.
+   *
+   * Ở chế độ thật, bảy trường sau **để trống** chứ không bịa: `points`,
+   * `favoriteTechnician`, `preferences`, `allergies`, `nailCondition`, `tags`,
+   * `history`. Loyalty và hồ sơ móng nằm ở mức C/D của §9.3–9.4 — không có bảng
+   * nào phía sau. Điền số 0 hay chuỗi rỗng ở đây là để cây render tự ẩn các khối
+   * ấy đi bằng chính phép kiểm nó đã có, thay vì hiện "0 điểm tích luỹ" cho một
+   * khách thật và làm người xem tưởng hệ thống đã tính.
+   *
+   * `branch` cũng để rỗng: khách ở máy chủ **không thuộc chi nhánh nào** — họ
+   * thuộc tiệm. Đó là quyết định của lược đồ, không phải thiếu sót.
+   */
+  const customerList = useMemo<TenantCustomer[]>(() => (
+    live
+      ? customerDirectoryLive.customers.map((customer) => ({
+        id: customer.id,
+        name: customer.fullName || customer.phone,
+        phone: customer.phone,
+        email: customer.email || '',
+        birthday: customer.birthDate || '',
+        branch: '' as TenantCustomer['branch'],
+        tier: customer.tier,
+        status: customer.status,
+        source: '',
+        visits: customer.visits,
+        totalSpent: customer.totalSpent,
+        points: 0,
+        lastVisit: customer.lastVisitAt || '',
+        favoriteTechnician: '',
+        preferences: [],
+        allergies: '',
+        nailCondition: '',
+        note: customer.note || '',
+        consent: [],
+        tags: [],
+        history: [],
+        activity: []
+      }))
+      : mockCustomerList
+  ), [live, customerDirectoryLive.customers, mockCustomerList]);
+
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [isCustomerUnlinked, setIsCustomerUnlinked] = useState(false);
 
   useEffect(() => {
+    if (live) return;
+
     const handleCustomersUpdated = () => {
-      setCustomerList(getTenantCustomers());
+      setMockCustomerList(getTenantCustomers());
     };
     window.addEventListener('salonsys_customers_updated', handleCustomersUpdated);
     window.addEventListener('storage', handleCustomersUpdated);
@@ -493,7 +828,7 @@ export default function TenantAdminAppointments({
       window.removeEventListener('salonsys_customers_updated', handleCustomersUpdated);
       window.removeEventListener('storage', handleCustomersUpdated);
     };
-  }, [tenantName]);
+  }, [live, tenantName]);
 
   // Khách hàng đang được khớp với form hiện tại
   const cleanPhoneInput = form.phone.replace(/[\s.-]/g, '');
@@ -528,7 +863,7 @@ export default function TenantAdminAppointments({
   const selectCustomer = (customer: TenantCustomer) => {
     setIsCustomerUnlinked(false);
     const preferredStaff = (customer.favoriteTechnician && customer.favoriteTechnician !== 'Chưa xác định')
-      ? staffDirectory.find((staff) => staff.branch === form.branch && staff.name === customer.favoriteTechnician)?.name
+      ? staffRoster.find((staff) => staff.branch === form.branch && staff.name === customer.favoriteTechnician)?.name
       : undefined;
     const safetyNotes = [
       customer.note,
@@ -576,25 +911,37 @@ export default function TenantAdminAppointments({
     }).slice(0, 5);
   }, [customerList, customerDropdownOpen, customerSearchQuery, form.customer, form.phone]);
 
+  /**
+   * Hai hiệu ứng dưới đây chỉ chạy ở **chế độ dữ liệu mẫu**.
+   *
+   * Ở chế độ thật, nguồn sự thật là máy chủ: ghi lịch hẹn xuống `localStorage`
+   * rồi phát sự kiện cho tab khác đọc lại là dựng một bản sao thứ hai, và bản
+   * sao ấy sẽ già đi ngay khi ai đó đặt lịch ở máy khác. Việc đồng bộ giữa hai
+   * máy do `board.reload()` lo — mỗi lần ghi thành công là một lần nạp lại.
+   */
   useEffect(() => {
+    if (live) return;
+
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(appointments));
-      window.dispatchEvent(new CustomEvent('salonsys_appointments_updated', { detail: { tenantName, appointments } }));
+      window.localStorage.setItem(storageKey, JSON.stringify(mockAppointments));
+      window.dispatchEvent(new CustomEvent('salonsys_appointments_updated', { detail: { tenantName, appointments: mockAppointments } }));
     } catch {
       // Local storage optional
     }
-  }, [appointments, storageKey, tenantName]);
+  }, [live, mockAppointments, storageKey, tenantName]);
 
   useEffect(() => {
+    if (live) return;
+
     const handleAppointmentsUpdated = (e: Event) => {
       const customEvent = e as CustomEvent<{ tenantName?: string; appointments?: TenantAppointment[] }>;
       if (!customEvent.detail?.tenantName || customEvent.detail.tenantName === tenantName) {
         if (customEvent.detail?.appointments) {
-          setAppointments(customEvent.detail.appointments);
+          setMockAppointments(customEvent.detail.appointments);
         } else {
           try {
             const stored = window.localStorage.getItem(storageKey);
-            if (stored) setAppointments(JSON.parse(stored));
+            if (stored) setMockAppointments(JSON.parse(stored));
           } catch {
             // ignore
           }
@@ -604,7 +951,7 @@ export default function TenantAdminAppointments({
     const handleStorage = (e: StorageEvent) => {
       if (e.key === storageKey && e.newValue) {
         try {
-          setAppointments(JSON.parse(e.newValue));
+          setMockAppointments(JSON.parse(e.newValue));
         } catch {
           // ignore
         }
@@ -616,20 +963,35 @@ export default function TenantAdminAppointments({
       window.removeEventListener('salonsys_appointments_updated', handleAppointmentsUpdated);
       window.removeEventListener('storage', handleStorage);
     };
-  }, [storageKey, tenantName]);
+  }, [live, storageKey, tenantName]);
+
+  /** Ghi phần trang trí xuống máy này. Không phụ thuộc chế độ: bộ mẫu không dùng tới nó. */
+  const patchAppointmentExtras = useCallback((id: string, patch: TenantAppointmentExtras) => {
+    setAppointmentExtras((current) => {
+      const next = { ...current, [id]: { ...current[id], ...patch } };
+
+      try {
+        window.localStorage.setItem(extrasStorageKey, JSON.stringify(next));
+      } catch {
+        // Local storage optional
+      }
+
+      return next;
+    });
+  }, [extrasStorageKey]);
 
   useEffect(() => {
     if (!bookingRequest) return;
     setIsCustomerUnlinked(false);
     const preferredStaff = (bookingRequest.favoriteTechnician && bookingRequest.favoriteTechnician !== 'Chưa xác định')
-      ? staffDirectory.find((staff) => staff.branch === bookingRequest.branch && staff.name === bookingRequest.favoriteTechnician)?.name
+      ? staffRoster.find((staff) => staff.branch === bookingRequest.branch && staff.name === bookingRequest.favoriteTechnician)?.name
       : undefined;
     const safetyNotes = [
       bookingRequest.note,
       bookingRequest.allergies && bookingRequest.allergies !== 'Không ghi nhận' && bookingRequest.allergies !== 'Chưa khai báo' ? `Dị ứng: ${bookingRequest.allergies}` : '',
       bookingRequest.nailCondition && bookingRequest.nailCondition !== 'Chưa đánh giá' ? `Tình trạng móng: ${bookingRequest.nailCondition}` : ''
     ].filter(Boolean).join('\n');
-    const nextForm = emptyForm(selectedDate, bookingRequest.branch);
+    const nextForm = makeEmptyForm(selectedDate, bookingRequest.branch);
     setForm({
       ...nextForm,
       customerId: bookingRequest.customerId,
@@ -768,12 +1130,12 @@ export default function TenantAdminAppointments({
   }, [operationalFilter, scopedAppointments, searchQuery, sourceFilter, staffFilter, statusFilter]);
 
   const scheduleStaff = useMemo(() => {
-    const directoryStaff = staffDirectory.filter((staff) => branchFilter === 'ALL' || staff.branch === branchFilter);
+    const directoryStaff = staffRoster.filter((staff) => branchFilter === 'ALL' || staff.branch === branchFilter);
     const knownNames = new Set(directoryStaff.map((staff) => staff.name));
-    const appointmentStaff = scopedAppointments.reduce<typeof staffDirectory>((result, appointment) => {
+    const appointmentStaff = scopedAppointments.reduce<typeof staffRoster>((result, appointment) => {
       if (knownNames.has(appointment.staff) || result.some((staff) => staff.name === appointment.staff)) return result;
       const initials = appointment.staff.trim().split(/\s+/).slice(-2).map((part) => part.charAt(0).toUpperCase()).join('');
-      result.push({ name: appointment.staff, branch: appointment.branch, initials: initials || 'NV', role: 'Kỹ thuật viên', shift: '08:00–20:00' });
+      result.push({ id: appointment.staff, name: appointment.staff, branch: appointment.branch, initials: initials || 'NV', role: 'Kỹ thuật viên', shift: '08:00–20:00' });
       return result;
     }, []);
     const appointmentCount = new Map<string, number>();
@@ -788,7 +1150,7 @@ export default function TenantAdminAppointments({
     const query = staffSearchQuery.trim().toLowerCase();
     return scheduleStaff
       .filter((staff) => staffFilter === 'ALL' || staff.name === staffFilter)
-      .filter((staff) => !query || `${staff.name} ${staff.role} ${branchLabels[staff.branch]}`.toLowerCase().includes(query));
+      .filter((staff) => !query || `${staff.name} ${staff.role} ${branchNames[staff.branch] || ""}`.toLowerCase().includes(query));
   }, [scheduleStaff, staffFilter, staffSearchQuery]);
 
   const staffPageCount = Math.max(1, Math.ceil(filteredScheduleStaff.length / STAFF_COLUMNS_PER_PAGE));
@@ -815,7 +1177,7 @@ export default function TenantAdminAppointments({
   const cancelledCount = scopedAppointments.filter((appointment) => ['CANCELLED', 'NO_SHOW'].includes(appointment.status)).length;
   const reminderPendingCount = scopedAppointments.filter((appointment) => ['PENDING', 'CONFIRMED'].includes(appointment.status) && !appointment.reminderSent).length;
   const bookedMinutes = scopedAppointments.filter((appointment) => !['CANCELLED', 'NO_SHOW'].includes(appointment.status)).reduce((sum, appointment) => sum + appointment.duration, 0);
-  const availableStaffCount = staffDirectory.filter((staff) => branchFilter === 'ALL' || staff.branch === branchFilter).length;
+  const availableStaffCount = staffRoster.filter((staff) => branchFilter === 'ALL' || staff.branch === branchFilter).length;
   const utilizationRate = availableStaffCount ? Math.min(100, Math.round(bookedMinutes / (availableStaffCount * 720) * 100)) : 0;
   const confirmationRate = scopedAppointments.length ? Math.round((scopedAppointments.length - pendingCount) / scopedAppointments.length * 100) : 0;
   const cancellationRate = scopedAppointments.length ? Math.round(cancelledCount / scopedAppointments.length * 100) : 0;
@@ -880,8 +1242,8 @@ export default function TenantAdminAppointments({
    */
   const isCompactStaffHeader = isScheduleExpanded || scheduleColumnWidth < 180;
   const selectedServiceDetails = form.services
-    .map((name) => services.find((service) => service.name === name))
-    .filter((service): service is (typeof services)[number] => Boolean(service));
+    .map((name) => serviceCatalog.find((service) => service.name === name))
+    .filter((service): service is (typeof serviceCatalog)[number] => Boolean(service));
   const selectedServiceDuration = selectedServiceDetails.reduce((sum, service) => sum + service.duration, 0);
   const selectedServicePrice = selectedServiceDetails.reduce((sum, service) => sum + service.price, 0);
   const selectedServiceEnd = isValid24HourTime(form.start) && selectedServiceDuration ? getEndTime(form.start, selectedServiceDuration) : '--:--';
@@ -889,9 +1251,49 @@ export default function TenantAdminAppointments({
     !isReceptionist || ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(selectedAppointment!.status)
   );
 
+  /**
+   * Một lần sửa lịch hẹn, tách làm hai đường theo chỗ dữ liệu thật sự sống.
+   *
+   * Mọi lời gọi ở màn này chỉ bao giờ vá `status` cộng với vài trường của
+   * `TenantAppointmentExtras` — đổi trạng thái, khai lý do hủy, ghi nhận hoàn
+   * tiền, đánh dấu đã nhắc lịch. Nên phép tách chỉ cần đúng một nhát: `status`
+   * đi lên máy chủ, phần còn lại nằm lại máy này.
+   *
+   * `REFUNDED` là ngoại lệ và phải chặn trước: máy chủ không có trạng thái ấy
+   * (hoàn tiền là chuyện của hóa đơn), nên gửi lên sẽ bị từ chối. Nó được dựng
+   * lại bằng cờ `refunded` trong extras, và bộ chuyển đổi đè nó lên trạng thái
+   * thật lúc đọc.
+   */
   const updateAppointment = (id: string, patch: Partial<TenantAppointment>) => {
     if (!requireManageAccess()) return;
-    setAppointments((current) => current.map((appointment) => appointment.id === id ? { ...appointment, ...patch } : appointment));
+
+    if (!live) {
+      setMockAppointments((current) => current.map((appointment) => appointment.id === id ? { ...appointment, ...patch } : appointment));
+      setSelectedAppointment((current) => current?.id === id ? { ...current, ...patch } : current);
+      return;
+    }
+
+    const { status, ...extrasPatch } = patch;
+    const extras: TenantAppointmentExtras = {
+      ...(extrasPatch as TenantAppointmentExtras),
+      ...(status === 'REFUNDED' ? { refunded: true } : {})
+    };
+
+    if (Object.keys(extras).length) patchAppointmentExtras(id, extras);
+
+    if (status && status !== 'REFUNDED') {
+      void board.changeStatus(id, status as AppointmentApiStatus).then((result) => {
+        if (result.status === 'error') onNotify?.(result.error.message);
+      });
+
+      // Cố ý KHÔNG vá trạng thái vào ngăn chi tiết ngay tại đây. Vá lạc quan rồi
+      // để hiệu ứng đồng bộ kéo bản cũ về trước khi lượt nạp lại kịp tới thì
+      // người dùng thấy trạng thái nhảy ba lần — mới, cũ, rồi mới lại. Máy chủ
+      // trả lời trong khoảng trăm mili-giây và lượt nạp lại sẽ tự đẩy bản đúng
+      // vào; một lần đổi vẫn nhanh hơn ba lần nhấp nháy.
+      return;
+    }
+
     setSelectedAppointment((current) => current?.id === id ? { ...current, ...patch } : current);
   };
 
@@ -918,7 +1320,7 @@ export default function TenantAdminAppointments({
   const openCreateForm = () => {
     if (!requireManageAccess()) return;
     setIsCustomerUnlinked(false);
-    setForm(emptyForm(selectedDate, selectedBranch));
+    setForm(makeEmptyForm(selectedDate, selectedBranch));
     setFormError('');
     setFieldErrors({});
     setFormMode('CREATE');
@@ -943,7 +1345,7 @@ export default function TenantAdminAppointments({
       source: appointment.source,
       status: appointment.status,
       deposit: String(appointment.deposit),
-      station: appointment.station || stationDirectory[appointment.branch][0],
+      station: appointment.station || stationsFor(appointment.branch)[0] || "",
       note: appointment.note
     });
     setFormError('');
@@ -1099,8 +1501,8 @@ export default function TenantAdminAppointments({
     }
 
     const chosenServices = form.services
-      .map((name) => services.find((service) => service.name === name))
-      .filter((service): service is (typeof services)[number] => Boolean(service));
+      .map((name) => serviceCatalog.find((service) => service.name === name))
+      .filter((service): service is (typeof serviceCatalog)[number] => Boolean(service));
     if (form.services.length > 0 && (!chosenServices.length || chosenServices.length !== form.services.length)) {
       errors.services = 'Danh sách dịch vụ có mục không còn trong bảng giá. Vui lòng chọn lại dịch vụ.';
     }
@@ -1133,7 +1535,7 @@ export default function TenantAdminAppointments({
     }
 
     // 6. Staff
-    const assignedStaff = staffDirectory.find((staff) => staff.name === form.staff && staff.branch === form.branch);
+    const assignedStaff = staffRoster.find((staff) => staff.name === form.staff && staff.branch === form.branch);
     if (!form.staff) {
       errors.staff = 'Vui lòng phân công kỹ thuật viên phụ trách.';
     } else if (!assignedStaff) {
@@ -1151,10 +1553,17 @@ export default function TenantAdminAppointments({
       }
     }
 
-    // 7. Station
-    if (!form.station) {
+    // 7. Station — chỉ bắt buộc khi chi nhánh thật sự có ghế để chọn.
+    //
+    // Sơ đồ ghế nằm ở mức C của §9.3: không bảng, không endpoint, và danh sách
+    // ghế chỉ tồn tại trong bộ mẫu. Bắt buộc ở chế độ dữ liệu thật thì ô này
+    // không bao giờ điền được, và **không ai đặt được lịch nào** — máy chủ thì
+    // vốn nhận `station` như một trường tuỳ chọn.
+    if (stationsFor(form.branch).length === 0) {
+      // Không có ghế nào để chọn: bỏ qua cả hai phép kiểm.
+    } else if (!form.station) {
       errors.station = 'Vui lòng chọn ghế hoặc phòng phục vụ.';
-    } else if (!stationDirectory[form.branch]?.includes(form.station)) {
+    } else if (!stationsFor(form.branch).includes(form.station)) {
       errors.station = 'Ghế hoặc phòng không thuộc chi nhánh đã chọn.';
     }
 
@@ -1234,14 +1643,124 @@ export default function TenantAdminAppointments({
         : new Date().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })
     };
 
-    if (formMode === 'EDIT') {
-      setAppointments((current) => current.map((appointment) => appointment.id === payload.id ? payload : appointment));
-    } else {
-      setAppointments((current) => [...current, payload]);
-      setSelectedDate(payload.date);
+    if (!live) {
+      if (formMode === 'EDIT') {
+        setMockAppointments((current) => current.map((appointment) => appointment.id === payload.id ? payload : appointment));
+      } else {
+        setMockAppointments((current) => [...current, payload]);
+        setSelectedDate(payload.date);
+      }
+      setSelectedAppointment(payload);
+      setFormMode(null);
+      return;
     }
-    setSelectedAppointment(payload);
+
+    void saveToServer(payload, existingId, chosenServices);
+  };
+
+  /**
+   * Đưa một lần lưu biểu mẫu lên máy chủ.
+   *
+   * Ba phép dịch phải làm trước khi gửi, vì biểu mẫu giữ **tên** còn API nhận **mã**:
+   * tên khách thành mã hồ sơ, tên kỹ thuật viên thành mã nhân viên, tên dịch vụ
+   * thành mã dịch vụ. Tên trùng nhau thì phép dịch lấy người đầu tiên khớp —
+   * chấp nhận được ở quy mô một tiệm, và là cái giá để không phải viết lại biểu mẫu.
+   *
+   * `warnings` hiện lên như một lời nhắc chứ không phải lỗi: BR-APT-005 và
+   * BR-APT-013 cho phép đặt ngoài ca hoặc đặt lùi giờ, chỉ nói cho người đặt biết.
+   */
+  const saveToServer = async (
+    payload: TenantAppointment,
+    existingId: string | undefined,
+    chosenServices: Array<{ id: string; name: string }>
+  ) => {
+    const customerId = await ensureCustomerId(payload.phone, payload.customer);
+    if (!customerId) return;
+
+    const staffId = staffRoster.find((staff) => staff.name === payload.staff)?.id;
+    if (!staffId) {
+      setFieldErrors({ staff: 'Không tìm thấy kỹ thuật viên này trong hồ sơ nhân sự.' });
+      setFormError('Không tìm thấy kỹ thuật viên này trong hồ sơ nhân sự.');
+      return;
+    }
+
+    const input: SaveAppointmentInput = {
+      customerId,
+      staffId,
+      startAt: `${payload.date}T${payload.start}:00+07:00`,
+      serviceIds: chosenServices.map((service) => service.id),
+      source: payload.source,
+      station: payload.station || undefined,
+      note: payload.note || undefined,
+      deposit: payload.deposit,
+      // `status` chỉ có nghĩa lúc tạo mới — BR-APT-021 cho đúng hai giá trị đầu.
+      ...(existingId || (payload.status !== 'PENDING' && payload.status !== 'CONFIRMED')
+        ? {}
+        : { status: payload.status })
+    };
+
+    const saved = existingId
+      ? await board.updateAppointment(existingId, input)
+      : await board.createAppointment(input);
+
+    if (saved.status === 'error') {
+      setFormError(saved.error.message);
+      setFieldErrors(Object.fromEntries(
+        (saved.error.fields || []).map((field) => [field.field, field.message])
+      ));
+      return;
+    }
+
+    reportWarnings(saved.data.warnings);
+
+    patchAppointmentExtras(saved.data.appointment.id, {
+      reminderSent: payload.reminderSent,
+      createdBy: payload.createdBy
+    });
+
+    if (!existingId) setSelectedDate(payload.date);
+
+    setSelectedAppointment(toTenantAppointment(
+      saved.data.appointment,
+      payload.price,
+      { ...appointmentExtras[saved.data.appointment.id], reminderSent: payload.reminderSent, createdBy: payload.createdBy }
+    ));
     setFormMode(null);
+  };
+
+  /**
+   * Hồ sơ khách theo số điện thoại, tạo mới nếu chưa có — BR-CUS-004.
+   *
+   * Mọi lịch hẹn bắt buộc gắn một hồ sơ khách: BR-CUS-007 đọc ngược hạng khách và
+   * tổng chi tiêu từ hóa đơn, nên một lượt khách không có hồ sơ là một lượt biến
+   * mất khỏi mọi con số về sau. BR-CUS-002 làm số điện thoại thành khóa tra cứu.
+   */
+  const ensureCustomerId = async (phone: string, fullName: string): Promise<string | null> => {
+    const digits = phone.replace(/[\s.-]/g, '');
+    const existing = customerDirectoryLive.customers.find(
+      (customer) => customer.phone.replace(/[\s.-]/g, '') === digits
+    );
+
+    if (existing) return existing.id;
+
+    const created = await customerDirectoryLive.createCustomer({
+      phone: phone.trim(),
+      fullName: fullName.trim()
+    });
+
+    if (created.status === 'error') {
+      setFormError(created.error.message);
+      setFieldErrors(Object.fromEntries(
+        (created.error.fields || []).map((field) => [field.field, field.message])
+      ));
+      return null;
+    }
+
+    return created.data.id;
+  };
+
+  const reportWarnings = (warnings: AppointmentWarning[]) => {
+    if (warnings.length) onNotify?.(warnings.map((warning) => warning.message).join(' · '));
   };
 
   const resetFilters = () => {
@@ -1301,7 +1820,7 @@ export default function TenantAdminAppointments({
       cell: (appointment) => (
         <div className="min-w-0">
           <p className="font-semibold text-brand-text">{appointment.staff}</p>
-          <p className="mt-0.5 text-caption text-brand-text-muted">{branchLabels[appointment.branch]}</p>
+          <p className="mt-0.5 text-caption text-brand-text-muted">{branchNames[appointment.branch] || appointment.branch}</p>
         </div>
       )
     },
@@ -1720,7 +2239,7 @@ export default function TenantAdminAppointments({
                         <span className="flex min-w-0 items-center gap-1">
                           <span className="truncate text-body font-semibold text-brand-text">{staff.name}</span>
                           {branchFilter === 'ALL' && (
-                            <span className="shrink-0 rounded-pill bg-brand-surface-high px-1.5 text-caption text-brand-text-muted">{staff.branch}</span>
+                            <span className="shrink-0 rounded-pill bg-brand-surface-high px-1.5 text-caption text-brand-text-muted">{branchShortNames[staff.branch] || staff.branch}</span>
                           )}
                         </span>
                         {/* Cột hẹp: tỉ lệ kín lịch đi kèm vai trò trên cùng một dòng,
@@ -1877,7 +2396,7 @@ export default function TenantAdminAppointments({
               </>
             )}
             <span className="flex items-center gap-1.5"><Clock3 aria-hidden="true" className="h-3.5 w-3.5" />Giờ mở cửa 08:00–20:00</span>
-            <span className="flex items-center gap-1.5"><MapPin aria-hidden="true" className="h-3.5 w-3.5" />{branchFilter === 'ALL' ? '2 chi nhánh' : branchLabels[branchFilter as BranchCode]}</span>
+            <span className="flex items-center gap-1.5"><MapPin aria-hidden="true" className="h-3.5 w-3.5" />{branchFilter === 'ALL' ? `${Object.keys(branchNames).length} chi nhánh` : branchNames[branchFilter] || branchFilter}</span>
           </div>
         </div>
       </section>
@@ -2094,7 +2613,7 @@ export default function TenantAdminAppointments({
                       {selectedAppointment.start}–{getEndTime(selectedAppointment.start, selectedAppointment.duration)}
                     </p>
                     <p className="mt-1 text-body text-brand-text-muted">
-                      {selectedAppointment.duration} phút · {branchLabels[selectedAppointment.branch]}
+                      {selectedAppointment.duration} phút · {branchNames[selectedAppointment.branch] || selectedAppointment.branch}
                     </p>
                   </div>
                   <div className="shrink-0 rounded-control border border-brand-outline bg-brand-surface px-3 py-2">
@@ -2121,7 +2640,11 @@ export default function TenantAdminAppointments({
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-2 text-caption text-brand-text-muted">
                       <span>{selectedAppointment.firstVisit ? 'Khách lần đầu sử dụng dịch vụ' : 'Khách đã có hồ sơ tại salon'}</span>
-                      {matchedCustomerDetail && (
+                      {/* Điểm tích luỹ chỉ hiện khi thật sự có. Loyalty nằm ngoài phạm vi
+                          backend (§9.3), nên ở chế độ dữ liệu thật mọi khách đều 0 điểm —
+                          in ra "0 điểm tích luỹ" là nói rằng hệ thống đã tính và khách
+                          chưa có điểm, trong khi thật ra chưa có gì tính cả. */}
+                      {matchedCustomerDetail && matchedCustomerDetail.points > 0 && (
                         <>
                           <span>•</span>
                           <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
@@ -2176,7 +2699,7 @@ export default function TenantAdminAppointments({
                   <h3 className="text-body font-semibold text-brand-text">Kỹ thuật viên</h3>
                   <p className="mt-2 text-body font-semibold text-brand-text">{selectedAppointment.staff}</p>
                   <p className="mt-0.5 text-caption text-brand-text-muted">
-                    {staffDirectory.find((staff) => staff.name === selectedAppointment.staff)?.role || 'Kỹ thuật viên'}
+                    {staffRoster.find((staff) => staff.name === selectedAppointment.staff)?.role || 'Kỹ thuật viên'}
                   </p>
                   {matchedCustomerDetail?.favoriteTechnician &&
                    matchedCustomerDetail.favoriteTechnician !== 'Chưa xác định' && (
@@ -2526,6 +3049,17 @@ export default function TenantAdminAppointments({
       >
         {selectedAppointment && (
           <form id="tenant-appointment-refund-form" onSubmit={submitRefund} noValidate className="flex flex-col gap-4">
+            {/* Câu phạm vi — chỉ ở chế độ dữ liệu thật, vì chỉ khi ấy nó mới đúng và
+                mới cần. Ở chế độ trình bày thì cả trang đã đeo nhãn dữ liệu mẫu. */}
+            {live && (
+              <p className="rounded-card border border-amber-300 bg-amber-50 px-3 py-2 text-caption text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                <strong className="font-bold">Phạm vi của khối này.</strong>{' '}
+                Máy chủ ghi nhận hoàn tiền ở <strong>hóa đơn</strong> chứ không ở lịch hẹn, nên
+                thông tin nhập tại đây chỉ lưu trên máy này và <strong>không vào báo cáo doanh
+                thu</strong>. Muốn hoàn tiền có sổ sách, làm ở màn Thanh toán trên hóa đơn của
+                lượt khách này.
+              </p>
+            )}
             <div className="flex items-center gap-3 rounded-card border border-brand-outline bg-brand-surface-lowest p-3">
               <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-amber-100 text-caption font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                 {selectedAppointment.customer.split(' ').slice(-2).map((word) => word[0]).join('')}
@@ -2913,7 +3447,7 @@ export default function TenantAdminAppointments({
             )}
 
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {services.map((service) => {
+              {serviceCatalog.map((service) => {
                 const isSelected = form.services.includes(service.name);
                 return (
                   <label
@@ -3003,12 +3537,23 @@ export default function TenantAdminAppointments({
                   aria-label={branchLocked ? 'Chi nhánh được phân công' : undefined}
                   onChange={(event) => {
                     const branch = event.target.value as BranchCode;
-                    setForm((current) => ({ ...current, branch, staff: branch === 'Q1' ? 'Hà My' : 'Thảo Nguyễn', station: stationDirectory[branch][0] }));
+                    // Đổi chi nhánh là đổi luôn kỹ thuật viên: BR-EMP-003 buộc nhân
+                    // viên thuộc đúng một chi nhánh, nên người đang chọn có thể
+                    // không còn hợp lệ. Lấy người đầu tiên của chi nhánh mới thay vì
+                    // chép cứng hai cái tên của bộ mẫu.
+                    const firstStaff = staffRoster.find((staff) => staff.branch === branch);
+                    setForm((current) => ({
+                      ...current,
+                      branch,
+                      staff: firstStaff?.name || '',
+                      station: stationsFor(branch)[0] || ''
+                    }));
                   }}
                   className="w-full"
                 >
-                  <option value="Q3">Chi nhánh Quận 3</option>
-                  <option value="Q1">Chi nhánh Quận 1</option>
+                  {Object.entries(branchNames).map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
                 </BeautifulSelect>
               </Field>
 
@@ -3021,13 +3566,19 @@ export default function TenantAdminAppointments({
                   }}
                   className="w-full"
                 >
-                  {staffDirectory.filter((staff) => staff.branch === form.branch).map((staff) => (
+                  {staffRoster.filter((staff) => staff.branch === form.branch).map((staff) => (
                     <option key={staff.name} value={staff.name}>{staff.name} · {staff.role}</option>
                   ))}
                 </BeautifulSelect>
               </Field>
 
-              <Field label="Ghế / phòng phục vụ" required error={fieldErrors.station}>
+              {/* Dấu bắt buộc đi theo việc có ghế để chọn hay không — xem phép kiểm 7. */}
+              <Field
+                label="Ghế / phòng phục vụ"
+                required={stationsFor(form.branch).length > 0}
+                helper={stationsFor(form.branch).length === 0 ? 'Sơ đồ ghế & khu vực chưa nối máy chủ nên chưa có ghế để chọn.' : undefined}
+                error={fieldErrors.station}
+              >
                 <BeautifulSelect
                   value={form.station}
                   onChange={(event) => {
@@ -3036,7 +3587,7 @@ export default function TenantAdminAppointments({
                   }}
                   className="w-full"
                 >
-                  {stationDirectory[form.branch].map((station) => <option key={station} value={station}>{station}</option>)}
+                  {stationsFor(form.branch).map((station) => <option key={station} value={station}>{station}</option>)}
                 </BeautifulSelect>
               </Field>
 

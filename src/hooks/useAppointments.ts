@@ -1,16 +1,29 @@
 /**
- * Bảng lịch của **một ngày làm việc**, kèm bốn thao tác ghi.
+ * Bảng lịch của một **khoảng thời gian**, kèm bốn thao tác ghi.
  *
- * Là hook đầu tiên có tham số ngày, và đó là điểm khác bản chất so với
+ * Là hook đầu tiên có tham số thời gian, và đó là điểm khác bản chất so với
  * `useCustomers` hay `useStaff`: danh bạ khách có trần tự nhiên nên nạp trọn
- * được, còn lịch hẹn cộng dồn mãi. Đổi ngày là một lần nạp mới, không phải một
- * phép lọc trên dữ liệu đã có — lọc ở trình duyệt thì lịch của ngày mai chỉ hiện
- * khi nó tình cờ nằm trong khoảng đã tải.
+ * được, còn lịch hẹn cộng dồn mãi. Đổi khoảng là một lần nạp mới, không phải một
+ * phép lọc trên dữ liệu đã có — lọc ở trình duyệt thì lịch ngoài khoảng đã tải
+ * chỉ hiện khi nó tình cờ nằm trong đó.
  *
  * Cả chủ tiệm lẫn lễ tân đều có toàn quyền ở nhóm `Appointments` (ma trận mục
  * 3.4), nhưng **nhận về hai danh sách khác nhau**: BR-ISO-004 thu hẹp lễ tân về
  * chi nhánh của họ. Phép thu hẹp ấy nằm ở máy chủ, đọc từ phiên đăng nhập, nên
  * hook này không có tham số chi nhánh và cũng không được có.
+ *
+ * ## Vì sao có hai cửa vào
+ *
+ * `useAppointments` nạp **một ngày** và là cửa mà cổng lễ tân dùng: quầy chỉ bao
+ * giờ nhìn ca hôm nay. `useAppointmentRange` nạp một khoảng bất kỳ, cho màn Lịch
+ * hẹn của chủ tiệm — dải chọn ngày ở đó vẽ vạch mật độ cho **cả bảy ngày** trong
+ * tuần, nên một ngày là không đủ để trang tự nói đúng về chính nó.
+ *
+ * Cái thứ hai là phần lõi, cái thứ nhất chỉ là lớp mỏng gọi vào nó qua
+ * `dayRange`. Chia như vậy chứ không chép thành hook thứ hai vì bốn hàm ghi bên
+ * dưới đều phải `reload()` sau khi thành công, và hai bản sao của quy tắc đó sẽ
+ * lệch nhau ngay lần sửa đầu tiên. Tầng service vốn đã nhận khoảng bất kỳ —
+ * `listAppointments(from, to)` — nên đây là mở đúng thứ đã có sẵn ở dưới.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -43,12 +56,14 @@ export interface AppointmentBoard {
 }
 
 /**
- * @param isoDate Ngày làm việc cần xem, dạng `yyyy-MM-dd` theo giờ tiệm.
+ * @param from Mốc đầu khoảng, ISO 8601 kèm phần bù múi giờ.
+ * @param to Mốc cuối khoảng, cùng dạng. Bao gồm cả mốc này.
  */
-export default function useAppointments(
+export function useAppointmentRange(
   enabled: boolean,
   activeTenantId: string | null,
-  isoDate: string
+  from: string,
+  to: string
 ): AppointmentBoard {
   const [appointments, setAppointments] = useState<AppointmentDto[]>([]);
   const [loading, setLoading] = useState(enabled);
@@ -58,7 +73,7 @@ export default function useAppointments(
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
 
   useEffect(() => {
-    if (!enabled || !activeTenantId || !isoDate) {
+    if (!enabled || !activeTenantId || !from || !to) {
       setAppointments([]);
       setLoading(false);
       setError(null);
@@ -67,8 +82,6 @@ export default function useAppointments(
 
     let active = true;
     setLoading(true);
-
-    const { from, to } = dayRange(isoDate);
 
     void listAppointments(from, to)
       .then((result) => {
@@ -90,7 +103,7 @@ export default function useAppointments(
     return () => {
       active = false;
     };
-  }, [enabled, activeTenantId, isoDate, reloadToken]);
+  }, [enabled, activeTenantId, from, to, reloadToken]);
 
   /**
    * Bốn hàm ghi đều `reload()` sau khi thành công thay vì tự vá mảng trong bộ
@@ -145,4 +158,23 @@ export default function useAppointments(
     rescheduleAppointment,
     changeStatus
   };
+}
+
+/**
+ * Bảng lịch của **một ngày làm việc** — cửa vào mà cổng lễ tân dùng.
+ *
+ * `dayRange` dựng khoảng từ 00:00:00 tới 23:59:59 theo giờ tiệm, nên hai lần gọi
+ * cùng một ngày cho ra cùng hai chuỗi và `useEffect` bên trong không nạp lại vô
+ * cớ.
+ *
+ * @param isoDate Ngày làm việc cần xem, dạng `yyyy-MM-dd` theo giờ tiệm.
+ */
+export default function useAppointments(
+  enabled: boolean,
+  activeTenantId: string | null,
+  isoDate: string
+): AppointmentBoard {
+  const { from, to } = isoDate ? dayRange(isoDate) : { from: '', to: '' };
+
+  return useAppointmentRange(enabled, activeTenantId, from, to);
 }
