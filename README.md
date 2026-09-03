@@ -14,9 +14,9 @@ Cần phân biệt rõ **ba lớp** đang cùng tồn tại — chúng không gi
 |---|---|---|
 | **Frontend nghiệp vụ** | Toàn bộ 3 cổng, ~76.000 dòng TS/TSX | Trình duyệt |
 | **Mock data + `localStorage`** | Hầu hết dữ liệu nghiệp vụ: tenant, gói, hóa đơn, lịch hẹn, khách hàng, kho, thu chi… | Trình duyệt |
-| **Backend tối thiểu hiện có** | Xác thực, phiên đăng nhập, quản lý một phần tài khoản, yêu cầu nâng cấp gói — trên Cloudflare Worker + D1 | Máy chủ |
+| **Backend nghiệp vụ** | Xác thực, tiệm, chi nhánh, dịch vụ, nhân viên, khách hàng, lịch hẹn, hóa đơn và thu tiền, nhật ký — **ASP.NET Core + SQL Server 2022**, solution riêng | Máy chủ |
 
-> **Backend tối thiểu này không phải là backend chính thức của hệ thống.** Nó phủ đúng 2 nhóm endpoint (xem §11.1). Backend nghiệp vụ đầy đủ vẫn còn phải xây — lộ trình ở [README-MIGRATION.md](README-MIGRATION.md).
+> **Backend đang được dựng theo lộ trình 20 ngày** ở [README-BACKEND-ROADMAP.md](README-BACKEND-ROADMAP.md) — không nằm trong repo này mà ở một solution ASP.NET Core riêng. Bản Cloudflare Worker + D1 mà các mục §10 và §11 mô tả là **điểm xuất phát đã bị thay**; giữ lại vì phần phân tích hiện trạng frontend quanh nó vẫn đúng.
 
 Ứng dụng có **3 cổng (portal) theo vai trò** trong cùng một bundle:
 
@@ -26,9 +26,9 @@ Cần phân biệt rõ **ba lớp** đang cùng tồn tại — chúng không gi
 | Tenant Admin | Chủ / quản lý chuỗi salon | `src/components/NailTenantAdminPortal.tsx` |
 | Receptionist | Lễ tân tại một chi nhánh | `src/components/ReceptionistPortal.tsx` |
 
-Vai trò được quyết định bởi `sessionAccount.role` trả về từ API xác thực, tại [src/App.tsx:1988](src/App.tsx#L1988) và [src/App.tsx:2018](src/App.tsx#L2018).
+Vai trò được quyết định bởi `session.account.role` trả về từ API xác thực, tại [src/App.tsx:250](src/App.tsx#L250).
 
-**Trạng thái dữ liệu:** hầu hết nghiệp vụ đang chạy trên **mock data + `localStorage`**. Chỉ có **xác thực** và **yêu cầu nâng cấp gói** là gọi API thật. Xem §10 và §11.
+**Trạng thái dữ liệu:** đang chuyển dần sang API thật. Đã nối: đăng nhập và chọn tiệm, quản lý tiệm, chi nhánh, dịch vụ, nhân viên, khách hàng. Các màn còn lại vẫn chạy **mock data + `localStorage`** và mang dải nhãn "Dữ liệu mẫu — chưa nối máy chủ". Xem [README-BACKEND-ROADMAP.md](README-BACKEND-ROADMAP.md) §9 để biết màn nào ở mức nào.
 
 Ngôn ngữ giao diện: **tiếng Việt** là gốc, có lớp dịch sang tiếng Anh (`src/i18n/`), chưa dịch đủ (chuỗi thiếu sẽ rơi về tiếng Việt và cảnh báo trong dev — [src/i18n/translate.ts:43](src/i18n/translate.ts#L43)).
 

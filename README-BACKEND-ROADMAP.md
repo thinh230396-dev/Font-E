@@ -5,7 +5,7 @@ Tài liệu này biến `README-BUSINESS-RULES.md` thành **lịch làm việc t
 | | |
 |---|---|
 | **Ngân sách** | 20 ngày × 8 giờ = **160 giờ** code. Báo cáo và slide viết ngoài 8 giờ này |
-| **Backend** | **ASP.NET Core 10 + EF Core + SQL Server LocalDB**, solution riêng tại `C:\Users\letru\source\repos\NailManagement` |
+| **Backend** | **ASP.NET Core 10 + EF Core + SQL Server 2022**, solution riêng tại `C:\Users\letru\source\repos\NailManagement` |
 | **Đầu ra bắt buộc** | Chạy trọn mạch demo ở `README-BUSINESS-RULES.md` §1 bằng dữ liệu thật trong database |
 | **Đọc trước** | [README-BUSINESS-RULES.md](README-BUSINESS-RULES.md) — nguồn sự thật nghiệp vụ · [README-MIGRATION.md](README-MIGRATION.md) §8, §12 — hiện trạng frontend |
 
@@ -28,14 +28,22 @@ Mười hai quyết định này chốt trong phiên lập lộ trình, bổ sun
 | 3 | **`node:sqlite` có sẵn + SQL thuần**, không Drizzle, không better-sqlite3 | Không cài gói native, không cần Build Tools trên Windows. Đã chạy thử trên Node v24.18 |
 | 4 | Contract lỗi **`{ error: { code, message, fields } }`** | Frontend gắn được thông báo vào đúng ô nhập — chốt §22 mục 3 |
 | 5 | **Luôn bắt chọn tiệm** sau khi đăng nhập (mọi TenantAdmin) | Chốt §22 mục 2. Bỏ cột `last_active_tenant_id` khỏi kế hoạch |
-| 6 | **Vitest chỉ cho phân quyền + cách ly tenant**, không test CRUD | ~1 ngày, phủ đúng BR-ISO-006 |
+| 6 | ~~**Vitest** chỉ cho phân quyền + cách ly tenant~~, không test CRUD | ~1 ngày, phủ đúng BR-ISO-006. ⚠️ **Vitest đã bị thay bằng xUnit ở ngày 12** (quyết định 53) — xem bảng thay thế bên dưới |
 | 7 | Nối frontend theo **mạch demo vàng** trước | ~14 màn hình thay vì 22 |
 | 8 | Màn chưa nối API **giữ `localStorage` + dải nhãn "Dữ liệu mẫu"** | Không có dữ liệu giả trình bày như thật |
 | 9 | **Chỉ chạy localhost**, không deploy | Tiết kiệm 1 ngày. `npm run build` vẫn phải chạy được để phòng thân |
 | 10 | **Bỏ USD, toàn hệ thống VND số nguyên** | Đúng BR-VAL-003. Bỏ `convertMoney` và tỷ giá cứng 25000 ở `src/utils/money.ts:5` |
 | 11 | Phiên là **cookie + bảng `app_sessions`**, không JWT | BR-AUTH-022 bắt kiểm tra trạng thái tài khoản mỗi request; JWT không thu hồi được giữa chừng |
 | 12 | **Chốt npm**, xóa `bun.lock` | Nợ kỹ thuật §21.3 |
-| 13 | **Clean Architecture 4 tầng đầy đủ**: use case là class có `ExecuteAsync()`, có DTO vào/ra, có mapper và presenter riêng | Tốn thêm 3–4 ngày → **bỏ lát cắt gói đăng ký (ngày 17)** và **rút báo cáo doanh thu còn 2 chiều** (ngày, chi nhánh) |
+| 13 | **Clean Architecture 4 tầng đầy đủ**: use case là class có `ExecuteAsync()`, có DTO vào/ra, có mapper và presenter riêng | Tốn thêm 3–4 ngày → **bỏ lát cắt gói đăng ký (ngày 17)**. ⚠️ Bản đầu của ô này còn ghi *"rút báo cáo doanh thu còn 2 chiều"* — **đã bỏ ý đó ngày 13**: xem ghi chú bên dưới |
+
+> ⚠️ **Quyết định 13 từng viết như thể báo cáo doanh thu đã bị cắt còn 2 chiều. Không phải.** Việc
+> cắt hẳn ngày 17 mới là đòn bẩy bù chi phí Clean Architecture; bốn chiều của BR-REV-004 vẫn giữ
+> nguyên, và §6 xếp việc rút xuống 2 chiều vào **đường cắt dự phòng** chỉ dùng nếu cuối ngày 15 cổng
+> lễ tân chưa thu được tiền. Lý do giữ: chiều **nhân viên** là nguồn tính hoa hồng ở BR-EMP-011
+> (BR-REV-005 nói thẳng), và §9.5 đã hứa *"vẫn hiện số tiền hoa hồng trong báo cáo"* — cắt chiều đó
+> là lỡ một lời hứa viết ở ba chỗ. Cả bốn chiều đều là `GROUP BY` trên dữ liệu đã có sẵn nên chiều
+> thứ tư gần như không tốn thêm gì. *(soát tài liệu cuối ngày 13)*
 
 > ⚠️ **Các quyết định 2, 3, 11, 12 ở trên đã bị thay ngày 24/08.** "vs insider" trong yêu cầu ban đầu là **Visual Studio Insiders**, không phải VS Code Insiders — tôi hiểu nhầm và đã dựng nhầm một backend Node trước khi phát hiện. Bảng dưới là quyết định thật.
 
@@ -46,6 +54,10 @@ Mười hai quyết định này chốt trong phiên lập lộ trình, bổ sun
 | 11′ | **SQL Server LocalDB**, không SQLite | ⚠️ Làm **BR-BAK-003 sai** — quy tắc đó ghi "sao lưu bằng copy tệp SQLite", nay không còn tệp để copy. Cần sửa `README-BUSINESS-RULES.md` §14. Đánh đổi đã biết: máy người chấm phải có LocalDB |
 | 12′ | **Cookie auth + bảng phiên tự quản**, không dùng ASP.NET Core Identity | Giữ nguyên được BR-AUTH-013/020/022/024 mà không phải uốn theo lược đồ của Identity |
 | 14′ | Băm mật khẩu bằng **PBKDF2-HMAC-SHA256, 210.000 vòng** (`Rfc2898DeriveBytes`) | Có sẵn trong .NET, không thêm gói. Thay cho SHA-256 một vòng của backend cũ — SHA-256 quá nhanh nên thuận lợi cho việc dò mật khẩu |
+| 6′ | **xUnit + `WebApplicationFactory`** trên **SQL Server LocalDB riêng**, không Vitest và không SQLite. Bộ kiểm thử dùng lại `DemoDataSeeder` của máy chủ thật | Chốt ở ngày 12. Là quyết định cuối cùng của bản gốc còn sót lại sau khi đổi sang ASP.NET Core — Vitest là công cụ của JavaScript nên không chạy được ở đây. Kéo theo §5 ngày 12 nói "SQLite trong bộ nhớ" cũng đã lỗi thời từ quyết định 11′ |
+| 11″ | **SQL Server 2022 Developer Edition** (instance mặc định `MSSQLSERVER`, Windows authentication), thay cho LocalDB. Chốt **03/09/2026** | Chỉ đổi chuỗi kết nối ở hai chỗ — `appsettings.json` và `SalonSysFactory.cs` — vì lược đồ không dùng tính năng riêng của phiên bản nào. Kéo theo hai việc: **BR-BAK-003** đổi công cụ từ Visual Studio sang SSMS, và **máy người chấm nay phải cài SQL Server thật** chứ không còn dùng ké bản LocalDB đi kèm Visual Studio — xem §7 rủi ro 6. Máy chủ mới dùng collation `Vietnamese_CI_AS` thay vì `SQL_Latin1_General_CP1_CI_AS`, làm đổi thứ tự sắp xếp danh mục và lộ ra một giả định ngầm trong `SalonScenario.NextSlot()` |
+
+> **Đọc 11′ và 6′ ở trên với mốc thời gian:** cả hai chốt ngày 24/08 khi nền tảng còn là LocalDB, và quyết định 11″ đã thay phần nền tảng ấy. Phần lập luận của chúng thì vẫn nguyên giá trị — lý do chọn một SQL Server thật thay vì SQLite hay EF Core InMemory không phụ thuộc vào việc đó là LocalDB hay bản đầy đủ.
 
 > Quyết định 11 suy ra từ source, không phải lựa chọn: `scripts/sites-worker.js:191-258` đã làm đúng mô hình cookie + bảng phiên, chuyển sang Express gần như bê nguyên.
 
@@ -68,7 +80,7 @@ Vượt 27 giờ. Nên phạm vi bị cắt như sau:
 |---|---:|---|
 | Backend 9 module | 68 | Bỏ 4 endpoint báo cáo nâng cao |
 | Frontend — **chỉ mạch demo vàng**, 14 màn | 58 | Xem bảng dưới |
-| Vitest phân quyền + cách ly tenant | 8 | |
+| xUnit phân quyền + cách ly tenant | 8 | Công cụ đổi ở quyết định 6′; ngân sách giờ giữ nguyên |
 | Dọn dẹp (bỏ USD, nhãn dữ liệu mẫu, code chết) | 4 | |
 | Tổng duyệt + sửa lỗi + seed lại | 12 | |
 | **Đệm** | **10** | 1,25 ngày cho sự cố |
@@ -128,9 +140,14 @@ server/
 
 > ⚠️ **Sơ đồ trên đã lỗi thời từ ngày 1.** Sau khi chốt Clean Architecture 4 tầng đầy đủ (§0 mục 13) và TypeScript (§0 mục 14), cấu trúc thật là sơ đồ bên dưới. Giữ lại sơ đồ cũ để thấy vì sao đổi.
 
-### 3.1 Cấu trúc thật — bốn project ASP.NET Core
+### 3.1 Cấu trúc thật — năm project ASP.NET Core
 
 > Sơ đồ ở §3.2 bên dưới là bản Node đã bị bỏ. Giữ lại vì các nguyên tắc tầng vẫn đúng nguyên vẹn.
+>
+> ⚠️ **Sơ đồ này dựng lại từ cây thư mục thật cuối ngày 13.** Bản trước liệt kê đúng những gì tồn
+> tại ở ngày 4 và không được cập nhật theo, nên nó thiếu hẳn project kiểm thử và bảy lát cắt use
+> case. Con số dễ lệch nhất là số tệp trong một thư mục — chúng có ở đây để trả lời câu hỏi
+> *"thư mục này đã phình tới mức phải chia chưa"*, không phải để tra cứu tên tệp.
 
 ```
 NailManagement.slnx
@@ -142,47 +159,69 @@ NailManagement.slnx
                                     AppointmentService, SalesInvoice, SalesInvoiceLine,
                                     InvoicePayment, InvoiceCounter
       Auditing/                     AuditLog
-    Enums/
-      Auth/                         UserRole, AccountStatus, AccessLevel, Feature
-      Platform/                     TenantStatus, TenantDisplayStatus, PackageStatus,
-                                    BillingCycle, SubscriptionInvoiceStatus, UpgradeRequestStatus
-      Salon/                        BranchStatus, StaffRole, AppointmentStatus, PaymentMethod…
-      Auditing/                     AuditEvent
+    Enums/                          Auth/ · Platform/ · Salon/ · Auditing/ — soi gương Entities/
     ValueObjects/                   Email, PhoneNumber, RawPassword
-    Policies/                       AuthPolicy, PermissionMatrix, AppointmentSchedulePolicy…
-    Repositories/                   ★ PORT: IUserRepository, ITenantRepository, IBranchRepository…
-    Common/                         ErrorCode, AppException, DomainException, Guard, ITenantOwned
+    Policies/         (10 tệp)      PermissionMatrix, AuthPolicy, ValidationPolicy,
+                                    AppointmentLifecyclePolicy, AppointmentSchedulePolicy,
+                                    AppointmentStatusText, InvoiceMoneyPolicy,
+                                    SalesInvoiceStatusText, CustomerTierPolicy,
+                                    FeatureCapabilityPolicy
+    Repositories/     (13 cổng)     ★ PORT: IUserRepository, ITenantRepository, IBranchRepository,
+                                    IAppointmentRepository, ISalesInvoiceRepository…
+    Common/                         ErrorCode, AppException, DomainException, Guard,
+                                    ITenantOwned, IBranchOwned
 
   NailManagement.Application/     ◄── tham chiếu Domain
-    UseCases/                       chia theo lát cắt: Auth/, Tenants/, Branches/,
-                                    Packages/, Accounts/, Audit/
-    DTOs/                           AuthDtos, TenantDtos, BranchDtos, PackageDtos,
-                                    AccountDto, AuditLogDto, ActorContext
-    Mappings/                       AccountMapper — chặn PasswordHash lọt ra ngoài
-    Abstractions/                   IPasswordHasher, IClock, IIdGenerator, IUnitOfWork…
-    Common/Exceptions/              InvalidCredentials, AccountLocked, Unauthenticated…
+    UseCases/         (11 lát cắt)  Auth/ · Tenants/ · Branches/ · Services/ · Staff/ ·
+                                    Customers/ · Appointments/ · SalesInvoices/ ·
+                                    Packages/ · Accounts/ · Audit/
+    DTOs/             (13 tệp)      AuthDtos, TenantDtos, BranchDtos, ServiceDtos, StaffDtos,
+                                    CustomerDtos, AppointmentDtos, SalesInvoiceDtos,
+                                    PackageDtos, AccountDto, AuditLogDto, ActorContext
+    Mappings/         (10 tệp)      một mapper cho mỗi lát cắt; AccountMapper chặn PasswordHash
+    Abstractions/     (7 cổng)      IPasswordHasher, IPasswordGenerator, IClock, IIdGenerator,
+                                    IUnitOfWork, ITenantContext, IAuditLogger
+    Common/                         BranchScope (BR-ISO-004), SalonTime (múi giờ tiệm),
+                                    Exceptions/
     DependencyInjection.cs          AddApplication()
 
   NailManagement.Infrastructure/  ◄── tham chiếu Application + Domain
     Persistence/
-      NailDbContext.cs              bộ lọc theo tiệm nằm ở đây (BR-ISO-002)
+      NailDbContext.cs              bộ lọc theo tiệm nằm ở đây (BR-ISO-002) — 18 DbSet
       Configurations/               chia Auth/ Platform/ Salon/ Auditing/ — soi gương Entities/
       Repositories/                 bản cài đặt của các cổng ở Domain
       Migrations/                   EF Core sinh ra; không sắp xếp lại
-      Seed/                         DemoAccountSeeder, DemoDataSeeder, DemoSeedCatalog
+      Seed/                         DemoAccountSeeder, DemoDataSeeder, DemoSeedCatalog, DemoIds
       TenantScope/                  AmbientTenantContext
+      EfUnitOfWork.cs               ranh giới giao dịch — dùng ở lập hóa đơn và thu tiền
     Auditing/                       AuditLogger
     Security/                       Pbkdf2PasswordHasher, RandomPasswordGenerator
     SystemServices/                 SystemClock, GuidIdGenerator
     DependencyInjection.cs          AddInfrastructure() — nơi cắm cổng vào bản cài đặt
 
   NailManagement.API/             ◄── Frameworks & Drivers, tham chiếu Application + Infrastructure
-    Controllers/                    Auth, Tenants, Branches, Packages, Accounts, AuditLogs
-    Security/                       attribute phân quyền + middleware phiên và chặn ghi
+    Controllers/      (11 tệp)      Auth, Tenants, Packages, Accounts, Branches, Services,
+                                    Staff, Customers, Appointments, SalesInvoices, AuditLogs
+                                    — 47 endpoint
+    Security/                       RequireAuth, RequirePermission, AllowWhenTenantReadonly,
+                                    RequestScope, SessionMiddleware, TenantWriteGuardMiddleware
     Common/ApiExceptionHandler.cs   ★ nơi DUY NHẤT ánh xạ mã lỗi sang HTTP status
     Common/ErrorResponse.cs
     Program.cs                      composition root + áp migration + seed
+
+  NailManagement.Tests/           ◄── xUnit, dựng máy chủ thật trong bộ nhớ (quyết định 6′)
+    Infrastructure/                 SalonSysFactory, SalonSysClient, SalonSysCollection,
+                                    TestDatabase
+    Isolation/                      TenantIsolationTests
+    Authorization/                  SuperAdminBoundary, ReceptionistScope, ReadOnlyTenant,
+                                    SessionRevalidation
+    Payments/                       PaymentCollectionTests
 ```
+
+**Thư mục cần để mắt.** Không thư mục nào đang vượt ngưỡng phải chia, nhưng hai chỗ đã chạm trần
+tự nhiên: `UseCases/Appointments/` và `UseCases/SalesInvoices/` mỗi thư mục **7 tệp**. Cả hai vẫn
+là **một nhóm trách nhiệm duy nhất** nên chia nhỏ lúc này chỉ tạo thêm tầng gián tiếp; nếu lát cắt
+báo cáo doanh thu ngày 16 làm `SalesInvoices/` phình tiếp thì đó là lúc tách.
 
 **Trục chia thư mục — ba nhóm nghiệp vụ, dùng chung cho cả ba tầng.** `Entities/`, `Enums/` và
 `Configurations/` đều chia theo đúng bốn nhóm mà §3.2 dùng khi liệt kê bảng database: `Auth`
@@ -194,8 +233,10 @@ thứ hai, và ba thư mục soi gương nhau nên tìm `BranchConfiguration` ch
 > sở thích: một namespace con tên `System` khiến mọi tham chiếu `System.X` bên trong nhánh đó bị
 > tra vào chính nó trước, nên `System.DateTimeOffset` sẽ không biên dịch được.
 
-Hai thư mục cố ý **không** chia: `Migrations/` do EF Core sinh và quản lý, còn `DTOs/` chỉ có bảy
-tệp — chia ra thì mỗi nhóm còn đúng một tệp, đó là chia nhỏ quá mức.
+Hai thư mục cố ý **không** chia: `Migrations/` do EF Core sinh và quản lý, còn `DTOs/` và
+`Mappings/` chạy song song một-đối-một với `UseCases/`. Mười ba tệp DTO nghe như nhiều, nhưng
+chúng đã **tự phân nhóm bằng tên tệp** — `AppointmentDtos.cs` gom trọn lát cắt lịch hẹn — nên
+thêm một tầng thư mục chỉ để lặp lại thông tin đã có trong tên là chia nhỏ quá mức.
 
 **Ba chỗ then chốt, để tra nhanh khi viết báo cáo:**
 
@@ -299,13 +340,13 @@ npm run dev
 | 9 | FE `TenantAdminStaff`, đổi khóa `localStorage` sang `tenantId` | |
 | 10 | BE khách hàng (5 endpoint) + FE `TenantAdminCustomers` | **② Dựng xong một tiệm** |
 | 11 | BE lịch hẹn (6 endpoint) — chống trùng lịch | |
-| 12 | Vitest đợt 1 (4h) + BE khung hóa đơn bán hàng (4h) | |
+| 12 | xUnit đợt 1 (4h) + BE khung hóa đơn bán hàng (4h) | |
 | 13 | BE thu tiền, hoàn tiền, tự `COMPLETED`, số hóa đơn | |
 | 14 | FE `ReceptionistPortal` — lịch hẹn, check-in, đổi trạng thái | |
 | 15 | FE `ReceptionistPortal` — thu tiền, hóa đơn | |
 | 16 | BE báo cáo doanh thu 4 chiều + FE `TenantAdminReports` | **③ Trọn mạch demo** |
-| 17 | ~~Lát cắt gói đăng ký~~ — **đã cắt** để bù chi phí Clean Architecture 4 tầng (§0 mục 13). Ngày này chuyển thành đệm cho các lát cắt trước | |
-| 18 | Vitest đợt 2 + dọn dẹp: bỏ USD, dải nhãn "Dữ liệu mẫu", audit log | |
+| 17 | ~~Lát cắt gói đăng ký~~ — **đã cắt** (§0 mục 13). Ngày đệm này dùng để **dọn số bịa**: nối màn Tổng quan chủ tiệm, doanh thu nền tảng và nhật ký kiểm toán vào dữ liệu thật | |
+| 18 | xUnit đợt 2 + dọn dẹp: bỏ USD, dải nhãn "Dữ liệu mẫu", audit log | |
 | 19 | Tổng duyệt: seed lại, chạy trọn kịch bản 3 vai, sửa lỗi | |
 | 20 | Đệm + tổng duyệt lần hai + đóng gói hướng dẫn chạy | |
 
@@ -412,9 +453,9 @@ Ngày khó nhất của backend.
 - **BR-APT-013 / BR-APT-005** — ngoài ca và đặt trong quá khứ chỉ **cảnh báo**, vẫn cho lưu. Trả kèm mảng `warnings`, khác hẳn `fields` của lỗi.
 - **BR-APT-022** — sơ đồ chuyển trạng thái §16.1 viết thành **một bảng**, mọi chuyển đổi ngoài bảng bị từ chối.
 
-### Ngày 12 — Vitest đợt 1 + khung hóa đơn
+### Ngày 12 — xUnit đợt 1 + khung hóa đơn
 
-Bốn giờ đầu viết ~12 test chạy thẳng vào tầng API với SQLite trong bộ nhớ. Viết hôm nay chứ không để cuối vì đây là lúc đã có đủ hai tenant và ba vai trò để thử, mà vẫn còn 8 ngày để sửa nếu lộ lỗi:
+Bốn giờ đầu viết ~12 test chạy thẳng vào tầng API **qua HTTP thật**, trên một SQL Server LocalDB riêng. *(Câu gốc ghi "SQLite trong bộ nhớ" — lỗi thời từ quyết định 11′, sửa khi soát tài liệu cuối ngày 13.)* Viết hôm nay chứ không để cuối vì đây là lúc đã có đủ hai tenant và ba vai trò để thử, mà vẫn còn 8 ngày để sửa nếu lộ lỗi:
 
 1. Tenant A không đọc được khách hàng / lịch hẹn / hóa đơn của tenant B
 2. TenantAdmin không đặt được `active_tenant_id` sang tenant không có trong `user_tenants` (BR-AUTH-026)
@@ -453,7 +494,7 @@ Bốn giờ đầu viết ~12 test chạy thẳng vào tầng API với SQLite t
 
 Luồng 5 bước BR-SUB-008. Phần backend port được nhiều từ `scripts/sites-worker.js:359-450` đã chạy được. Sửa luôn `persistPackageUpgradeRequest` và `persistPackageUpgradeReview` đang `return true` trong nhánh `catch`, và chỗ `App.tsx:1654` gọi `persistPackageUpgradeReview` hai lần cho cùng một lần duyệt.
 
-### Ngày 18 — Vitest đợt 2 + dọn dẹp
+### Ngày 18 — xUnit đợt 2 + dọn dẹp
 
 | Giờ | Việc |
 |---:|---|
@@ -470,6 +511,11 @@ Xóa database, chạy lại migration + seed từ số 0, rồi diễn trọn k�
 
 Nếu ngày 19 sạch: tổng duyệt lần hai, viết `server/README.md` (cách chạy, ba tài khoản demo, cách reset database), kiểm tra `npm run build` và `npm run lint` đều xanh.
 
+> ⚠️ **`server/README.md` là đường dẫn của bản kế hoạch cũ**, hồi còn định đặt backend trong
+> chính repo giao diện. Quyết định 2′/3′ ở §0 đã đổi sang một solution ASP.NET riêng, nên tệp
+> thật nằm ở gốc solution ấy: `C:\Users\letru\source\repos\NailManagement\README.md`.
+> *(ghi lại khi làm ngày 20)*
+
 ---
 
 ## 6. Đường cắt khi trễ
@@ -480,7 +526,7 @@ Kiểm tra ở ba mốc. Trễ thì cắt theo đúng thứ tự này, **không 
 |---|---|---|---:|
 | Cuối ngày 6 | Chưa xong tenant + chi nhánh | Bỏ hẳn ngày 17 (gói đăng ký) | 8h |
 | Cuối ngày 10 | Chưa dựng được một tiệm trọn vẹn | Bỏ hoàn tiền và tip khỏi backend (`NICE TO HAVE`, BR §2.3); `TenantAdminReports` dùng lại `TenantAdminOverview` | 8h |
-| Cuối ngày 15 | Cổng lễ tân chưa thu được tiền | Bỏ Vitest đợt 2; báo cáo chỉ còn 2 chiều ngày + chi nhánh | 6h |
+| Cuối ngày 15 | Cổng lễ tân chưa thu được tiền | Bỏ xUnit đợt 2; báo cáo chỉ còn 2 chiều ngày + chi nhánh | 6h |
 
 **Bốn thứ tuyệt đối không cắt** — đây là những chỗ hội đồng hay vặn nhất, và cũng là chỗ đã tốn 77 quyết định để chốt:
 
@@ -497,10 +543,10 @@ Kiểm tra ở ba mốc. Trễ thì cắt theo đúng thứ tự này, **không 
 |---|---|---|
 | 1 | **`ReceptionistPortal.tsx` 5.493 dòng** — sửa vào giữa file dễ vỡ chỗ khác | Chỉ thay chỗ khởi tạo state và hàm ghi, không đụng cây render. Xem ngày 14–15 |
 | 2 | **Cách ly tenant** — chỗ dễ lộ dữ liệu chéo nhất, do một tài khoản quản nhiều tiệm | Ép mọi truy vấn đi qua `db/query.js`. Không endpoint nào được tự viết `WHERE tenant_id` |
-| 3 | **Giao dịch lúc thu tiền** — 3 bảng phải cùng thành công | `node:sqlite` đồng bộ nên bọc `BEGIN` / `COMMIT` rất gọn. Viết test riêng cho ca này |
+| 3 | **Giao dịch lúc thu tiền** — 3 bảng phải cùng thành công | ✅ **Đã xử lý ngày 13** bằng `IUnitOfWork` / `EfUnitOfWork` — một giao dịch EF Core bao quanh dòng thu, hóa đơn và lịch hẹn. Có phép thử riêng cho ca này |
 | 4 | **`App.tsx` chuyển quá tay** | Chỉ 5 trong 10 state lên API (`tenants`, `packages`, `invoices`, `tenantAdmins`, `upgradeRequests`). Năm state còn lại — `alerts`, `tickets`, `announcements`, `systemSettings`, `themeMode` — **giữ nguyên `localStorage`** |
 | 5 | **Plugin `vite-local-auth` chặn proxy** | Gỡ ngay ngày 1 |
-| 6 | **`node:sqlite` in cảnh báo experimental lúc khởi động** | Vô hại. Tắt bằng `--no-warnings` nếu thấy vướng khi demo |
+| 6 | ~~**`node:sqlite` in cảnh báo experimental lúc khởi động**~~ → **máy người chấm phải cài được SQL Server** | Rủi ro gốc không còn (quyết định 11′ bỏ SQLite). Rủi ro thay thế **nặng thêm từ 03/09** theo quyết định 11″: LocalDB đi kèm Visual Studio nên gần như máy nào có VS là có sẵn, còn **SQL Server 2022 là bản cài riêng vài GB**. Nếu buổi chấm diễn ra trên máy của trường, hoặc trên máy không cài được, hãy đổi chuỗi kết nối về `(localdb)\MSSQLLocalDB` — lược đồ chạy y hệt, bộ kiểm thử đã xác nhận xanh trên cả hai. `dotnet run` vẫn tự chạy migration + seed lúc khởi động ở cả hai trường hợp |
 | 7 | **Ngày 11 và 13 là hai ngày đặc nhất** | Nếu ngày 10 đã trễ, cắt theo bảng §6 **trước khi** bước vào ngày 11, đừng cắt giữa chừng |
 
 ---
@@ -514,7 +560,7 @@ Những điểm còn bỏ ngỏ ở `README-BUSINESS-RULES.md` §22 mà tôi ch�
 | 1 | Ngưỡng hạng khách (§22 mục 1) | Giữ 5tr / 20tr | Chỉ là nhãn hiển thị, đổi lúc nào cũng được |
 | 2 | Số hóa đơn (§22 mục 4) | Reset mỗi ngày, theo từng tenant | Đúng như BR-INV-016 đang giả định |
 | 3 | Lịch hẹn `PENDING` quá hạn (§22 mục 5) | Chỉ hiện nhãn "quá hạn" tính lúc đọc, không tự đổi trạng thái | Nhất quán với BR-TENANT-003 — không có job nền |
-| 4 | Node tối thiểu (§22 mục 7) | `>=22` trong `engines` | `node:sqlite` có từ 22.5 |
+| 4 | Node tối thiểu (§22 mục 7) | `>=20.19` trong `engines` | Chỉ còn là ràng buộc của **Vite 6 và công cụ frontend** — lý do cũ (`node:sqlite` có từ 22.5) đã mất hiệu lực từ quyết định 11′ |
 | 5 | Chế độ demo | Giữ công tắc `demoMode` sẵn có, nhưng mặc định **tắt** sau khi có backend | Còn dùng để trình bày dữ liệu mẫu khi cần |
 | 6 | Thư viện lấy dữ liệu ở frontend | Tự viết hook, **không** thêm React Query | 14 màn hình không đủ nhiều để bù chi phí học và thêm một dependency |
 
@@ -538,7 +584,7 @@ Bảng tra cứu để trả lời nhanh câu "cái này có làm không". Bốn
 | **Khách hàng** | Thêm, sửa, vô hiệu, tra cứu theo số điện thoại duy nhất trong tenant, hạng khách suy từ tổng chi tiêu | 5 | BR-CUS-001…009 |
 | **Lịch hẹn** | Tạo nhiều dịch vụ một lịch, **chống trùng giờ kỹ thuật viên**, dời lịch, 7 trạng thái với sơ đồ chuyển cố định, cảnh báo ngoài ca và đặt trong quá khứ, tiền cọc | 6 | BR-APT-001…041 |
 | **Hóa đơn bán hàng** | Tạo từ lịch hẹn hoặc bán lẻ, dòng nhập tay, giảm giá kèm lý do, tip, **thu nhiều lần nhiều phương thức**, hoàn tiền, số hóa đơn theo tenant reset mỗi ngày, tự hoàn tất lịch hẹn khi đủ tiền | 7 | BR-INV-001…033 · BR-PAY-001…008 |
-| **Báo cáo doanh thu** | Theo tiền thực thu, 4 chiều: ngày, chi nhánh, nhân viên, dịch vụ; hoa hồng tính lúc hiển thị | 4 | BR-REV-001…008 |
+| **Báo cáo doanh thu** | Theo tiền thực thu, 4 chiều: ngày, chi nhánh, nhân viên, dịch vụ; hoa hồng tính lúc hiển thị | ~~4~~ **1** | BR-REV-001…008 |
 | **Nhật ký kiểm toán** | Ghi 8 loại sự kiện **ở server**, không sửa không xóa, Superadmin xem tất cả, chủ tiệm xem tenant mình | 1 | BR-AUD-001…005 |
 | **Gói đăng ký** *(ngày 17)* | Bảng gói, quyền tính năng theo gói, yêu cầu nâng cấp 5 bước, hóa đơn đăng ký, nộp chứng từ và xác nhận | 10 | BR-SUB-001…011 |
 
@@ -593,7 +639,7 @@ Mười sáu chỗ ở `README-BUSINESS-RULES.md` §20 là **có chức năng nh
 
 ### 9.6 Nếu trễ thì mất thêm gì
 
-Theo đúng thứ tự ở §6: **gói đăng ký** (cả module) → **hoàn tiền và tip** → **Vitest đợt 2** và **hai chiều báo cáo** nhân viên + dịch vụ. Bốn thứ không bao giờ cắt: cách ly tenant, chặn ghi khi hết hạn, chống trùng lịch, công thức tiền.
+Theo đúng thứ tự ở §6: **gói đăng ký** (cả module) → **hoàn tiền và tip** → **xUnit đợt 2** và **hai chiều báo cáo** nhân viên + dịch vụ. Bốn thứ không bao giờ cắt: cách ly tenant, chặn ghi khi hết hạn, chống trùng lịch, công thức tiền.
 
 ---
 
@@ -650,7 +696,7 @@ dotnet run --project NailManagement.API --launch-profile http
 | # | Việc | Mức |
 |---|---|---|
 | 1 | **Hồi quy:** gỡ `viteLocalAuth()` làm `/api/package-upgrade-requests` mất chỗ phục vụ → 404 ở mỗi lần tải trang. Frontend nuốt lỗi và lùi về `localStorage` nên không vỡ, nhưng console đầy 404. Ngày 17 đã bị cắt nên endpoint này sẽ không quay lại | **Cần quyết** |
-| 2 | `npm run lint:web` đang có **86 lỗi kiểu ở 5 tệp**, có từ trước ngày 1. Nặng nhất: `TenantAdminAnnouncements.tsx` bị lặp nguyên khối nội dung từ dòng 578; ba màn lễ tân dùng `PageHeader` và `Pagination` mà **quên import** — sẽ ném lỗi lúc chạy | **Cao** — ba màn lễ tân nằm đúng đường ngày 14–15 |
+| 2 | ~~`npm run lint:web` đang có **86 lỗi kiểu ở 5 tệp**... ba màn lễ tân quên import `PageHeader` và `Pagination` — sẽ ném lỗi lúc chạy~~ — **đã hết, xác nhận cuối ngày 13.** `npx tsc --noEmit` nay không còn lỗi nào trong `src/`. Tên lệnh cũng sai: script là `npm run lint`, không phải `lint:web` | ~~Cao~~ → Hết |
 | 3 | `Header.tsx:428` gắn cứng `alt="letruongthinhcr145@gmail.com"` thay vì email tài khoản đang đăng nhập | Thấp — sửa ở ngày 4 |
 
 ### Ngày 2 — xong
@@ -1559,3 +1605,1622 @@ nếu hội đồng hỏi thì trả lời được rằng đây là chỗ đã 
 | 8 | Cấp, sửa, khóa tài khoản **chủ tiệm** vẫn chưa có endpoint và chưa có lịch — treo từ ngày 7 | Chưa có lịch |
 | 9 | §3.1 ghi "`DTOs/` chỉ có bảy tệp" — nay là mười một. Vẫn dưới ngưỡng phải chia thư mục, nhưng con số trong tài liệu đã cũ | Thấp |
 | 10 | `UseCases/Appointments/` có **7 tệp**, nhiều nhất trong các lát cắt. Vẫn là một nhóm trách nhiệm duy nhất nên chưa cần chia, nhưng là thư mục đầu tiên đáng để mắt | Thấp |
+
+### Ngày 12 — xong
+
+Bốn quyết định chốt đầu ngày, tất cả theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 53 | **Thay Vitest bằng xUnit + `WebApplicationFactory`** | Quyết định 6 ở §0 ghi "Vitest" — công cụ của JavaScript, không chạy được trên backend .NET, và là quyết định duy nhất của bản gốc chưa ai thay sau khi chuyển sang ASP.NET Core. Nay là **quyết định 6′** |
+| 54 | Test chạy trên **LocalDB riêng, dùng lại `DemoDataSeeder`** | Đúng provider của lúc chạy thật; không phải viết bộ nạp thứ hai rồi giữ cho khớp với bộ nạp thật |
+| 55 | **Kéo BR-INV-016 về ngày 12** | `SalesInvoice.Create` đòi tham số `code` bắt buộc, nên không có bộ sinh số thì không tạo được hóa đơn nào. Hai việc này không tách rời được như §5 giả định |
+| 56 | **Làm khung hóa đơn trước, viết test sau** | Phép thử số 1 của §5 nhắc tới hóa đơn, mà endpoint hóa đơn phải tới nửa sau của ngày mới có. Đảo thứ tự để nó phủ đủ cả ba module ngay hôm nay |
+
+#### Vì sao "Vitest" là quyết định duy nhất bị bỏ quên
+
+§0 có một bảng "quyết định thay thế" liệt kê 2′, 3′, 11′, 12′ và 14′ — tất cả những gì đổi khi
+backend chuyển từ Node sang ASP.NET Core. Quyết định 6 không có tên trong bảng ấy, nên nó sống sót
+tới hôm nay dưới dạng một câu vô nghĩa: chạy Vitest trên một solution C#. Cùng số phận là câu
+"SQLite trong bộ nhớ" ở §5 ngày 12 — SQLite đã bị quyết định 11′ thay bằng SQL Server LocalDB từ
+ngày 1.
+
+Đây là loại nợ tài liệu chỉ lộ ra khi có người thật sự làm tới ngày đó. Ghi lại vì §19 sẽ đọc lại
+lộ trình một lượt, và vì hội đồng có thể hỏi tại sao tài liệu nói một đằng mã nguồn một nẻo.
+
+---
+
+### Phần 1 — Khung hóa đơn bán hàng
+
+**Backend — 10 tệp mới, 6 tệp sửa:**
+
+| Tầng | Hạng mục |
+|---|---|
+| Domain | `ISalesInvoiceRepository` mới; `SalesInvoiceStatusText` mới; `IBranchOwned` mới; `SalesInvoice` thêm `ClearLines`, `AssignStaff`, `UpdateNote`. Không đụng công thức tiền — `InvoiceMoneyPolicy` và toàn bộ gốc tổng hợp đã dựng đủ từ ngày 2 |
+| Application | `SalesInvoiceDtos`, `SalesInvoiceMapper`, `BranchScope`, `SalonTime`; lát cắt `UseCases/SalesInvoices/` gồm 5 use case cùng khối dùng chung `SalesInvoiceLineBuilder` |
+| Infrastructure | `SalesInvoiceRepository` |
+| API | `SalesInvoicesController` |
+| Quyền | Không thêm gì: ô `SalesInvoices` cho chủ tiệm và lễ tân đã có trong `PermissionMatrix` từ ngày 3 |
+| Migration | Không có. Bốn bảng `SalesInvoices`, `SalesInvoiceLines`, `InvoicePayments`, `InvoiceCounters` đã dựng từ ngày 2 |
+
+**5 endpoint. Hai cái còn lại của ngân sách 7 ở §9.1 — ghi nhận thu tiền và hoàn tiền — thuộc lát cắt thu tiền:**
+
+| Endpoint | Ghi chú |
+|---|---|
+| `GET /api/sales-invoices?from=&to=` | Lọc theo **giờ lập**, không theo giờ thu: một hóa đơn thu làm nhiều lần có nhiều mốc thu |
+| `GET /api/sales-invoices/{id}` | Kèm dòng hàng và dòng thu tiền |
+| `POST /api/sales-invoices` | Hai đường vào: từ lịch hẹn (BR-INV-010) hoặc bán lẻ (BR-INV-011) |
+| `PUT /api/sales-invoices/{id}` | Thay trọn, chỉ khi chưa thu đủ (BR-INV-015) |
+| `PATCH /api/sales-invoices/{id}/status` | Chỉ nhận `CANCELLED` |
+
+#### Ba trạng thái không đặt tay được, và vì sao phải nói rõ ra
+
+BR-PAY-003 quy định `PENDING`, `PARTIAL`, `PAID` **suy ra từ tổng thu**. Cách dễ nhất là im lặng bỏ
+qua chúng, nhưng khi đó người gửi `{"status":"PAID"}` nhận về một phản hồi 200 và một hóa đơn không
+đổi gì — họ sẽ tưởng mình vừa làm sai thao tác. `ParseSettableStatus` vì vậy từ chối cả bốn giá trị
+không hợp lệ bằng **ba câu chữ khác nhau**: ba trạng thái suy ra được thì giải thích chúng đến từ
+số tiền đã thu; `REFUNDED` thì chỉ sang đường hoàn tiền vì nó cần số tiền và lý do; còn lại là
+không có thật.
+
+#### Đường dẫn là `/api/sales-invoices` chứ không phải `/api/invoices`
+
+BR-INV-001 mở đầu bằng cảnh báo "hai bảng hóa đơn hoàn toàn tách biệt — không được nhầm". Một đường
+dẫn mơ hồ ở đây là mời người đọc mã nhầm hóa đơn khách trả cho tiệm với hóa đơn tiệm trả cho
+SalonSys, mà nhầm hai thứ đó là nhầm luôn ý nghĩa của mọi con số doanh thu.
+
+**Kiểm chứng qua HTTP thật — 30 phép thử, tất cả đạt:**
+
+| Nhóm | Phép thử tiêu biểu | Kết quả |
+|---|---|---|
+| Đọc | 33 hóa đơn thật của Nailé trong tuần seed; mỗi dòng có tên chi nhánh, tên khách, tên kỹ thuật viên, các dòng hàng và các dòng thu | Đạt |
+| BR-INV-020 | Hóa đơn seed có tip: hàng 850.000 + tip 60.000 = tổng 910.000, thu 910.000, còn 0 | Đạt |
+| BR-INV-016 | Ba hóa đơn liên tiếp trong ngày nhận `HD-20260828-001`, `-002`, `-003` — đúng định dạng, đúng ngày theo giờ tiệm, số tăng dần | Đạt |
+| BR-INV-010 | Lập từ lịch đang `IN_SERVICE` → `201`; lập cho lịch `CANCELLED` → `422` kèm nhãn tiếng Việt "Đã hủy" | Đạt |
+| Bấm hai lần | Lập lần thứ hai cho cùng lịch → `422` nói rõ **số hóa đơn đã có**, thay vì tính tiền khách hai lần | Đạt |
+| **BR-APT-031** | Lịch có cọc 200.000 → hóa đơn sinh ra đã mang sẵn dòng `DEPOSIT/CASH 200.000`, trạng thái tự thành `PARTIAL`, còn lại 230.000 | Đạt |
+| BR-SVC-007 | Dòng lấy **giá hiện tại** của dịch vụ: 250.000 và 180.000, không phải giá lúc đặt lịch | Đạt |
+| **Giá không nhận từ client** | Gửi `unitPrice: 1` cho một dịch vụ có trong danh mục → hóa đơn ghi 120.000, đúng giá máy chủ | Đạt |
+| BR-INV-011/012 | Hóa đơn bán lẻ trộn một dịch vụ và một dòng nhập tay; dòng nhập tay giữ nguyên giá client gửi | Đạt |
+| BR-INV-021 | Giảm giá vượt tổng tiền hàng `422` gắn ô `discount`; công thức 675.000 − 50.000 + 30.000 = 655.000 | Đạt |
+| Đầu vào | Không dòng nào `422`; không khách `422`; dòng nhập tay thiếu tên `422`; chủ tiệm không chọn chi nhánh `422` | Đạt |
+| Sửa trọn | Đổi bộ dòng → tổng tính lại; **dòng cũ bị xóa hẳn, không thành rác**; bỏ trống ghi chú và kỹ thuật viên thì cả hai bị gỡ | Đạt |
+| BR-INV-014/015 | Sửa hóa đơn `PARTIAL` được; sửa hóa đơn đã hủy `422` kèm nhãn "Đã hủy" | Đạt |
+| **BR-PAY-003** | Đặt tay `PAID` `422`, `REFUNDED` `422`, `FAILED` `422` — ba câu chữ khác nhau | Đạt |
+| BR-DEL-001 | `DELETE /api/sales-invoices/{id}` → `404`, không có động từ này | Đạt |
+| **BR-AUTH-030** | Superadmin đọc và lập hóa đơn đều `403` | Đạt |
+| **BR-ISO-004** | Lễ tân Quận 3 thấy 2 hóa đơn của mình chứ không phải 5 của cả tiệm; mở và sửa hóa đơn Quận 1 đều `404` | Đạt |
+| Chi nhánh từ phiên | Lễ tân gửi `branchId` của Quận 1 → hóa đơn vẫn lập ở Quận 3, đúng chi nhánh trong phiên | Đạt |
+
+---
+
+### Phần 2 — Bộ kiểm thử tự động
+
+**Project thứ năm: `NailManagement.Tests`, chia ba thư mục theo trách nhiệm.**
+
+| Thư mục | Nội dung |
+|---|---|
+| `Infrastructure/` | `SalonSysFactory` dựng máy chủ thật trong bộ nhớ; `SalonSysClient` giữ cookie phiên; `SalonSysCollection` gom mọi lớp vào một bộ; `TestDatabase` là cửa sau cho đúng hai trạng thái API không dựng ra được |
+| `Isolation/` | `TenantIsolationTests` — 6 phép thử |
+| `Authorization/` | `SuperAdminBoundaryTests` (7), `ReceptionistScopeTests` (8), `ReadOnlyTenantTests` (3), `SessionRevalidationTests` (5) |
+
+**`dotnet test` — 29 phép thử, 29 đạt, 3 giây.** *(Kết quả thật, nhưng chạy trên database demo chứ
+không phải database riêng — xem ghi chú đỏ bên dưới. Các phép khẳng định vẫn có giá trị; thứ sai là
+câu "chạy lại từ số 0".)*
+
+#### Vì sao đi qua HTTP chứ không gọi thẳng use case
+
+Bốn trong sáu kịch bản mà §5 liệt kê nằm ở **tầng HTTP**: `RequirePermission` là bộ lọc của MVC,
+`TenantWriteGuardMiddleware` và `SessionMiddleware` là middleware. Gọi thẳng `ExecuteAsync` thì cả
+ba đều không chạy, và bộ kiểm thử sẽ xanh trong khi hệ thống thật vẫn hở — đúng loại test tệ nhất,
+loại tạo ra cảm giác an toàn sai. Chuỗi bốn bước của BR-TENANT-013 chỉ tồn tại khi request đi trọn
+đường ống.
+
+Cái giá phải trả: mỗi lần chạy tốn 3 giây thay vì vài phần trăm giây. Với 29 phép thử thì đó là
+cái giá rẻ.
+
+#### Vì sao LocalDB chứ không phải EF Core InMemory
+
+*(Chữ "LocalDB" trong mục này là tên nền tảng lúc viết, ngày 13. Quyết định 11″ ngày 03/09 đã đổi sang SQL Server 2022 — lập luận bên dưới không đổi một chữ nào, vì nó so một **SQL Server thật** với InMemory chứ không so LocalDB với bản đầy đủ.)*
+
+EF Core InMemory **không cưỡng chế chỉ số duy nhất và không có giao dịch thật**. Bộ kiểm thử sẽ
+xanh ở đúng những chỗ đáng lẽ phải đỏ — ràng buộc số điện thoại duy nhất trong tiệm (BR-CUS-002),
+số hóa đơn duy nhất (BR-INV-016), và giao dịch cấp số. Chính Microsoft khuyến cáo không dùng nó cho
+test có tính thật.
+
+Đổi lại, dùng LocalDB thì bộ kiểm thử **dùng lại được `DemoDataSeeder`**: máy chủ tự chạy migration
+và nạp dữ liệu ngay lúc khởi động, đúng đoạn mã ở `Program.cs` mà lần chạy thật dùng. Bộ kiểm thử vì
+vậy có sẵn hai tiệm và ba vai trò mà không cần một bộ nạp thứ hai để phải giữ cho khớp — thứ chắc
+chắn sẽ lệch sau vài lát cắt.
+
+Database test tên `NailManagementTests`, khác hẳn database chạy thật, và **bị xóa trước mỗi lần
+chạy** nên kết quả không phụ thuộc vào lần chạy trước.
+
+> 🔴 **Đoạn trên đúng về ý định nhưng SAI về thực tế, suốt từ ngày 12 tới cuối ngày 13.** Phép ghi
+> đè chuỗi kết nối trong `SalonSysFactory` không bao giờ có tác dụng, nên bộ kiểm thử chạy thẳng
+> vào **database demo**: `NailManagementTests` chưa từng được tạo ra. Xem "Lỗi bắt được lúc soát
+> tài liệu" ở cuối ngày 13. Đã vá; câu trên nay mới thật.
+
+#### 🔴 Một lỗ hổng thật, bắt được ngay ở lần chạy đầu tiên
+
+Tài khoản bị khóa giữa phiên nhận về `401 UNAUTHENTICATED` thay vì `403 ACCOUNT_NOT_ACTIVE`. Sai
+một dòng ở `GetCurrentAccountUseCase`:
+
+```csharp
+if (!user.IsActive())
+    throw new UnauthenticatedException("Tài khoản đã bị khóa hoặc vô hiệu hóa.");
+```
+
+Nghe như chuyện nhỏ, nhưng nó **phá đúng cái vòng lặp mà ba chỗ khác trong mã nguồn đã viết ra để
+ngăn**. Chú thích ở `ErrorCode` nói rõ: gặp `UNAUTHENTICATED` thì frontend đưa người dùng về màn
+đăng nhập, còn `403` thì cố ý không. Chú thích ở `RequestScope.Rejection` và ở `SessionMiddleware`
+đều nói lý do giữ lại nguyên nhân từ chối là để người bị khóa tài khoản *"không loay hoay đăng nhập
+lại mãi không hiểu vì sao"*.
+
+Hệ quả thật: người vừa bị khóa bị đá về màn đăng nhập → đăng nhập lại → `LoginUseCase` trả đúng
+`403 ACCOUNT_NOT_ACTIVE` → nhưng frontend đã ở màn đăng nhập rồi, và họ chỉ thấy một thông báo lỗi
+mà không hiểu vì sao vừa bị đá ra. Hai đường vào hệ thống trả lời **mâu thuẫn nhau** cho cùng một
+tình huống.
+
+Đáng chú ý ở chỗ: lỗi này **không thể phát hiện bằng cách bấm thử**, vì không có endpoint nào khóa
+tài khoản chủ tiệm — đó là việc còn treo từ lát cắt nhân viên. Nó chỉ lộ ra khi có một phép thử
+chạm được vào database. Đây chính là loại lỗi mà §0 mục 6 mua bộ kiểm thử này về để bắt.
+
+Đã vá bằng `AccountNotActiveException`, và phép thử phủ cả hai trạng thái `SUSPENDED` lẫn
+`INACTIVE`.
+
+#### Ba điều chệch khỏi kế hoạch, có chủ đích
+
+1. **Luật thu hẹp theo chi nhánh gom về `BranchScope`.** Trước hôm nay nó có hai bản chép ở
+   `ListStaffUseCase` và `AppointmentScope`, và hóa đơn sắp thành bản thứ ba trong khi báo cáo doanh
+   thu còn cần bản thứ tư. Kèm theo là `IBranchOwned` ở tầng Domain — em ruột của `ITenantOwned`,
+   đánh dấu đúng ba dòng cuối của bảng BR-ISO-004. Khách hàng và dịch vụ cố ý không mang nó.
+2. **Múi giờ tiệm gom về `SalonTime`.** Cũng sắp thành bản chép thứ hai. Dùng UTC ở đây là lỗi
+   **im lặng và chỉ sai trong bảy tiếng mỗi ngày**: từ 0 giờ tới 7 giờ sáng giờ Việt Nam, UTC còn ở
+   ngày hôm trước, nên bảng lịch hiện lịch hôm qua và số hóa đơn mang ngày hôm qua.
+3. **Phép thử miễn trừ đổi mục tiêu.** §5 nêu hai nhóm miễn trừ là yêu cầu nâng gói và nộp chứng từ
+   hóa đơn đăng ký — cả hai chưa có endpoint nào vì lát cắt gói đăng ký đã bị cắt (§0 mục 13). Phép
+   miễn trừ **có thật** hôm nay nằm ở `AuthController`: đăng nhập, chọn tiệm, đăng xuất. Thiếu dấu
+   miễn trừ ở đó thì chủ tiệm hết hạn không chọn được tiệm của mình, nên không vào nổi màn hình để
+   đọc lý do bị khóa — hệ thống tự nhốt người dùng ở ngoài cửa đúng lúc họ cần vào nhất.
+
+### Việc còn treo sau ngày 12
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — treo từ ngày 6 | **Cần sửa** |
+| 2 | Cổng chủ tiệm còn các màn mức C hiện số bịa cạnh dữ liệu thật: Tổng quan, Ghế & khu vực, POS, Báo cáo | **Cần sửa** |
+| 3 | `BranchCode = 'Q1' \| 'Q3'`, hợp đồng `bookingRequest`, và `saveTenantCustomers` chết — cả ba nằm ở frontend, dọn cùng ngày 14–15 | Trượt lịch |
+| 4 | **Lịch hẹn không lưu khách đặt cọc bằng phương thức nào** — BR-APT-030 chỉ có một cột số tiền, nên dòng `DEPOSIT` sinh ra luôn ghi `CASH`. Sửa đúng thì phải thêm cột vào bảng lịch hẹn | Thấp |
+| 5 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7. Nay có thêm hệ quả: phép thử BR-AUTH-022 phải đi cửa sau vào database vì không có đường nào qua API | Chưa có lịch |
+| 6 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc | Thấp |
+| 7 | Database demo lẫn rác của sáu phiên thử; riêng ngày 12 thêm năm hóa đơn `HD-20260828-00x` và một lịch hẹn có cọc ở Nailé. Nên dựng lại database trước khi bảo vệ | Thấp |
+| 8 | §5 ngày 12 vẫn ghi "SQLite trong bộ nhớ" trong phần mô tả công việc. §0 đã cập nhật bằng quyết định 6′, nhưng câu ở §5 thì chưa | Thấp |
+| 9 | §3.1 ghi "`DTOs/` chỉ có bảy tệp" — nay là mười hai, và solution nay có **năm** project chứ không phải bốn | Thấp |
+
+### Ngày 13 — xong
+
+Hai quyết định chốt đầu ngày, cả hai theo phương án khuyến nghị. Khác mọi ngày trước, hai câu hỏi
+này **không phải chuyện kỹ thuật** — chúng là hai chỗ tài liệu nghiệp vụ tự mâu thuẫn, và không
+đọc mã nguồn nào trả lời được:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 57 | **Lịch hẹn `CHECKED_IN` thu đủ tiền cũng tự hoàn tất**, không riêng `IN_SERVICE` | BR-INV-010 cho lập hóa đơn từ cả lịch `CHECKED_IN`, nhưng sơ đồ §16.1 chỉ vẽ một mũi tên tới `COMPLETED` và nó xuất phát từ `IN_SERVICE`. Bám sơ đồ thì **lần thu tiền thất bại** với khách trả trước rồi mới làm. ⚠️ `README-BUSINESS-RULES.md` §16.1 cần thêm một hàng |
+| 58 | **Chủ tiệm đóng được lịch `IN_SERVICE` kể cả khi chưa có hóa đơn nào** | BR-APT-027 chỉ nói tới ca hóa đơn còn `PARTIAL`. Ca tệ hơn hẳn là khách bỏ về không trả đồng nào: lịch chưa có hóa đơn, mà BR-APT-040 lại cấm hủy lịch đang phục vụ — không có đường này thì nó kẹt vĩnh viễn trên bảng lịch |
+
+#### Vì sao hai điểm này chỉ lộ ra ở ngày 13
+
+Cả hai đều là chỗ **hai luật viết ở hai mục khác nhau chạm nhau**. BR-INV-010 nằm ở mục 10 nói về
+hóa đơn; sơ đồ §16.1 nằm ở mục 16 nói về vòng đời lịch hẹn. Mỗi mục tự nó nhất quán, và người đọc
+từng mục một sẽ không thấy gì sai. Chúng chỉ chọi nhau khi có người viết đúng cái đoạn mã nối hai
+mục ấy lại — mà đoạn mã đó chính là lát cắt thu tiền.
+
+Đây cũng là lý do §7 của lộ trình xếp ngày 11 và ngày 13 vào loại "hai ngày đặc nhất".
+
+---
+
+### Phần 1 — Hai endpoint thu tiền
+
+**Backend — 3 tệp mới, 7 tệp sửa. Không có migration:** bốn bảng `SalesInvoices`,
+`SalesInvoiceLines`, `InvoicePayments`, `InvoiceCounters` đã dựng từ ngày 2, và ba cột mà ngày
+hôm nay dùng tới — `InvoicePayments.Reason`, `Appointments.CompletedWithUnpaidBalance`,
+`Appointments.Deposit` — đều đã có sẵn.
+
+| Tầng | Hạng mục |
+|---|---|
+| Domain | `AppointmentLifecyclePolicy` thêm `CanCompleteFromPayment` và `CanForceComplete`; `Appointment.CompleteFromPaidInvoice` và `CompleteWithUnpaidBalance` hỏi hai luật đó thay vì hỏi bảng chuyển trạng thái chung. Không đụng `SalesInvoice` — `RegisterPayment` và `IssueRefund` đã dựng đủ từ ngày 12 |
+| Application | `RecordPaymentUseCase` và `IssueRefundUseCase` mới; `SalesInvoiceDtos` thêm hai lệnh; `ChangeAppointmentStatusUseCase` viết lại để nhận `COMPLETED` |
+| Infrastructure | **Không sửa gì.** `SalesInvoiceRepository` và `AppointmentRepository` đã có đủ hàm |
+| API | `SalesInvoicesController` thêm hai endpoint và hai record request |
+| Quyền | **Không thêm gì.** Hai ô `Refunds` và `ForceCompleteAppointment` đã nằm trong `PermissionMatrix` từ ngày 3, cố ý vắng mặt ở hàng lễ tân |
+
+**Hai endpoint, cộng lại đúng ngân sách 7 ở §9.1:**
+
+| Endpoint | Quyền | Ghi chú |
+|---|---|---|
+| `POST /api/sales-invoices/{id}/payments` | `SalesInvoices` | Ba việc trong một giao dịch: dòng thu, hóa đơn tính lại, lịch hẹn tự đóng |
+| `POST /api/sales-invoices/{id}/refunds` | **`Refunds`** | Endpoint **duy nhất** trên tài nguyên này mà lễ tân nhận `403` |
+
+#### Ba việc trong một giao dịch, và vì sao không tách ra được
+
+Một lần bấm "Thu tiền" ở quầy kéo theo ba thay đổi: thêm dòng vào `InvoicePayments`, hóa đơn suy
+lại trạng thái từ tổng thu (BR-PAY-003), và nếu vừa đủ tiền thì lịch hẹn tự `COMPLETED`
+(BR-APT-026). Hỏng ở giữa thì hoặc tiền khách đưa biến mất khỏi hệ thống, hoặc hóa đơn ghi đã thu
+đủ trong khi lịch hẹn vẫn treo ở "đang phục vụ" và ca sau tưởng khách còn ngồi đó. Rủi ro số 3 ở
+§7 chỉ đúng chỗ này.
+
+#### Ba thứ cố ý không nhận từ client
+
+| Không nhận | Vì sao |
+|---|---|
+| `type` | Đường này luôn sinh dòng `PAYMENT`. `DEPOSIT` do tiền cọc chuyển sang lúc lập hóa đơn (BR-APT-031), `REFUND` đi đường riêng vì cần lý do và cần quyền khác |
+| `paidAt` | Doanh thu ở BR-REV-001 đếm theo **tiền thực thu**, nên nhận mốc thời gian từ client là cho phép dời một khoản thu sang tháng khác — và người ở quầy sẽ không bao giờ biết con số báo cáo đã bị dời |
+| `status` của hóa đơn | BR-PAY-003 — đã chặn từ ngày 12, hôm nay không mở lại |
+
+#### Thu tiền cho một buổi hẹn đã hủy vẫn phải chạy
+
+Lịch ở trạng thái cuối — đã hủy, hoặc khách không đến — thì `RecordPaymentUseCase` **bỏ qua bước
+đóng lịch trong im lặng** thay vì ném lỗi. Hai lý do, và lý do thứ hai mới là lý do thật:
+
+1. BR-APT-041 nói ba trạng thái cuối không quay lại được, nên ép một lịch đã hủy thành "hoàn tất"
+   là ghi đè một quyết định người ở quầy đã chủ động đưa ra.
+2. **Một lần thu tiền không được thất bại vì lịch hẹn nằm ở đâu.** Khách hủy buổi hẹn rồi vẫn trả
+   tiền cho phần đã làm là chuyện có thật, và tiền họ đưa là có thật.
+
+#### `POST .../refunds` chứ không phải `PATCH .../status` với `REFUNDED`
+
+Hoàn tiền sinh ra một **chứng từ mới** — một dòng tiền có số tiền, phương thức và lý do — chứ
+không phải đổi một ô trạng thái. `REFUNDED` chỉ là hệ quả. Đây cũng là câu trả lời cho câu chữ mà
+`ParseSettableStatus` đã viết sẵn từ ngày 12: *"Hoàn tiền phải đi qua lệnh hoàn tiền để ghi nhận
+số tiền và lý do."*
+
+---
+
+### Phần 2 — BR-APT-027, và một phép kiểm quyền không đặt được ở bộ lọc
+
+Ngoại lệ của chủ tiệm đi vào **endpoint đã có** `PATCH /api/appointments/{id}/status`, không thêm
+đường mới: §9.1 chốt module lịch hẹn đúng 6 endpoint và cả 6 đã dùng hết ở ngày 11.
+
+Nhưng cùng một đường dẫn ấy còn là **đường hủy lịch mà lễ tân dùng cả ngày**. Gắn nhóm
+`ForceCompleteAppointment` lên endpoint bằng thuộc tính `RequirePermission` sẽ khóa luôn đường hủy
+lịch của họ — bộ lọc chạy *trước* khi thân request được đọc nên nó không phân biệt được hai việc.
+
+Vì vậy phép kiểm quyền này nằm **trong use case**, là chỗ duy nhất trong toàn hệ thống mà
+`PermissionMatrix` được hỏi ngoài tầng API. Đó là một ngoại lệ có giá, nên nó được ghi rõ ở cả hai
+đầu: chú thích trong `ChangeAppointmentStatusUseCase` và chú thích ở `AppointmentsController`.
+
+Phép thử `Le_tan_khong_dong_duoc_lich_hen_chua_thu_du` khẳng định **cả hai vế**: lễ tân gửi
+`COMPLETED` nhận `403`, rồi cùng người đó gửi `CANCELLED` lên cùng đường dẫn phải nhận `422` của
+luật vòng đời (BR-APT-040) chứ không phải `403` của phân quyền. Thiếu vế thứ hai thì một lần khóa
+nhầm cả endpoint vẫn qua được bộ kiểm thử.
+
+Câu chữ khi từ chối nói ra **đường đúng**, không chỉ nói không:
+
+> Lịch hẹn tự hoàn tất khi hóa đơn thu đủ tiền. Đóng lịch khi chưa thu đủ là quyền của chủ tiệm.
+
+---
+
+### Phần 3 — Kiểm chứng
+
+**`dotnet test` — 44 phép thử, 44 đạt, 5 giây** *(kết quả này chạy trên database demo; chạy lại lần
+hai thì đỏ 6 — đó chính là cách lỗi cấu hình lộ ra, xem cuối ngày 13. Sau khi vá: xanh cả hai lần
+liên tiếp trên database riêng)*. 15 phép thử mới nằm ở
+`NailManagement.Tests/Payments/PaymentCollectionTests.cs`, thư mục thứ tư của project kiểm thử.
+
+Mọi phép thử ở đó **tự dựng dữ liệu của mình** thay vì mượn bản ghi mẫu: thu tiền là thao tác một
+chiều, hóa đơn đã thanh toán thì không sửa và không hủy được nữa (BR-INV-014). Mượn bản ghi mẫu là
+để lần chạy thứ hai gặp một hóa đơn đã đóng và đỏ vì lý do không liên quan.
+
+| Nhóm | Phép thử tiêu biểu | Kết quả |
+|---|---|---|
+| **BR-PAY-003 · BR-APT-026** | Thu hai lần: `PENDING → PARTIAL` (lịch **chưa** đóng) `→ PAID` (lịch tự `COMPLETED`). Kiểm cả ranh giới giữa hai bước, không chỉ trạng thái cuối | Đạt |
+| **Quyết định 57** | Khách còn ở `CHECKED_IN` trả đủ tiền → thu được, lịch đóng lại | Đạt |
+| BR-PAY-004 | Nửa tiền mặt nửa chuyển khoản → hai dòng `CASH` và `BANK`, đúng thứ tự | Đạt |
+| BR-INV-011 | Hóa đơn bán lẻ không lịch hẹn → thu bình thường, không có gì để đóng | Đạt |
+| Đầu vào | `PAYPAL` gắn ô `method`; số 0 và số âm gắn ô `amount`; hóa đơn đã hủy `422` | Đạt |
+| **BR-PAY-007** | Lễ tân **thu được** 400.000 rồi **hoàn `403`** trên chính hóa đơn đó | Đạt |
+| **BR-PAY-006** | Hoàn 200.000 → dòng `REFUND` mang `-200000` kèm lý do; `collected` còn 300.000 | Đạt |
+| BR-PAY-008 | Hoàn khi chưa thu đủ gắn ô `status`; hoàn quá số đã thu gắn ô `amount`; thiếu lý do gắn ô `reason` | Đạt |
+| §16.2 | `REFUNDED` là điểm cuối → hoàn lần hai `422` | Đạt |
+| **BR-APT-027** | Lễ tân đóng lịch `403`, nhưng hủy lịch vẫn ra `422` của vòng đời; chủ tiệm đóng được, cờ `completedWithUnpaidBalance` bật | Đạt |
+| **Quyết định 58** | Lịch chưa có hóa đơn nào vẫn đóng tay được | Đạt |
+| Ranh giới | Chủ tiệm **không** đóng tắt được lịch mới `CHECKED_IN` — ngoại lệ chỉ dành cho buổi đã bắt đầu | Đạt |
+
+**Kiểm chứng thêm qua HTTP thật trên database chạy thật — 9 phép thử, tất cả đạt.** Đây là những
+thứ bộ kiểm thử tự động chưa chạm tới:
+
+| Phép thử | Kết quả |
+|---|---|
+| **BR-AUTH-030** — Superadmin gọi cả hai endpoint mới | `403` cả hai |
+| **BR-ISO-004** — lễ tân Quận 3 thu tiền hóa đơn Quận 1 | `404`, không phải `403` |
+| **BR-ISO-002** — chủ tiệm đang ở Muse thu tiền hóa đơn của Nailé | `404` |
+| Cùng chi nhánh | Lễ tân Quận 3 thu tiền hóa đơn Quận 3 → `201`, đúng như phải thế |
+| **BR-AUD-002** — nhật ký `PAYMENT_RECEIVED` | Có, kèm `invoiceCode`, `method`, `amount`, `collected`, `remaining`, `invoiceStatus` |
+| **BR-AUD-002** — nhật ký `REFUND_ISSUED` | Có, `amount` ghi **trị tuyệt đối** kèm lý do và `collected` sau khi hoàn |
+| **BR-APT-031 + quyết định 57** | Lịch có cọc 200.000, hóa đơn 260.000 sinh ra đã `PARTIAL` còn 60.000; thu nốt bằng MoMo khi lịch còn `CHECKED_IN` → `PAID` và lịch `COMPLETED` |
+| **Buổi hẹn đã hủy** | Hủy lịch rồi vẫn thu đủ tiền → hóa đơn `PAID`, lịch **giữ nguyên** `CANCELLED` |
+| **BR-APT-027** | Lễ tân `403` kèm đúng câu chữ; chủ tiệm `200`, cờ `completedWithUnpaidBalance` bật |
+
+#### Nhật ký ghi sau khi giao dịch chốt
+
+Cùng khuôn đã dùng ở lát cắt nhân viên: `audit.RecordAsync` nằm **ngoài** khối giao dịch. Nằm
+trong thì nó bị cuộn ngược theo khi có lỗi, và một dòng "đã thu tiền" cho khoản tiền chưa vào sổ
+còn tệ hơn không có dòng nào.
+
+Dòng `REFUND_ISSUED` ghi **trị tuyệt đối** chứ không ghi dấu âm của dòng tiền: người đọc nhật ký
+hỏi "hoàn bao nhiêu", còn dấu âm là quy ước của bảng thu tiền để công thức doanh thu cộng dồn
+được — không phải thứ cần lặp lại ở nhật ký.
+
+### Việc còn treo sau ngày 13
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — treo từ ngày 6 | **Cần sửa** |
+| 2 | Cổng chủ tiệm còn các màn mức C hiện số bịa cạnh dữ liệu thật: Tổng quan, Ghế & khu vực, POS, Báo cáo | **Cần sửa** |
+| 3 | `BranchCode = 'Q1' \| 'Q3'`, hợp đồng `bookingRequest`, và `saveTenantCustomers` chết — cả ba nằm ở frontend, dọn cùng ngày 14–15 | Trượt lịch |
+| 4 | **Lịch hẹn không lưu khách đặt cọc bằng phương thức nào** — BR-APT-030 chỉ có một cột số tiền, nên dòng `DEPOSIT` sinh ra luôn ghi `CASH`. Sửa đúng thì phải thêm cột vào bảng lịch hẹn | Thấp |
+| 5 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 6 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc | Thấp |
+| 7 | Database demo lẫn rác của bảy phiên thử; riêng ngày 13 thêm bốn hóa đơn `HD-20260828-019…022` và bốn lịch hẹn thử ở Nailé, một trong số đó đặt ở tháng 3/2027. Nên dựng lại database trước khi bảo vệ | Thấp |
+| 8 | `UseCases/SalesInvoices/` nay có **7 tệp**, ngang `UseCases/Appointments/`. Vẫn là một nhóm trách nhiệm duy nhất nên chưa cần chia, nhưng là thư mục thứ hai đáng để mắt | Thấp |
+| 9 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 ở §8.1 và §11.2. Phần lớn là chủ đích — nó là tài liệu "điểm xuất phát" — nhưng câu "Đã có bảng trong D1" thì sai thẳng. Chưa sửa vì tài liệu này sắp hết vai trò sau ngày 15 | Thấp |
+
+---
+
+## Soát tài liệu — cuối ngày 13
+
+Trước khi sửa BR-APT-027 ở §9.3, soát cả bốn tài liệu đối chiếu với mã nguồn thật. Tìm ra **12 chỗ
+lệch**, đã sửa hết trong cùng phiên.
+
+**Vì sao đáng ghi lại:** phần lớn không phải lỗi mới. Chúng là **hệ quả trễ của bốn quyết định thay
+thế 2′, 3′, 11′, 12′** — cú đổi Node sang ASP.NET Core ngày 24/08. Mỗi ngày sau đó chỉ ghi nhận
+đúng những con số mình vừa làm lệch (`DTOs/` bảy tệp, "SQLite trong bộ nhớ"), nên phần còn lại
+trôi âm thầm suốt mười hai ngày. Đây chính là loại nợ mà §19 dự định phát hiện — bắt sớm hơn sáu
+ngày.
+
+| Mức | Chỗ | Đã sửa thành |
+|---|---|---|
+| 🔴 | `README-BUSINESS-RULES.md` bảng đầu: *"Node + Express + SQLite (Q1A)"* | ASP.NET Core 10 + EF Core + LocalDB, kèm ghi chú vì sao Q1A không còn hiệu lực |
+| 🔴 | §20 hàng 15 vẫn ghi *"Copy tệp SQLite thủ công"* trong khi §14 đã sửa | `BACKUP DATABASE` trên LocalDB — hai mục nay khớp nhau |
+| 🔴 | §3.4 thiếu hàng thứ 17 của ma trận | Thêm hàng **"Hồ sơ tiệm mình"** (`Feature.OwnTenantProfile`) kèm giải thích vì sao nó tách khỏi hàng "Tenant" |
+| 🔴 | BR-APT-027 hẹp hơn §16.1 vừa sửa | Mở rộng cho cả ba ca chưa thu đủ; §16.1 sửa lại câu dẫn để hai mục không đá nhau |
+| 🔴 | **Báo cáo doanh thu: 2 hay 4 chiều** — §0 nói đã cắt, bốn chỗ khác nói 4, §6 nói cắt là dự phòng | **Chốt giữ 4 chiều**, sửa §0 quyết định 13. Lý do: chiều nhân viên là nguồn hoa hồng BR-EMP-011, cắt nó là lỡ lời hứa ở ba chỗ |
+| 🟡 | §3.1 liệt kê đúng những gì tồn tại ở ngày 4 | Dựng lại từ cây thư mục thật: **năm** project, 11 lát cắt use case, 11 controller, 47 endpoint, và project kiểm thử vốn thiếu hẳn |
+| 🟡 | §7 rủi ro 3 khuyên bọc `BEGIN`/`COMMIT` của `node:sqlite` | Ghi đúng thứ đã làm: `IUnitOfWork` / `EfUnitOfWork` |
+| 🟡 | §7 rủi ro 6 cảnh báo `node:sqlite` in cảnh báo experimental | Rủi ro không còn tồn tại; thay bằng rủi ro thật là máy người chấm phải có LocalDB |
+| 🟡 | §8 giả định 4 buộc Node `>=22` vì `node:sqlite` | Còn `>=20.19`, và chỉ là ràng buộc của Vite 6 |
+| 🟡 | Năm chỗ ở §1, §4, §5, §6, §9.6 vẫn ghi **Vitest** | Đổi sang **xUnit**. Các chỗ nhắc Vitest còn lại đều là lịch sử có chủ đích |
+| 🟢 | Việc treo ngày 1 số 2: *"86 lỗi kiểu... ba màn lễ tân quên import — sẽ ném lỗi lúc chạy"*, mức **Cao**, chĩa vào ngày 14–15 | **Đã hết từ lúc nào không ai ghi.** `npx tsc --noEmit` nay sạch. Gỡ khỏi danh sách — một cảnh báo Cao sai sự thật chĩa vào ngày mai tệ hơn là không có |
+| 🟢 | `CLAUDE.md` mô tả một kiến trúc **không còn tồn tại**: hai backend Cloudflare + Vite plugin, *"chỉ phủ auth"*, `bun.lock` còn đó | Viết lại phần backend cho đúng solution ASP.NET Core, thêm lệnh chạy máy chủ, và chỉ đúng khuôn `src/services/` + `src/hooks/` thay cho `src/utils/authApi.ts` |
+
+### Một lỗi thật, không phải lệch tài liệu
+
+`npm run lint` **không xanh**: `tsconfig.json` không khai `exclude` nên `tsc` quét cả
+`claude-skills/` — một thư mục công cụ ngoài, đã gitignore — và báo 3 lỗi module. §5 ngày 20 đòi
+lệnh này xanh. Đã thêm `exclude` cho `node_modules`, `dist`, `claude-skills`; **`npx tsc --noEmit`
+nay trả về 0 lỗi.**
+
+Kèm theo: danh sách treo ngày 1 gọi lệnh là `npm run lint:web`, script đó chưa bao giờ tồn tại.
+
+### 🔴 Lỗi bắt được lúc soát tài liệu — bộ kiểm thử chạy vào database thật
+
+Lượt soát tài liệu ở trên chỉ định sửa chữ. Nhưng lúc chạy lại `dotnet test` để xác nhận không làm
+vỡ gì, **6 phép thử đỏ** — chính 6 phép thử vừa xanh vài giờ trước. Lỗi là `409 SLOT_CONFLICT`.
+
+**Chẩn đoán, ba bằng chứng độc lập:**
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `sys.databases` trên LocalDB | Chỉ có `NailManagement`. **`NailManagementTests` chưa từng tồn tại** |
+| Lịch hẹn tháng 12/2026 trong database **demo** | 6 — đúng số lịch hẹn mà bộ kiểm thử tạo |
+| Dấu thời gian của 41 hóa đơn `HD-20260828-*` | Ba cụm cách nhau **vài giây**: `06:53:12–14`, `07:19:49–50`, `07:20:17–18` — vân tay của ba lần chạy `dotnet test` |
+
+**Nguyên nhân — hai dòng, ở hai project khác nhau:**
+
+`Program.cs` gọi `AddInfrastructure(builder.Configuration)` ngay dòng thứ hai, và
+`Infrastructure/DependencyInjection.cs` đọc `GetConnectionString("Default")` **ngay lúc đăng ký
+service**, giữ luôn chuỗi ấy trong closure của `UseSqlServer`. Trong khi `SalonSysFactory` ghi đè
+bằng `ConfigureAppConfiguration` — một callback **bị hoãn tới `builder.Build()`**, tức chạy *sau*
+khi giá trị đã bị đọc xong.
+
+Chú thích ngay tại chỗ ghi đè viết *"Nguồn cấu hình thêm ở đây chạy SAU appsettings.json nên nó
+thắng"*. Câu đó **đúng về thứ tự nguồn và sai về thời điểm** — và chính nó là lý do không ai nghĩ
+tới việc kiểm lại.
+
+**Cách vá:** đặt biến môi trường `ConnectionStrings__Default` trong hàm khởi tạo của factory, tức
+trước cả khi host được dựng. `WebApplication.CreateBuilder` luôn nạp sẵn nguồn biến môi trường và
+nguồn đó xếp trên `appsettings.json`, nên giá trị sẵn sàng đúng lúc dòng đọc kia chạy. Phép ghi đè
+cũ giữ nguyên để phủ nốt những chỗ đọc cấu hình muộn hơn.
+
+**Kiểm chứng, hai chiều:**
+
+| Phép thử | Trước khi vá | Sau khi vá |
+|---|---|---|
+| `dotnet test` chạy **hai lần liên tiếp** | Lần một 44/44, lần hai **đỏ 6** | **44/44 cả hai lần** |
+| `NailManagementTests` trong `sys.databases` | Không có | **Có** |
+| Hóa đơn `HD-20260828-*` trong database demo | +9 sau mỗi lần chạy | **Đứng yên ở 41** sau hai lần chạy |
+
+#### Vì sao đáng ghi lại
+
+Đây đúng loại lỗi mà §0 mục 6 mua bộ kiểm thử về để bắt, chỉ khác là **lần này nạn nhân chính là bộ
+kiểm thử**. Nó xanh 44/44 nên không ai nghi ngờ, trong khi hai điều nó tự nhận đều sai: chạy trên
+database riêng, và không phụ thuộc lần chạy trước.
+
+Nó cũng cho thấy vì sao **chạy một lần rồi kết luận là chưa đủ**. Một bộ kiểm thử ghi vào database
+dùng chung vẫn xanh ở lần đầu tiên sau mỗi lần dữ liệu được dựng lại — và ngày 19 theo kế hoạch sẽ
+dựng lại database, nên lỗi này có thể đã sống sót tới tận hôm bảo vệ, ẩn sau một dòng "44/44 đạt".
+
+Cuối cùng, nó giải thích một việc treo đã ghi nhầm nguyên nhân: *"database demo lẫn rác của bảy
+phiên thử"* — phần lớn không phải do bấm tay thử, mà là sản phẩm của chính `dotnet test`.
+
+> **Rác đã sinh ra thì để nguyên**, không xóa tay: ngày 19 vốn là "xóa database, chạy lại migration
+> + seed từ số 0" nên nó dọn sạch toàn bộ. Xóa tay bây giờ là làm trước một việc đã có lịch, và
+> phải viết `DELETE` đụng vào bảng nhật ký — thứ BR-AUD-004 nói thẳng là không được sửa. Từ nay rác
+> ngừng sinh thêm, và 6 lịch hẹn tháng 12/2026 không còn ảnh hưởng tới bộ kiểm thử nữa.
+
+### Ngày 14 — xong (nửa đầu cổng lễ tân)
+
+`ReceptionistPortal.tsx` — 5.476 dòng — nay chạy **lịch hẹn, nhân viên và bảng giá bằng dữ liệu
+thật**. Màn thu tiền vẫn ở dữ liệu mẫu, đúng như §5 chia việc: ngày 15 mới tới lượt nó.
+
+Làm đúng theo bốn bước mà §5 ngày 14–15 dặn: giữ nguyên cây render, thay chỗ khởi tạo state bằng
+hook, thay hàm ghi bằng lệnh gọi service, và để yên state thuộc về giao diện.
+
+**Frontend — 2 tệp mới, 9 tệp sửa:**
+
+| Tầng | Hạng mục |
+|---|---|
+| Service | `services/appointments.ts` — 6 endpoint của ngày 11, là tầng đầu tiên có **khoảng ngày** và có **`warnings` bên cạnh `error`** |
+| Hook | `hooks/useAppointments.ts` — bảng lịch của một ngày, bốn thao tác ghi, tất cả `reload()` sau khi thành công |
+| Màn hình | `ReceptionistPortal` nối `useAppointments`, `useStaff`, `useSalonServices`, `useCustomers`; `ReceptionistTechnicians` đổi hai prop |
+| Phiên | `DemoAccount` thêm `branchId`; `App.tsx` truyền `session.branch?.id` |
+| Kiểu | `BranchCode` mở ở **8 tệp** — việc treo từ ngày 6 |
+
+#### Lớp chuyển đổi, thay vì viết lại 5.476 dòng
+
+Cây render đọc `appointment.start`, `appointment.duration`, `appointment.staff` ở hàng trăm chỗ.
+Đổi nó theo hình dạng DTO là sửa từng chỗ ấy — dài, rủi ro cao, và không mua lại gì cho người
+dùng. Nên có `toReceptionAppointment(dto, price, extras)`: một hàm mặc lại hình dạng cũ cho dữ
+liệu mới, và toàn bộ giao diện không biết gì đã đổi.
+
+Đi kèm là **`AppointmentExtras`** — tám trường mà máy chủ không có chỗ lưu: giờ bắt đầu thật, số
+phút gia hạn, dị ứng, nhãn phân loại, nhắc lịch, người tạo. Không phải sơ suất của lược đồ: §9.4
+bỏ hẳn nhắc lịch và ràng buộc dị ứng, còn giờ bắt đầu thật là khái niệm chỉ sống trong một ca làm
+việc. Chúng ở lại `localStorage` theo mã lịch hẹn, thay vì bị nhét vào ô `note` của máy chủ — nhét
+vào đó là biến một ô ghi chú cho người đọc thành một định dạng dữ liệu không ai khai báo.
+
+Kỹ thuật viên đi theo cùng khuôn: **danh sách** từ API (bắt buộc, vì phân công cần mã nhân viên
+thật), **chấm công** ở client (bảy trạng thái của quầy là chấm công, thứ §9.4 bỏ khỏi MVP).
+
+#### Bỏ hẳn `setAppointments` — không còn vá mảng tại chỗ
+
+Mười hai chỗ ghi cũ đều gọi API rồi để hook nạp lại. Đây là màn hình mà **hai máy ở quầy cùng mở
+một lúc** là chuyện thường; vá tại chỗ thì máy này không bao giờ thấy lịch máy kia vừa đặt, và hai
+người sẽ xếp hai khách vào cùng một giờ mà đều tin mình đúng.
+
+Bỏ luôn state cũng biến trình biên dịch thành danh sách việc: `tsc` chỉ thẳng cả mười hai chỗ,
+không sót chỗ nào.
+
+---
+
+### 🔴 Năm lỗi mà chỉ dữ liệu thật mới làm lộ ra
+
+Đây là phần đáng giá nhất của ngày 14. Cả năm đều **xanh trên dữ liệu mẫu** và hỏng ngay khi dữ
+liệu thật về — bốn trong số đó hỏng **trong im lặng**, không báo gì cả.
+
+| # | Lỗi | Vì sao dữ liệu mẫu giấu được nó |
+|---|---|---|
+| 1 | **Vòng lặp vô hạn gọi API** — hơn 15 request giống hệt nhau trong chưa tới một giây | Một effect cũ ghi lịch hẹn xuống `localStorage` rồi phát sự kiện; chỗ nghe gọi `reload()`; nạp xong mảng có danh tính mới → effect chạy lại. Vòng này chỉ khép lại khi có một lần nạp mạng ở giữa |
+| 2 | **Lọc chi nhánh bằng nhãn, dữ liệu mang khóa** — lọc `=== 'Q3'` trong khi DTO mang `BRN-LUMIERE-Q3` | Dữ liệu mẫu ghi thẳng `'Q3'` vào bản ghi nên luôn khớp. Hậu quả: bảng lịch và danh sách kỹ thuật viên **rỗng trơn, không báo lỗi** — trông hệt như "hôm nay không có khách" |
+| 3 | **Lọc kỹ thuật viên theo kỹ năng khớp đúng tên dịch vụ** | Dữ liệu mẫu ghi kỹ năng trùng nguyên văn tên dịch vụ; hồ sơ thật ghi theo nhóm ("Gel", "Nail Art"). Ô chọn kỹ thuật viên rỗng, quầy không tiếp nhận được ai. ⚠️ Còn **trái BR-EMP-010** — kỹ năng chỉ để hiển thị, hệ thống không cưỡng chế |
+| 4 | **Chặn cứng lịch ngoài ca** | ⚠️ Trái BR-APT-013 — ngoài ca là **cảnh báo, vẫn cho lưu**. Máy chủ đã trả `warnings` đúng như vậy. Khách quen nhờ làm nốt cuối ca là chuyện thường, mà quầy không có cách nào bỏ qua |
+| 5 | **Dịch vụ mặc định của biểu mẫu là tên bịa** (`'Gel Manicure'`) | Thẻ `<select>` vẫn *hiển thị* mục đầu tiên vì không có gì khác để vẽ. Người dùng thấy "Chăm sóc da chân" đang chọn, bấm gửi, nhận về "dịch vụ không còn trong bảng giá" — một câu vô lý với thứ họ đang nhìn |
+
+**Ba trong năm lỗi là luật nghiệp vụ bị chép ra client rồi chép sai** (số 3, 4, và bảng chuyển
+trạng thái cũ). Cách chữa giống nhau: hỏi máy chủ thay vì chép. Sơ đồ trạng thái nay đọc từ
+`nextStatuses` mà API gửi kèm từng lịch hẹn — tính từ đúng bảng BR-APT-022 ở tầng Domain — thay
+cho một bảng ba dòng chép tay vốn đã sai với cả hủy lịch lẫn khách không đến.
+
+---
+
+### Kiểm chứng — chạy thật trong trình duyệt
+
+| Phép thử | Kết quả |
+|---|---|
+| Bảng lịch nạp từ API | Lịch hẹn thật của Nailé hiện trên bàn lễ tân, kèm tên khách, tên kỹ thuật viên, tiền cọc |
+| Vòng lặp gọi API | **2 request lúc tải, 0 request thêm trong 3 giây** — trước khi sửa là hơn 15 |
+| Bảng giá | Tám dịch vụ thật của Nailé thay cho tám cái tên bịa |
+| Kỹ thuật viên | "Nguyễn Thu Trang", "Trần Thị Mai" — hồ sơ thật, kèm trạng thái chấm công |
+| **Tiếp nhận khách trọn luồng** | `POST /api/customers` (khách mới) → `POST /api/appointments` → `PATCH /{id}/status` CHECKED_IN → nạp lại. Hộp thoại đóng, không lỗi |
+| **BR-APT-010** | Thẻ hiện **55 phút** cho dịch vụ 50 phút — máy chủ đã cộng 5 phút buffer, không phải con số "60 phút" người dùng chọn trên biểu mẫu |
+| Đổi trạng thái | "Bắt đầu làm" → `PATCH /{id}/status` → thẻ chuyển sang "Đang phục vụ" |
+| Guard "phải xếp ghế" | Chặn trước khi gọi API, đúng như thiết kế cũ — **không** có request nào bị bắn đi |
+| Đối chiếu database | `APT-8B4BD13A3E54` · Khách Ngày 14 · Trần Thị Mai · `InService` · ghế M-05 · 18:50 |
+
+`npm run lint` xanh, `dotnet test` giữ nguyên 44/44.
+
+### Việc còn treo sau ngày 14
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Màn thu tiền vẫn ở dữ liệu mẫu** — và tạm thời **không đóng lịch hẹn** sau khi thu. Cố ý: BR-APT-026 nói lịch chỉ hoàn tất khi hóa đơn THẬT chuyển `PAID`, còn lễ tân không có quyền đặt tay (BR-APT-027). Đánh dấu ở client trong khi máy chủ thấy khác là đúng loại nói dối lát cắt này đi sửa | Ngày 15 |
+| 2 | Giá hiển thị trên thẻ lịch hẹn là **ước tính** cộng từ bảng giá hiện tại. Máy chủ không lưu giá trên lịch hẹn — BR-SVC-006 chốt giá lúc lập hóa đơn — nên con số thật chỉ có ở hóa đơn | Ngày 15 |
+| 3 | Một lịch hẹn hiện chỉ mang **một dịch vụ** khi tạo từ quầy, dù API nhận nhiều. Biểu mẫu cũ chỉ có một ô chọn | Thấp |
+| 4 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — treo từ ngày 6 | **Cần sửa** |
+| 5 | Cổng chủ tiệm còn các màn mức C hiện số bịa cạnh dữ liệu thật: Tổng quan, Ghế & khu vực, POS, Báo cáo | **Cần sửa** |
+| 6 | **Lịch hẹn không lưu khách đặt cọc bằng phương thức nào** — BR-APT-030 chỉ có một cột số tiền | Thấp |
+| 7 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 8 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc | Thấp |
+| 9 | Database demo lẫn rác của các phiên thử; ngày 14 thêm khách `0977000014` và một lịch hẹn ở Nailé. Ngày 19 dựng lại từ số 0 | Thấp |
+| 10 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 ở §8.1 và §11.2 | Thấp |
+
+### Ngày 15 — xong → **Mốc ② mở rộng: quầy thu được tiền thật**
+
+Nửa sau của cổng lễ tân. Màn thu tiền và sổ hóa đơn nay chạy bằng dữ liệu thật, và **chỗ ngày 14
+cố ý để dở đã khép lại**: thu đủ tiền thì lịch hẹn tự hoàn tất, do máy chủ làm, trong cùng một
+giao dịch với lần thu cuối.
+
+**Frontend — 2 tệp mới, 1 tệp sửa:**
+
+| Tầng | Hạng mục |
+|---|---|
+| Service | `services/salesInvoices.ts` — bảy endpoint của ngày 12 và 13 |
+| Hook | `hooks/useSalesInvoices.ts` — sổ hóa đơn một ngày, bốn thao tác ghi |
+| Màn hình | `ReceptionistPortal` nối `useSalesInvoices`; `toReceptionPayment` mặc lại hình dạng cũ; `executeFinalPayment` viết lại |
+
+#### Ba lời gọi, và vì sao thứ tự có ý nghĩa
+
+Một lần bấm "Xác nhận & Hoàn tất" ở quầy nay là ba lời gọi:
+
+1. **`POST /api/sales-invoices` kèm `appointmentId`** — BR-INV-010. Gửi kèm mã lịch hẹn chứ không
+   lập hóa đơn bán lẻ, vì chính mối nối ấy là điều kiện để BR-APT-026 đóng lịch khi thu đủ, và
+   cũng là cách tiền cọc tự thành một dòng `DEPOSIT` (BR-APT-031).
+2. **`PUT /api/sales-invoices/{id}`** — BR-INV-015. Bước này **bắt buộc** vì máy chủ dựng hóa đơn
+   từ dịch vụ của lịch hẹn và **cố ý bỏ qua** `lines` mà client gửi kèm lệnh lập — để một hóa đơn
+   không thể ghi tên dịch vụ khác với thứ khách đã đặt. Nhưng POS ở quầy còn thêm sản phẩm, phụ
+   thu mẫu vẽ và các dòng gộp từ khách khác, nên chúng vào ở bước sửa.
+3. **`POST /{id}/payments`**, một lời gọi cho mỗi phương thức — BR-PAY-004.
+
+**Số tiền phải thu không do màn hình tự tính.** Sau bước 2, máy chủ trả `remaining` đã trừ sẵn
+tiền cọc. Đây là điểm khác hẳn bản cũ, vốn tự cộng `subtotal − discount + tip − deposit` ở trình
+duyệt: giữ phép tính ấy là dựng ra một công thức thứ hai cho cùng một con số, và ngày nó lệch với
+máy chủ thì người ở quầy phát hiện ngay trước mặt khách.
+
+#### Bấm hai lần không tạo hai hóa đơn
+
+Trước khi lập, màn hình tìm hóa đơn đang mở của chính lịch hẹn đó và dùng lại. Máy chủ đã chặn hóa
+đơn thứ hai bằng `422`, nhưng dùng lại thì người ở quầy không phải nhìn thấy lỗi nào cả — họ chỉ
+thấy đúng hóa đơn cũ với phần còn thiếu. Đây cũng là đường đi khi khách trả làm nhiều lần.
+
+#### `cashier` để trống, có chủ đích
+
+DTO hóa đơn không mang tên người lập: máy chủ có lưu `CreatedByUserId` nhưng không gửi ra, và tên
+người thu nằm ở nhật ký kiểm toán (BR-AUD-001). Điền tên người đang đăng nhập vào đó sẽ ghi sai
+người cho mọi hóa đơn do ca trước lập — một lời nói dối im lặng trên chứng từ.
+
+---
+
+### 🔴 Một lỗi có sẵn chặn hẳn BR-PAY-004
+
+Ô "Mã GD / Tên" của mỗi phần chia tiền ghi vào `payerName`, trong khi phép kiểm ở `submitPayment`
+đọc `reference`:
+
+```
+if (item.method !== 'CASH' && !item.reference?.trim()) → "cần nhập mã giao dịch để đối soát"
+```
+
+Hai trường khác nhau, nên **chia tiền với bất kỳ phương thức nào không phải tiền mặt đều bất khả
+thi**: gõ mã xong vẫn nhận đúng câu báo lỗi ấy, và không có cách nào qua được. BR-PAY-004 bị chặn
+hẳn ở giao diện dù máy chủ hỗ trợ đầy đủ từ ngày 13.
+
+Lỗi này **không phải do lát cắt hôm nay gây ra** — nó có từ trước, và chỉ lộ ra khi có người thật
+sự bấm hết một luồng chia tiền. Bản dữ liệu mẫu không bao giờ chạm tới nó vì nó không gọi API nào,
+nên không ai có lý do đi tới bước cuối.
+
+Đã sửa: ô này nay ghi vào `reference` với mọi phương thức không phải tiền mặt, và giữ `payerName`
+cho tiền mặt. Tên người trả **cố ý không gửi lên máy chủ** — cột `reference` ở đó dùng để đối
+soát với sao kê ngân hàng (BR-PAY-005), nhét tên người vào là làm bẩn nó.
+
+---
+
+### Kiểm chứng — chạy thật, đối chiếu tới tận database
+
+**Ca 1 — hóa đơn có tiền cọc, lịch còn `CHECKED_IN`** *(phủ BR-APT-031 và quyết định 57)*
+
+| Bước | Kết quả |
+|---|---|
+| Bấm "Tạo HĐ" trên lịch của khách có cọc 200.000đ | Màn POS mở, hai dòng dịch vụ 250.000 + 180.000 |
+| Xác nhận thu 230.000đ | `PUT /{id}` → `POST /{id}/payments` |
+| Database | `HD-20260828-002` · `Paid` · tổng 430.000 |
+| Dòng thu | `Deposit/Cash 200.000` (máy chủ tự sinh lúc lập) + `Payment/Cash 230.000` |
+| **Lịch hẹn** | **`Completed`** — tự hoàn tất từ `CHECKED_IN`, đúng quyết định 57 |
+| Cờ `CompletedWithUnpaidBalance` | `0` — không gắn nhầm nợ cho một hóa đơn đã trả đủ |
+| Hóa đơn dùng lại | Lịch này đã có hóa đơn `PARTIAL` từ phiên thử ngày 12; màn hình **dùng lại nó** thay vì lập cái thứ hai |
+
+**Ca 2 — chia tiền hai phương thức** *(phủ BR-PAY-004)*
+
+| Bước | Kết quả |
+|---|---|
+| Chia 2 (50/50), tiền mặt + chuyển khoản, mã `FT-NGAY15-001` | Phép kiểm qua được — **trước khi sửa thì không** |
+| Lời gọi | **Hai** `POST /{id}/payments` liên tiếp |
+| Database | `HD-20260828-042` · `Paid` · tổng 260.000 |
+| Dòng thu | `Payment/Cash 130.000` và `Payment/Bank 130.000` kèm mã giao dịch |
+| **Lịch hẹn** | **`Completed`** — lần này từ `IN_SERVICE` |
+| Giao diện | "Hôm nay: 3 lịch (2 xong)", doanh thu ca cộng đúng |
+
+`npm run lint` xanh, `dotnet test` 44/44.
+
+### Việc còn treo sau ngày 15
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Biểu đồ "Doanh thu đã thu" ở màn Tổng quan vẫn là số bịa** — treo từ ngày 6 | **Cần sửa** |
+| 2 | Cổng chủ tiệm còn các màn mức C hiện số bịa cạnh dữ liệu thật: Tổng quan, Ghế & khu vực, POS, Báo cáo | **Cần sửa** |
+| 3 | `seedPayments()` và một phần `seedAppointments()` nay là **mã chết** — đã gắn nhãn, dọn ở ngày 18 | Thấp |
+| 4 | Tên thu ngân trên hóa đơn hiện để trống; muốn hiện đúng thì DTO phải mang `createdBy`, hoặc màn hình đọc nhật ký kiểm toán | Thấp |
+| 5 | Gộp hóa đơn nhiều khách (`mergedAppointmentIds`) chỉ còn là **nhãn hiển thị**: mọi dòng gộp vào một hóa đơn của khách chính, vì BR-CUS-004 buộc mỗi hóa đơn gắn đúng một hồ sơ khách | Thấp |
+| 6 | **Lịch hẹn không lưu khách đặt cọc bằng phương thức nào** — BR-APT-030 chỉ có một cột số tiền | Thấp |
+| 7 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 8 | `TenantAdminServices` vẫn còn mã của thời dữ liệu mẫu ở ngăn chi tiết và bộ lọc | Thấp |
+| 9 | Database demo lẫn rác của các phiên thử. Ngày 19 dựng lại từ số 0 | Thấp |
+| 10 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 ở §8.1 và §11.2 | Thấp |
+
+### Ngày 16 — xong → **Mốc ③ đạt: mạch demo chạy trọn bằng dữ liệu thật**
+
+Đây là điểm mà lộ trình đánh dấu *"đồ án đã đủ để nộp"*. Từ Superadmin tạo tiệm, tới chủ tiệm dựng
+chi nhánh — dịch vụ — nhân viên — khách, tới lễ tân đặt lịch, check-in, thu tiền, tới chủ tiệm mở
+báo cáo doanh thu: **không còn khâu nào chạy dữ liệu mẫu.**
+
+Hai quyết định chốt đầu ngày, cả hai theo phương án khuyến nghị:
+
+| # | Quyết định | Hệ quả |
+|---|---|---|
+| 59 | **Chiều "dịch vụ" phân bổ theo tỉ lệ giá trị dòng** | Ba chiều đầu gắn thẳng vào dòng thu tiền, chiều thứ tư thì không: dịch vụ nằm ở dòng hàng còn tiền vào theo cả hóa đơn. Phân bổ theo tỉ lệ khiến **cộng bảng nào lại cũng ra đúng một con số** |
+| 60 | **Một endpoint trả cả bốn chiều** | §9.1 dự trù 4. Nhưng bốn lời gọi là bốn lần quét cùng một khoảng dữ liệu, và tệ hơn — chúng có thể rơi vào hai phía của một lần thu tiền ở quầy, khiến bốn bảng trên cùng màn hình cộng ra bốn con số khác nhau |
+
+#### Vì sao chiều thứ tư cần một quyết định riêng
+
+BR-REV-001 chốt doanh thu theo **tiền thực thu**, và BR-REV-004 đòi bốn chiều. Ba chiều đầu —
+ngày, chi nhánh, nhân viên — đều là thuộc tính của hóa đơn nên gắn thẳng được vào từng dòng thu.
+Chiều "dịch vụ" thì không: một hóa đơn 430.000đ gồm hai dịch vụ mới thu 230.000đ thì mỗi dịch vụ
+đã mang về bao nhiêu — **không rule nào trả lời**.
+
+Ba cách đều có giá. Chỉ tính hóa đơn đã thu đủ thì tổng của bảng này thấp hơn ba bảng kia; tính
+trọn dòng hàng thì cao hơn. Cả hai đều tạo ra đúng một câu hỏi mà không ai muốn nghe khi bảo vệ:
+*"sao bốn bảng không khớp nhau?"*. Phân bổ theo tỉ lệ thì tổng các tỉ lệ bằng 1, nên **bốn bảng
+luôn cộng lại ra cùng một con số** — và đó là tính chất đáng nêu chứ không phải một tình cờ.
+
+---
+
+### Backend — 5 tệp mới, 2 tệp sửa, không có migration
+
+| Tầng | Hạng mục |
+|---|---|
+| Domain | `RevenuePolicy` — công thức BR-REV-001 thành hàm thuần; `IRevenueRepository` |
+| Application | `RevenueDtos`; `UseCases/Reports/GetRevenueReportUseCase` |
+| Infrastructure | `RevenueRepository` |
+| API | `ReportsController` — một endpoint `GET /api/reports/revenue` |
+| Quyền | Không thêm gì: ô `RevenueReports` cho chủ tiệm đã có trong `PermissionMatrix` từ ngày 3 |
+
+#### Vì sao tách `IRevenueRepository` khỏi `ISalesInvoiceRepository`
+
+Cùng đọc một bảng, nhưng trả lời hai câu hỏi khác hẳn. Cổng cũ phục vụ **sổ hóa đơn**: lấy theo
+**giờ lập**, để quầy mở một hóa đơn ra thu tiền. Cổng mới phục vụ **báo cáo**: lấy theo **giờ
+thu**, vì BR-REV-001 ghi nhận trên cơ sở tiền mặt và BR-REV-003 bắt hoàn tiền làm giảm doanh thu
+tại ngày hoàn chứ không sửa lại ngày cũ.
+
+Hai mốc ấy khác nhau thật: hóa đơn lập cuối tháng trước mà khách trả nốt đầu tháng này thuộc sổ
+hóa đơn tháng trước và doanh thu tháng này. Gộp vào một cổng là mời người viết sau chọn nhầm mốc.
+
+#### Cách trừ tip: theo tỉ lệ, không theo cục
+
+BR-REV-001 viết *"trừ đi tip của các hóa đơn liên quan"*. Trừ nguyên cục thì phải chọn **một
+ngày** để gánh toàn bộ tip của một hóa đơn thu làm nhiều lần — và ngày đó có thể ra doanh thu
+**âm** trong khi tiệm vẫn thu được tiền. Trừ theo tỉ lệ cho ra đúng con số của BR-REV-001 khi hóa
+đơn đã thu đủ (`Total × (Total − Tip) / Total = Total − Tip`), và mỗi ngày gánh đúng phần của
+mình khi chưa.
+
+---
+
+### Frontend — 2 tệp mới, 2 tệp sửa
+
+`services/reports.ts` và `hooks/useRevenueReport.ts` — hook **chỉ đọc** duy nhất của dự án, vì
+doanh thu không phải thứ ai nhập vào mà là thứ suy ra từ tiền đã thu.
+
+#### Màn báo cáo: bỏ hẳn phần bịa, không gắn nhãn cho nó
+
+Trước ngày 16, chế độ dữ liệu thật **chặn toàn bộ** màn báo cáo bằng một khung trống — đúng lúc
+đó, vì mọi con số trên trang đều dựng từ hằng số nhân với nhau: doanh thu gộp là `revenue / 0.967`,
+hoàn tiền là phần dư của một phép trừ, tỉ trọng phương thức thanh toán là bốn số cố định
+`42/28/18/12`.
+
+Nay chế độ dữ liệu thật có **một trang riêng**: chỉ báo cáo doanh thu, bốn bảng phân rã, một dải
+nhãn nói rõ template và lịch gửi định kỳ nằm ngoài phạm vi (BR-REV-006). Trang cũ giữ nguyên cho
+chế độ trình diễn, nơi đã nói rõ là dữ liệu mẫu.
+
+Vì sao không giữ phần đầu trang rồi gắn nhãn: mục tiêu kỳ, tỉ lệ tăng trưởng, công suất ghế và dự
+báo chi phí vật tư đều cần dữ liệu mà hệ thống **cố ý không thu thập** — BR-REV-007 bỏ hẳn module
+chi phí. Một con số bịa nằm cạnh một con số thật thì **cả hai cùng mất giá trị**, và người đọc
+không có cách nào phân biệt.
+
+---
+
+### 🔴 Một lỗi cùng họ với ngày 14
+
+Màn báo cáo gửi `branchId=Q3` lên API — **mã hiển thị**, trong khi API cần mã định danh chi nhánh
+(`BRN-LUMIERE-Q3`). Kết quả: báo cáo trống trơn, và trông y hệt *"kỳ này không thu được đồng nào"*.
+
+Đây đúng là lỗi số 2 của ngày 14 lặp lại ở một màn khác: ô chọn trên giao diện giữ mã hiển thị của
+thời dữ liệu mẫu, còn dữ liệu thật mang khóa. Đã sửa bằng một prop riêng `activeBranchId`, và cổng
+chủ tiệm chỉ truyền xuống khi mã ấy **thật sự có trong danh sách chi nhánh** — sai thì lùi về "cả
+tiệm" thay vì trả rỗng.
+
+---
+
+### Kiểm chứng
+
+**Backend qua HTTP thật:**
+
+| Phép thử | Kết quả |
+|---|---|
+| **Bốn chiều cộng lại bằng nhau** | Tổng 8.590.000 · theo ngày 8.590.000 · chi nhánh 8.590.000 · nhân viên 8.590.000 · dịch vụ 8.590.000 — khớp tuyệt đối |
+| **BR-REV-002** — loại tip | Tiền qua két 80.375.000 − doanh thu 77.734.999 = tip 2.640.001, đúng bằng con số báo cáo trả về |
+| **BR-REV-003** — hoàn tiền | 1.200.000 đã tự trừ vào doanh thu, ghi riêng để đọc |
+| **BR-EMP-011** — hoa hồng | Mỗi người một tỉ lệ riêng: 15%, 18%, 12% — nhân lúc hiển thị, không có bảng |
+| **Ma trận mục 3.4** | Lễ tân `403`, Superadmin `403` (BR-AUTH-030) |
+| Trần khoảng ngày | 366 ngày, vượt thì `422` gắn ô `to` |
+| Lọc chi nhánh | Quận 1 riêng: 34.049.999 |
+
+**Giao diện, tài khoản chủ tiệm Nailé, kỳ 01/07 – 28/08:**
+
+Doanh thu 77.734.999₫ · 169 hóa đơn · 32 ngày · hai chi nhánh (43.685.000 + 34.049.999 = đúng
+tổng) · năm dòng nhân viên kèm hoa hồng · bảng dịch vụ xếp theo doanh thu. Mọi con số khớp với
+phản hồi API và với database.
+
+`npm run lint` xanh, `dotnet build` 0 lỗi 0 cảnh báo, `dotnet test` 44/44.
+
+### Việc còn treo sau ngày 16
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Màn Tổng quan của chủ tiệm vẫn hiện số bịa** — biểu đồ "Doanh thu đã thu", thẻ KPI, "Dịch vụ được yêu thích". Nay đã có `GET /api/reports/revenue` để nối, nên việc này rẻ hơn hẳn trước | **Cần sửa** |
+| 2 | Ba màn mức C khác của cổng chủ tiệm còn số bịa: Ghế & khu vực, POS, và tab Vận hành/Khách hàng/Nhân sự của Báo cáo | **Cần sửa** |
+| 3 | `seedPayments()` và phần lớn `seedAppointments()` là mã chết — dọn ở ngày 18 | Thấp |
+| 4 | Tên thu ngân trên hóa đơn để trống; DTO không mang `createdBy` | Thấp |
+| 5 | **Lịch hẹn không lưu khách đặt cọc bằng phương thức nào** — BR-APT-030 chỉ có một cột số tiền | Thấp |
+| 6 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 7 | Sai số làm tròn của phép phân bổ: tối đa 1đ mỗi dòng, không tích lũy. Thấy được ở con số lẻ như 77.734.999 | Thấp |
+| 8 | §9.1 ghi báo cáo doanh thu **4 endpoint**, thực tế là **1** — quyết định 60 | Thấp |
+| 9 | Database demo lẫn rác của các phiên thử. Ngày 19 dựng lại từ số 0 | Thấp |
+| 10 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 ở §8.1 và §11.2 | Thấp |
+
+### Ngày 17 — xong: dọn số bịa
+
+Ngày 17 vốn là **ngày đệm** sau khi lát cắt gói đăng ký bị cắt (§0 mục 13). Nó được dùng để đóng
+việc treo số 1 và 2 — những màn hiện số bịa cạnh số thật — sau một lượt soát trước đó tìm ra chín
+chỗ như vậy.
+
+Việc này đáng làm ngay ở đây chứ không để tới ngày 19: từ ngày 16, các màn đã nối dữ liệu thật
+khiến số bịa **mâu thuẫn ra mặt** trong cùng một cổng. Trước đó chúng chỉ là số bịa; nay chúng là
+hai câu trả lời khác nhau cho một câu hỏi, và người xem không có cách nào biết câu nào đúng.
+
+| Đã sửa | Trước | Sau |
+|---|---|---|
+| Chủ tiệm · Tổng quan · doanh thu | `128.450.000₫` ↑18,6% | **`67.581.666₫`** — thật, 30 ngày qua |
+| Chủ tiệm · Tổng quan · lịch hẹn hôm nay | Trần Thu Hà, Lê Phương Anh… | Bùi Thu Hà, Khách Ngày 14 — lịch thật |
+| Chủ tiệm · Tổng quan · nhân viên xuất sắc | Kim Ngân `32.450.000₫` | Trần Thị Mai `18.400.000₫` — từ `byStaff` |
+| Chủ tiệm · Tổng quan · biểu đồ doanh thu | đọc sổ Thu–Chi ở `localStorage` | `byDay` của báo cáo doanh thu |
+| Chủ tiệm · Tổng quan · hai khối dịch vụ | khung trống "không dùng số liệu mẫu" | `byService` thật, cả lượt lẫn doanh thu |
+| Chủ tiệm · hạn mức chi nhánh | `6 / 3` — báo vượt hạn mức sai | **`2 / 3`** |
+| Superadmin · doanh thu nền tảng | `86.353.000₫` | **`11.100.000₫`** — khớp database |
+| Superadmin · nhật ký kiểm toán | `0` | **`300`** bản ghi thật do máy chủ ghi |
+| Chủ tiệm · POS và Ghế & khu vực | số tiền không nhãn | dải nhãn "Dữ liệu mẫu" |
+| Superadmin · phiên đăng nhập | `0` không nhãn | dải nhãn, nói rõ máy chủ vẫn quản phiên thật |
+
+#### Backend — một endpoint đọc, không có migration
+
+`GET /api/subscription-invoices`. Lát cắt gói đăng ký đã bị cắt nên đây **chỉ là phép đọc**:
+không có lệnh nộp chứng từ, không có lệnh xác nhận thanh toán, không có luồng nâng cấp năm bước.
+Nó tồn tại vì thiếu nó thì màn Tổng quan của Superadmin phải bịa ra con số doanh thu nền tảng — và
+BR-REV-008 đã cảnh báo sẵn điều đó bằng đúng câu chữ: *"Dữ liệu mẫu hiện tại đang sai ngữ cảnh
+này. Phải sửa khi seed database."*
+
+**49 endpoint, 13 controller.**
+
+#### 🔴 Một lỗi bắt được ngay khi kiểm chứng endpoint mới
+
+Phép `Include(invoice => invoice.Tenant)` sinh ra INNER JOIN với bảng tiệm, mà bảng tiệm có bộ lọc
+xóa mềm toàn cục — nên endpoint **đánh rơi 6 trên 11 hóa đơn**, đúng những hóa đơn của tiệm đã xóa
+mềm. BR-INV-031 nói thẳng hóa đơn đăng ký **không bao giờ xóa được** vì nó là chứng từ tài chính;
+giấu nó đi vì tiệm bị gỡ là làm mất đúng phần lịch sử mà rule ấy đi giữ.
+
+Bỏ phép nối không mất gì: hóa đơn đã lưu sẵn `TenantName` và `PackageName`, chốt tại thời điểm lập
+(BR-SUB-004) — và đó mới là thứ đúng để hiển thị trên một chứng từ.
+
+#### Hóa đơn đăng ký: đổi nguồn, giữ nguyên đường ghi
+
+`App.tsx` không còn khởi tạo `invoices` từ `INITIAL_INVOICES`, và **không còn ghi chúng xuống
+`localStorage`** — giữ lại thì lần tải sau đọc bản chụp cũ đè lên dữ liệu máy chủ, và con số bịa
+quay lại theo đúng con đường vừa đi chặn.
+
+Bảy thao tác ghi của module gói đăng ký vẫn sửa mảng trong bộ nhớ như cũ. Module ấy đã bị cắt và
+màn hình của nó đã mang dải nhãn dữ liệu mẫu; tải lại trang thì sửa đổi biến mất và sự thật của
+máy chủ quay về — hành vi đúng cho một module chỉ để trình diễn.
+
+#### Nhật ký kiểm toán: nối trước, gỡ sau
+
+Màn "Bảo mật & nhật ký" nay đọc `GET /api/audit-logs`. Việc gỡ 19 lời gọi `recordAuditLog()` phía
+trình duyệt vẫn để ở ngày 18, và **đúng thứ tự đó**: gỡ trước là để lại một màn trống trong khi
+máy chủ vẫn đang ghi.
+
+Bảng dịch mười loại sự kiện sang từ vựng của giao diện (`severity`, `status`, `category`) nằm gọn
+trong `useAuditLogs`. Ba cột ấy là khái niệm **của riêng giao diện** — BR-AUD-002 chốt danh sách
+sự kiện chứ không phân loại chúng — nên có đúng một chỗ dịch, thay vì rải phép đoán khắp màn hình.
+
+---
+
+### 🟡 Một chỗ tôi báo sai ở lượt soát
+
+Tôi đã ghi *"badge Quản lý Tenant hiện 1 trong khi có 6 tenant"*. **Sai** — badge ấy là
+`pendingUpgrades + expiringSalons`, tức badge **cảnh báo**, không phải phép đếm tenant. Nó đang
+chạy đúng. Không sửa gì, và ghi lại đây để §19 không đi tìm một lỗi không tồn tại.
+
+### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| `npm run lint` · `npm run build` | Xanh |
+| `dotnet build` · `dotnet test` | 0 lỗi · 44/44 |
+| Endpoint mới | 11/11 hóa đơn, 4 đã thu = `11.100.000₫` — khớp truy vấn SQL trực tiếp |
+| Màn Tổng quan chủ tiệm | Bốn thẻ, biểu đồ, hai khối dịch vụ, hai danh sách đều là dữ liệu thật |
+| Doanh thu nền tảng | `11.100.000₫` trên giao diện, khớp database |
+| Nhật ký kiểm toán | 300 bản ghi (trần của endpoint), thay cho 0 |
+| Hạn mức chi nhánh | `2 / 3`, khớp thanh bên |
+
+#### Một chuyện đáng ghi về công cụ
+
+Sau vài lần sửa nhanh liên tiếp vào cùng một tệp, **Vite phục vụ bản dịch cũ của đúng một dòng**
+trong khi các dòng khác của cùng tệp đã mới. Nhãn "Tỷ trọng trong tháng hiện tại" vẫn hiện dù mã
+nguồn trên đĩa đã đổi, và `location.reload()` không chữa được. Chỉ khởi động lại dev server mới
+dứt điểm. Đáng nhớ khi kiểm chứng bằng mắt: **một thay đổi không thấy trên màn hình chưa chắc là
+một thay đổi sai**.
+
+### Việc còn treo sau ngày 17
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | Gỡ 19 lời gọi `recordAuditLog()` ở `App.tsx` và 1 ở `DataBackup.tsx` — nay đã nối màn đọc nên gỡ được | Ngày 18 |
+| 2 | `seedPayments()`, `seedAppointments()`, `INITIAL_INVOICES` là mã chết | Ngày 18 |
+| 3 | Bỏ USD: `convertMoney` và tỷ giá cứng ở `src/utils/money.ts:5` | Ngày 18 |
+| 4 | §3.1 của lộ trình lệch một lát cắt sau mỗi ngày làm. **Đề xuất bỏ hẳn các con số đếm** khỏi mục ấy | Thấp |
+| 5 | `ReceptionistPortal.tsx` nay **6.178 dòng**, tài liệu ghi ~5.400 | Thấp |
+| 6 | Tab Vận hành / Khách hàng / Nhân sự của Báo cáo vẫn là dữ liệu mẫu — đã có dải nhãn ở trang dữ liệu thật | Thấp |
+| 7 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 8 | Tên thu ngân trên hóa đơn để trống; phương thức đặt cọc; sai số làm tròn 1đ | Thấp |
+| 9 | Database demo lẫn rác của các phiên thử. Ngày 19 dựng lại từ số 0 | Thấp |
+| 10 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 | Thấp |
+
+---
+
+### Ngày 18 — xong: bộ kiểm thử đợt 2, bỏ USD, gỡ nhật ký giả, dải nhãn dữ liệu mẫu
+
+Bốn việc của ngày 18 không liên quan nhau về kỹ thuật nhưng cùng trả lời một câu hỏi: **những
+gì hệ thống nói ra có đúng không.** Bộ kiểm thử giữ cho luật đừng lặng lẽ sai; bỏ USD gỡ đi một
+tỷ giá bịa; gỡ `recordAuditLog()` bỏ những bản ghi kiểm toán do trình duyệt tự khai; dải nhãn
+nói ra màn nào đang chạy số thật.
+
+#### xUnit đợt 2 — **44 → 74 phép thử**, ba lớp mới
+
+| Lớp | Giữ điều gì |
+|---|---|
+| `Appointments/BookingConflictTests` | BR-APT-010/011/012 — chống trùng lịch kỹ thuật viên |
+| `Appointments/AppointmentLifecycleTests` | BR-APT-020/022/023/025/040/041 — sơ đồ chuyển trạng thái §16.1 |
+| `Invoices/InvoiceMoneyTests` | BR-INV-020/021/022, BR-SVC-007, BR-APT-031, BR-PAY-003/008 |
+
+Ba ranh giới đáng nói, vì mỗi cái đều là chỗ một lỗi **không tự lộ ra**:
+
+- **Hai lịch nối đuôi nhau không phải là trùng.** Đổi `<` thành `<=` trong phép chồng lấn vẫn
+  qua được mọi phép thử ném hai lịch chồng hẳn lên nhau, nhưng nó khóa mất khung giờ liền kề và
+  kỹ thuật viên mất một suất khách mỗi lần.
+- **Khoảng chiếm chỗ gồm cả thời gian dọn dẹp.** Quên phần này thì hệ thống vẫn nhận lịch, vẫn
+  chống trùng, và chỉ sai đúng khoảng thời gian người làm cần để lau dọn giữa hai khách.
+- **Hoàn đúng bằng tổng đã thu thì vẫn được.** Lát cắt thu tiền đã kiểm vế vượt trần một đồng;
+  thiếu vế này thì một phép so `>=` viết nhầm chỗ `>` vẫn xanh, và tiệm mất khả năng hoàn trọn
+  tiền cho khách khiếu nại — đúng tình huống mà việc hoàn tiền sinh ra để xử lý.
+
+Mỗi phép thử từ chối đều khẳng định thêm rằng **bản ghi không đổi** sau khi bị từ chối. Một lỗi
+ném ra *sau* khi đã ghi vẫn trả về đúng mã lỗi ấy, nên chỉ nhìn mã thì không phân biệt được.
+
+##### `Scenarios/SalonScenario` — một bộ đếm khung giờ, không phải bốn
+
+Phần dựng dữ liệu được tách khỏi `PaymentCollectionTests` thành thư mục riêng. Không phải để cho
+đẹp: BR-APT-011 chặn cứng hai lịch chồng giờ của cùng kỹ thuật viên, và **mọi** lớp kiểm thử đều
+chọn cùng một người đầu danh sách chi nhánh Quận 3. Bốn lớp giữ bốn bộ đếm riêng thì cả bốn cùng
+xin khung giờ thứ nhất, thứ hai… và lớp chạy sau đỏ vì đụng lịch của lớp chạy trước — một phép
+thử đỏ vì lý do không liên quan gì tới thứ nó kiểm. Bộ đếm phải là **một**.
+
+Đặt ở `Scenarios/` chứ không nhét vào `Infrastructure/`: thư mục đó trả lời "làm sao nói chuyện
+được với máy chủ", còn đây là "một buổi làm ở tiệm trông như thế nào".
+
+#### Bỏ USD — bắt đầu từ kiểu, không phải từ tìm-thay
+
+`CurrencyCode` thu về đúng một giá trị VND, và `tsc` trở thành danh sách kiểm: mọi chữ USD còn
+sót lại đều thành lỗi biên dịch. Cách này bắt được cả những chỗ mà một lần tìm-thay sẽ bỏ qua —
+ví dụ nhánh `if (currency === ...)` trong hàm rút gọn số của biểu đồ Tổng quan.
+
+| Đã gỡ | |
+|---|---|
+| `convertMoney` và tỷ giá cứng `USD_TO_VND_RATE = 25000` | Xóa hẳn khỏi `src/utils/money.ts` |
+| Ba ô chọn tiền tệ | Cấu hình hệ thống, Cài đặt tiệm, Hồ sơ tenant — nay là một dòng chỉ đọc |
+| Ô chọn tiền tệ khi lập hóa đơn và khi soạn gói | Cùng với bước nhảy `0.01` của nhánh USD |
+| Khối chú thích *"mỗi gói vẫn có thể dùng VND hoặc USD riêng"* | Câu này đã thành sai |
+| Tham số `reportCurrency` của `platformRevenue` | Không còn gì để quy đổi |
+
+**Giá dự phòng của gói chép từ máy chủ**, không tự đặt: `1.200.000 / 2.500.000 / 6.200.000 ₫`,
+đúng bộ số ở `DemoSeedCatalog.cs`. Trước đó là `49 / 99 / 249` USD — giữ nguyên là để một màn
+rơi về giá dự phòng hiện `49 ₫` cạnh một màn khác hiện `1.200.000 ₫` cho cùng một gói.
+
+`formatMoney(amount, currency?)` **giữ tham số thứ hai** dù chỉ còn một đơn vị: 86 chỗ gọi đang
+truyền cột tiền tệ của bản ghi vào đó, và sửa hết cho một thay đổi không đổi gì trên màn hình là
+đổi rủi ro lấy sự gọn gàng. Kiểu đã hẹp lại nên không ai truyền được đơn vị khác vào nữa.
+
+#### Nhật ký kiểm toán — gỡ **28** lời gọi, không phải 19
+
+Lộ trình ghi *"19 chỗ ở `App.tsx` và 1 ở `DataBackup.tsx`"*. Đếm thực tế: **28 lời gọi ở 7 tệp**
+(`App.tsx` 5, `DataBackup` 8, `HelpAndSupport` 6, `SecurityAndLogs` 4, `SuperAdminAnnouncements`
+2, `SystemSettings` 1, `TenantAdminHelpAndSupport` 2). `src/utils/auditLogs.ts` nay xóa hẳn.
+
+##### 🔴 Lỗi ghi đè bảng nhật ký — bắt được khi soát phạm vi
+
+`SecurityAndLogs` đăng ký listener `AUDIT_LOGS_UPDATED_EVENT`, và handler gọi `setLogs` với mảng
+đọc từ `localStorage`. Nghĩa là **bấm "Xuất CSV" ngay trên chính màn nhật ký** sẽ thay 300 bản
+ghi thật của máy chủ bằng một dòng do trình duyệt vừa ghi. Ngày 17 nối màn đọc đã tạo ra đường
+này mà không ai thấy: trước đó cả hai đầu đều là `localStorage` nên ghi đè là chuyện bình thường.
+
+Chữa bằng cách bỏ bản sao trong state — danh sách đọc thẳng từ `useAuditLogs`, không còn chỗ cho
+ai ghi đè. Kiểm chứng bằng cách phát lại đúng sự kiện cũ: **300 → 300**, trước đây sẽ còn 1.
+
+##### Nút "Dọn log hết hạn" — bỏ hẳn
+
+Nó **đếm** trên danh sách đang hiển thị (nay là dữ liệu máy chủ) nhưng **xóa** trên
+`localStorage`, nên sau ngày 17 nó báo "đã dọn N bản ghi" rồi không dọn được gì mà người dùng
+nhìn thấy. Bỏ chứ không sửa: BR-DEL-001 không cho xóa cứng, nhật ký kiểm toán là thứ ít được
+phép xóa nhất, và máy chủ chưa có endpoint dọn theo chính sách lưu trữ — nút này không có đường
+nào đi tới sự thật.
+
+#### Dải nhãn "Dữ liệu mẫu" — một bảng ở nơi định tuyến, không rải vào từng màn
+
+Ba cổng, ba bảng `MOCK_DATA_REASONS` đặt cạnh chỗ chọn màn hình: `App.tsx` (8 màn),
+`NailTenantAdminPortal` (11 màn), `ReceptionistPortal` (2 màn). Lý do không rải
+`<MockDataNotice />` vào từng tệp: dải nhãn phải xuất hiện ở **cùng một chỗ** trên mọi màn, và
+"màn nào chưa nối" là sự thật của cả cổng chứ không của riêng từng tệp — nối xong một màn thì
+xóa đúng một dòng, không phải đi tìm dải nhãn nằm lẫn trong một tệp vài nghìn dòng.
+
+Bốn màn **giữ nhãn riêng** vì nhãn của chúng nói về một phần chứ không cả trang: `stations`,
+`pos`, `reports` (chỉ tab Vận hành / Khách hàng / Nhân sự là mẫu, tab Doanh thu là thật), và tab
+Phiên đăng nhập của màn Bảo mật. `PackageUpgradeRequests` nhận thêm `showMockDataNotice` để
+không chồng nhãn khi nó nằm trong màn Hóa đơn đã có nhãn của trang.
+
+Dải nhãn cũ viết tay trong `TenantAdminAppointments` được dời lên bảng, giữ nguyên ý câu chữ.
+
+### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| `dotnet build` · `dotnet test` | 0 lỗi · **74/74**, chạy hai lượt liên tiếp cùng kết quả |
+| `npm run lint` · `npm run build` | Xanh |
+| Superadmin — 11 tab | 8 tab có nhãn, 3 tab dữ liệu thật không có nhãn, **0 chữ USD** |
+| Chủ tiệm — 19 màn | 8 màn nhãn đúng nội dung của chính màn đó, màn đã nối không có nhãn |
+| Lễ tân — 7 màn | Đúng 3 màn có nhãn (Sản phẩm quầy, Ghế & phòng, đối soát POS) |
+| Nhật ký kiểm toán | 300 bản ghi thật; phát lại sự kiện ghi đè cũ → vẫn 300 |
+| Console trình duyệt | Không lỗi |
+
+### Việc còn treo sau ngày 18
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Giảm giá âm lúc LẬP hóa đơn bị bỏ qua trong im lặng** — `CreateSalesInvoiceUseCase` chỉ gọi `ApplyDiscount` khi số tiền lớn hơn 0, nên `discount: -50000` cho ra hóa đơn đúng tiền nhưng người gửi không được báo là gõ sai. Đường **sửa** hóa đơn thì chặn đúng, và đã có phép thử. Cùng dạng với `SetTip` | Trung bình |
+| 2 | Tham số `reportCurrency` vẫn được truyền qua 7 tệp dù chỉ còn một đơn vị tiền. Vô hại nhưng là ống dẫn chết | Thấp |
+| 3 | `general.currency` và `BrandInfo.currency` vẫn nằm trong mô hình cài đặt dù không còn ô chọn | Thấp |
+| 4 | Hai màn khóa theo gói (Kho vật tư, Vệ sinh & an toàn) chưa xem được dải nhãn bằng tài khoản Premium — cùng cơ chế với 8 màn đã kiểm | Thấp |
+| 5 | §3.1 của lộ trình lệch một lát cắt sau mỗi ngày làm. **Đề xuất bỏ hẳn các con số đếm** khỏi mục ấy | Thấp |
+| 6 | Tab Vận hành / Khách hàng / Nhân sự của Báo cáo vẫn là dữ liệu mẫu — đã có dải nhãn | Thấp |
+| 7 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 8 | Tên thu ngân trên hóa đơn để trống; phương thức đặt cọc; sai số làm tròn 1đ | Thấp |
+| 9 | Database demo lẫn rác của các phiên thử. Ngày 19 dựng lại từ số 0 | Thấp |
+| 10 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 | Thấp |
+
+### Ngày 19 — xong: tổng duyệt trên database dựng lại từ số 0
+
+Xóa `NailManagement`, chạy lại migration + seed, rồi diễn trọn kịch bản ba vai — một lượt gọi
+thẳng API, một lượt bấm tay trong trình duyệt. Năm chỗ vấp, **bốn cái là lỗi hiển thị sai sự
+thật** và không cái nào lộ ra ở mười tám ngày trước, vì cả bốn chỉ sai khi màn hình chạy bằng
+dữ liệu thật.
+
+#### Database trước và sau
+
+| | Trước | Sau khi seed lại |
+|---|---:|---:|
+| Tenants | 12 | 6 |
+| AppUsers | 12 | 7 |
+| AppSessions | 327 | 0 |
+| AuditLogs | 442 | 6 |
+| SalesInvoices | 193 | 151 |
+| Appointments | 198 | 176 |
+
+Sáu tháng "lịch sử" của tiệm Nailé và Muse là do bộ nạp dựng lùi từ hôm nay, nên mỗi lần seed
+lại là một bộ số khác — đó là lý do phải tổng duyệt **sau** khi dựng lại chứ không phải trước.
+
+#### 🔴 Chỗ vấp 1 — báo cáo doanh thu mở ra là trống, ngay ở bước cuối của mạch demo
+
+`TenantAdminReports` khởi tạo khoảng ngày bằng hai hằng số `2026-07-01` – `2026-07-20`. Chúng
+được viết khi trang còn chạy bằng dữ liệu mẫu nằm trọn trong tháng 7; từ ngày 16 tab Doanh thu
+đọc tiền thật, mà tiền thật thì luôn ở những ngày gần nhất. Kết quả: chủ tiệm bấm "Báo cáo" và
+nhận đúng câu *"Chưa có khoản thu nào trong kỳ này"* — trong khi thẻ Tổng quan ngay màn trước
+đang ghi 69.985.928 ₫.
+
+Một kỳ báo cáo cố định trong quá khứ không nói sai về con số, nhưng nó nói sai về việc **tiệm có
+thu được tiền hay không**. Nay mặc định là 30 ngày gần nhất, khớp thẻ "Doanh thu 30 ngày qua" ở
+Tổng quan: hai màn cùng trả lời một câu hỏi thì phải mở ra cùng một kỳ.
+
+#### 🔴 Chỗ vấp 2 — hộp chọn chi nhánh đọc sai bốn ô, sai cả bốn
+
+Màn hình đầu tiên chủ tiệm nhìn thấy sau khi đăng nhập ghi:
+
+```
+QL: 95 Võ Văn Tần, Quận 3, TP. Hồ Chí Minh      ← nhãn "quản lý", giá trị là địa chỉ
+Nhân sự: 0283930001                             ← nhãn "nhân sự", giá trị là số điện thoại
+DT: Chi nhánh chính                             ← nhãn "doanh thu", giá trị là vai trò
+```
+
+`branchSelectionList` lấy `cells[0..3]` làm giờ mở cửa, quản lý, nhân sự, doanh thu — đúng thứ
+tự của thời dữ liệu mẫu. Ngày 8 `branchDtoToNailRow` dựng lại `cells` thành
+`[mã, địa chỉ, điện thoại, vai trò]` cho khớp sáu cột của bảng chi nhánh, còn chỗ này không đổi
+theo. Đây là cùng một họ lỗi với ngày 14 và ngày 16: **giao diện giữ hình dạng của thời dữ liệu
+mẫu, còn dữ liệu thật thì đã đổi hình.**
+
+Cách sửa không phải tìm lại đúng ô. Quản lý phụ trách, sĩ số, doanh thu và giờ mở cửa của một
+chi nhánh **không có cột nào ở database** — chúng nằm trong mười một trường mà quyết định 36 đã
+gỡ. Nên bốn trường ấy bị xóa khỏi `BranchSelectionItem`, chỗ gọi đọc theo **nhãn** thay vì theo
+vị trí, và thẻ hiện đủ ba thứ hệ thống biết thật: địa chỉ, số điện thoại, vai trò. Một ô không
+có nguồn sự thật thì bỏ đi, đừng để trống chờ ai đó lấp bằng thứ gần nhất.
+
+#### 🔴 Chỗ vấp 3 — thanh trên cùng in mã định danh bản ghi
+
+Huy hiệu cạnh tên chi nhánh in thẳng khóa lọc, mà từ ngày 9 khóa lọc là `branch.id`. Với dữ liệu
+mẫu nó ra `Q3` nên không ai thấy gì; với tiệm thật nó ra `BRN-LUMIERE-Q3`, và với một chi nhánh
+vừa lập qua giao diện thì ra `BRN-64FDDBE766AE` nằm giữa thanh công cụ.
+
+Cùng nguyên nhân, `OverviewPage` tự dựng lại tên chi nhánh từ khóa lọc với hai nhánh cứng `'Q1'`
+và `'Q3'`, nên tiêu đề biểu đồ ghi *"Doanh thu thực nhận · Chi nhánh BRN-LUMIERE-Q3"*. Cổng đã
+có sẵn câu trả lời đúng ở `currentActiveBranchTitle`; hai chỗ cùng trả lời một câu hỏi thì chỗ
+chép lại sẽ là chỗ sai trước. Nay tên truyền xuống bằng prop, và huy hiệu dùng mã ngắn do tiệm
+tự đặt.
+
+#### 🔴 Chỗ vấp 4 — hai màn chạy bằng số thật vẫn đeo nhãn "Dữ liệu mẫu"
+
+Dải nhãn của ngày 18 làm đúng việc của nó ở 21 màn, nhưng đặt nhầm ở hai màn **đã nối máy chủ**:
+
+| Màn | Nhãn cũ | Sự thật |
+|---|---|---|
+| Báo cáo hệ thống (Superadmin) | "dựng trên hóa đơn đăng ký **trong trình duyệt**" | Đọc cùng mảng `invoices` và cùng danh sách tiệm với màn Thanh toán — cả hai từ `useSubscriptionInvoices` và `useTenants` |
+| Báo cáo doanh thu (chủ tiệm) | "Dữ liệu mẫu — chưa nối máy chủ" | Chính là trang doanh thu thật của ngày 16 |
+
+Nói sai theo hướng **hạ thấp** cũng là nói sai. Người xem không có cách nào biết chỗ nào còn tin
+được nữa, và ở buổi bảo vệ thì đây đúng là hai màn hội đồng nhìn vào.
+
+`MockDataNotice` nhận thêm prop `title` để một màn nói được **phạm vi** thay vì phủ nhận chính
+con số mình vừa hiện ra. Mặc định giữ nguyên, nên 21 màn còn lại không đổi một chữ.
+
+#### 🔴 Chỗ vấp 5 — thu tiền vượt số còn thiếu không bị chặn
+
+Thu đúng 280.000 ₫ cho hóa đơn 280.000 ₫ → `PAID`, còn thiếu 0 ₫. Thu thêm 1.000 ₫ → **`201
+Created`**, `remaining` thành **−1.000 ₫**. Thu thẳng 780.000 ₫ cho hóa đơn 260.000 ₫ cũng qua,
+`remaining` = −520.000 ₫. Và vì báo cáo trừ tip **theo tỉ lệ trên tiền đã thu**, phần dư ấy đi
+thẳng vào doanh thu: một hóa đơn 320.000 ₫ thu 350.000 ₫ cho ra doanh thu 328.125 ₫.
+
+`IssueRefund` có trần đúng theo BR-PAY-008, `RegisterPayment` thì không — hai chiều đối xứng mà
+chỉ một chiều có rào. Bản cũ ghi rõ đây là chủ ý: *"khách đưa dư rồi lấy lại tiền thừa là chuyện
+thường ở quầy"*. **Quyết định ngày 19 đảo lại chủ ý đó:** tiền thối lại cho khách không phải
+doanh thu, nên nó cũng không được vào sổ. BR-PAY-003 viết `PAID nếu đã_thu ≥ total`, dấu `≥` ấy
+nay chỉ còn để mô tả trạng thái, không còn là giấy phép thu vượt.
+
+Rào đặt ở **đúng một loại dòng tiền**: `PaymentType.Payment`. Dòng `Deposit` do
+`CreateSalesInvoiceUseCase` sinh từ tiền cọc của lịch hẹn, mà BR-APT-032 không buộc cọc phải nhỏ
+hơn hóa đơn — khách cọc 500.000 ₫ rồi đổi sang dịch vụ 300.000 ₫ là hợp lệ, chặn ở đó sẽ làm
+hỏng cả việc lập hóa đơn. Dòng `Refund` đã có trần riêng.
+
+Giao diện lễ tân **không** tạo ra tình huống này: đường thu một phương thức gửi đúng `remaining`
+của máy chủ, đường chia nhiều phương thức bắt tổng khớp `invoiceTotal` đã trừ cọc. Nghĩa là suốt
+mười tám ngày, thứ giữ cho con số trung thực là **phép tính ở trình duyệt** — đúng chỗ mà ngày
+14 và ngày 16 đã chứng minh là không nên tin.
+
+#### Không phải lỗi, dù thoạt nhìn giống
+
+- **Oasis hiện "Quá hạn"** chứ không phải "Hết hạn" — BR-TENANT-001 chỉ có bốn trạng thái hiển
+  thị, `OVERDUE` là một trong bốn, và nó được tính lúc đọc chứ không lưu (BR-TENANT-002).
+- **"Bắt đầu làm" bấm không ăn** — lịch hẹn chưa xếp ghế. Máy chủ không lưu ghế (§9.4), nên nó
+  nằm ở `AppointmentExtras` của trình duyệt và mất khi xóa `localStorage`. Hộp thoại phân công
+  mở ra kèm lời nhắc; đúng như thiết kế.
+- **`commissionRate` nhận 0…1 chứ không phải phần trăm** — `TenantAdminStaff.tsx:488` chia 100
+  trước khi gửi. Lỗi nằm ở kịch bản kiểm thử tôi viết, không ở hệ thống.
+
+### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| Kịch bản ba vai gọi thẳng API, 50 bước | **50/50** sau khi sửa (46/50 trước) |
+| `dotnet test` | **75/75** (thêm 1 phép thử thu vượt), chạy hai lượt liên tiếp cùng kết quả |
+| `npm run lint` · `npm run build` | Xanh |
+| Thu vượt qua API thật | `422 VALIDATION_FAILED`, lỗi gắn vào ô `amount`, bản ghi không đổi |
+| Hộp chọn chi nhánh | Ba dòng, ba nhãn khớp giá trị, không in địa chỉ hai lần |
+| Thanh trên cùng · tiêu đề biểu đồ | `Q3` · "Chi nhánh Quận 3" |
+| Báo cáo doanh thu mở lần đầu | 01/08–30/08, doanh thu 35.840.929 ₫ / 77 hóa đơn |
+| Thu tiền bấm tay ở cổng lễ tân | `PUT` + `POST payments` → két 1.061.000 → 1.511.000 ₫ |
+| Console trình duyệt | Chỉ hai lần `401` của phép dò phiên trước khi đăng nhập |
+| Database sau cùng | Dựng lại lần hai từ số 0 — 6 tiệm, 7 tài khoản, 0 phiên, 6 dòng nhật ký |
+
+### Việc còn treo sau ngày 19
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Giảm giá âm lúc LẬP hóa đơn bị bỏ qua trong im lặng** — `CreateSalesInvoiceUseCase` chỉ gọi `ApplyDiscount` khi số tiền lớn hơn 0. Cùng dạng với `SetTip`. Đường **sửa** hóa đơn thì chặn đúng | Trung bình |
+| 2 | Tham số `reportCurrency` vẫn được truyền qua 7 tệp dù chỉ còn một đơn vị tiền | Thấp |
+| 3 | `general.currency` và `BrandInfo.currency` vẫn nằm trong mô hình cài đặt dù không còn ô chọn | Thấp |
+| 4 | Bốn tiệm phụ (Aurora, Bloom, Morning, Oasis) seed ra **không có chi nhánh, nhân sự hay khách** — mọi màn của chúng đều trống. Đủ để demo cách ly và chặn ghi, nhưng đừng mở chúng ra khi trình bày | Thấp |
+| 5 | §3.1 của lộ trình lệch một lát cắt sau mỗi ngày làm. **Đề xuất bỏ hẳn các con số đếm** khỏi mục ấy | Thấp |
+| 6 | Tab Vận hành / Khách hàng / Nhân sự của Báo cáo vẫn là dữ liệu mẫu — đã có dải nhãn | Thấp |
+| 7 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 8 | Phương thức đặt cọc; sai số làm tròn 1đ. *(Tên thu ngân đã hiện đúng — "Thu ngân: Lê Hoàng Nam")* | Thấp |
+| 9 | Màn Lịch hẹn của chủ tiệm hiện "Không tìm thấy nhân viên — thử tên khác hoặc xóa tìm kiếm" khi ô tìm đang trống. Màn dữ liệu mẫu | Thấp |
+| 10 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 | Thấp |
+
+### Ngày 19 (lượt hai) — tổng duyệt kỹ: 174 phép kiểm API + quét trọn 37 màn
+
+Lượt một đi hết mạch demo. Lượt này **ấn vào từng ranh giới**, và quét giao diện bằng máy thay
+vì bằng mắt. Hai chỗ vấp mới, cả hai đều thuộc loại một buổi bấm tay không bắt được.
+
+#### Kịch bản kiểm chứng — 174 bước, 14 nhóm
+
+| Nhóm | Bước | Giữ điều gì |
+|---|---:|---|
+| Phiên và phân quyền | 11 | Sai mật khẩu và email không tồn tại trả **cùng** một mã lỗi; đăng xuất giết phiên thật |
+| Tầng nền tảng không đọc dữ liệu tiệm | 7 | BR-AUTH-030 trên cả bảy endpoint nghiệp vụ |
+| Gói và danh sách tiệm | 10 | Bốn trạng thái hiển thị của BR-TENANT-001 trên đúng bốn tiệm mẫu |
+| Lập tiệm mới | 8 | Hạn quá khứ, gói lạ, tên rỗng, email trùng, mã trùng — năm đường bị chặn |
+| Chủ tiệm dựng tiệm | 29 | Hạn mức gói, chi nhánh chính không ngừng được, KTV không có tài khoản |
+| Lễ tân đặt lịch | 17 | Chống trùng ở **bốn** vị trí tương đối, hai cảnh báo không chặn |
+| Sơ đồ chuyển trạng thái | 10 | Nhảy cóc bị chặn, hai điểm cuối không quay lại, dời lịch chạy lại phép chống trùng |
+| Hóa đơn và tiền | 27 | Công thức tiền, thu nhiều lần, thu vượt, hoàn tiền — cả bốn chiều |
+| Báo cáo doanh thu | 10 | `revenue + tips = collected`; bốn chiều cộng lại bằng nhau; lọc chi nhánh không rò tiệm khác |
+| Cách ly tiệm | 9 | Đọc **và** ghi chéo tiệm; đổi tiệm trong cùng phiên |
+| Chặn ghi khi hết hạn / tạm ngưng | 12 | Cả hai trạng thái, cả hai đường ghi |
+| Vòng đời tiệm | 6 | Khóa tiệm chặn ghi **ngay trên phiên đang mở**, mở khóa thì ghi lại được ngay |
+| Nhật ký kiểm toán | 4 | Bảy loại sự kiện, gắn đúng mã tiệm |
+| Sửa và ngừng hoạt động | 14 | Xóa mềm, và giá dịch vụ đổi **không** làm đổi hóa đơn cũ |
+
+**174/174 đạt** trên database vừa dựng lại từ số 0.
+
+Kịch bản nằm ở `scripts/rehearsal.mjs`, chạy bằng `npm run rehearsal`. Nó vào repo chứ không ở
+lại thư mục tạm vì ngày 20 còn một lượt tổng duyệt nữa, và vì thứ đáng giữ không phải kết quả
+lần chạy này mà là **174 câu hỏi** — chép tay lại chúng ở lượt sau là chép thiếu. Đọc `API_ORIGIN`
+như `vite.config.ts`, thoát mã 1 khi có bước hỏng, và nói thẳng "máy chủ đã chạy chưa" thay vì
+để nguyên câu `fetch failed` của Node.
+
+Ba ranh giới đáng ghi lại, vì mỗi cái là chỗ một lỗi sẽ không tự lộ:
+
+- **Ngừng một chi nhánh thì mở lại được chỗ trong hạn mức.** BR-BRANCH-005 đếm chi nhánh
+  `ACTIVE`, không đếm cả danh sách. Một phép đếm sai vẫn qua được mọi phép thử chỉ thêm chi nhánh.
+- **Đổi giá dịch vụ không làm đổi hóa đơn đã lập.** BR-SVC-007 chốt giá lúc lập; nếu hóa đơn đọc
+  giá hiện hành thì sổ sách tháng trước tự viết lại mỗi lần tiệm tăng giá.
+- **Khóa tiệm có hiệu lực ngay trên phiên đang mở.** Máy chủ kiểm tra ở mỗi request chứ không
+  đọc một lần lúc đăng nhập — đó là lý do phiên là cookie + bảng `AppSessions` chứ không phải JWT.
+
+#### 🔴 Chỗ vấp 6 — màn Bảo mật báo "0 đăng nhập thất bại" trong khi database giữ 2
+
+`useAuditLogs` tra bảng `EVENT_META` bằng khóa viết theo tên enum của C# — `Login`,
+`LoginFailed`, `TenantCreated`. Máy chủ gửi trên dây `LOGIN`, `LOGIN_FAILED`, `TENANT_CREATED`
+(`AuditLogMapper.ToWireFormat`). **Mười khóa, trượt cả mười, mọi lúc.** `event` khai kiểu
+`string` nên `tsc` không có gì để bắt, và `AuditEventCode` trong tầng service cũng viết theo tên
+enum — kiểu sai xác nhận cho bảng sai.
+
+Hậu quả không dừng ở nhãn. Mọi bản ghi rơi vào nhánh dự phòng, tức là **`severity: 'low'`,
+`status: 'success'`, `category: 'SYSTEM'`** cho tất cả:
+
+| | Trước | Sau |
+|---|---|---|
+| Nhãn sự kiện | `TENANT_UPDATED` | "Cập nhật hồ sơ tiệm" |
+| Ô "rủi ro 24 giờ" | 0 yêu cầu xác thực thất bại | **2** — đúng số dòng `LOGIN_FAILED` trong database |
+| Lọc theo kết quả "Thất bại" | 0 dòng | 2 dòng, tô "Cảnh báo" |
+| Lọc theo danh mục "Xác thực" | 0/30 | **13/30** |
+| Lọc theo mức độ | chỉ có "Thông tin" | ba mức đều có dòng |
+
+Đây là chỗ vấp nặng nhất của cả hai lượt: một màn **giám sát bảo mật** báo yên trong khi hệ
+thống vừa ghi nhận hai lần đăng nhập sai. Nó cũng là loại lỗi mà nhìn màn hình không thấy —
+"0 sự cố" trông y hệt một hệ thống lành mạnh. Chỉ có đối chiếu con số trên màn hình với con số
+trong database mới lộ ra.
+
+Sửa bằng cách khóa bảng theo **chuỗi trên dây**, và ràng `EVENT_META` thành
+`Record<AuditEventCode, …>` với `AuditEventCode` là union của chính mười chuỗi ấy — lần lệch sau
+sẽ là lỗi biên dịch chứ không phải một màn hình nói dối.
+
+#### 🔴 Chỗ vấp 7 — "Chi nhánh undefined" ở chân bảng giá dịch vụ
+
+`ServiceDto` **không có cột chi nhánh** — chú thích ở `services/salonServices.ts` nói thẳng điều
+đó, vì bảng giá là của cả tiệm. Nhưng màn Dịch vụ & giá vẫn giữ hai thứ của thời dữ liệu mẫu:
+
+- Ô chọn chi nhánh với ba tùy chọn cứng `Q3` / `Q1` / `ALL`. Ở chế độ thật, giá trị là
+  `BRN-LUMIERE-Q3` — **không khớp tùy chọn nào**, nên trình duyệt vẽ đại mục đầu tiên. Ô ấy ghi
+  "Chi nhánh Quận 3" bất kể đang làm ở đâu, và bấm vào nó không lọc gì (bộ lọc đã bị bỏ qua ở
+  chế độ thật vì không có gì để lọc).
+- Dòng chân trang tra `branchLabels[selectedBranch]` bằng khóa thật → in ra **"Chi nhánh
+  undefined"**.
+
+Cùng họ với chỗ vấp 2 và 3 của lượt một. Nay ở chế độ thật ô chọn biến mất và dòng chân trang
+ghi "Áp dụng cho toàn tiệm"; chế độ dữ liệu mẫu giữ nguyên.
+
+#### Quét 37 màn bằng máy, không bằng mắt
+
+Một hàm chạy trong trình duyệt bấm qua từng mục điều hướng của cả ba cổng rồi soi nội dung tìm
+sáu dấu hiệu: mã định danh thô lọt ra màn hình, `undefined`, `NaN`, `Invalid Date`,
+`[object Object]`, và chữ USD còn sót.
+
+| Cổng | Màn | Kết quả |
+|---|---:|---|
+| Superadmin | 11 | Sạch sau khi sửa nhật ký. Dải nhãn đúng ở 8 màn mẫu, không có ở 3 màn thật |
+| Chủ tiệm | 19 | Một `undefined` — chỗ vấp 7. Còn lại sạch |
+| Lễ tân | 7 | Sạch |
+
+Lý do làm bằng máy: bấm tay 37 màn thì `undefined` nằm ở dòng chân trang cỡ chữ nhỏ nhất trang,
+sau bảng phân trang, và mắt trượt qua nó ba lượt liền — nó chỉ hiện ra khi có thứ đọc từng ký tự.
+
+#### ⚠️ Một cái bẫy khi bảo vệ: dữ liệu mẫu dựng lùi từ **giờ chạy seed**
+
+`DemoDataSeeder` sinh lịch hẹn bằng `now.AddDays(-dayOffset)` — chỉ lùi về quá khứ, không có gì
+ở tương lai. Buổi tổng duyệt lượt hai chạy sang ngày hôm sau và bắt được hệ quả:
+
+```
+Lịch hẹn ngày seed        : 2 lịch
+Lịch hẹn ngày hôm sau     : 0 lịch
+→ Bàn lễ tân: 0 khách · 0 ca · 0 lịch · doanh thu ca 0đ
+```
+
+Màn hình xử lý đúng cách — "Tất cả lịch hẹn hiện tại đã được xử lý xong", không lỗi, không màn
+trắng. Nhưng cổng lễ tân là **trung tâm của buổi demo**, và nó trống trơn nếu database được dựng
+từ hôm trước. **Phải dựng lại database vào đúng buổi sáng hôm bảo vệ.**
+
+### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| Kịch bản API 174 bước, 14 nhóm | **174/174** trên database vừa dựng lại |
+| `dotnet test` | **75/75** |
+| `npm run lint` · `npm run build` | Xanh |
+| Quét 37 màn của ba cổng | 0 mã định danh thô · 0 `undefined` · 0 `NaN` · 0 chữ USD |
+| Nhật ký: lọc "Thất bại" | 2 dòng "Đăng nhập thất bại", tô Cảnh báo — khớp database |
+| Nhật ký: lọc danh mục "Xác thực" | 13/30 bản ghi |
+| Bảng giá dịch vụ | "Áp dụng cho toàn tiệm", không còn ô chọn chi nhánh vô nghĩa |
+| Báo cáo doanh thu sang ngày mới | Tự trượt sang 02/08–31/08, 34.575.000 ₫ / 75 hóa đơn |
+| Console trình duyệt qua trọn buổi quét | Chỉ `401` của phép dò phiên trước khi đăng nhập |
+| Database sau cùng | 6 tiệm · 7 tài khoản · 0 phiên · 6 dòng nhật ký |
+
+### Việc còn treo sau ngày 19 (lượt hai)
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Giảm giá âm lúc LẬP hóa đơn bị bỏ qua trong im lặng** — `CreateSalesInvoiceUseCase` chỉ gọi `ApplyDiscount` khi số tiền lớn hơn 0. Cùng dạng với `SetTip` | Trung bình |
+| 2 | **Bộ nạp dữ liệu mẫu chỉ dựng lịch hẹn về quá khứ.** Cân nhắc thêm vài lịch ở tương lai gần để cổng lễ tân không phụ thuộc vào việc seed đúng hôm demo | Trung bình |
+| 3 | Ô "Rủi ro 24 giờ" hiện số sự kiện **mức cao**, còn dòng chú thích dưới nó đếm **đăng nhập thất bại** — hai phép đếm khác nhau nằm chồng nhau, nên thẻ đọc ra "0" màu xanh bên trên "2 yêu cầu xác thực thất bại" | Thấp |
+| 4 | Nhật ký hiện `USR-SUPERADMIN` thay cho tên người. Máy chủ cố ý chỉ lưu mã (tên đổi được, mã thì không); muốn hiện tên thì cần API trả kèm | Thấp |
+| 5 | Tham số `reportCurrency` vẫn được truyền qua 7 tệp dù chỉ còn một đơn vị tiền | Thấp |
+| 6 | `general.currency` và `BrandInfo.currency` vẫn nằm trong mô hình cài đặt dù không còn ô chọn | Thấp |
+| 7 | Bốn tiệm phụ (Aurora, Bloom, Morning, Oasis) seed ra không có chi nhánh, nhân sự hay khách — đủ để demo cách ly và chặn ghi, nhưng đừng mở ra khi trình bày | Thấp |
+| 8 | §3.1 của lộ trình lệch một lát cắt sau mỗi ngày làm. **Đề xuất bỏ hẳn các con số đếm** khỏi mục ấy | Thấp |
+| 9 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 10 | Phương thức đặt cọc; sai số làm tròn 1đ | Thấp |
+| 11 | Màn Lịch hẹn của chủ tiệm hiện "Không tìm thấy nhân viên — thử tên khác" khi ô tìm đang trống. Màn dữ liệu mẫu | Thấp |
+| 12 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 | Thấp |
+
+### Ngày 20 — xong: tổng duyệt lần hai, README vận hành, và ba con số bịa cuối cùng
+
+Kế hoạch ngày 20 viết ba việc: *"tổng duyệt lần hai, viết `server/README.md`, kiểm tra
+`npm run build` và `npm run lint` đều xanh"*. Làm đủ cả ba. Lượt duyệt lần này diễn **trên giao
+diện** chứ không gọi API — và đó là lý do nó bắt được ba thứ mà 174 phép kiểm API không thấy:
+cả ba đều là con số hiện ra cho người dùng, không phải dữ liệu máy chủ trả về.
+
+#### Đường đi của lượt duyệt — bấm tay đúng như lúc bảo vệ
+
+| Vai | Làm gì | Kết quả |
+|---|---|---|
+| Superadmin | Lập tiệm mới qua biểu mẫu, gói Premium, kèm tài khoản chủ tiệm | Mã tiệm tự sinh `TDN2-645`; hộp thoại mật khẩu tạm hiện đúng một lần, nói rõ "không gửi email, cũng không có cách xem lại" |
+| Chủ tiệm mới | Đăng nhập bằng mật khẩu tạm, chọn tiệm, vào chi nhánh chính | Hộp chọn chi nhánh hiện đúng ba dòng đã sửa ở ngày 19 |
+| Lễ tân | Thu tiền lịch hẹn 15:00, giảm 50.000 ₫, tip 20.000 ₫ | 450.000 − 50.000 + 20.000 = **420.000 ₫**; két 0 → 420.000 ₫; "2 lịch (1 xong)" |
+| Chủ tiệm | Mở Báo cáo doanh thu | 35.270.000 ₫ · 76 hóa đơn; `revenue + tips = collected` khớp |
+
+#### 🔴 Chỗ vấp 8 — thanh bên nói tiệm có 5 nhân viên, kể cả tiệm chưa có ai
+
+```
+const [staffUsage, setStaffUsage] = useState(tenant?.staffCount ?? nailModuleConfigs.staff.rows.length);
+```
+
+`useState` chỉ chạy hàm khởi tạo **một lần**, và lần đó thì `tenant` còn đang tải — nên
+`tenant?.staffCount` là `undefined`, ô hạn mức rơi về `nailModuleConfigs.staff.rows.length`, tức
+con số **5** của dữ liệu mẫu, rồi nằm lại đó vĩnh viễn. Không có `useEffect` nào đồng bộ lại.
+
+Tiệm vừa lập, chưa có ai: thanh bên ghi "Nhân sự 5/∞". Tiệm Nailé có 6 người: cũng ghi 5.
+
+Nặng hơn chuyện nhìn sai. Gói Basic cho tối đa **5** nhân viên, nên một tiệm Basic trống trơn sẽ
+thấy **"5/5"** kèm ô cảnh báo màu hổ phách — hệ thống tự nói với chủ tiệm rằng họ đã hết chỗ
+tuyển người trong khi chưa tuyển ai. Nay có `useEffect` đồng bộ theo `tenant`, và thanh bên đọc
+"Nhân sự 0/∞" cho tiệm mới.
+
+#### 🔴 Chỗ vấp 9 — năm huy hiệu hằng số đi theo người dùng khắp cổng
+
+`navGroups` viết cứng năm con số: Lịch hẹn `32`, Ghế & khu vực `7/14`, POS `5`, Kho vật tư `18`,
+Vệ sinh `4`. Thanh bên hiện ở **mọi màn**, nên năm con số ấy theo người dùng đi khắp cổng và tự
+giới thiệu mình là số liệu của tiệm đang mở. Một tiệm vừa lập, chưa có lịch hẹn nào, vẫn được
+thanh bên báo "Lịch hẹn 32".
+
+Không sửa bằng cách tìm số thật: bốn trong năm màn ấy **không có gì ở máy chủ để đếm** (§9.3).
+Đã bỏ cả năm. Trường `badge` giữ lại vì màn Lịch hẹn của chủ tiệm sẽ nối trong tương lai và lúc
+đó có số thật để điền — còn bây giờ thì bỏ trống, đừng để một con số bịa đứng thay.
+
+#### 🔴 Chỗ vấp 10 — chuông thông báo cộng cứng `+ 4`
+
+```
+{unreadAnnouncementsCount + 4 > 0 && ( … {unreadAnnouncementsCount + 4} )}
+```
+
+Chuông không bao giờ về 0. Đọc hết bản tin, dọn hết việc — nó vẫn đỏ và vẫn ghi 4. Huy hiệu trên
+tab "Việc cần xử lý" cũng là số `4` viết thẳng, không đổi khi người dùng dọn bớt.
+
+Nay cả hai đếm đúng `operationalTasks.length`, nên **số trên chuông bằng đúng số thứ mở ra thấy
+được**: dọn hết việc thì chuông tụt từ 8 xuống 4 (chỉ còn bản tin chưa đọc), tab hết huy hiệu.
+
+Bốn "việc cần xử lý" ấy vẫn là hằng số viết sẵn — không có bảng nào ở máy chủ sinh ra chúng. Ở
+mọi màn khác, nội dung mẫu đều phải tự khai bằng `MockDataNotice`; hộp thả xuống không có chỗ
+cho một dải nhãn đầy đủ nên nay nói gọn ngay trên đầu danh sách. Không nói thì bốn dòng ấy đọc
+như việc thật của tiệm — kể cả với một tiệm chưa có lịch hẹn nào.
+
+> Ba chỗ vấp này cùng một hình dạng, và cùng một lý do khiến chúng sống sót qua mười chín ngày:
+> **hằng số nằm ở tầng khung giao diện, không ở màn nào cả.** Bộ quét 37 màn của ngày 19 tìm
+> `undefined`, `NaN`, mã định danh thô — nó không có cách nào biết "32" là số bịa còn "1/3" là
+> số thật. Chỉ có lập một tiệm rỗng rồi nhìn xem hệ thống nói gì về nó mới lộ ra.
+
+#### `README.md` cho máy chủ — không phải `server/README.md`
+
+Lộ trình viết `server/README.md` từ hồi còn định đặt backend trong repo giao diện. Quyết định
+2′/3′ ở §0 đã đổi sang solution ASP.NET riêng, nên tệp nằm ở gốc solution:
+`C:\Users\letru\source\repos\NailManagement\README.md`.
+
+Sáu mục, viết cho người phải chạy hệ thống chứ không cho người đọc mã: chạy lên trong ba bước ·
+ba tài khoản demo (kèm bốn tiệm phụ và mỗi tiệm demo được luật nào) · dựng lại database từ số 0 ·
+kiểm thử · bố cục năm project · cấu hình.
+
+Ba chỗ ghi thẳng cái bẫy thay vì để người sau tự vấp:
+
+- **Đừng bật hồ sơ `https` khi chạy dev** — proxy của Vite đi HTTP, một lần chuyển hướng 307 sẽ
+  làm cookie phiên `Secure=false` bị bỏ rơi.
+- **Dừng máy chủ trước khi `dotnet test`** — tiến trình đang chạy khóa DLL, và `dotnet test` đỏ
+  ngay ở bước build với `MSB3027`, trông y như hỏng mã nguồn.
+- **Dựng lại database vào đúng buổi sáng hôm demo** — bộ nạp lùi từ giờ chạy seed và không đặt
+  gì ở tương lai.
+
+Toàn bộ số liệu trong README được kiểm bằng cách **làm đúng theo nó**: dừng máy chủ → `dotnet
+test` → `dotnet ef database drop` → chạy lại → đối chiếu. Hai dòng log seed đúng như đã hứa, cả
+mười bảng khớp bảng số dòng, và **cả mười lối đăng nhập** (bảy tài khoản, ba trong số đó vào
+được cả bằng tên đăng nhập) đều thật.
+
+### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| Kịch bản ba vai bấm tay trên giao diện | Chạy trọn: lập tiệm → cấp tài khoản → thu tiền → báo cáo |
+| `npm run rehearsal` | **174/174**, mã thoát 0, trên database vừa dựng lại |
+| `dotnet test` | **75/75** |
+| `npm run lint` · `npm run build` | Xanh |
+| README đối chiếu thực tế | 2 dòng log seed · 10/10 bảng đúng số dòng · 10/10 lối đăng nhập |
+| Thanh bên tiệm mới | "Nhân sự 0/∞" — trước là "5/∞" |
+| Chuông thông báo | 8 → 4 sau khi dọn hết việc; trước luôn kẹt ở 8 |
+| Công thức tiền qua giao diện | 450.000 − 50.000 + 20.000 = 420.000 ₫ |
+
+### Việc còn treo sau ngày 20
+
+| # | Việc | Mức |
+|---|---|---|
+| 1 | **Giảm giá âm lúc LẬP hóa đơn bị bỏ qua trong im lặng** — `CreateSalesInvoiceUseCase` chỉ gọi `ApplyDiscount` khi số tiền lớn hơn 0. Cùng dạng với `SetTip` | Trung bình |
+| 2 | **Bộ nạp chỉ dựng lịch hẹn về quá khứ.** Cân nhắc thêm vài lịch ở tương lai gần để cổng lễ tân không phụ thuộc vào việc seed đúng hôm demo | Trung bình |
+| 3 | **Biểu mẫu lập tiệm không có ô mã chi nhánh chính**, dù `CreateTenantInput.primaryBranchCode` có nhận. Mọi tiệm lập qua giao diện đều có chi nhánh không mã, và huy hiệu đọc "CHƯA ĐẶT" | Thấp |
+| 4 | Bốn "việc cần xử lý" trong hộp thông báo vẫn là hằng số — nay đã có nhãn dữ liệu mẫu, nhưng bỏ hẳn thì sạch hơn | Thấp |
+| 5 | Ô "Rủi ro 24 giờ" đếm sự kiện **mức cao**, còn dòng chú thích dưới nó đếm **đăng nhập thất bại** — hai phép đếm khác nhau chồng lên nhau | Thấp |
+| 6 | Nhật ký hiện `USR-SUPERADMIN` thay cho tên người. Máy chủ cố ý chỉ lưu mã; muốn hiện tên thì API phải trả kèm | Thấp |
+| 7 | Tham số `reportCurrency` vẫn được truyền qua 7 tệp dù chỉ còn một đơn vị tiền | Thấp |
+| 8 | `general.currency` và `BrandInfo.currency` vẫn nằm trong mô hình cài đặt dù không còn ô chọn | Thấp |
+| 9 | Bốn tiệm phụ seed ra không có chi nhánh, nhân sự hay khách — đủ để demo cách ly và chặn ghi, nhưng đừng mở ra khi trình bày | Thấp |
+| 10 | §3.1 của lộ trình lệch một lát cắt sau mỗi ngày làm. **Đề xuất bỏ hẳn các con số đếm** khỏi mục ấy | Thấp |
+| 11 | Endpoint **khóa tài khoản chủ tiệm** vẫn chưa có — treo từ ngày 7 | Chưa có lịch |
+| 12 | `README-MIGRATION.md` vẫn mô tả Cloudflare Worker + D1 | Thấp |
+
+### Soát toàn hệ thống sau ngày 20 — bốn lỗi, một trong đó là lỗi nặng nhất của cả dự án
+
+Lượt soát này không đi theo kịch bản mà đi theo **những chỗ chưa ai đăng nhập vào bao giờ**: một
+tiệm gói Basic, một tiệm gói Enterprise, và một tiệm không có chi nhánh nào. Cả bốn lỗi đều nằm
+ở đó — 174 phép kiểm API và ba lượt quét 37 màn trước đó đều chạy trên tiệm Nailé, mà Nailé
+tình cờ là tiệm **Premium**.
+
+#### 🔴 Lỗi 1 — cổng chủ tiệm luôn tưởng mọi tiệm đều là gói Premium
+
+`GET /api/packages` chỉ mở cho Superadmin. Đó là chủ ý và ghi rõ trong `PackagesController`:
+module quản lý gói đã bị cắt khỏi MVP, endpoint ấy tồn tại chỉ để màn lập tiệm có bảng giá thật.
+
+Nhưng cổng chủ tiệm lại đi tra gói **trong chính bảng giá đó**:
+
+```
+getSubscriptionPackageForTenant(packages, targetTenant)   // packages = [] ở phiên chủ tiệm
+  → undefined → FALLBACK_SUBSCRIPTION_PACKAGE             // một hằng số Premium viết sẵn
+```
+
+Phép tra ấy **chưa bao giờ thành công** ở cổng chủ tiệm. Nailé là Premium nên không ai thấy gì
+suốt mười tám ngày. Đăng nhập bằng hai tiệm còn lại thì lộ ngay:
+
+| | Aurora (Enterprise) | Muse (Basic) |
+|---|---|---|
+| Nhãn gói | "Gói **Premium**" | "Gói **Premium**" |
+| Hạn mức chi nhánh | 3 — máy chủ cho **99** | 3 — máy chủ chỉ cho **1** |
+| Hạn mức nhân sự | 999 — máy chủ cho **9999** | 999 — máy chủ chỉ cho **5** |
+| Tính năng | Kho vật tư và Vệ sinh **bị khóa** dù đã trả tiền | Năm màn Premium **mở toang** dù chưa mua |
+
+Chiều nào cũng sai, và chiều Basic sai theo kiểu tệ nhất: cổng mời chủ tiệm mở chi nhánh thứ hai
+rồi để máy chủ từ chối — BR-BRANCH-005 chặn đúng, nhưng người dùng chỉ biết sau khi đã gõ xong
+biểu mẫu.
+
+Máy chủ **đã gửi đủ** mọi thứ cần thiết trên `GET /api/tenants/me`: `packageName`, `packageId`,
+`subscriptionPrice`, `maxSalons`, `maxStaff`. Nay có `buildSubscriptionPackageFromTenant` dựng
+gói từ chính hồ sơ tiệm, và danh sách quyền suy ra từ tên gói qua `PACKAGE_PROFILES` — đúng bậc
+quyền mà `session.tenant.capabilities` của máy chủ trả về.
+
+Lấy hạn mức từ **hồ sơ tiệm** chứ không từ bậc gói đoán ra, vì BR-SUB-004 chốt gói theo phiên bản
+tại thời điểm ký: một tiệm cũ có thể mang hạn mức khác bảng giá hôm nay.
+
+Sau khi sửa:
+
+| | Aurora | Muse | Nailé |
+|---|---|---|---|
+| Gói | Enterprise | Basic | Premium |
+| Chi nhánh | 0/∞ | 1/1 | 2/3 |
+| Nhân sự | 0/∞ | 2/5 | 6/∞ |
+| Màn bị khóa | không | 5 màn | 2 màn |
+
+#### 🔴 Lỗi 2 — màn Lịch hẹn của chủ tiệm luôn rỗng, và nó nói dối về chính bộ dữ liệu mẫu của mình
+
+Màn này chạy hoàn toàn bằng dữ liệu mẫu, và mọi dòng mẫu mang mã chi nhánh `'Q1'` hoặc `'Q3'`.
+Cổng thì truyền xuống `branch` — từ ngày 9 là **mã định danh bản ghi** kiểu `BRN-LUMIERE-Q3`.
+Không mã nào khớp, nên sáu phép lọc trong màn loại sạch mọi thứ:
+
+```
+Trước:  THỨ 2 | 0 lịch · THỨ 3 | 0 lịch · … cả bảy ngày đều 0
+Sau:    THỨ 2 | 1 lịch · THỨ 3 | 14 lịch · Tất cả 14 · Chờ xác nhận 3 · Đã xác nhận 4
+```
+
+Đây cũng là lời giải cho việc còn treo số 11 của ngày 19: *"hiện 'Không tìm thấy nhân viên — thử
+tên khác' khi ô tìm đang trống"* — danh sách kỹ thuật viên lọc theo cùng khóa ấy.
+
+Dải nhãn đầu trang đã nói rõ đây là dữ liệu mẫu, nên vấn đề không phải nguồn dữ liệu mà là **màn
+hình nói dối về chính bộ mẫu của nó**: bộ mẫu có lịch, trang thì bảo không có. Nay `branchFilter`
+quy về `'ALL'` khi mã chi nhánh không thuộc bộ mẫu — không biết lọc theo một chi nhánh thì hiện
+tất cả, đừng hiện rỗng. Ô chọn chi nhánh cũng đọc `branchFilter`, nên nó thôi hiện "Chi nhánh
+Quận 3" khi thật ra không lọc theo chi nhánh nào.
+
+Cùng lúc vá một lỗi **tiềm ẩn**: dòng tóm tắt in `branchLabels[selectedBranch]`, tức là sẽ ra
+`undefined` ngay khi có một lịch hẹn mẫu nào rơi vào tuần đang xem.
+
+#### 🔴 Lỗi 3 — tiệm không có chi nhánh nào vẫn hiện "Chi nhánh Q3"
+
+Phép canh "chi nhánh đang chọn phải có thật" thoát sớm ở điều kiện `!branches.length`, nên với
+một tiệm chưa có chi nhánh, khóa lọc nằm lại ở giá trị khởi tạo `'Q3'` của thời dữ liệu mẫu.
+Thanh trên cùng và tiêu đề biểu đồ cùng đi ghi "Chi nhánh Quận 3" cho một tiệm không có chi nhánh
+nào tên như vậy.
+
+Nay quy về `'ALL'`: mở hộp chọn ra cũng chỉ có đúng mục "Toàn hệ thống", nên hỏi lại là vô ích —
+chọn hộ rồi nói đúng tên còn hơn.
+
+#### 🟡 Lỗi 4 — danh sách tiệm hiện mã định danh, không phải mã tiệm
+
+`TenantManagement` in `tenant.id` dưới tên tiệm, trong khi `TenantPicker` và `TenantSwitcher`
+đều in `tenant.code`. Với tiệm seed thì đọc tạm được (`TEN-AURORA`), với tiệm lập qua giao diện
+thì ra `TEN-RS552840` — dù chính chủ tiệm đã gõ mã `RS552840` ở biểu mẫu, dưới ô có chú thích
+"Mã tiệm không đổi lại sau khi lập".
+
+Nay in `code`, và ô tìm kiếm nhận **cả hai**: mã ngắn là thứ hiện trên màn hình, mã định danh là
+thứ xuất hiện trong URL, log và thông báo lỗi.
+
+#### Vì sao ba lượt soát trước không thấy
+
+Bộ quét 37 màn tìm được `undefined`, `NaN`, mã định danh thô — nhưng nó **không có cách nào biết
+"Gói Premium" là sai** khi tiệm đang mở thật sự là Premium. Cả ba lượt trước đều đăng nhập bằng
+Nailé, và Nailé là tiệm duy nhất mà con số dự phòng tình cờ đúng.
+
+Bài học lặp lại lần thứ tư trong dự án: **một giá trị dự phòng là một lời nói dối chờ đúng hoàn
+cảnh để phát ra.** Trước đó là `nailModuleConfigs.staff.rows.length` (ngày 20), `branchLabels`
+khóa theo `Q1`/`Q3` (ngày 19 và hôm nay), và `EVENT_META` khóa theo tên enum C# (ngày 19).
+
+### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| `dotnet build -warnaserror` | 0 warning · 0 error |
+| `dotnet test` | **75/75** |
+| `npm run lint` · `npm run build` | Xanh |
+| `npm run rehearsal` | **174/174**, mã thoát 0 |
+| Quét 37 màn ba cổng | 0 mã thô · 0 `undefined` · 0 `NaN` · 0 chữ USD |
+| Ba gói khác nhau | Enterprise · Basic · Premium — nhãn, hạn mức và khóa tính năng đều khớp máy chủ |
+| Tiệm không có chi nhánh | "Chi nhánh: Tất cả chi nhánh" |
+| Màn Lịch hẹn chủ tiệm | 14 lịch mẫu hiện ra, trước là 0 |
+| Danh sách tiệm | AURORA · BLOOM · MORNING · MUSE · LUMIERE · OASIS |
+| Mạng khi chạy cổng chủ tiệm | Không có request nào 403 — cổng thôi hỏi bảng giá |
+
+### Soát lại toàn bộ dải nhãn — bốn màn thật đang bị dán nhãn "dữ liệu mẫu"
+
+Ngày 18 dựng dải nhãn cho 21 màn. Ngày 19 phát hiện hai màn **chạy số thật** vẫn đeo nhãn ấy và
+sửa chúng. Lượt này soát nốt: **thêm bốn màn nữa cùng lỗi**, và một cái trong đó tự mâu thuẫn
+ngay trên màn hình — người dùng nhìn thấy trước tôi.
+
+#### Cái tôi bỏ sót ở ba lượt quét trước
+
+Bộ quét 37 màn kiểm **"có dải nhãn hay không"**, không kiểm **"dải nhãn nói có đúng không"**.
+Nó không có cách nào biết câu "chưa nối máy chủ" là sai khi màn hình bên dưới đang hiện đúng
+những con số của database.
+
+Lượt này dùng một phép dò khác, nhắm thẳng vào chính hình dạng của lỗi:
+
+> Màn nào **đồng thời** đeo nhãn "Dữ liệu mẫu — chưa nối máy chủ" **và** tự nói trong thân trang
+> rằng nó "đọc từ máy chủ" → dải nhãn nói sai.
+
+Đó đúng là cách người dùng bắt được màn Quản lí Tenant Admin: dải nhãn vàng ghi *"chưa nối máy
+chủ"*, còn dòng mô tả ngay dưới tiêu đề ghi *"Danh sách đọc trực tiếp từ máy chủ"*. Hai câu cách
+nhau ba dòng và phủ định nhau.
+
+#### Bốn màn đã sửa
+
+| Màn | Sự thật, có bằng chứng | Nhãn cũ |
+|---|---|---|
+| **Tenant Admin** (Superadmin) | `GET /api/accounts?role=TENANT_ADMIN` — năm tài khoản seed, kèm chi tiết "2 tenant" của Nguyễn Văn Boss suy từ bảng `UserTenants` | "là dữ liệu mẫu" |
+| **Gói dịch vụ** (Superadmin) | Màn hình hiện `PKG-BASIC · v1 · 1.200.000 ₫` — đúng mã và giá `GET /api/packages` trả về | "nằm ngoài phạm vi backend MVP" |
+| **Thanh toán & hóa đơn** (Superadmin) | "Tổng hợp **5** hóa đơn" — đúng 5 hóa đơn của `GET /api/subscription-invoices` | Thân nhãn đã ghi đúng "đọc thật từ máy chủ", nhưng **câu in đậm phía trên vẫn phủ nhận nó** |
+| **Gói đăng ký** (Chủ tiệm) | Hiện "Premium · 2.500.000 ₫" — khớp `packageName` và `subscriptionPrice` của `GET /api/tenants/me` | "đã bị cắt khỏi MVP" |
+
+Cả bốn nay dùng câu mở đầu **"Phạm vi trang này."** thay vì lời cảnh báo dữ liệu mẫu, và nội dung
+nói rõ ranh giới thật: **đọc là thật, ghi là cục bộ**. Prop `title` của `MockDataNotice` đã có
+sẵn từ ngày 19 cho đúng tình huống này; cổng chủ tiệm nay cũng có bảng `MOCK_DATA_TITLES` riêng.
+
+Ba màn trong số đó thuộc một dạng đáng ghi lại: **đọc thật nhưng ghi cục bộ.** Dán nhãn "chưa nối
+máy chủ" lên chúng là nói sai về vế đọc để cảnh báo đúng về vế ghi — trả giá bằng việc phủ nhận
+những con số thật mà hội đồng đang nhìn.
+
+#### Mười bảy màn còn lại: nhãn đúng
+
+Soát ở tầng mã nguồn — màn nào nhận dữ liệu từ hook hay service của máy chủ — rồi đối chiếu lại
+bằng phép dò trên trình duyệt:
+
+| Cổng | Màn giữ nhãn "dữ liệu mẫu" | Kiểm |
+|---|---:|---|
+| Superadmin | 4 (Bản tin, Cấu hình, Trung tâm hỗ trợ, Sao lưu) | Chỉ `localStorage`, nhãn đúng |
+| Chủ tiệm | 10 (Lịch hẹn, Thành viên, Kho, Màu & mẫu, Đặt lịch online, Thu & Chi, Vệ sinh, Bản tin, Trợ giúp, Cài đặt) | Chỉ dữ liệu mẫu, nhãn đúng |
+| Lễ tân | 3 (Sản phẩm quầy, Ghế & phòng, POS) | Chỉ dữ liệu mẫu, nhãn đúng |
+
+Hai dải nhãn viết tay cũng đúng: tab Phiên đăng nhập của màn Bảo mật nói rõ *"máy chủ vẫn quản
+phiên thật trong bảng `AppSessions`; chỉ là chưa có màn đọc"*, và màn Báo cáo doanh thu của chủ
+tiệm đã mang câu phạm vi từ ngày 19.
+
+Hai màn nhận `tenant` nhưng **không hiển thị** dữ liệu ấy — Bản tin hệ thống dùng nó để lọc thông
+báo theo tiệm — nên nhãn "nội dung chỉ lưu trên trình duyệt" vẫn đúng.
+
+### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| Phép dò mâu thuẫn, 28 màn ba cổng | **0 màn** vừa đeo nhãn mẫu vừa tự nói đọc từ máy chủ |
+| Bốn màn đã sửa | Đều mang câu "Phạm vi trang này", nội dung khớp số máy chủ |
+| Mười bảy màn còn lại | Giữ nguyên nhãn cảnh báo, không đổi một chữ |
+| `npm run lint` · `npm run build` | Xanh |
+| `npm run rehearsal` | **174/174** |

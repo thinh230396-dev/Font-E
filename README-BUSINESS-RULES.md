@@ -8,8 +8,13 @@ Mọi rule ở đây được chốt qua 77 quyết định trong phiên phỏng
 |---|---|
 | **Bối cảnh** | Đồ án cá nhân, làm một mình, **còn 20 ngày** |
 | **Mục tiêu** | MVP chạy end-to-end, demo được, nộp được — **không phải** hệ thống production |
-| **Backend** | Node + Express + SQLite (Q1A) |
-| **Tài liệu liên quan** | [README.md](README.md) — kiến trúc hiện trạng · [README-MIGRATION.md](README-MIGRATION.md) — lộ trình chuyển từ mock sang API |
+| **Backend** | **ASP.NET Core 10 + EF Core + SQL Server 2022**, solution riêng tại `C:\Users\letru\source\repos\NailManagement` |
+| **Tài liệu liên quan** | [README-BACKEND-ROADMAP.md](README-BACKEND-ROADMAP.md) — lịch dựng backend theo ngày · [README.md](README.md) — đặc tả giao diện · [README-MIGRATION.md](README-MIGRATION.md) — hiện trạng frontend |
+
+> ⚠️ **Ô "Backend" từng ghi "Node + Express + SQLite (Q1A)".** Q1A chốt như vậy trong phiên phỏng
+> vấn ngày 24/08, nhưng cùng ngày hôm đó đã đổi: xem `README-BACKEND-ROADMAP.md` §0, các quyết định
+> thay thế 2′, 3′ và 11′. Hai chỗ chịu ảnh hưởng trực tiếp — BR-BAK-003 ở §14 và hàng 15 của bảng
+> §20 — đều đã sửa theo. *(soát tài liệu cuối ngày 13)*
 
 ---
 
@@ -137,6 +142,7 @@ Chủ tiệm xem báo cáo doanh thu theo ngày / chi nhánh / nhân viên / d�
 | Yêu cầu nâng cấp gói | ✅ duyệt | ✅ gửi / hủy | ❌ |
 | Tài khoản TenantAdmin | ✅ | ❌ | ❌ |
 | Tài khoản Receptionist | ❌ | ✅ | ❌ |
+| **Hồ sơ tiệm mình** | ❌ | 👁 | ❌ |
 | Chi nhánh | ❌ | ✅ | 👁 |
 | Nhân viên | ❌ | ✅ | 👁 *chi nhánh mình* |
 | Dịch vụ | ❌ | ✅ | 👁 |
@@ -147,6 +153,14 @@ Chủ tiệm xem báo cáo doanh thu theo ngày / chi nhánh / nhân viên / d�
 | Hoàn tất lịch khi chưa thu đủ | ❌ | ✅ | ❌ |
 | Báo cáo doanh thu tiệm | ❌ | ✅ | ❌ |
 | Nhật ký kiểm toán | ✅ | 👁 *tenant mình* | ❌ |
+
+> **Hàng "Hồ sơ tiệm mình" bổ sung khi soát tài liệu cuối ngày 13.** Nó cố ý **tách khỏi hàng
+> "Tenant"** ở đầu bảng: hàng đó nói về việc quản lý tiệm *của người khác* — tạo, sửa, khóa, xóa
+> mềm — và vẫn là ô riêng của Superadmin. Đọc hồ sơ tiệm mình đang làm việc (tên tiệm, gói, hạn
+> dùng) là chuyện khác hẳn, và phiên phỏng vấn không có hàng nào cho nó vì màn hình cũ đọc thẳng
+> từ `localStorage`. Lễ tân **không** có ô này: hồ sơ tiệm mang theo danh sách chủ tiệm kèm email,
+> giá gói và hạn dùng — thông tin hợp đồng, không phải thứ cần ở quầy. Trong mã nguồn đây là
+> `Feature.OwnTenantProfile`.
 
 **BR-AUTH-030** — `SUPERADMIN` **không truy cập được** dữ liệu nghiệp vụ bên trong tenant: lịch hẹn, khách hàng, nhân viên, hóa đơn bán hàng, báo cáo doanh thu tiệm. *(Q14A)*
 
@@ -361,7 +375,9 @@ Trùng khi:  start_mới < end_cũ  AND  end_mới > start_cũ
 
 **BR-APT-026** — Chuyển sang `COMPLETED` **chỉ xảy ra tự động** khi hóa đơn gắn với lịch hẹn chuyển `PAID`. *(Q58A)*
 
-**BR-APT-027** — **Ngoại lệ:** `TENANT_ADMIN` được chuyển tay `IN_SERVICE → COMPLETED` kể cả khi hóa đơn còn `PARTIAL`. Hệ thống ghi chú *"hoàn tất khi chưa thu đủ"*. `RECEPTIONIST` **không** có quyền này. *(Q72A)*
+**BR-APT-027** — **Ngoại lệ:** `TENANT_ADMIN` được chuyển tay `IN_SERVICE → COMPLETED` khi hóa đơn **chưa thu đủ** — gồm cả ba trường hợp: hóa đơn còn `PARTIAL`, hóa đơn còn `PENDING`, và **lịch chưa có hóa đơn nào**. Hệ thống ghi chú *"hoàn tất khi chưa thu đủ"* trong cả ba. `RECEPTIONIST` **không** có quyền này. *(Q72A, mở rộng bởi quyết định 58 ngày 13)*
+
+> **Vì sao mở rộng khỏi mỗi ca `PARTIAL`.** Ca đáng lo nhất không phải khách trả thiếu, mà là khách bỏ về giữa chừng **không trả đồng nào**: lúc đó lịch thường chưa có hóa đơn, mà BR-APT-040 lại cấm hủy một lịch đang phục vụ. Bó ngoại lệ này vào đúng chữ `PARTIAL` nghĩa là lịch ấy **kẹt vĩnh viễn** ở `IN_SERVICE`, không vai trò nào đóng được, và bảng lịch của tiệm mang theo một dòng chết. Xem `README-BACKEND-ROADMAP.md` §5 ngày 13.
 
 ### 9.4 Tiền đặt cọc
 
@@ -431,6 +447,9 @@ PARTIAL  nếu 0 < đã_thu < total
 PENDING  nếu đã_thu = 0
 ```
 
+> Dấu `≥` ở dòng đầu chỉ mô tả trạng thái, **không phải giấy phép thu vượt** — xem BR-PAY-009.
+> Nó cần thiết vì tiền cọc có thể lớn hơn tổng hóa đơn cuối cùng. *(làm rõ ở ngày 19)*
+
 **BR-PAY-004** — **Chia nhiều phương thức trong một lần thu** được hỗ trợ tự nhiên: mỗi phương thức là một dòng `invoice_payments`. *(Q60A)*
 
 **BR-PAY-005** — 5 phương thức thanh toán: `CASH`, `BANK`, `CARD`, `MOMO`, `ZALOPAY`. Đây **chỉ là nhãn ghi nhận thủ công**, không tích hợp cổng thanh toán thật. *(Q61A)*
@@ -440,6 +459,17 @@ PENDING  nếu đã_thu = 0
 **BR-PAY-007** — **Chỉ `TENANT_ADMIN` được hoàn tiền.** `RECEPTIONIST` thu tiền được nhưng **không** hoàn tiền được. *(Q66A)*
 
 **BR-PAY-008** — Tổng hoàn không được vượt tổng đã thu. *(suy ra từ Q66A)*
+
+**BR-PAY-009** — **Một lần thu không được vượt số tiền hóa đơn còn thiếu**, và hóa đơn đã thu đủ
+thì không thu thêm được. Áp dụng cho dòng `PAYMENT`; dòng `DEPOSIT` không chịu ràng buộc này vì
+BR-APT-032 không buộc tiền cọc phải nhỏ hơn hóa đơn, còn dòng `REFUND` đã có trần riêng ở
+BR-PAY-008. *(quyết định ngày 19 — buổi tổng duyệt)*
+
+> Rule này **đảo lại một chủ ý cũ**. Trước ngày 19 hệ thống cố ý cho thu vượt, với lý do khách đưa
+> dư rồi lấy lại tiền thừa là chuyện thường ở quầy. Buổi tổng duyệt cho thấy cái giá: `remaining`
+> thành số âm, và vì BR-REV-001 trừ tip theo tỉ lệ trên tiền đã thu, phần dư đi thẳng vào doanh
+> thu — một hóa đơn 320.000 ₫ thu 350.000 ₫ báo doanh thu 328.125 ₫. Tiền thối lại cho khách không
+> phải doanh thu, nên số ghi vào sổ là số **phải thu**, không phải số tiền khách đưa ra.
 
 ### 10.5 Hóa đơn đăng ký
 
@@ -534,9 +564,9 @@ Gói mới kích hoạt, expires_at gia hạn
 
 **BR-BAK-002** — Màn hình `DataBackup.tsx` giữ nguyên là **mô phỏng hoàn toàn**, không có bảng và không có endpoint nào phía sau. *(Q6A)*
 
-**BR-BAK-003** — Việc sao lưu ở MVP thực hiện **thủ công, nằm ngoài phần mềm**: sao lưu database `NailManagement` trên SQL Server LocalDB bằng câu lệnh `BACKUP DATABASE`, hoặc bằng chức năng Backup có sẵn trong SQL Server Object Explorer của Visual Studio. *(hệ quả của Q6A + quyết định chọn LocalDB ngày 24/08)*
+**BR-BAK-003** — Việc sao lưu ở MVP thực hiện **thủ công, nằm ngoài phần mềm**: sao lưu database `NailManagement` trên SQL Server bằng câu lệnh `BACKUP DATABASE`, hoặc bằng chức năng Backup trong SQL Server Management Studio (chuột phải database → Tasks → Back Up). *(hệ quả của Q6A + quyết định chọn SQL Server ngày 24/08)*
 
-> Bản trước của rule này ghi "copy tệp SQLite thủ công". Nó đã sai kể từ khi backend chuyển sang **ASP.NET Core + SQL Server LocalDB** — LocalDB không phải một tệp đơn để copy khi database đang được gắn. Xem `README-BACKEND-ROADMAP.md` §0 quyết định 11′.
+> Rule này đã được sửa hai lần, và cả hai lần đều vì nền tảng lưu trữ đổi chứ không phải vì nghiệp vụ đổi. Bản đầu ghi "copy tệp SQLite thủ công" — sai kể từ khi backend chuyển sang **ASP.NET Core + SQL Server** (`README-BACKEND-ROADMAP.md` §0 quyết định 11′), vì SQL Server không phải một tệp đơn để copy khi database đang được gắn. Bản thứ hai ghi cụ thể là LocalDB và chỉ tới Visual Studio — sai kể từ **03/09/2026**, khi dự án chuyển sang **SQL Server 2022 Developer Edition** với SSMS làm công cụ quản trị. Bản thân cách sao lưu thì không đổi qua cả hai lần: vẫn là `BACKUP DATABASE` chạy tay.
 
 ---
 
@@ -572,10 +602,11 @@ Gói mới kích hoạt, expires_at gia hạn
                     ┌──────────────► CANCELLED
                     │
 PENDING ──► CONFIRMED ──► CHECKED_IN ──► IN_SERVICE ──► COMPLETED
-   │            │              │
-   │            └──► NO_SHOW   ├──► CANCELLED
-   │                           └──► NO_SHOW
-   └──► CANCELLED
+   │            │              │                            ▲
+   │            └──► NO_SHOW   ├──► CANCELLED               │
+   │                           ├──► NO_SHOW                 │
+   └──► CANCELLED              └────────────────────────────┘
+                                    hóa đơn thu đủ tiền
 ```
 
 | Từ | Được chuyển sang | Ai được phép |
@@ -583,11 +614,18 @@ PENDING ──► CONFIRMED ──► CHECKED_IN ──► IN_SERVICE ──► 
 | `PENDING` | `CONFIRMED`, `CANCELLED` | Receptionist, TenantAdmin |
 | `CONFIRMED` | `CHECKED_IN`, `CANCELLED`, `NO_SHOW` | Receptionist, TenantAdmin |
 | `CHECKED_IN` | `IN_SERVICE`, `CANCELLED`, `NO_SHOW` | Receptionist, TenantAdmin |
+| `CHECKED_IN` | `COMPLETED` | **Tự động** khi hóa đơn `PAID` — **không ai bấm tay được** |
 | `IN_SERVICE` | `COMPLETED` | **Tự động** khi hóa đơn `PAID` |
-| `IN_SERVICE` | `COMPLETED` *(khi hóa đơn còn `PARTIAL`)* | **Chỉ TenantAdmin** |
+| `IN_SERVICE` | `COMPLETED` *(khi hóa đơn **chưa thu đủ**, kể cả khi **chưa có hóa đơn nào**)* | **Chỉ TenantAdmin** |
 | `COMPLETED` | — | Điểm cuối |
 | `CANCELLED` | — | Điểm cuối |
 | `NO_SHOW` | — | Điểm cuối |
+
+**Hai hàng cần đọc kỹ, vì chúng là chỗ sơ đồ này từng thiếu.** Cả hai chốt ngày 28/08/2026 khi viết lát cắt thu tiền — xem `README-BACKEND-ROADMAP.md` §5 ngày 13, quyết định 57 và 58:
+
+**`CHECKED_IN` → `COMPLETED`** *(quyết định 57)* — BR-INV-010 cho lập hóa đơn từ lịch đang `CHECKED_IN` **hoặc** `IN_SERVICE`, còn BR-APT-026 nói lịch tự hoàn tất khi hóa đơn `PAID`. Ghép hai rule ấy lại thì một lịch mới check-in mà khách trả đủ tiền luôn — chuyện thường ở quầy tiệm nail, khách trả trước rồi mới làm — cũng phải hoàn tất được. Sơ đồ cũ chỉ vẽ mũi tên từ `IN_SERVICE`, nên bám nguyên nó thì **hệ thống từ chối nhận tiền của khách**. Đây là đường **tự động**: không vai trò nào bấm tay chuyển `CHECKED_IN` → `COMPLETED` được, và giao diện cũng không được hiện nút cho nó.
+
+**`IN_SERVICE` → `COMPLETED` khi chưa có hóa đơn** *(quyết định 58)* — bản đầu của BR-APT-027 chỉ nói tới ca hóa đơn còn `PARTIAL`. Nhưng ca đáng lo hơn là khách bỏ về giữa chừng không trả đồng nào: lịch chưa có hóa đơn, mà BR-APT-040 lại cấm hủy lịch đang phục vụ, nên nó kẹt vĩnh viễn trên bảng lịch không ai đóng được. Ngoại lệ của chủ tiệm vì vậy áp cho **mọi lịch chưa thu đủ**. BR-APT-027 ở §9.3 đã được mở rộng theo, nên hai mục nay nói cùng một điều.
 
 **BR-APT-040** — `IN_SERVICE` **không hủy được**. Đang phục vụ dở thì phải kết thúc. *(Q52A)*
 
@@ -736,7 +774,7 @@ Bảng này ghi lại **những gì đã cố ý đơn giản hóa** và lý do 
 | 12 | VAT theo dịch vụ, hóa đơn điện tử VN | **Không có thuế**, giá đã gồm thuế | Cần nhà cung cấp được cấp phép *(Q64A)* |
 | 13 | Tích hợp cổng thanh toán thật | **Phương thức chỉ là nhãn ghi nhận thủ công** | Cần tài khoản merchant *(Q61A)* |
 | 14 | Hệ thống thông báo + email/SMS | **Không có** | Cần dịch vụ ngoài *(Q73A)* |
-| 15 | Sao lưu / khôi phục có lịch, mã hóa, đa vùng | **Copy tệp SQLite thủ công** | Không phải nghiệp vụ cốt lõi *(Q6A)* |
+| 15 | Sao lưu / khôi phục có lịch, mã hóa, đa vùng | **`BACKUP DATABASE` thủ công trên SQL Server** | Không phải nghiệp vụ cốt lõi *(Q6A)* — xem BR-BAK-003 |
 | 16 | Module chi phí, tính lợi nhuận | **Chỉ có doanh thu** | Module kế toán *(Q70A)* |
 
 ---
