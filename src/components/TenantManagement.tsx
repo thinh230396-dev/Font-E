@@ -453,8 +453,11 @@ export default function TenantManagement({
   const hasActiveFilters = Boolean(effectiveSearch) || statusFilter !== 'ALL' || packageFilter !== 'ALL';
 
   const filtered = tenants.filter((tenant) => {
+    /* Tìm được bằng CẢ mã ngắn lẫn mã định danh: mã ngắn là thứ tiệm tự đặt và là thứ hiện
+       trên màn hình, còn mã định danh là thứ xuất hiện trong URL, log và thông báo lỗi. */
     const matchesSearch = !effectiveSearch
       || tenant.name.toLowerCase().includes(effectiveSearch)
+      || tenant.code.toLowerCase().includes(effectiveSearch)
       || tenant.id.toLowerCase().includes(effectiveSearch)
       || tenant.adminEmail.toLowerCase().includes(effectiveSearch)
       || tenant.adminName.toLowerCase().includes(effectiveSearch);
@@ -956,8 +959,12 @@ export default function TenantManagement({
                         </span>
                       )}
                     </div>
+                    {/* Mã ngắn do tiệm tự đặt, không phải mã định danh bản ghi — cùng thứ mà
+                        hộp chọn tiệm và bộ đổi tiệm đang hiện. Trước đây chỗ này in `tenant.id`,
+                        nên một tiệm lập qua giao diện đọc ra `TEN-RS552840` trong khi chính chủ
+                        tiệm đã gõ mã `RS552840` ở biểu mẫu lập tiệm. */}
                     <span className="truncate text-xs text-brand-text-muted block">
-                      {tenant.id}
+                      {tenant.code}
                     </span>
                   </div>
                 </div>

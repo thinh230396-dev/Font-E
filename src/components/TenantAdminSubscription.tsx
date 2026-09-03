@@ -173,7 +173,7 @@ export default function TenantAdminSubscription({
   const cycle = tenant?.billingCycle || current.billingCycle || 'monthly';
   const lockedPricing = tenant
     ? getTenantLockedSubscriptionPrice([current], tenant, cycle)
-    : { price: cycle === 'yearly' ? getYearlyPackagePrice(current) : current.price, currency: current.currency || 'USD' };
+    : { price: cycle === 'yearly' ? getYearlyPackagePrice(current) : current.price, currency: current.currency || 'VND' };
   const upgrade = plans.filter((plan) => isTenantPackageUpgradeCandidate(current, plan)).sort((a, b) => a.price - b.price)[0];
   const renewalDate = tenant?.subscriptionRenewsAt || tenant?.trialEndDate;
   const canChangePlan = !readOnlyReason || tenant?.status === 'OVERDUE';
@@ -424,7 +424,7 @@ export default function TenantAdminSubscription({
         return <article key={plan.id} className={`relative flex flex-col overflow-hidden rounded-3xl border bg-white shadow-sm ${isCurrent ? 'border-violet-400 ring-2 ring-violet-100' : 'border-slate-200'}`}>
           {isCurrent && <div className="bg-violet-600 px-5 py-2 text-center text-caption font-black uppercase tracking-[0.15em] text-white">Gói đang sử dụng</div>}
           <div className="flex flex-1 flex-col p-6"><div className="flex items-start justify-between"><div><p className="text-xl font-black text-slate-900">{plan.name}</p><p className="mt-2 min-h-10 text-caption leading-5 text-slate-500">{plan.description}</p></div>{plan.isPopular && !isCurrent && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-caption font-black text-amber-700">PHỔ BIẾN</span>}</div>
-          <p className="mt-5 text-2xl font-black text-slate-900">{money(displayPrice, plan.currency || 'USD')}<span className="text-caption font-semibold text-slate-400"> / {billingView === 'yearly' ? 'năm' : 'tháng'}</span></p>
+          <p className="mt-5 text-2xl font-black text-slate-900">{money(displayPrice, plan.currency || 'VND')}<span className="text-caption font-semibold text-slate-400"> / {billingView === 'yearly' ? 'năm' : 'tháng'}</span></p>
           <div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl bg-slate-50 p-3"><p className="text-caption font-bold text-slate-400">CHI NHÁNH</p><p className="mt-1 text-caption font-black text-slate-700">{isUnlimitedTenantLimit(plan.maxSalons, 'branches') ? 'Không giới hạn' : plan.maxSalons}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-caption font-bold text-slate-400">NHÂN SỰ</p><p className="mt-1 text-caption font-black text-slate-700">{isUnlimitedTenantLimit(plan.maxStaff, 'staff') ? 'Không giới hạn' : plan.maxStaff}</p></div></div>
           <div className="mt-5 flex-1 space-y-2.5">{SUBSCRIPTION_CAPABILITY_CATALOG.slice(0, 8).map((capability) => { const enabled = planCapabilities.has(capability.key); return <div key={capability.key} className="flex items-start gap-2"><span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-300'}`}>{enabled ? <Check className="h-2.5 w-2.5" /> : <X className="h-2.5 w-2.5" />}</span><span className={`text-caption font-semibold ${enabled ? 'text-slate-600' : 'text-slate-400'}`}>{capability.label}</span></div>; })}</div>
           <button type="button" disabled={isCurrent || !canChangePlan} onClick={() => setSelectedPlan(plan)} className={`mt-6 h-11 rounded-xl text-caption font-black ${isCurrent ? 'bg-slate-100 text-slate-400' : 'bg-slate-900 text-white hover:bg-violet-600'} disabled:cursor-not-allowed`}>{isCurrent ? 'Đang sử dụng' : 'Yêu cầu chuyển gói'}</button></div>
@@ -435,7 +435,7 @@ export default function TenantAdminSubscription({
     {activeTab === 'usage' && <section className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{usage.map((item) => { const Icon = item.icon; const nearLimit = item.percent >= 80; return <article key={item.label} className={`rounded-2xl border bg-white p-5 shadow-sm ${nearLimit ? 'border-amber-300' : 'border-slate-200'}`}><div className="flex items-start justify-between"><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone[item.tone].icon}`}><Icon className="h-4 w-4" /></span><span className={`text-caption font-black ${nearLimit ? 'text-amber-600' : 'text-slate-500'}`}>{item.percent ? `${item.percent}%` : '∞'}</span></div><p className="mt-4 text-caption font-bold text-slate-500">{item.label}</p><p className="mt-1 text-sm font-black text-slate-900">{item.value}</p><div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${nearLimit ? 'bg-amber-500' : tone[item.tone].bar}`} style={{ width: `${item.percent || 10}%` }} /></div><p className="mt-2 text-caption leading-4 text-slate-400">{item.hint}</p></article>; })}</div>
       <div className="grid gap-5 xl:grid-cols-[1fr_0.72fr]"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-slate-900">Chi tiết quyền chức năng</h2><p className="mt-1 text-caption text-slate-500">Quyền được áp dụng đồng nhất trên tất cả chi nhánh.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{capabilityGroups.map((group) => <div key={group.title} className="rounded-2xl bg-slate-50 p-4"><p className="text-caption font-black text-slate-800">{group.title}</p><div className="mt-3 space-y-2.5">{group.keys.map((key) => { const capability = SUBSCRIPTION_CAPABILITY_CATALOG.find((item) => item.key === key); const enabled = enabledCapabilities.has(key); return <div key={key} className="flex items-center gap-2"><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>{enabled ? <Check className="h-3 w-3" /> : <LockKeyhole className="h-3 w-3" />}</span><span className={`text-caption font-bold ${enabled ? 'text-slate-700' : 'text-slate-400'}`}>{capability?.label || key}</span></div>; })}</div></div>)}</div></div>
-      <aside className="rounded-2xl bg-slate-900 p-5 text-white"><Sparkles className="h-6 w-6 text-violet-300" /><h2 className="mt-4 text-base font-black">Gợi ý tối ưu chi phí</h2><p className="mt-2 text-caption leading-5 text-slate-300">Chuyển sang thanh toán hằng năm giúp tiết kiệm {current.yearlyDiscountPercent || 0}% và giữ nguyên toàn bộ quyền của gói {current.name}.</p><div className="mt-5 rounded-2xl bg-white/[0.07] p-4"><p className="text-caption text-slate-400">Ước tính tiết kiệm mỗi năm</p><p className="mt-1 text-xl font-black">{money(current.price * 12 - getYearlyPackagePrice(current), current.currency || 'USD')}</p></div><button type="button" onClick={() => { setBillingView('yearly'); setActiveTab('plans'); }} className="mt-4 h-10 w-full rounded-xl bg-white text-caption font-black text-slate-900">Xem giá hằng năm</button></aside></div>
+      <aside className="rounded-2xl bg-slate-900 p-5 text-white"><Sparkles className="h-6 w-6 text-violet-300" /><h2 className="mt-4 text-base font-black">Gợi ý tối ưu chi phí</h2><p className="mt-2 text-caption leading-5 text-slate-300">Chuyển sang thanh toán hằng năm giúp tiết kiệm {current.yearlyDiscountPercent || 0}% và giữ nguyên toàn bộ quyền của gói {current.name}.</p><div className="mt-5 rounded-2xl bg-white/[0.07] p-4"><p className="text-caption text-slate-400">Ước tính tiết kiệm mỗi năm</p><p className="mt-1 text-xl font-black">{money(current.price * 12 - getYearlyPackagePrice(current), current.currency || 'VND')}</p></div><button type="button" onClick={() => { setBillingView('yearly'); setActiveTab('plans'); }} className="mt-4 h-10 w-full rounded-xl bg-white text-caption font-black text-slate-900">Xem giá hằng năm</button></aside></div>
     </section>}
 
     {activeTab === 'billing' && <section className="space-y-5">
@@ -943,7 +943,7 @@ export default function TenantAdminSubscription({
                 >
                   <span className="text-caption font-black text-slate-900">Hằng tháng</span>
                   <span className="mt-1 text-[11px] font-bold text-slate-500">
-                    {money(selectedPlan.price, selectedPlan.currency || 'USD')} / tháng
+                    {money(selectedPlan.price, selectedPlan.currency || 'VND')} / tháng
                   </span>
                 </button>
                 <button
@@ -960,7 +960,7 @@ export default function TenantAdminSubscription({
                     ) : null}
                   </div>
                   <span className="mt-1 text-[11px] font-bold text-slate-500">
-                    {money(getYearlyPackagePrice(selectedPlan), selectedPlan.currency || 'USD')} / năm
+                    {money(getYearlyPackagePrice(selectedPlan), selectedPlan.currency || 'VND')} / năm
                   </span>
                 </button>
               </div>
@@ -970,7 +970,7 @@ export default function TenantAdminSubscription({
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-caption text-slate-400">Giá dự kiến</p>
                 <p className="mt-1 text-sm font-black text-slate-900">
-                  {money(billingView === 'yearly' ? getYearlyPackagePrice(selectedPlan) : selectedPlan.price, selectedPlan.currency || 'USD')}
+                  {money(billingView === 'yearly' ? getYearlyPackagePrice(selectedPlan) : selectedPlan.price, selectedPlan.currency || 'VND')}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">

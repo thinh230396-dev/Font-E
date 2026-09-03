@@ -1,7 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
-  AlertTriangle,
   Award,
   CalendarCheck2,
   CalendarDays,
@@ -45,7 +44,8 @@ import { tenantStorageKey } from '../utils/tenantStorage';
 
 type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'REFUNDED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
-type BranchCode = 'Q1' | 'Q3';
+/** Mã chi nhánh do chủ tiệm tự đặt nên tập giá trị là mở — mở kiểu ở ngày 14, cùng lúc với cổng lễ tân. */
+type BranchCode = string;
 type ViewMode = 'SCHEDULE' | 'LIST';
 type OperationalFilter = 'ALL' | 'ACTION' | 'IN_SALON' | 'CONFIRMED';
 
@@ -409,6 +409,21 @@ export default function TenantAdminAppointments({
   bookingRequest,
   onBookingRequestHandled
 }: TenantAdminAppointmentsProps) {
+  /**
+   * Mã chi nhánh dùng để LỌC, quy về `'ALL'` khi nó không phải mã của dữ liệu mẫu.
+   *
+   * Màn này chạy hoàn toàn bằng dữ liệu mẫu (§9.2) và mọi dòng mẫu mang mã `'Q1'` hoặc `'Q3'`.
+   * Cổng chủ tiệm thì truyền xuống `branch` — từ ngày 9 là **mã định danh bản ghi**, kiểu
+   * `BRN-LUMIERE-Q3`. Không mã nào khớp, nên phép lọc ở dưới loại sạch: lịch tuần hiện "0 lịch"
+   * cả bảy ngày, danh sách kỹ thuật viên báo "Không tìm thấy nhân viên" dù ô tìm đang trống, và
+   * dòng tóm tắt in ra `branchLabels[...]` là `undefined`.
+   *
+   * Dải nhãn ở đầu trang đã nói rõ đây là dữ liệu mẫu, nên vấn đề không phải nguồn dữ liệu mà là
+   * **màn hình nói dối về chính bộ mẫu của nó**: bộ mẫu có lịch, trang thì bảo không có. Không
+   * biết lọc theo một chi nhánh thì hiện tất cả, đừng hiện rỗng.
+   */
+  const branchFilter = selectedBranch in branchLabels ? selectedBranch : 'ALL';
+
   const storageKey = tenantStorageKey('tenant-admin-appointments-v2');
   const todayDate = toIsoDate(new Date());
   const [appointments, setAppointments] = useState<TenantAppointment[]>(() => {
@@ -424,7 +439,7 @@ export default function TenantAdminAppointments({
       return generateAppointmentSeed();
     }
   });
-  const initialDate = getInitialScheduleDate(appointments, selectedBranch, todayDate);
+  const initialDate = getInitialScheduleDate(appointments, branchFilter, todayDate);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [didAutoLocateSchedule, setDidAutoLocateSchedule] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('SCHEDULE');
@@ -722,7 +737,7 @@ export default function TenantAdminAppointments({
   };
 
   const scopedAppointments = useMemo(() => appointments.filter((appointment) => (
-    appointment.date === selectedDate && (selectedBranch === 'ALL' || appointment.branch === selectedBranch)
+    appointment.date === selectedDate && (branchFilter === 'ALL' || appointment.branch === branchFilter)
   )), [appointments, selectedBranch, selectedDate]);
 
   useEffect(() => {
@@ -731,7 +746,7 @@ export default function TenantAdminAppointments({
       setDidAutoLocateSchedule(true);
       return;
     }
-    const nearestDate = getInitialScheduleDate(appointments, selectedBranch, selectedDate);
+    const nearestDate = getInitialScheduleDate(appointments, branchFilter, selectedDate);
     if (nearestDate !== selectedDate) setSelectedDate(nearestDate);
     setDidAutoLocateSchedule(true);
   }, [appointments, didAutoLocateSchedule, scopedAppointments.length, selectedBranch, selectedDate]);
@@ -753,7 +768,7 @@ export default function TenantAdminAppointments({
   }, [operationalFilter, scopedAppointments, searchQuery, sourceFilter, staffFilter, statusFilter]);
 
   const scheduleStaff = useMemo(() => {
-    const directoryStaff = staffDirectory.filter((staff) => selectedBranch === 'ALL' || staff.branch === selectedBranch);
+    const directoryStaff = staffDirectory.filter((staff) => branchFilter === 'ALL' || staff.branch === branchFilter);
     const knownNames = new Set(directoryStaff.map((staff) => staff.name));
     const appointmentStaff = scopedAppointments.reduce<typeof staffDirectory>((result, appointment) => {
       if (knownNames.has(appointment.staff) || result.some((staff) => staff.name === appointment.staff)) return result;
@@ -800,7 +815,7 @@ export default function TenantAdminAppointments({
   const cancelledCount = scopedAppointments.filter((appointment) => ['CANCELLED', 'NO_SHOW'].includes(appointment.status)).length;
   const reminderPendingCount = scopedAppointments.filter((appointment) => ['PENDING', 'CONFIRMED'].includes(appointment.status) && !appointment.reminderSent).length;
   const bookedMinutes = scopedAppointments.filter((appointment) => !['CANCELLED', 'NO_SHOW'].includes(appointment.status)).reduce((sum, appointment) => sum + appointment.duration, 0);
-  const availableStaffCount = staffDirectory.filter((staff) => selectedBranch === 'ALL' || staff.branch === selectedBranch).length;
+  const availableStaffCount = staffDirectory.filter((staff) => branchFilter === 'ALL' || staff.branch === branchFilter).length;
   const utilizationRate = availableStaffCount ? Math.min(100, Math.round(bookedMinutes / (availableStaffCount * 720) * 100)) : 0;
   const confirmationRate = scopedAppointments.length ? Math.round((scopedAppointments.length - pendingCount) / scopedAppointments.length * 100) : 0;
   const cancellationRate = scopedAppointments.length ? Math.round(cancelledCount / scopedAppointments.length * 100) : 0;
@@ -1432,17 +1447,12 @@ export default function TenantAdminAppointments({
         )}
       />
       {/*
-        Màn này vẫn chạy bằng dữ liệu mẫu trong `localStorage` — §9.2 xếp nó vào mức B, và
-        API lịch hẹn phải tới ngày 11 mới có. Dải nhãn được kéo sớm về đây ở ngày 10 vì kể
-        từ khi màn khách hàng nối máy chủ, hai màn hiện hai danh sách khách khác nhau: một
-        bên là khách thật của tiệm, một bên là chín hồ sơ mẫu. Không nói rõ thì đó là loại
-        nhầm lẫn khó phát hiện nhất.
+        Dải nhãn "Dữ liệu mẫu" của màn này từng nằm ngay đây — kéo sớm về từ ngày 10, vì kể
+        từ khi màn khách hàng nối máy chủ thì hai màn hiện hai danh sách khách khác nhau.
+        Ngày 18 dời nó lên `NailTenantAdminPortal`, nơi mọi màn chưa nối cùng lấy nhãn từ một
+        bảng: giữ cả hai là hiện hai dải nhãn chồng nhau trên cùng một trang. Câu chữ vẫn
+        nguyên ý, xem `MOCK_DATA_REASONS.appointments`.
       */}
-      <p className="flex items-center gap-2 rounded-card border border-amber-200 bg-amber-50 px-4 py-2.5 text-caption font-bold text-amber-800">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        Dữ liệu mẫu — màn lịch hẹn chưa nối máy chủ. Danh sách khách ở đây không phải danh bạ
-        thật của tiệm.
-      </p>
       <section className={`isolate border border-brand-outline bg-brand-surface ${isScheduleExpanded ? 'ui-fullscreen-layer fixed inset-0 flex flex-col rounded-none' : 'overflow-hidden rounded-card shadow-card'}`}>
         {/* Thanh điều khiển hai hàng, chia theo nhóm việc: hàng trên là "đang xem
             ngày nào", hàng dưới là "làm gì với ngày đó". Trước đây tất cả dồn vào
@@ -1487,7 +1497,7 @@ export default function TenantAdminAppointments({
 
           {/* Hàng 2 — phạm vi dữ liệu và hành động trên ngày đang xem */}
           <div className="flex flex-wrap items-center gap-2">
-            <BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className={`${controlClass} w-auto sm:w-44`}>
+            <BeautifulSelect value={branchFilter} onChange={(event) => onSelectedBranchChange(event.target.value)} disabled={branchLocked} aria-label={branchLocked ? 'Chi nhánh được phân công' : 'Chọn chi nhánh'} className={`${controlClass} w-auto sm:w-44`}>
               <option value="Q3">Quận 3</option>
               <option value="Q1">Quận 1</option>
               {!branchLocked && <option value="ALL">Tất cả chi nhánh</option>}
@@ -1543,7 +1553,7 @@ export default function TenantAdminAppointments({
         <div className={`${isScheduleExpanded ? 'hidden' : 'grid'} grid-cols-7 border-b border-brand-outline bg-brand-surface-lowest px-2 sm:px-3`}>
           {(() => {
             const weekCounts = weekDates.map((date) => appointments.filter((appointment) => (
-              appointment.date === date && (selectedBranch === 'ALL' || appointment.branch === selectedBranch)
+              appointment.date === date && (branchFilter === 'ALL' || appointment.branch === branchFilter)
             )).length);
             const busiest = Math.max(1, ...weekCounts);
 
@@ -1709,7 +1719,7 @@ export default function TenantAdminAppointments({
                       <div className="min-w-0 flex-1">
                         <span className="flex min-w-0 items-center gap-1">
                           <span className="truncate text-body font-semibold text-brand-text">{staff.name}</span>
-                          {selectedBranch === 'ALL' && (
+                          {branchFilter === 'ALL' && (
                             <span className="shrink-0 rounded-pill bg-brand-surface-high px-1.5 text-caption text-brand-text-muted">{staff.branch}</span>
                           )}
                         </span>
@@ -1867,7 +1877,7 @@ export default function TenantAdminAppointments({
               </>
             )}
             <span className="flex items-center gap-1.5"><Clock3 aria-hidden="true" className="h-3.5 w-3.5" />Giờ mở cửa 08:00–20:00</span>
-            <span className="flex items-center gap-1.5"><MapPin aria-hidden="true" className="h-3.5 w-3.5" />{selectedBranch === 'ALL' ? '2 chi nhánh' : branchLabels[selectedBranch as BranchCode]}</span>
+            <span className="flex items-center gap-1.5"><MapPin aria-hidden="true" className="h-3.5 w-3.5" />{branchFilter === 'ALL' ? '2 chi nhánh' : branchLabels[branchFilter as BranchCode]}</span>
           </div>
         </div>
       </section>

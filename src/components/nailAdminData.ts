@@ -1,3 +1,4 @@
+import type { CurrencyCode } from '../types';
 import { BRANCH_MODEL_OPTIONS } from '../utils/branches';
 
 export type NailPageId =
@@ -67,7 +68,7 @@ export interface BrandInfo {
   address: string;
   website: string;
   timezone: string;
-  currency: 'VND' | 'USD';
+  currency: CurrencyCode;
   language: string;
 }
 

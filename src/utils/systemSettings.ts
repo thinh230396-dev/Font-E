@@ -1,3 +1,5 @@
+import type { CurrencyCode } from '../types';
+
 export interface SystemSettingsModel {
   version: 2;
   updatedAt: string | null;
@@ -7,7 +9,7 @@ export interface SystemSettingsModel {
     supportEmail: string;
     defaultLanguage: 'vi' | 'en';
     timezone: string;
-    currency: 'VND' | 'USD';
+    currency: CurrencyCode;
     maintenanceMode: boolean;
   };
   billing: {

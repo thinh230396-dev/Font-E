@@ -139,10 +139,10 @@ export const INITIAL_INVOICES: Invoice[] = [
   {
     id: 'INV-2026-1065', invoiceCode: 'SS-INV-2026-1065', tenantId: 'TEN-IVORY', tenantName: 'Ivory Skin Clinic',
     type: 'MONTHLY_SUBSCRIPTION', planName: 'Enterprise', packageId: 'PKG-3', packageVersion: 4, billingCycle: 'monthly', servicePeriod: '01/07/2026 – 31/07/2026', billingPeriod: 'Tháng 07/2026',
-    createdAt: invoiceDateFromNow(-9), updatedAt: invoiceDateFromNow(-8), dueDate: invoiceDateFromNow(-2), paidAt: invoiceDateFromNow(-8), subtotal: 249, discountAmount: 0, taxAmount: 0, amount: 249, currency: 'USD', status: 'PAID',
+    createdAt: invoiceDateFromNow(-9), updatedAt: invoiceDateFromNow(-8), dueDate: invoiceDateFromNow(-2), paidAt: invoiceDateFromNow(-8), subtotal: 6_200_000, discountAmount: 0, taxAmount: 0, amount: 6_200_000, currency: 'VND', status: 'PAID',
     billingEmail: 'my.bui@ivoryskin.vn', billingCompany: 'Ivory Skin Clinic JSC', billingAddress: '102 Trần Hưng Đạo, Hoàn Kiếm, Hà Nội', taxCode: '0109821456', paymentMethod: 'Visa •••• 8842', paymentGateway: 'STRIPE', transactionCode: 'pi_3QxA8Ivory', processingFee: 7.47, netReceived: 241.53,
     reconciliationStatus: 'MATCHED', reconciledAt: invoiceDateFromNow(-8, 1), reconciledBy: 'reconciliation-bot@system', collectionStage: 'NONE', reminderCount: 0, refundStatus: 'NONE', issuedBy: 'billing-scheduler@system',
-    lineItems: [{ id: 'LI-1065-1', description: 'Enterprise Subscription · July 2026', quantity: 1, unitPrice: 249, amount: 249, taxRate: 0 }],
+    lineItems: [{ id: 'LI-1065-1', description: 'Enterprise Subscription · July 2026', quantity: 1, unitPrice: 6_200_000, amount: 6_200_000, taxRate: 0 }],
     paymentAttempts: [{ id: 'PAY-1065-1', attemptedAt: invoiceDateFromNow(-8), status: 'SUCCESS', gateway: 'STRIPE', amount: 249, transactionCode: 'pi_3QxA8Ivory' }],
     activities: [{ id: 'ACT-1065-1', action: 'Thanh toán thành công', description: 'Stripe đã xác nhận thẻ Visa.', actor: 'Stripe Gateway', createdAt: invoiceDateFromNow(-8) }]
   },

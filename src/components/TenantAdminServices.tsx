@@ -60,7 +60,8 @@ type ServiceCategory = string;
  * bao giờ sinh ra hai giá trị đó nữa.
  */
 type ServiceStatus = 'ACTIVE' | 'INACTIVE' | 'HIDDEN' | 'DRAFT';
-type BranchCode = 'Q1' | 'Q3';
+/** Mã chi nhánh do chủ tiệm tự đặt nên tập giá trị là mở — mở kiểu ở ngày 14, cùng lúc với cổng lễ tân. */
+type BranchCode = string;
 type ServiceView = 'TABLE' | 'CARDS';
 
 interface PriceHistory {
@@ -927,7 +928,7 @@ export default function TenantAdminServices({
       <PageHeader
         title="Dịch vụ & giá"
         actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center"><BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} aria-label="Chọn chi nhánh" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold text-slate-700 shadow-sm sm:w-48"><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option><option value="ALL">Tất cả chi nhánh</option></BeautifulSelect><button type="button" onClick={exportServices} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" />Xuất bảng giá</button><button type="button" onClick={openCreate} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Thêm dịch vụ</button></div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">{!isLive && (<BeautifulSelect value={selectedBranch} onChange={(event) => onSelectedBranchChange(event.target.value)} aria-label="Chọn chi nhánh" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-caption font-bold text-slate-700 shadow-sm sm:w-48"><option value="Q3">Chi nhánh Quận 3</option><option value="Q1">Chi nhánh Quận 1</option><option value="ALL">Tất cả chi nhánh</option></BeautifulSelect>)}<button type="button" onClick={exportServices} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-caption font-bold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" />Xuất bảng giá</button><button type="button" onClick={openCreate} disabled={!canManage} className="flex h-11 items-center justify-center gap-2 border border-violet-700 bg-violet-600 px-4 text-caption font-black text-white shadow-lg shadow-violet-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:shadow-none"><Plus className="h-4 w-4" />Thêm dịch vụ</button></div>
         )}
       />
 
@@ -1198,12 +1199,29 @@ export default function TenantAdminServices({
             itemLabel="dịch vụ"
             variant="violet"
           />
+          {/*
+            Bảng giá là của CẢ TIỆM, không của riêng chi nhánh nào.
+
+            `ServiceDto` không có cột chi nhánh — chú thích ở `services/salonServices.ts` nói
+            thẳng điều đó — nên ở chế độ dữ liệu thật, một ô chọn chi nhánh và một dòng "áp dụng
+            cho chi nhánh X" đều không có gì đứng sau. Trước ngày 19 cả hai vẫn hiện: ô chọn đọc
+            `BRN-LUMIERE-Q3` không khớp tùy chọn nào nên trình duyệt vẽ đại mục đầu tiên
+            ("Chi nhánh Quận 3") bất kể đang làm ở đâu, còn dòng dưới tra `branchLabels` bằng
+            khóa thật và in ra "Chi nhánh undefined".
+          */}
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-caption text-slate-400">
             <span>Giá đã bao gồm VAT</span>
-            <span className="flex items-center gap-1.5">
-              <Store className="h-3.5 w-3.5" />
-              {selectedBranch === 'ALL' ? 'Tất cả chi nhánh' : `Chi nhánh ${branchLabels[selectedBranch as BranchCode]}`}
-            </span>
+            {isLive ? (
+              <span className="flex items-center gap-1.5">
+                <Store className="h-3.5 w-3.5" />
+                Áp dụng cho toàn tiệm
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <Store className="h-3.5 w-3.5" />
+                {selectedBranch === 'ALL' ? 'Tất cả chi nhánh' : `Chi nhánh ${branchLabels[selectedBranch as BranchCode]}`}
+              </span>
+            )}
           </div>
         </div>
       </section>

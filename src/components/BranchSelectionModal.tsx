@@ -2,20 +2,24 @@ import { useState } from 'react';
 import {
   Building2,
   CheckCircle2,
-  Clock,
   Layers,
   MapPin,
   Phone,
   Search,
-  Sparkles,
   Store,
-  User,
-  Users,
   ArrowRight,
   ShieldCheck
 } from 'lucide-react';
 import { Modal as UiModal } from './ui';
 
+/**
+ * Một chi nhánh như thẻ chọn hiển thị nó.
+ *
+ * Bốn trường `manager`, `staff`, `hours`, `revenue` đã bị bỏ ở ngày 19. Chúng không có cột
+ * nào ở database — cùng nhóm mười một trường mà quyết định 36 đã gỡ khỏi hồ sơ chi nhánh —
+ * nên chỗ gọi buộc phải nhét giá trị khác vào, và thẻ đi nói "Nhân sự: 0283930001". Một ô
+ * không có nguồn sự thật thì bỏ đi, đừng để trống chờ ai đó lấp bằng thứ gần nhất.
+ */
 export interface BranchSelectionItem {
   code: string;
   id: string;
@@ -23,11 +27,8 @@ export interface BranchSelectionItem {
   subtitle?: string;
   address?: string;
   phone?: string;
-  manager?: string;
-  stations?: string | number;
-  staff?: string | number;
-  hours?: string;
-  revenue?: string;
+  /** "Chi nhánh chính" hoặc "Chi nhánh thành viên" — BR-BRANCH-002. */
+  role?: string;
   status?: string;
   badgeTone?: string;
   note?: string;
@@ -64,7 +65,7 @@ export default function BranchSelectionModal({
       branch.code.toLowerCase().includes(query) ||
       branch.id.toLowerCase().includes(query) ||
       (branch.address && branch.address.toLowerCase().includes(query)) ||
-      (branch.manager && branch.manager.toLowerCase().includes(query))
+      (branch.phone && branch.phone.toLowerCase().includes(query))
     );
   });
 
@@ -103,7 +104,7 @@ export default function BranchSelectionModal({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm theo tên chi nhánh, mã Q1/Q3, địa chỉ hoặc quản lý..."
+              placeholder="Tìm theo tên chi nhánh, mã, địa chỉ hoặc số điện thoại..."
               className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-xs font-medium outline-none transition focus:border-violet-400 focus:bg-white focus:ring-3 focus:ring-violet-100"
             />
           </div>
@@ -183,33 +184,19 @@ export default function BranchSelectionModal({
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-2 pt-1">
-                      {item.manager && (
+                      {item.phone && (
                         <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                           <span className="truncate text-slate-600">
-                            QL: <strong className="text-slate-800 font-semibold">{item.manager}</strong>
+                            <strong className="text-slate-800 font-semibold">{item.phone}</strong>
                           </span>
                         </div>
                       )}
-                      {item.hours && (
+                      {item.role && (
                         <div className="flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                          <span className="truncate text-slate-600">{item.hours}</span>
-                        </div>
-                      )}
-                      {item.staff && (
-                        <div className="flex items-center gap-1.5">
-                          <Users className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                           <span className="truncate text-slate-600">
-                            Nhân sự: <strong className="text-slate-800 font-semibold">{item.staff}</strong>
-                          </span>
-                        </div>
-                      )}
-                      {item.stations && (
-                        <div className="flex items-center gap-1.5">
-                          <Sparkles className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                          <span className="truncate text-slate-600">
-                            Quy mô: <strong className="text-slate-800 font-semibold">{item.stations}</strong>
+                            <strong className="text-slate-800 font-semibold">{item.role}</strong>
                           </span>
                         </div>
                       )}
@@ -223,11 +210,6 @@ export default function BranchSelectionModal({
                     {isCurrent ? 'Tiếp tục làm việc' : 'Vào chi nhánh này'}
                     <ArrowRight className="h-3.5 w-3.5" />
                   </span>
-                  {item.revenue && (
-                    <span className="text-[11px] font-medium text-slate-400">
-                      DT: {item.revenue}
-                    </span>
-                  )}
                 </div>
               </div>
             );

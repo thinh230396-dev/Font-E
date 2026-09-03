@@ -16,7 +16,7 @@ import {
   Users
 } from 'lucide-react';
 import type { CurrencyCode, Invoice, SubscriptionPackage, Tenant, TenantStatus } from '../types';
-import { convertMoney, formatMoney } from '../utils/money';
+import { formatMoney } from '../utils/money';
 import { getPlatformRevenueByTenant } from '../utils/platformRevenue';
 
 interface SystemReportsProps {
@@ -58,9 +58,10 @@ const formatDate = (value?: string) => {
   return date ? date.toLocaleDateString('vi-VN') : '—';
 };
 
-const toReportCurrency = (amount: number, currency: string | undefined, reportCurrency: CurrencyCode) => (
-  convertMoney(Number(amount || 0), currency, reportCurrency)
-);
+/* Trước ngày 18 hàm này quy đổi USD sang VND. Quyết định 10 bỏ USD nên không còn gì để
+   quy đổi; hàm ở lại vì nó vẫn làm một việc thật là ép về số — cột tiền trên hóa đơn cũ
+   trong localStorage có thể là chuỗi hoặc rỗng. */
+const toReportCurrency = (amount: number) => Number(amount || 0);
 
 export default function SystemReports({ tenants, invoices, packages, reportCurrency }: SystemReportsProps) {
   const currentYear = new Date().getFullYear();
@@ -120,7 +121,7 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
    * đơn đăng ký. Nhãn trên giao diện đã đổi theo cho đúng nghĩa.
    */
   const platformRevenueByTenant = useMemo(
-    () => getPlatformRevenueByTenant(invoices, reportCurrency),
+    () => getPlatformRevenueByTenant(invoices),
     [invoices, reportCurrency]
   );
   const revenueOf = (tenant: Tenant) => platformRevenueByTenant.get(tenant.id) || 0;
@@ -159,13 +160,13 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
   const activePackageCount = packages.filter((pkg) => !pkg.status || pkg.status === 'ACTIVE').length;
   const collectedRevenueVnd = filteredInvoices
     .filter((invoice) => invoice.status === 'PAID')
-    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
+    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0);
   const billedRevenueVnd = filteredInvoices
     .filter((invoice) => invoice.status !== 'CANCELLED')
-    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
+    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0);
   const receivableVnd = filteredInvoices
     .filter((invoice) => invoice.status === 'PENDING' || invoice.status === 'OVERDUE')
-    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
+    .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0);
   const overdueInvoices = filteredInvoices.filter((invoice) => invoice.status === 'OVERDUE');
   const collectionRate = billedRevenueVnd > 0 ? Math.round((collectedRevenueVnd / billedRevenueVnd) * 100) : 0;
   const billedInvoiceCount = filteredInvoices.filter((invoice) => invoice.status !== 'CANCELLED').length;
@@ -175,7 +176,7 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
     return {
       status,
       count: statusInvoices.length,
-      amountVnd: statusInvoices.reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0)
+      amountVnd: statusInvoices.reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0)
     };
   });
 
@@ -190,10 +191,10 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
       invoiceCount: monthInvoices.length,
       billedVnd: monthInvoices
         .filter((invoice) => invoice.status !== 'CANCELLED')
-        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0),
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0),
       collectedVnd: monthInvoices
         .filter((invoice) => invoice.status === 'PAID')
-        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0),
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0),
       newTenants: monthTenants.length
     };
   }), [filteredInvoices, filteredTenants, reportCurrency, selectedYear]);
@@ -241,13 +242,13 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
       ) === name);
       const billedVnd = packageInvoices
         .filter((invoice) => invoice.status !== 'CANCELLED')
-        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0);
       const collectedVnd = packageInvoices
         .filter((invoice) => invoice.status === 'PAID')
-        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0);
       const debtVnd = packageInvoices
         .filter((invoice) => invoice.status === 'PENDING' || invoice.status === 'OVERDUE')
-        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount, invoice.currency, reportCurrency), 0);
+        .reduce((sum, invoice) => sum + toReportCurrency(invoice.amount), 0);
       return {
         name,
         color: packages.find((pkg) => pkg.name === name)?.color || '#8b5cf6',
@@ -324,7 +325,7 @@ export default function SystemReports({ tenants, invoices, packages, reportCurre
       ...filteredInvoices.map((invoice) => [
         invoice.invoiceCode || invoice.id, formatDate(invoice.createdAt), invoice.tenantName,
         invoice.planName || tenantById.get(invoice.tenantId)?.packageName || '—',
-        invoiceStatusMeta[invoice.status].label, invoice.amount, invoice.currency || 'VND', toReportCurrency(invoice.amount, invoice.currency, reportCurrency)
+        invoiceStatusMeta[invoice.status].label, invoice.amount, invoice.currency || 'VND', toReportCurrency(invoice.amount)
       ])
     ];
     const tenantRows: Array<Array<string | number>> = [

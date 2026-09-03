@@ -34,7 +34,6 @@ import {
   Zap
 } from 'lucide-react';
 import type { Ticket, TicketHistoryEntry, TicketMessage } from '../types';
-import { recordAuditLog } from '../utils/auditLogs';
 import { Button, Modal } from './ui';
 
 interface HelpAndSupportProps {
@@ -516,12 +515,6 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
       updatedAt: new Date().toISOString(),
       history: addHistory(current, agent ? 'Phân công ticket' : 'Bỏ phân công', `${previous} → ${agent?.name || 'Chưa phân công'}`)
     }));
-    recordAuditLog({
-      eventCode: 'SUPPORT.TICKET.ASSIGNED', event: 'Cập nhật người xử lý ticket',
-      description: `${ticket.id}: ${previous} → ${agent?.name || 'Chưa phân công'}.`, severity: 'medium', status: 'success', category: 'SUPPORT',
-      resource: `Ticket ${ticket.id}`, resourceId: ticket.id, method: `CLIENT /support/tickets/${ticket.id}/assignment`,
-      changes: [{ field: 'assignedTo', before: previous, after: agent?.name || 'Chưa phân công' }]
-    });
   };
 
   const handleStatusChange = (ticket: Ticket, status: Ticket['status']) => {
@@ -534,12 +527,6 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
       updatedAt: now,
       history: addHistory(current, 'Đổi trạng thái', `${STATUS_CONFIG[current.status].label} → ${STATUS_CONFIG[status].label}`)
     }));
-    recordAuditLog({
-      eventCode: 'SUPPORT.TICKET.STATUS.UPDATED', event: 'Cập nhật trạng thái ticket',
-      description: `${ticket.id}: ${STATUS_CONFIG[ticket.status].label} → ${STATUS_CONFIG[status].label}.`, severity: status === 'ESCALATED' ? 'high' : 'medium', status: 'success', category: 'SUPPORT',
-      resource: `Ticket ${ticket.id}`, resourceId: ticket.id, method: `CLIENT /support/tickets/${ticket.id}`,
-      changes: [{ field: 'status', before: ticket.status, after: status }]
-    });
   };
 
   const handlePriorityChange = (ticket: Ticket, priority: Ticket['priority']) => {
@@ -550,12 +537,6 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
       updatedAt: new Date().toISOString(),
       history: addHistory(current, 'Đổi độ ưu tiên', `${PRIORITY_CONFIG[current.priority].label} → ${PRIORITY_CONFIG[priority].label}`)
     }));
-    recordAuditLog({
-      eventCode: 'SUPPORT.TICKET.PRIORITY.UPDATED', event: 'Cập nhật ưu tiên ticket',
-      description: `${ticket.id}: ${PRIORITY_CONFIG[ticket.priority].label} → ${PRIORITY_CONFIG[priority].label}.`, severity: priority === 'URGENT' ? 'high' : 'medium', status: 'success', category: 'SUPPORT',
-      resource: `Ticket ${ticket.id}`, resourceId: ticket.id, method: `CLIENT /support/tickets/${ticket.id}`,
-      changes: [{ field: 'priority', before: ticket.priority, after: priority }]
-    });
   };
 
   const handleSendReply = (event: FormEvent) => {
@@ -580,13 +561,6 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
       updatedAt: now,
       history: addHistory(current, replyType === 'PUBLIC_REPLY' ? 'Gửi phản hồi' : 'Thêm ghi chú nội bộ', replyType === 'PUBLIC_REPLY' ? 'Đã gửi phản hồi đến khách hàng.' : 'Đã thêm ghi chú chỉ đội ngũ nội bộ có thể xem.')
     }));
-    recordAuditLog({
-      eventCode: replyType === 'PUBLIC_REPLY' ? 'SUPPORT.TICKET.REPLIED' : 'SUPPORT.TICKET.NOTE.ADDED',
-      event: replyType === 'PUBLIC_REPLY' ? 'Phản hồi ticket hỗ trợ' : 'Thêm ghi chú nội bộ',
-      description: `${selectedTicket.id}: ${replyType === 'PUBLIC_REPLY' ? 'đã gửi phản hồi công khai' : 'đã thêm ghi chú nội bộ'}.`,
-      severity: 'low', status: 'success', category: 'SUPPORT', resource: `Ticket ${selectedTicket.id}`, resourceId: selectedTicket.id,
-      method: `CLIENT /support/tickets/${selectedTicket.id}/messages`, metadata: { messageType: replyType }
-    });
     setReplyText('');
     setReplyAttachedFiles([]);
   };
@@ -615,11 +589,6 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
     anchor.download = `support-tickets-${new Date().toISOString().slice(0, 10)}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
-    recordAuditLog({
-      eventCode: 'SUPPORT.TICKETS.EXPORTED', event: 'Xuất danh sách ticket hỗ trợ',
-      description: `Superadmin đã xuất ${filteredTickets.length} ticket theo bộ lọc hiện tại.`, severity: 'medium', status: 'success', category: 'SUPPORT',
-      resource: 'Hàng chờ hỗ trợ', method: 'CLIENT /support/tickets/export', metadata: { ticketCount: filteredTickets.length, format: 'csv' }
-    });
   };
 
   const handleCreateTicketSubmit = (e: FormEvent) => {
@@ -679,17 +648,6 @@ export default function HelpAndSupport({ tickets, onTicketsChange, showConfirm }
     };
 
     onTicketsChange([newTicket, ...tickets]);
-    recordAuditLog({
-      eventCode: 'SUPPORT.TICKETS.CREATED',
-      event: 'Khởi tạo ticket hỗ trợ',
-      description: `Superadmin đã tạo ticket ${newTicket.id} cho ${newTicket.tenantName}.`,
-      severity: 'low',
-      status: 'success',
-      category: 'SUPPORT',
-      resource: `Ticket ${newTicket.id}`,
-      resourceId: newTicket.id,
-      method: 'CLIENT /support/tickets/create'
-    });
 
     // Reset and close
     setCreateTenantName('');

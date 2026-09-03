@@ -33,7 +33,7 @@ import type {
   SubscriptionPackageStatus,
   Tenant
 } from '../types';
-import { convertMoney, formatMoney } from '../utils/money';
+import { formatMoney } from '../utils/money';
 import {
   DEFAULT_SUBSCRIPTION_LIMITS,
   SUBSCRIPTION_CAPABILITY_CATALOG,
@@ -113,11 +113,11 @@ const tenantUsesPackage = (tenant: Tenant, pkg: SubscriptionPackage) => (
 const getPackageStatus = (pkg: SubscriptionPackage): SubscriptionPackageStatus => pkg.status || 'ACTIVE';
 
 const getMonthlyRecurringValue = (tenant: Tenant, pkg: SubscriptionPackage, reportCurrency: CurrencyCode) => {
-  const currency = tenant.subscriptionCurrency || pkg.currency || 'USD';
+  const currency = tenant.subscriptionCurrency || pkg.currency || 'VND';
   const lockedPrice = tenant.subscriptionPrice;
   const price = lockedPrice ?? getSubscriptionPrice([pkg], pkg.name, tenant.billingCycle || 'monthly').price;
   const monthlyPrice = tenant.billingCycle === 'yearly' ? price / 12 : price;
-  return convertMoney(monthlyPrice, currency, reportCurrency);
+  return monthlyPrice;
 };
 
 export default function SubscriptionPackages({
@@ -168,7 +168,7 @@ export default function SubscriptionPackages({
     .reduce((packageSum, tenant) => packageSum + getMonthlyRecurringValue(tenant, pkg, reportCurrency), 0), 0);
   const collectedRevenue = invoices
     .filter((invoice) => invoice.status === 'PAID')
-    .reduce((sum, invoice) => sum + convertMoney(invoice.amount, invoice.currency, reportCurrency), 0);
+    .reduce((sum, invoice) => sum + invoice.amount, 0);
 
   const getCompatibleReplacementPackages = (sourcePackage: SubscriptionPackage) => {
     const sourceTenants = tenantsByPackage.get(sourcePackage.id) || [];
@@ -438,7 +438,7 @@ function PackageEditor({ editor, reportCurrency, onClose, onSave }: { editor: Ed
           {section === 'general' && <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4"><Field label="Tên gói *" className="md:col-span-2"><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="form-control" placeholder="Ví dụ: Premium Plus" /></Field><Field label="Trạng thái"><BeautifulSelect value={getPackageStatus(draft)} onChange={(event) => setDraft({ ...draft, status: event.target.value as SubscriptionPackageStatus })} className="form-control"><option value="DRAFT">Bản nháp</option><option value="ACTIVE">Đang hoạt động</option><option value="DEPRECATED">Ngừng đăng ký mới</option><option value="ARCHIVED">Đã lưu trữ</option></BeautifulSelect></Field><Field label="Màu nhận diện"><input type="color" value={draft.color} onChange={(event) => setDraft({ ...draft, color: event.target.value })} className="form-control h-9 p-1" /></Field></div>
             <Field label="Mô tả gói"><textarea rows={3} value={draft.description || ''} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className="form-control resize-none" placeholder="Mô tả đối tượng và giá trị của gói..." /></Field>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><Field label="Giá theo tháng"><input type="number" min="0" value={draft.price} onChange={(event) => updateMonthlyPrice(Number(event.target.value))} className="form-control" /></Field><Field label="Giảm giá năm (%)"><input type="number" min="0" max="100" value={draft.yearlyDiscountPercent || 0} onChange={(event) => updateDiscount(Math.min(100, Math.max(0, Number(event.target.value))))} className="form-control" /></Field><Field label="Giá theo năm"><input type="number" min="0" value={getYearlyPackagePrice(draft)} onChange={(event) => setDraft({ ...draft, yearlyPrice: Number(event.target.value) })} className="form-control" /></Field><Field label="Tiền tệ niêm yết"><BeautifulSelect value={draft.currency || reportCurrency} onChange={(event) => setDraft({ ...draft, currency: event.target.value as CurrencyCode })} className="form-control"><option value="VND">VND — Việt Nam Đồng</option><option value="USD">USD — US Dollar</option></BeautifulSelect></Field></div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><Field label="Giá theo tháng"><input type="number" min="0" value={draft.price} onChange={(event) => updateMonthlyPrice(Number(event.target.value))} className="form-control" /></Field><Field label="Giảm giá năm (%)"><input type="number" min="0" max="100" value={draft.yearlyDiscountPercent || 0} onChange={(event) => updateDiscount(Math.min(100, Math.max(0, Number(event.target.value))))} className="form-control" /></Field><Field label="Giá theo năm"><input type="number" min="0" value={getYearlyPackagePrice(draft)} onChange={(event) => setDraft({ ...draft, yearlyPrice: Number(event.target.value) })} className="form-control" /></Field><Field label="Tiền tệ niêm yết"><p className="form-control flex items-center bg-brand-surface-high/40">VND — Việt Nam Đồng</p></Field></div>
             <div className="flex items-start gap-2 rounded-xl border border-brand-outline/35 bg-brand-surface-lowest p-3 text-[10px] leading-relaxed text-brand-text-muted">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-primary" />
               <p>

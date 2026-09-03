@@ -91,7 +91,7 @@ import { formatCompactMoney, formatMoney as formatPlanMoney } from '../utils/mon
 import BranchCallDialog from './BranchCallDialog';
 import TenantAdminOverview from './TenantAdminOverview';
 import { nailModuleConfigs, type BrandInfo, type NailFormField, type NailModuleConfig, type NailPageId, type NailRow, type PaymentSettings, type UiTone } from './nailAdminData';
-import { Button, PageHeader } from './ui';
+import { Button, MockDataNotice, PageHeader } from './ui';
 import type { InterfaceLanguage } from './AccountPreferences';
 import { useT } from '../i18n';
 import { tenantStorageKey } from '../utils/tenantStorage';
@@ -164,15 +164,29 @@ interface NavItem {
 /* Nhãn tiếng Việt ở đây CHÍNH LÀ khoá từ điển (xem `src/i18n/translations.ts`):
    render thì bọc qua `t(...)`, còn những chỗ đọc navGroups ngoài React vẫn dùng
    được nhãn gốc mà không cần bảng ánh xạ thứ hai. */
+
+/*
+  ── Vì sao không mục nào còn `badge` ─────────────────────────────────────────────────
+  Năm mục từng mang huy hiệu viết cứng: Lịch hẹn `32`, Ghế & khu vực `7/14`, POS `5`,
+  Kho vật tư `18`, Vệ sinh `4`. Chúng là hằng số của thời dữ liệu mẫu, và vì thanh bên hiện
+  ở MỌI màn nên năm con số ấy theo người dùng đi khắp cổng, tự giới thiệu mình là số liệu của
+  tiệm đang mở. Buổi tổng duyệt ngày 20 lập một tiệm mới rồi đăng nhập vào: chưa có nhân viên,
+  chưa có lịch hẹn nào, thanh bên vẫn ghi "Lịch hẹn 32".
+
+  Không sửa bằng cách tìm số thật, vì bốn trong năm màn ấy **không có gì ở máy chủ để đếm** —
+  ghế, POS, kho và vệ sinh đều nằm ngoài phạm vi MVP (§9.3). Trường `badge` giữ lại vì màn Lịch
+  hẹn của chủ tiệm sẽ nối trong tương lai và lúc đó có số thật để điền; còn bây giờ thì bỏ
+  trống, đừng để một con số bịa đứng thay.
+*/
 const navGroups: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'Vận hành',
     items: [
       { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
       { id: 'branches', label: 'Chi nhánh', icon: Store },
-      { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays, badge: '32' },
-      { id: 'stations', label: 'Ghế & khu vực', icon: Armchair, badge: '7/14' },
-      { id: 'pos', label: 'POS & thanh toán', icon: CreditCard, badge: '5' }
+      { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays },
+      { id: 'stations', label: 'Ghế & khu vực', icon: Armchair },
+      { id: 'pos', label: 'POS & thanh toán', icon: CreditCard }
     ]
   },
   {
@@ -187,7 +201,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { id: 'staff', label: 'Nhân sự', icon: UserRound },
       { id: 'services', label: 'Dịch vụ & giá', icon: Sparkles },
-      { id: 'inventory', label: 'Kho vật tư', icon: Boxes, badge: '18' },
+      { id: 'inventory', label: 'Kho vật tư', icon: Boxes },
       { id: 'gallery', label: 'Màu & mẫu Nail', icon: Image }
     ]
   },
@@ -197,7 +211,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
       { id: 'announcements', label: 'Bản tin hệ thống', icon: Megaphone },
       { id: 'online', label: 'Đặt lịch online', icon: Globe2 },
       { id: 'finance', label: 'Thu & Chi', icon: WalletCards },
-      { id: 'sanitation', label: 'Vệ sinh & an toàn', icon: ShieldCheck, badge: '4' },
+      { id: 'sanitation', label: 'Vệ sinh & an toàn', icon: ShieldCheck },
       { id: 'reports', label: 'Báo cáo', icon: BarChart3 },
       { id: 'subscription', label: 'Gói đăng ký', icon: BadgePercent },
       { id: 'support', label: 'Trung tâm trợ giúp', icon: Headphones },
@@ -205,12 +219,51 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
     ]
   }
 ];
+/*
+  ── Dải nhãn "Dữ liệu mẫu" của cổng chủ tiệm ──────────────────────────────────────────
+  Quyết định 8 của lộ trình: màn nằm ngoài phạm vi 9 module lõi vẫn giữ `localStorage` và
+  vẫn đi qua được khi demo, nhưng phải nói ra rằng dữ liệu là mẫu. Cổng này là nơi hai loại
+  số đứng gần nhau nhất — Tổng quan và Báo cáo đọc doanh thu THẬT của tiệm, còn Thu & Chi
+  hay Kho vật tư thì bịa — nên thiếu nhãn là để người xem so hai con số không so được.
+
+  Một bảng ở nơi định tuyến thay vì rải `<MockDataNotice />` vào từng tệp màn: vị trí dải
+  nhãn giống nhau ở mọi màn, và nối xong một module thì xóa đúng một dòng ở đây.
+
+  Ba màn KHÔNG có mặt trong bảng vì đã tự mang nhãn riêng, đặt sát khối số mà nó nói tới:
+  `stations`, `pos` và `reports` — ở `reports` chỉ có tab Vận hành / Khách hàng / Nhân sự là
+  dữ liệu mẫu, còn tab Doanh thu là thật, nên một dải nhãn chung cho cả trang sẽ nói sai.
+*/
+const MOCK_DATA_REASONS: Record<string, string> = {
+  appointments: 'Màn lịch hẹn của chủ tiệm chưa nối máy chủ. Lịch hẹn THẬT nằm ở cổng lễ tân — danh sách khách ở đây không phải danh bạ khách thật của tiệm.',
+  loyalty: 'Thành viên & ưu đãi nằm ngoài phạm vi 9 module lõi (§9.4), nên hạng thẻ và điểm tích lũy ở đây chỉ lưu trên trình duyệt này.',
+  inventory: 'Kho vật tư nằm ngoài phạm vi backend MVP, nên tồn kho, định mức và phiếu nhập ở đây là dữ liệu mẫu.',
+  gallery: 'Thư viện màu & mẫu nail nằm ngoài phạm vi backend MVP, nên ảnh và bộ sưu tập chỉ lưu trên trình duyệt này.',
+  online: 'Trang đặt lịch trực tuyến nằm ngoài phạm vi backend MVP. Lịch đặt từ đây không đi vào bảng lịch hẹn thật của máy chủ.',
+  finance: 'Sổ Thu & Chi nằm ngoài phạm vi backend MVP. Doanh thu THẬT của tiệm nằm ở màn Báo cáo, tính theo tiền thực thu (BR-REV-001).',
+  sanitation: 'Vệ sinh & an toàn nằm ngoài phạm vi 9 module lõi, nên checklist và lịch khử khuẩn ở đây là dữ liệu mẫu.',
+  announcements: 'Bản tin hệ thống nằm ngoài phạm vi backend MVP, nên nội dung ở đây chỉ lưu trên trình duyệt này.',
+  subscription: 'Gói, hạn dùng và hóa đơn đăng ký đọc thật từ máy chủ. Nhưng module quản lý gói đã bị cắt khỏi MVP (§0 mục 13), nên nâng cấp và nộp chứng từ chỉ sửa bản sao trong bộ nhớ và mất khi tải lại trang.',
+  support: 'Trung tâm trợ giúp nằm ngoài phạm vi 9 module lõi, nên phiếu yêu cầu chỉ tồn tại trên trình duyệt này.',
+  settings: 'Cài đặt tiệm lưu trên trình duyệt này. Hồ sơ tiệm THẬT — tên, gói, hạn dùng — do máy chủ giữ và sửa ở cổng Superadmin.'
+};
+
+/*
+  Câu mở đầu riêng cho những màn KHÔNG phải dữ liệu mẫu.
+
+  Màn nào không có mặt ở đây thì giữ nguyên câu cảnh báo mặc định của `MockDataNotice`. Chỉ
+  màn Gói đăng ký cần câu khác: nó đọc gói, hạn dùng và hóa đơn thật từ máy chủ, chỉ có đường
+  ghi là cục bộ — dán nhãn "chưa nối máy chủ" lên đó là phủ nhận chính con số nó vừa hiện.
+*/
+const MOCK_DATA_TITLES: Record<string, string> = {
+  subscription: 'Phạm vi trang này.'
+};
+
 const FALLBACK_SUBSCRIPTION_PACKAGE = normalizeSubscriptionPackage({
   id: 'PKG-DEMO-PREMIUM',
   name: 'Premium',
   description: 'Gói vận hành chuyên nghiệp cho salon nhiều chi nhánh.',
-  price: 99,
-  currency: 'USD',
+  price: 2_500_000,
+  currency: 'VND',
   billingCycle: 'monthly',
   activeTenants: 1,
   features: [],
@@ -389,11 +442,20 @@ interface OverviewPageProps {
   staffLimit: number;
   onNavigate: (page: NailPageId) => void;
   onQuickCreate: (page: Exclude<NailPageId, 'overview' | 'subscription' | 'support'>) => void;
+  /**
+   * Tên chi nhánh đang chọn, đã phân giải sẵn ở cổng.
+   *
+   * Trước ngày 19 trang này tự dựng lại tên từ khóa lọc, với hai nhánh cứng 'Q1' và 'Q3' của
+   * thời dữ liệu mẫu. Từ ngày 9 khóa lọc là mã định danh bản ghi, nên mọi tiệm thật rơi vào
+   * nhánh cuối và tiêu đề biểu đồ đi ghi "Chi nhánh BRN-D33DC9464FD1". Cổng đã có sẵn câu trả
+   * lời đúng ở `currentActiveBranchTitle`; hai chỗ cùng trả lời một câu hỏi thì chỗ chép lại
+   * sẽ là chỗ sai trước.
+   */
+  branchName: string;
 }
-function OverviewPage({ branch, ownerName, tenantName, tenant, demoMode, invoiceCount, onToggleDemo, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
+function OverviewPage({ branch, branchName, ownerName, tenantName, tenant, demoMode, invoiceCount, onToggleDemo, planName, branchCount, branchLimit, staffCount, staffLimit, onNavigate, onQuickCreate }: OverviewPageProps) {
   const t = useT();
   const [revenueRange, setRevenueRange] = useState<OverviewRevenueRange>(7);
-  const branchName = branch === 'ALL' ? t('Tất cả chi nhánh') : branch === 'Q1' ? t('Chi nhánh Quận 1') : branch === 'Q3' ? t('Chi nhánh Quận 3') : `${t('Chi nhánh')} ${branch}`;
   const ownerShortName = ownerName.trim().split(/\s+/).pop() || ownerName;
   const branchQuota = formatTenantQuota(branchCount, branchLimit, 'branches');
   const staffQuota = formatTenantQuota(staffCount, staffLimit, 'staff');
@@ -976,7 +1038,7 @@ function SubscriptionPage({ tenantName, tenant, subscriptionPackage, availablePa
     ? getTenantLockedSubscriptionPrice([subscriptionPackage], tenant, billingCycle)
     : {
         price: billingCycle === 'yearly' ? getYearlyPackagePrice(subscriptionPackage) : subscriptionPackage.price,
-        currency: subscriptionPackage.currency || 'USD'
+        currency: subscriptionPackage.currency || 'VND'
       };
   const enabledCapabilityKeys = getEnabledTenantCapabilities(subscriptionPackage, availablePackages);
   const lockedCapabilities = SUBSCRIPTION_CAPABILITY_CATALOG.filter((item) => !enabledCapabilityKeys.has(item.key));
@@ -1284,6 +1346,25 @@ export default function NailTenantAdminPortal({
   };
 
   const [staffUsage, setStaffUsage] = useState(tenant?.staffCount ?? nailModuleConfigs.staff.rows.length);
+
+  /**
+   * Sĩ số nhân sự phải đi theo tiệm, không đứng yên ở con số lúc gắn component.
+   *
+   * `useState` chỉ chạy hàm khởi tạo **một lần**, và lần đó thì `tenant` vẫn đang tải nên
+   * `tenant?.staffCount` là `undefined` — ô hạn mức rơi về `nailModuleConfigs.staff.rows.length`,
+   * tức con số 5 của dữ liệu mẫu, rồi nằm lại đó vĩnh viễn. Buổi tổng duyệt ngày 20 bắt được:
+   * một tiệm vừa lập, chưa có ai, thanh bên vẫn ghi "Nhân sự 5/∞"; tiệm Nailé có 6 người cũng
+   * ghi đúng con số 5 ấy.
+   *
+   * Không chỉ là chuyện nhìn sai. Gói Basic cho tối đa 5 nhân viên, nên một tiệm Basic trống
+   * trơn sẽ thấy "5/5" kèm ô cảnh báo màu hổ phách — hệ thống tự nói với chủ tiệm rằng họ đã
+   * hết chỗ tuyển người trong khi chưa tuyển ai.
+   */
+  useEffect(() => {
+    if (demoMode || !tenant) return;
+
+    setStaffUsage(tenant.staffCount ?? 0);
+  }, [demoMode, tenant]);
   const [rowsByPage, setRowsByPage] = useState<Partial<Record<NailPageId, NailRow[]>>>(() => {
     const initialRows = Object.fromEntries(Object.entries(nailModuleConfigs).map(([id, config]) => [
       id,
@@ -1325,6 +1406,18 @@ export default function NailTenantAdminPortal({
     ? (rowsByPage.branches || nailModuleConfigs.branches.rows)
     : branchDirectory.branches.map(branchDtoToNailRow);
 
+  /*
+    Hạn mức chi nhánh đếm **chi nhánh đang hoạt động**, không đếm cả danh sách.
+
+    BR-BRANCH-005 cưỡng chế `max_salons` trên số chi nhánh đang mở; chi nhánh đã ngừng vẫn nằm
+    trong danh sách vì BR-DEL-001 không cho xóa cứng thứ gì. Đếm cả danh sách khiến ô hạn mức
+    ghi "6 / 3" cho một tiệm chỉ mở 2 chi nhánh — báo vượt hạn mức một cách sai sự thật, ngay
+    cạnh thanh bên đang ghi đúng "2/3".
+  */
+  const activeBranchCount = demoMode || !tenant
+    ? branchRows.length
+    : branchDirectory.branches.filter((item) => item.status === 'ACTIVE').length;
+
   /**
    * Chi nhánh đang chọn phải là một chi nhánh có thật của tiệm này.
    *
@@ -1333,8 +1426,20 @@ export default function NailTenantAdminPortal({
    * rỗng mà không nói vì sao; ở đây thì người dùng được hỏi lại đúng một câu.
    */
   useEffect(() => {
-    if (demoMode || !tenant || branchDirectory.loading || !branchDirectory.branches.length) return;
+    if (demoMode || !tenant || branchDirectory.loading) return;
     if (branch === 'ALL' || branchDirectory.branches.some((item) => item.id === branch)) return;
+
+    /*
+      Tiệm chưa có chi nhánh nào thì không có gì để hỏi lại — mở hộp chọn ra cũng chỉ có đúng
+      mục "Toàn hệ thống". Nhánh này trước đây thoát sớm ở điều kiện `!branches.length`, nên
+      khóa lọc nằm lại ở giá trị khởi tạo `'Q3'` của thời dữ liệu mẫu và thanh trên cùng đi
+      ghi "Chi nhánh: Chi nhánh Q3" cho một tiệm không có chi nhánh nào tên như vậy.
+    */
+    if (!branchDirectory.branches.length) {
+      window.sessionStorage.setItem('tenant-admin-chosen-branch', 'ALL');
+      setBranch('ALL');
+      return;
+    }
 
     window.sessionStorage.removeItem('tenant-admin-chosen-branch');
     setShowBranchModal(true);
@@ -1353,26 +1458,33 @@ export default function NailTenantAdminPortal({
       const displayCode = row.details.find((d) => d.label.includes('Mã chi nhánh'))?.value
         || row.branchCode
         || row.id.replace(/^BR-/, '');
-      const addressDetail = row.details.find((d) => d.label.includes('Địa chỉ'))?.value || row.subtitle;
-      const phoneDetail = row.details.find((d) => d.label.includes('Điện thoại'))?.value;
-      const managerDetail = row.cells[1] || '';
-      const staffDetail = row.cells[2] || '';
-      const revenueDetail = row.cells[3] || '';
-      const hoursDetail = row.cells[0] || '';
-      const stationsDetail = row.details.find((d) => d.label.includes('Số ghế'))?.value;
+      /*
+        Đọc theo NHÃN, không theo vị trí trong `cells`.
+
+        Bốn dòng cũ lấy `cells[0..3]` làm giờ mở cửa, quản lý, nhân sự và doanh thu. Đó là
+        thứ tự của thời dữ liệu mẫu; ngày 8 `branchDtoToNailRow` dựng lại `cells` thành
+        [mã, địa chỉ, điện thoại, vai trò] cho khớp sáu cột của bảng chi nhánh, còn chỗ này
+        thì không đổi theo. Kết quả là thẻ chọn chi nhánh ghi "QL: 95 Võ Văn Tần…",
+        "Nhân sự: 0283930001" và "DT: Chi nhánh chính" — mỗi dòng một sự thật sai, ngay trên
+        màn hình đầu tiên chủ tiệm nhìn thấy sau khi đăng nhập.
+
+        Quản lý phụ trách, sĩ số nhân sự, doanh thu và giờ mở cửa của một chi nhánh **không
+        có cột nào ở database** — chúng nằm trong mười một trường bị bỏ ở quyết định 36. Nên
+        cách sửa không phải là tìm lại đúng ô, mà là thôi hiển thị thứ hệ thống không biết,
+        và hiện đủ ba thứ nó có thật: địa chỉ, số điện thoại, vai trò chi nhánh.
+      */
+      const detail = (label: string) => row.details.find((d) => d.label.includes(label))?.value;
+      const address = detail('Địa chỉ') || row.subtitle;
 
       return {
         code: displayCode,
         id: row.branchCode || row.id,
         name: row.title,
-        subtitle: row.subtitle,
-        address: addressDetail,
-        phone: phoneDetail,
-        manager: managerDetail,
-        staff: staffDetail,
-        revenue: revenueDetail,
-        hours: hoursDetail,
-        stations: stationsDetail,
+        // `subtitle` của dòng chi nhánh chính là địa chỉ, nên bỏ đi để thẻ không in địa chỉ hai lần.
+        subtitle: row.subtitle === address ? undefined : row.subtitle,
+        address,
+        phone: detail('Điện thoại'),
+        role: detail('Vai trò'),
         status: row.badge,
         badgeTone: row.badgeTone,
         note: row.note,
@@ -1397,6 +1509,19 @@ export default function NailTenantAdminPortal({
     if (branch === 'ALL') return 'Tất cả chi nhánh';
     const found = branchSelectionList.find((b) => b.id === branch);
     return found ? found.name : `Chi nhánh ${branch}`;
+  }, [branch, branchSelectionList]);
+
+  /**
+   * Mã ngắn của chi nhánh đang chọn — thứ hiện trên huy hiệu ở thanh trên cùng.
+   *
+   * Huy hiệu ấy in thẳng khóa lọc, mà từ ngày 9 khóa lọc là mã định danh bản ghi. Với dữ liệu
+   * mẫu nó ra 'Q3' nên không ai thấy gì; với một chi nhánh vừa lập qua giao diện thì nó ra
+   * `BRN-64FDDBE766AE` nằm giữa thanh công cụ. Mã ngắn do tiệm tự đặt đã có sẵn trong danh
+   * sách chọn chi nhánh — dùng lại nó, và chỉ lùi về khóa khi tiệm bỏ trống mã.
+   */
+  const currentActiveBranchCode = useMemo(() => {
+    if (branch === 'ALL') return '';
+    return branchSelectionList.find((b) => b.id === branch)?.code || branch;
   }, [branch, branchSelectionList]);
 
   const currentConfig = activePage === 'overview' || activePage === 'subscription' || activePage === 'support' ? null : (nailModuleConfigs[activePage] || null);
@@ -1954,7 +2079,7 @@ export default function NailTenantAdminPortal({
               <span className="font-extrabold text-violet-950 max-w-[160px] truncate">{currentActiveBranchTitle}</span>
               {branch !== 'ALL' && (
                 <span className="rounded-md bg-violet-200/80 px-1.5 py-0.5 text-[10px] font-black text-violet-800 uppercase">
-                  {branch}
+                  {currentActiveBranchCode}
                 </span>
               )}
               <ChevronDown className="h-3.5 w-3.5 text-violet-500 group-hover:translate-y-0.5 transition-transform" />
@@ -1969,9 +2094,17 @@ export default function NailTenantAdminPortal({
                 className="relative flex h-10 w-10 items-center justify-center border border-slate-200 bg-white p-0 text-slate-600 shadow-sm rounded-xl cursor-pointer hover:bg-slate-50"
               >
                 <Bell className="h-4 w-4" />
-                {unreadAnnouncementsCount + 4 > 0 && (
+                {/*
+                  Số trên chuông phải bằng số thứ mở ra thấy được.
+
+                  Trước ngày 20 nó là `unreadAnnouncementsCount + 4`: hằng số 4 cộng thẳng vào,
+                  nên chuông không bao giờ về 0 — dọn hết việc, đọc hết bản tin, nó vẫn đỏ và
+                  vẫn ghi 4. Nay cộng đúng số việc còn lại, và cả hai vế đều là thứ người dùng
+                  bấm vào xem được.
+                */}
+                {unreadAnnouncementsCount + operationalTasks.length > 0 && (
                   <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
-                    {unreadAnnouncementsCount + 4}
+                    {unreadAnnouncementsCount + operationalTasks.length}
                   </span>
                 )}
               </button>
@@ -2011,7 +2144,9 @@ export default function NailTenantAdminPortal({
                         }`}
                       >
                         <span>Việc cần xử lý</span>
-                        <span className="bg-slate-400 text-white rounded-full px-1.5 py-0.2 text-[9px] font-bold">4</span>
+                        {operationalTasks.length > 0 && (
+                          <span className="bg-slate-400 text-white rounded-full px-1.5 py-0.2 text-[9px] font-bold">{operationalTasks.length}</span>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -2115,6 +2250,16 @@ export default function NailTenantAdminPortal({
                     </div>
                   ) : (
                     <div>
+                      {/*
+                        Bốn việc trong tab này là hằng số viết sẵn — không có bảng nào ở máy chủ
+                        sinh ra chúng. Ở mọi màn khác của cổng, nội dung mẫu đều phải tự khai bằng
+                        `MockDataNotice`; hộp thả xuống không có chỗ cho một dải nhãn đầy đủ nên
+                        nói gọn ngay trên đầu danh sách. Không nói thì bốn dòng ấy đọc như việc
+                        thật của tiệm — kể cả với một tiệm vừa lập, chưa có lịch hẹn nào.
+                      */}
+                      <p className="border-b border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-800">
+                        Dữ liệu mẫu — danh sách việc chưa nối máy chủ.
+                      </p>
                       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/50">
                         <span className="text-[11px] font-bold text-slate-500">
                           {operationalTasks.length} việc cần xử lý
@@ -2216,15 +2361,22 @@ export default function NailTenantAdminPortal({
                 <span className="truncate">Chi nhánh: <strong className="font-extrabold text-violet-900">{currentActiveBranchTitle}</strong></span>
                 {branch !== 'ALL' && (
                   <span className="rounded-md bg-violet-200/80 px-1.5 py-0.5 text-[10px] font-black text-violet-800 uppercase">
-                    {branch}
+                    {currentActiveBranchCode}
                   </span>
                 )}
               </div>
               <span className="shrink-0 text-xs font-bold text-violet-700 underline ml-2">Đổi chi nhánh</span>
             </button>
           </div>
+          {MOCK_DATA_REASONS[activePage] && (
+            <MockDataNotice
+              title={MOCK_DATA_TITLES[activePage]}
+              reason={MOCK_DATA_REASONS[activePage]}
+              className="mb-5"
+            />
+          )}
           {activePage === 'overview' ? (
-            <OverviewPage branch={branch} ownerName={account.displayName} tenantName={tenantName} tenant={tenant} demoMode={demoMode} invoiceCount={visibleInvoices.length} onToggleDemo={demoMode ? clearDemoData : loadDemoData} planName={currentPackage.name} branchCount={branchRows.length} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
+            <OverviewPage branch={branch} branchName={currentActiveBranchTitle} ownerName={account.displayName} tenantName={tenantName} tenant={tenant} demoMode={demoMode} invoiceCount={visibleInvoices.length} onToggleDemo={demoMode ? clearDemoData : loadDemoData} planName={currentPackage.name} branchCount={activeBranchCount} branchLimit={branchLimit} staffCount={staffUsage} staffLimit={staffLimit} onNavigate={navigate} onQuickCreate={openCreate} />
           ) : activePage === 'subscription' ? (
             <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-caption font-bold text-slate-400">Đang tải trung tâm gói đăng ký...</div>}>
               <TenantAdminSubscription
@@ -2233,7 +2385,7 @@ export default function NailTenantAdminPortal({
                 subscriptionPackage={currentPackage}
                 availablePackages={normalizedAvailablePackages}
                 invoices={visibleInvoices}
-                branchCount={branchRows.length}
+                branchCount={activeBranchCount}
                 staffCount={staffUsage}
                 roleLabel="Owner · Tenant Admin"
                 readOnlyReason={readOnlyReason}
@@ -2435,6 +2587,10 @@ export default function NailTenantAdminPortal({
                 accessMode={currentAccessMode}
                 readOnlyReason={readOnlyReason}
                 onNotify={setToast}
+                activeTenantId={demoMode ? null : tenant?.id}
+                activeBranchId={
+                  !demoMode && branchDirectory.branches.some((item) => item.id === branch) ? branch : null
+                }
               />
             </Suspense>
           ) : activePage === 'announcements' ? (

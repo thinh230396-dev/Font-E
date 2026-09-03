@@ -16,6 +16,15 @@ export interface DemoAccount {
    */
   branchCode?: string;
   branchName?: string;
+  /**
+   * Mã định danh chi nhánh — thêm ở ngày 14, và là thứ dùng để **lọc dữ liệu**.
+   *
+   * `branchCode` là nhãn người đọc ("Q3"); `branchId` là khóa mà mọi DTO của máy chủ mang
+   * theo (`BRN-LUMIERE-Q3`). Trước khi có ô này, cổng lễ tân lọc lịch hẹn và nhân viên bằng
+   * mã hiển thị trong khi dữ liệu thật mang khóa — không bản ghi nào khớp, và màn hình rỗng
+   * mà không báo lỗi gì cả. Đó là kiểu hỏng tệ nhất: trông như "hôm nay không có khách".
+   */
+  branchId?: string;
 }
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [

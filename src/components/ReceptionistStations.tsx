@@ -25,7 +25,8 @@ import BeautifulSelect from './BeautifulSelect';
 import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader, Pagination } from './ui';
 import { tenantStorageKey } from '../utils/tenantStorage';
 
-type BranchCode = 'Q1' | 'Q3';
+/** Mã chi nhánh do chủ tiệm tự đặt nên tập giá trị là mở — mở kiểu ở ngày 14, cùng lúc với cổng lễ tân. */
+type BranchCode = string;
 type StationArea = 'MANICURE' | 'PEDICURE' | 'VIP';
 type StationBaseStatus = 'READY' | 'CLEANING' | 'MAINTENANCE' | 'OUT_OF_SERVICE';
 type StationStatus = StationBaseStatus | 'OCCUPIED' | 'RESERVED';

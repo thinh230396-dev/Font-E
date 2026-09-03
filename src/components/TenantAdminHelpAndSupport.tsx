@@ -47,7 +47,6 @@ import {
 } from 'lucide-react';
 import type { DemoAccount } from '../auth/demoAccounts';
 import type { SubscriptionPackage, Tenant, Ticket, TicketHistoryEntry, TicketMessage } from '../types';
-import { recordAuditLog } from '../utils/auditLogs';
 import BeautifulSelect from './BeautifulSelect';
 import { Modal } from './ui';
 
@@ -463,17 +462,6 @@ export default function TenantAdminHelpAndSupport({
     setCreateAttachedFiles([]);
     setFormPriority('MEDIUM');
 
-    recordAuditLog({
-      eventCode: 'SUPPORT.TICKET.CREATED_BY_TENANT',
-      event: 'Gửi yêu cầu hỗ trợ tới Superadmin',
-      description: `${id}: Tenant "${tenantName}" gửi yêu cầu "${formSubject}".`,
-      severity: formPriority === 'URGENT' ? 'high' : 'medium',
-      status: 'success',
-      category: 'SUPPORT',
-      resource: `Ticket ${id}`,
-      resourceId: id,
-      method: 'CLIENT /tenant/support/tickets/create'
-    });
 
     onNotify?.(`Đã gửi yêu cầu hỗ trợ ${id} thành công. Kỹ thuật viên sẽ phản hồi trong vòng ${metrics.slaText}.`);
   };
@@ -522,17 +510,6 @@ export default function TenantAdminHelpAndSupport({
     setReplyBody('');
     setAttachedFiles([]);
 
-    recordAuditLog({
-      eventCode: 'SUPPORT.TICKET.TENANT_REPLIED',
-      event: 'Salon phản hồi ticket hỗ trợ',
-      description: `${selectedTicket.id}: Quản trị viên salon đã gửi tin nhắn phản hồi.`,
-      severity: 'low',
-      status: 'success',
-      category: 'SUPPORT',
-      resource: `Ticket ${selectedTicket.id}`,
-      resourceId: selectedTicket.id,
-      method: `CLIENT /tenant/support/tickets/${selectedTicket.id}/reply`
-    });
 
     onNotify?.('Đã gửi phản hồi thành công đến kỹ thuật viên.');
   };

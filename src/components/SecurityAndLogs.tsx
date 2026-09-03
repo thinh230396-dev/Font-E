@@ -30,20 +30,14 @@ import {
   XCircle
 } from 'lucide-react';
 import type { AdminSession, SystemLog } from '../types';
-import {
-  AUDIT_LOGS_STORAGE_KEY,
-  AUDIT_LOGS_UPDATED_EVENT,
-  loadAuditLogs,
-  recordAuditLog,
-  saveAuditLogs
-} from '../utils/auditLogs';
+import useAuditLogs from '../hooks/useAuditLogs';
 import {
   loadSystemSettings,
   SYSTEM_SETTINGS_STORAGE_KEY,
   SYSTEM_SETTINGS_UPDATED_EVENT,
   type SystemSettingsModel
 } from '../utils/systemSettings';
-import { Modal, useToast } from './ui';
+import { MockDataNotice, Modal, useToast } from './ui';
 
 interface SecurityAndLogsProps {
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
@@ -198,7 +192,24 @@ function MetricCard({ icon, label, value, detail, tone = 'primary' }: {
 export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }: SecurityAndLogsProps) {
   const showToast = useToast();
   const [activeTab, setActiveTab] = useState<PageTab>('overview');
-  const [logs, setLogs] = useState<SystemLog[]>(loadAuditLogs);
+  /*
+    ── Nhật ký kiểm toán: dữ liệu THẬT ───────────────────────────────────────────────────
+    Trước ngày 17 màn này đọc `localStorage`, và nó hiện **0 bản ghi** trong khi database đã
+    có hàng trăm dòng do máy chủ ghi từ ngày 3. Con số 0 ấy là loại sai tệ nhất: nó trông y
+    hệt một con số vừa đọc được, và nói với người xem rằng chưa có gì xảy ra trên hệ thống.
+
+    BR-AUD-001 nói rõ nhật ký ghi ở **máy chủ**; hàm ghi phía trình duyệt là bản ghi giả mạo
+    vì tên người thao tác và địa chỉ IP do chính trình duyệt điền. Ngày 18 đã gỡ cả 28 lời
+    gọi `recordAuditLog()` trên toàn dự án và xóa hẳn `utils/auditLogs.ts` — đúng thứ tự
+    nối trước, gỡ sau, vì gỡ trước là để lại một màn trống trong khi máy chủ vẫn đang ghi.
+
+    Cùng lúc đó, đường đồng bộ qua `localStorage` biến mất, và đó là điểm chính: listener
+    `AUDIT_LOGS_UPDATED_EVENT` cũ nhận sự kiện rồi gọi `setLogs` với mảng đọc từ trình duyệt,
+    nên chỉ cần bấm "Xuất CSV" ngay trên màn này là **cả bảng dữ liệu thật bị thay bằng vài
+    dòng của trình duyệt**. Nay danh sách đọc thẳng từ hook, không còn bản sao trong state để
+    ai đó ghi đè.
+  */
+  const { logs } = useAuditLogs(true);
   const [sessions, setSessions] = useState<AdminSession[]>(loadSessions);
   const [settings, setSettings] = useState<SystemSettingsModel>(loadSystemSettings);
   const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null);
@@ -210,25 +221,18 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    const handleAuditUpdate = (event: Event) => {
-      const next = (event as CustomEvent<SystemLog[]>).detail;
-      setLogs(next || loadAuditLogs());
-    };
     const handleSettingsUpdate = (event: Event) => {
       const next = (event as CustomEvent<SystemSettingsModel>).detail;
       setSettings(next || loadSystemSettings());
     };
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === AUDIT_LOGS_STORAGE_KEY) setLogs(loadAuditLogs());
       if (event.key === SYSTEM_SETTINGS_STORAGE_KEY) setSettings(loadSystemSettings());
       if (event.key === SESSIONS_STORAGE_KEY) setSessions(loadSessions());
     };
 
-    window.addEventListener(AUDIT_LOGS_UPDATED_EVENT, handleAuditUpdate);
     window.addEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSettingsUpdate);
     window.addEventListener('storage', handleStorage);
     return () => {
-      window.removeEventListener(AUDIT_LOGS_UPDATED_EVENT, handleAuditUpdate);
       window.removeEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSettingsUpdate);
       window.removeEventListener('storage', handleStorage);
     };
@@ -291,8 +295,6 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginatedLogs = filteredLogs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const retentionCutoff = Date.now() - settings.security.auditRetentionDays * 24 * 60 * 60 * 1000;
-  const expiredLogCount = logs.filter((log) => new Date(log.timestamp).getTime() < retentionCutoff).length;
 
   const handleExport = () => {
     const headers = ['Thời gian', 'Mã sự kiện', 'Sự kiện', 'Tác nhân', 'Vai trò', 'IP', 'Vị trí', 'Danh mục', 'Tài nguyên', 'Kết quả', 'Mức độ', 'Request ID', 'Mô tả'];
@@ -320,42 +322,14 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    recordAuditLog({
-      eventCode: 'DATA.AUDIT_LOG.EXPORTED',
-      event: 'Xuất nhật ký kiểm toán',
-      description: `Đã xuất ${filteredLogs.length} bản ghi theo bộ lọc hiện tại.`,
-      severity: 'medium',
-      status: 'success',
-      category: 'DATA',
-      resource: 'Nhật ký kiểm toán',
-      method: 'CLIENT /audit-logs/export',
-      metadata: { exportedRows: filteredLogs.length, format: 'csv' }
-    });
   };
 
-  const handlePurgeExpiredLogs = () => {
-    if (expiredLogCount === 0) return;
-    showConfirm(
-      'Dọn nhật ký hết thời hạn?',
-      `${expiredLogCount} bản ghi đã quá chính sách lưu ${settings.security.auditRetentionDays} ngày. Bản ghi còn thời hạn sẽ được giữ nguyên; thao tác dọn sẽ được ghi lại vào audit trail.`,
-      () => {
-        const retainedLogs = loadAuditLogs().filter((log) => new Date(log.timestamp).getTime() >= retentionCutoff);
-        saveAuditLogs(retainedLogs);
-        recordAuditLog({
-          eventCode: 'DATA.AUDIT_LOG.RETENTION_PURGE',
-          event: 'Dọn nhật ký hết thời hạn',
-          description: `Đã dọn ${expiredLogCount} bản ghi quá thời hạn lưu ${settings.security.auditRetentionDays} ngày.`,
-          severity: 'medium',
-          status: 'success',
-          category: 'DATA',
-          resource: 'Nhật ký kiểm toán',
-          method: 'CLIENT /audit-logs/retention-purge',
-          metadata: { deletedRows: expiredLogCount, retentionDays: settings.security.auditRetentionDays }
-        });
-        showToast('Đã dọn các nhật ký hết thời hạn lưu.');
-      }
-    );
-  };
+  /* Ở đây từng có nút "Dọn log hết hạn". Nó ĐẾM trên danh sách đang hiển thị — nay là dữ
+     liệu máy chủ — nhưng XÓA trên `localStorage`, nên sau khi màn này nối máy chủ ở ngày 17
+     thì nó báo "đã dọn N bản ghi" rồi không dọn được gì mà người dùng nhìn thấy. Gỡ ở ngày
+     18 thay vì sửa: BR-DEL-001 không cho xóa cứng, nhật ký kiểm toán lại là thứ ít được phép
+     xóa nhất, và máy chủ chưa có endpoint dọn theo chính sách lưu trữ — nên nút này không có
+     đường nào đi tới sự thật. Chính sách lưu trữ vẫn hiện ở tab Tổng quan bảo mật. */
 
   const revokeSession = (session: AdminSession) => {
     if (session.isCurrent || session.status === 'revoked') return;
@@ -366,17 +340,6 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
         const next = sessions.map((item) => item.id === session.id ? { ...item, status: 'revoked' as const } : item);
         setSessions(next);
         saveSessions(next);
-        recordAuditLog({
-          eventCode: 'SECURITY.SESSION.REVOKED',
-          event: 'Thu hồi phiên đăng nhập',
-          description: `Đã thu hồi phiên ${session.id} trên ${session.device}.`,
-          severity: 'medium',
-          status: 'success',
-          category: 'SECURITY',
-          resource: 'Phiên quản trị',
-          resourceId: session.id,
-          metadata: { targetIp: session.ip }
-        });
         showToast('Đã thu hồi phiên đăng nhập.');
       }
     );
@@ -392,16 +355,6 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
         const next = sessions.map((session) => session.isCurrent ? session : { ...session, status: 'revoked' as const });
         setSessions(next);
         saveSessions(next);
-        recordAuditLog({
-          eventCode: 'SECURITY.SESSIONS.REVOKED_ALL',
-          event: 'Thu hồi tất cả phiên khác',
-          description: `Đã thu hồi ${revocable.length} phiên quản trị ngoài phiên hiện tại.`,
-          severity: 'high',
-          status: 'success',
-          category: 'SECURITY',
-          resource: 'Phiên quản trị',
-          metadata: { revokedSessions: revocable.length }
-        });
         showToast('Đã đăng xuất khỏi tất cả thiết bị khác.');
       }
     );
@@ -624,9 +577,6 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
                 <button type="button" onClick={() => { setSearchQuery(''); setCategoryFilter('ALL'); setStatusFilter('ALL'); setSeverityFilter('ALL'); setDateRange('7d'); }} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-outline/45 bg-brand-surface-high px-3 py-1.5 text-[10px] font-bold text-brand-text cursor-pointer">
                   <RefreshCw className="h-3.5 w-3.5" /> Đặt lại bộ lọc
                 </button>
-                <button type="button" onClick={handlePurgeExpiredLogs} disabled={expiredLogCount === 0} title={expiredLogCount === 0 ? 'Không có bản ghi quá thời hạn lưu' : undefined} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-outline/45 bg-brand-surface-high px-3 py-1.5 text-[10px] font-bold text-brand-text cursor-pointer disabled:cursor-not-allowed">
-                  <Database className="h-3.5 w-3.5" /> Dọn log hết hạn ({expiredLogCount})
-                </button>
               </div>
             </div>
           </div>
@@ -691,6 +641,13 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
 
       {activeTab === 'sessions' && (
         <div className="space-y-5">
+          {/*
+            §9.2 để phần thu hồi phiên ngoài phạm vi vì nghiệp vụ của nó chưa được định nghĩa,
+            và §9.4 bỏ hẳn "thu hồi phiên từ xa". Máy chủ CÓ bảng `AppSessions` thật, nhưng
+            không có endpoint đọc — nên bảng dưới đây rỗng, và một bảng rỗng không nói gì thì
+            trông y hệt "chưa ai từng đăng nhập".
+          */}
+          <MockDataNotice reason="Danh sách phiên đăng nhập nằm ngoài phạm vi backend MVP (§9.2). Máy chủ vẫn quản phiên thật trong bảng AppSessions; chỉ là chưa có màn đọc." />
           <div className="flex flex-col gap-3 rounded-xl border border-brand-outline/40 bg-brand-surface p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-bold text-brand-text">Phiên đăng nhập Superadmin</h2>

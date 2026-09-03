@@ -35,9 +35,9 @@ import {
   Save,
   Info,
 } from 'lucide-react';
-import { Branch, SubscriptionPackage, Tenant, SubscriptionPackageName, TenantStatus } from '../types';
+import { Branch, CurrencyCode, SubscriptionPackage, Tenant, SubscriptionPackageName, TenantStatus } from '../types';
 import { BRANCH_MODEL_OPTIONS, generateBranchCode, getBranchModelLabel, getBranchStatusLabel, normalizeBranch, normalizeTenantBranches, validateBranchDraft } from '../utils/branches';
-import { convertMoney, formatMoney, normalizeCurrency } from '../utils/money';
+import { formatMoney, normalizeCurrency } from '../utils/money';
 import { inferPaymentGateway } from '../utils/invoicePayments';
 import {
   getSellablePackages,
@@ -72,7 +72,7 @@ interface TenantExtraDetails {
   cancellationRate: number;
   timezone: string;
   country: string;
-  currency: 'USD' | 'VND';
+  currency: CurrencyCode;
   defaultLanguage: 'Vietnamese' | 'English';
   allowOnlineBooking: boolean;
   paymentGatewayConfigured: boolean;
@@ -156,7 +156,7 @@ const getTenantExtraDetails = (tenant: Tenant, packages: SubscriptionPackage[]):
     cancellationRate: 2.4,
     timezone: tenant.timezone || defaultTimezone,
     country: inferredCountry,
-    currency: tenant.currency || (inferredCountry === 'Vietnam' ? 'VND' : 'USD'),
+    currency: normalizeCurrency(tenant.currency),
     defaultLanguage: tenant.defaultLanguage || (inferredCountry === 'Vietnam' ? 'Vietnamese' : 'English'),
     allowOnlineBooking: tenant.allowOnlineBooking !== undefined ? tenant.allowOnlineBooking : true,
     paymentGatewayConfigured: tenant.paymentGatewayConfigured !== undefined ? tenant.paymentGatewayConfigured : true,
@@ -337,11 +337,9 @@ const getTenantExtraDetails = (tenant: Tenant, packages: SubscriptionPackage[]):
 const getRenewPrice = (
   packages: SubscriptionPackage[],
   tenant: Tenant,
-  duration: '1_month' | '3_months' | '6_months' | '1_year',
-  targetCurrency: 'USD' | 'VND'
+  duration: '1_month' | '3_months' | '6_months' | '1_year'
 ) => {
   const pkg = getSubscriptionPackage(packages, tenant.packageName);
-  const sourceCurrency = tenant.subscriptionCurrency || pkg?.currency || 'USD';
   const lockedPrice = tenant.subscriptionPrice;
   const monthlyBase = lockedPrice !== undefined
     ? (tenant.billingCycle === 'yearly' ? lockedPrice / 12 : lockedPrice)
@@ -351,7 +349,7 @@ const getRenewPrice = (
         ? lockedPrice
         : (pkg ? getYearlyPackagePrice(pkg) : monthlyBase * 12))
     : monthlyBase * (duration === '3_months' ? 3 : duration === '6_months' ? 6 : 1);
-  return convertMoney(amount, sourceCurrency, targetCurrency);
+  return amount;
 };
 
 const getPackageChangeBlockReason = (
@@ -473,7 +471,7 @@ export default function TenantDetailModal({
 
   // Local configs that can be updated in real-time
   const [allowOnlineBooking, setAllowOnlineBooking] = useState(tenant.allowOnlineBooking !== undefined ? tenant.allowOnlineBooking : true);
-  const [currency, setCurrency] = useState<'USD' | 'VND'>(tenant.currency || 'VND');
+  const [currency, setCurrency] = useState<CurrencyCode>(normalizeCurrency(tenant.currency));
   const [defaultLanguage, setDefaultLanguage] = useState<'Vietnamese' | 'English'>(tenant.defaultLanguage || 'Vietnamese');
   const [internalNotes, setInternalNotes] = useState(tenant.internalNotes || '');
   const [paymentGatewayConfigured, setPaymentGatewayConfigured] = useState(tenant.paymentGatewayConfigured !== undefined ? tenant.paymentGatewayConfigured : true);
@@ -772,7 +770,7 @@ export default function TenantDetailModal({
         const newDaysRemaining = currentDaysRemaining + addedDays;
 
         const renewCurrency = normalizeCurrency(tenant.currency);
-        const renewAmount = getRenewPrice(packages, tenant, duration, renewCurrency);
+        const renewAmount = getRenewPrice(packages, tenant, duration);
 
         const updatedFields: any = {
           daysRemaining: newDaysRemaining,
@@ -878,15 +876,10 @@ export default function TenantDetailModal({
         }
 
         const nextPackage = getSubscriptionPackage(packages, payload);
-        const changeCurrency = normalizeCurrency(tenant.currency);
         const selectedPrice = nextPackage
           ? (billingCycle === 'yearly' ? getYearlyPackagePrice(nextPackage) : nextPackage.price)
           : getSubscriptionPrice(packages, payload, billingCycle).price;
-        const changeAmount = convertMoney(
-          selectedPrice,
-          nextPackage?.currency || 'USD',
-          changeCurrency
-        );
+        const changeAmount = selectedPrice;
         const invId = `INV-CHG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
         const durationText = billingCycle === 'yearly' ? '1 năm' : '1 tháng';
         const methodText = paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : paymentMethod === 'cash' ? 'Tiền mặt' : paymentMethod === 'card' ? 'Thẻ' : 'Khác';
@@ -912,7 +905,7 @@ export default function TenantDetailModal({
                 packageVersion: nextPackage?.version || 1,
                 billingCycle,
                 price: selectedPrice,
-                currency: nextPackage?.currency || 'USD',
+                currency: nextPackage?.currency || 'VND',
                 effectiveAt: scheduledEffectiveAt,
                 requestedAt: new Date().toISOString()
               }
@@ -929,7 +922,7 @@ export default function TenantDetailModal({
               subscriptionPackageId: nextPackage?.id,
               subscriptionPackageVersion: nextPackage?.version || 1,
               subscriptionPrice: selectedPrice,
-              subscriptionCurrency: nextPackage?.currency || 'USD',
+              subscriptionCurrency: nextPackage?.currency || 'VND',
               subscriptionStartedAt: todayIso,
               subscriptionRenewsAt: getExpirationDateIso(remainingDays),
               pendingSubscriptionChange: undefined,
@@ -957,7 +950,7 @@ export default function TenantDetailModal({
             : `Đổi gói sang ${payload} (${durationText})`,
           dueDate: effectiveDate === 'next_cycle' ? scheduledEffectiveAt : getExpirationDateIso(remainingDays),
           amount: changeAmount,
-          currency: changeCurrency,
+          currency: normalizeCurrency(tenant.currency),
           status: invoiceStatus === 'PAID' ? 'Đã thanh toán' : 'Đang chờ',
           paymentMethod: methodText,
           paymentGateway: inferPaymentGateway(methodText),
@@ -1121,7 +1114,7 @@ export default function TenantDetailModal({
                   const newExpDateStr = getExpirationDateStr(newDaysRemaining);
 
                   const targetCurrency = normalizeCurrency(tenant.currency);
-                  const price = getRenewPrice(packages, tenant, renewDuration, targetCurrency);
+                  const price = getRenewPrice(packages, tenant, renewDuration);
                   const amountFormatted = formatMoney(price, targetCurrency);
 
                   const methodText = renewPaymentMethod === 'bank_transfer' ? 'Chuyển khoản' : renewPaymentMethod === 'cash' ? 'Tiền mặt' : renewPaymentMethod === 'card' ? 'Thẻ' : 'Khác';
@@ -1283,10 +1276,7 @@ export default function TenantDetailModal({
                   {selectablePackages.map((packageOption) => {
                     const pkg = packageOption.name;
                     const isSelected = selectedPlan === pkg;
-                    const priceFormatted = formatMoney(
-                      convertMoney(packageOption.price, packageOption.currency, tenant.currency),
-                      tenant.currency
-                    );
+                    const priceFormatted = formatMoney(packageOption.price, tenant.currency);
                     const blockReason = pkg === tenant.packageName ? null : getPackageChangeBlockReason(tenant, pkg, packages);
                     
                     return (
@@ -1477,7 +1467,7 @@ export default function TenantDetailModal({
                   {(['1_month', '3_months', '6_months', '1_year'] as const).map((duration) => {
                     const isSelected = renewDuration === duration;
                     const targetCurrency = normalizeCurrency(tenant.currency);
-                    const price = getRenewPrice(packages, tenant, duration, targetCurrency);
+                    const price = getRenewPrice(packages, tenant, duration);
                     const priceFormatted = formatMoney(price, targetCurrency);
                     
                     let durationLabel = '1 tháng';
@@ -1522,7 +1512,7 @@ export default function TenantDetailModal({
                   <span className="text-brand-text-muted">Tổng cộng thanh toán:</span>
                   <span className="text-sm text-brand-primary font-black">
                     {formatMoney(
-                      getRenewPrice(packages, tenant, renewDuration, normalizeCurrency(tenant.currency)),
+                      getRenewPrice(packages, tenant, renewDuration),
                       normalizeCurrency(tenant.currency)
                     )}
                   </span>
@@ -2310,14 +2300,8 @@ export default function TenantDetailModal({
                           <p className="font-bold text-brand-text">Đơn vị tiền tệ chính</p>
                           <p className="text-[10px] text-brand-text-muted mt-0.5">Hệ thống tính hóa đơn và thanh toán khách hàng.</p>
                         </div>
-                        <BeautifulSelect
-                          value={currency} 
-                          onChange={(e) => setCurrency(e.target.value as 'USD' | 'VND')}
-                          className="bg-brand-surface border border-brand-outline rounded-lg px-2.5 py-1.5 text-xs text-brand-text w-full cursor-pointer focus:outline-none focus:border-brand-primary"
-                        >
-                          <option value="VND">VND (đ) - Tiếng Việt</option>
-                          <option value="USD">USD ($) - Dollar Mỹ</option>
-                        </BeautifulSelect>
+                        {/* Ô chọn bỏ ở ngày 18 cùng USD — BR-VAL-003: VND, số nguyên. */}
+                        <p className="px-2.5 py-1.5 text-xs font-semibold text-brand-text">VND (₫) — Việt Nam Đồng</p>
                       </div>
 
                       {/* Language Selection */}

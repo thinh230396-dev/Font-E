@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { PageHeader, Pagination } from './ui';
+import { MockDataNotice, PageHeader, Pagination } from './ui';
 import { getTenantAdminInitialData } from '../utils/mockDataReset';
 import {
   AlertCircle, ArrowDownLeft, ArrowDownRight, ArrowUpRight, Banknote, Boxes, Check, ChevronRight,
@@ -1099,6 +1099,16 @@ export default function TenantAdminPayments({ searchQuery, onSearchQueryChange, 
   const invoiceInputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-semibold text-slate-800 outline-none focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100';
 
   return <div className="tenant-admin-payments space-y-5">
+    {/*
+      ⚠️ Màn này hiện "Doanh thu thuần" và "Còn phải thu" từ dữ liệu mẫu trên trình duyệt, và
+      chúng **mâu thuẫn thẳng** với màn Báo cáo cùng cổng — nơi đọc dữ liệu thật từ ngày 16.
+      Dải nhãn thêm ở ngày 17 để người đọc biết con số nào tin được.
+
+      Nối màn này vào `/api/sales-invoices` là việc lớn hơn hẳn một dải nhãn: nó có sổ quỹ,
+      phiếu chi và rút két — ba thứ thuộc module Thu–Chi mà BR-REV-007 bỏ hẳn khỏi backend.
+    */}
+    <MockDataNotice reason="Số liệu đối soát ở đây là dữ liệu mẫu trên trình duyệt. Doanh thu thật của tiệm nằm ở màn Báo cáo, tính theo tiền thực thu (BR-REV-001)." />
+
     <PageHeader
         title={isReceptionist ? 'Hóa đơn & Thu ngân' : 'Thanh toán & đối soát'}
         actions={(

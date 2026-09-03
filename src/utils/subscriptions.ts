@@ -7,10 +7,18 @@ import {
   Tenant
 } from '../types';
 
+/**
+ * Giá rơi về khi một bản ghi gói cũ trong `localStorage` không mang đủ trường.
+ *
+ * Ba con số này **chép từ bộ nạp dữ liệu mẫu của máy chủ** —
+ * `NailManagement.Infrastructure/Persistence/Seed/DemoSeedCatalog.cs` — chứ không tự đặt.
+ * Trước ngày 18 chúng là 49 / 99 / 249 USD, và giữ nguyên là để một màn hình rơi về giá
+ * dự phòng hiện `1.200.000 ₫` cạnh một màn khác hiện `49 ₫` cho cùng một gói.
+ */
 const LEGACY_PACKAGE_DEFAULTS: Record<string, Pick<SubscriptionPackage, 'price' | 'currency' | 'billingCycle' | 'maxStaff' | 'maxSalons'>> = {
-  Basic: { price: 49, currency: 'USD', billingCycle: 'monthly', maxStaff: 5, maxSalons: 1 },
-  Premium: { price: 99, currency: 'USD', billingCycle: 'monthly', maxStaff: 15, maxSalons: 3 },
-  Enterprise: { price: 249, currency: 'USD', billingCycle: 'monthly', maxStaff: 999, maxSalons: 99 }
+  Basic: { price: 1_200_000, currency: 'VND', billingCycle: 'monthly', maxStaff: 5, maxSalons: 1 },
+  Premium: { price: 2_500_000, currency: 'VND', billingCycle: 'monthly', maxStaff: 15, maxSalons: 3 },
+  Enterprise: { price: 6_200_000, currency: 'VND', billingCycle: 'monthly', maxStaff: 999, maxSalons: 99 }
 };
 
 export const SUBSCRIPTION_CAPABILITY_CATALOG: Array<{ key: string; label: string }> = [
@@ -97,7 +105,7 @@ const inferCapabilities = (features: string[]): SubscriptionCapability[] => {
 };
 
 export const normalizeSubscriptionPackage = (pkg: SubscriptionPackage): SubscriptionPackage => {
-  const currency = pkg.currency || 'USD';
+  const currency = pkg.currency || 'VND';
   const discount = pkg.yearlyDiscountPercent ?? 20;
   const yearlyPrice = pkg.yearlyPrice ?? Number((pkg.price * 12 * (1 - discount / 100)).toFixed(2));
   const profile = PACKAGE_PROFILES[pkg.name];
@@ -144,6 +152,42 @@ export const getSubscriptionPackage = (
   packageName: SubscriptionPackageName
 ) => packages.find((pkg) => pkg.name === packageName);
 
+/**
+ * Dựng gói dịch vụ **từ chính hồ sơ tiệm**, cho lúc không có bảng giá để tra.
+ *
+ * `GET /api/packages` chỉ mở cho Superadmin — cố ý, vì module quản lý gói đã bị cắt khỏi MVP và
+ * endpoint ấy tồn tại chỉ để màn lập tiệm có giá thật. Hệ quả là cổng chủ tiệm **không bao giờ**
+ * có bảng giá: `getSubscriptionPackageForTenant` không tìm thấy gì, và trước ngày 20 mọi thứ rơi
+ * về một hằng số Premium viết sẵn.
+ *
+ * Cái giá của lần rơi ấy không chỉ là một cái nhãn sai. Gói quyết định **hạn mức và tính năng**:
+ * một tiệm Enterprise bị báo "Gói Premium", chỉ được mở 3 chi nhánh thay vì 99, và thấy Kho vật
+ * tư với Vệ sinh & an toàn bị khóa dù đã trả tiền cho chúng. Chiều ngược lại còn tệ hơn: một
+ * tiệm Basic được cổng cho phép mở tới 3 chi nhánh, rồi máy chủ từ chối ở chi nhánh thứ hai.
+ *
+ * Máy chủ **đã gửi đủ** mọi thứ cần thiết trên `GET /api/tenants/me`: tên gói, mã gói, giá đã
+ * chốt, `maxSalons`, `maxStaff`. Danh sách quyền suy ra từ tên gói qua `PACKAGE_PROFILES` —
+ * cùng bậc quyền mà `session.tenant.capabilities` của máy chủ trả về.
+ */
+export const buildSubscriptionPackageFromTenant = (
+  tenant: Pick<Tenant,
+    'packageName' | 'subscriptionPackageId' | 'subscriptionPrice' | 'subscriptionPackageVersion' | 'maxSalons' | 'maxStaff'>
+): SubscriptionPackage => normalizeSubscriptionPackage({
+  id: tenant.subscriptionPackageId || `PKG-${tenant.packageName.toUpperCase()}`,
+  name: tenant.packageName,
+  price: tenant.subscriptionPrice ?? 0,
+  currency: 'VND',
+  billingCycle: 'monthly',
+  activeTenants: 1,
+  features: [],
+  // Hạn mức phải là của tiệm, không phải của một bậc gói đoán ra: BR-SUB-004 chốt gói theo
+  // phiên bản tại thời điểm ký, nên một tiệm cũ có thể mang hạn mức khác bảng giá hôm nay.
+  maxSalons: tenant.maxSalons ?? 1,
+  maxStaff: tenant.maxStaff ?? 0,
+  version: tenant.subscriptionPackageVersion,
+  color: '#7c3aed'
+});
+
 export const getSubscriptionPackageForTenant = (
   packages: SubscriptionPackage[],
   tenant: Pick<Tenant, 'subscriptionPackageId' | 'packageName'>
@@ -180,7 +224,7 @@ export const getSubscriptionPrice = (
     price: selectedPackage
       ? (billingCycle === 'yearly' ? getYearlyPackagePrice(selectedPackage) : selectedPackage.price)
       : (fallback?.price ?? 0) * (billingCycle === 'yearly' ? 12 : 1),
-    currency: selectedPackage?.currency ?? fallback?.currency ?? 'USD'
+    currency: selectedPackage?.currency ?? fallback?.currency ?? 'VND'
   };
 };
 

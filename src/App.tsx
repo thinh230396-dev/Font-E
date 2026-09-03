@@ -7,9 +7,10 @@ import {
   INITIAL_INVOICES
 } from './data';
 import { Tenant, SubscriptionPackage, SystemAlert, Invoice, TenantStatus, TenantAdminAccount, Ticket, PackageUpgradeRequest, SystemAnnouncement } from './types';
-import { convertMoney, normalizeCurrency } from './utils/money';
+import { normalizeCurrency } from './utils/money';
 import {
   getSubscriptionPackage,
+  buildSubscriptionPackageFromTenant,
   getSubscriptionPackageForTenant,
   getSubscriptionPrice,
   getYearlyPackagePrice,
@@ -22,11 +23,10 @@ import {
   SYSTEM_SETTINGS_UPDATED_EVENT,
   type SystemSettingsModel
 } from './utils/systemSettings';
-import { recordAuditLog } from './utils/auditLogs';
 import { inferPaymentGateway, normalizeInvoicePaymentData } from './utils/invoicePayments';
 import { SUPPORT_MOCK_TICKETS } from './mockData/supportTickets';
 import useGlobalModalGuard from './hooks/useGlobalModalGuard';
-import { Button, Modal as UiModal, useToast } from './components/ui';
+import { Button, MockDataNotice, Modal as UiModal, useToast } from './components/ui';
 import {
   deletePackageUpgradeRequest,
   loadPackageUpgradeRequests,
@@ -39,6 +39,7 @@ import { setTenantStorageScope } from './utils/tenantStorage';
 import { describeApiError } from './services/apiClient';
 import useMyTenant from './hooks/useMyTenant';
 import useTenants from './hooks/useTenants';
+import useSubscriptionInvoices from './hooks/useSubscriptionInvoices';
 import type { CreateTenantInput, UpdateTenantInput } from './services/tenants';
 import {
   getSession,
@@ -126,7 +127,6 @@ const getBillingCycleDays = (billingCycle?: 'monthly' | 'yearly') => {
   return billingCycle === 'yearly' ? 365 : 30;
 };
 
-const AUDIT_SENSITIVE_FIELDS = new Set(['adminTempPassword', 'tempPassword', 'password', 'token']);
 const LEGACY_MOCK_SUPPORT_TICKET_IDS = new Set([
   'TKT-2026-0716-018',
   'TKT-2026-0716-017',
@@ -138,22 +138,6 @@ const LEGACY_MOCK_SUPPORT_TICKET_IDS = new Set([
   'TKT-2026-0716-011'
 ]);
 
-const toAuditValue = (value: unknown) => {
-  if (value === undefined || value === null || value === '') return '—';
-  if (typeof value === 'object') return '[dữ liệu có cấu trúc]';
-  return String(value);
-};
-
-const buildAuditChanges = <T extends object>(current: T, patch: Partial<T>) => (
-  Object.entries(patch)
-    .filter(([field, value]) => !AUDIT_SENSITIVE_FIELDS.has(field) && value !== (current as Record<string, unknown>)[field])
-    .slice(0, 12)
-    .map(([field, value]) => ({
-      field,
-      before: toAuditValue((current as Record<string, unknown>)[field]),
-      after: toAuditValue(value)
-    }))
-);
 
 const getTenantSubscriptionRenewalDate = (tenant: Tenant) => {
   if (tenant.subscriptionRenewsAt) return tenant.subscriptionRenewsAt;
@@ -242,7 +226,8 @@ export default function App() {
         // Chỗ ép kiểu ở đây đã bỏ được từ ngày 6: `DemoAccount.branchCode` nay là `string`,
         // đúng với việc mã chi nhánh do người dùng tự đặt và có tập giá trị mở.
         branchCode: session.branch?.code,
-        branchName: session.branch?.name
+        branchName: session.branch?.name,
+        branchId: session.branch?.id
       }
     : null;
 
@@ -301,13 +286,32 @@ export default function App() {
     [apiPackages, tenants]
   );
   const [alerts, setAlerts] = useState<SystemAlert[]>(loadAlertsWithOneTimeMocks);
-  const [invoices, setInvoices] = useState<Invoice[]>(() => {
-    const existingInvoices = loadLocalStorageData<Invoice[]>('invoices', []);
-    const sourceInvoices = existingInvoices.length > 0
-      ? existingInvoices
-      : loadLocalStorageData<Invoice[]>('invoices_v2', INITIAL_INVOICES);
-    return dedupeInvoices(sourceInvoices.map((invoice) => normalizeInvoicePaymentData(normalizeInvoiceDueDate(invoice))));
-  });
+  /*
+    ── Hóa đơn đăng ký: nền là dữ liệu THẬT, từ ngày 17 ──────────────────────────────────
+    Trước đây state này khởi tạo từ `INITIAL_INVOICES` trong `localStorage`, và màn Tổng quan
+    của Superadmin cộng chúng lại thành "Doanh thu nền tảng đã thu". Con số ra 86.353.000₫
+    trong khi database chỉ có 11.100.000₫ thật — đúng thứ mà BR-REV-008 đã cảnh báo sẵn:
+    *"Dữ liệu mẫu hiện tại đang sai ngữ cảnh này."*
+
+    Nay nền là API. Các thao tác ghi của module gói đăng ký — đánh dấu đã thu, nộp chứng từ,
+    duyệt nâng cấp — vẫn sửa mảng trong bộ nhớ như cũ, vì module ấy đã bị cắt khỏi MVP (§0 mục
+    13) và màn hình của nó đã mang dải nhãn dữ liệu mẫu. Tải lại trang thì chúng biến mất và
+    sự thật của máy chủ quay về, đó là hành vi đúng cho một module chỉ để trình diễn.
+
+    Cố ý KHÔNG còn ghi xuống `localStorage`: giữ lại thì lần tải sau sẽ đọc bản chụp cũ đè lên
+    dữ liệu máy chủ, và con số bịa quay lại theo đúng con đường vừa đi chặn.
+  */
+  const subscriptionInvoiceBook = useSubscriptionInvoices(
+    session?.account.role === 'SUPERADMIN'
+  );
+
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  useEffect(() => {
+    setInvoices(dedupeInvoices(subscriptionInvoiceBook.invoices.map(
+      (invoice) => normalizeInvoicePaymentData(normalizeInvoiceDueDate(invoice))
+    )));
+  }, [subscriptionInvoiceBook.invoices]);
   const [upgradeRequests, setUpgradeRequests] = useState<PackageUpgradeRequest[]>(loadPackageUpgradeRequests);
   const [tickets, setTickets] = useState<Ticket[]>(() => {
     const storedTickets = loadLocalStorageData<Ticket[]>('support_tickets', [])
@@ -510,10 +514,11 @@ export default function App() {
     saveLocalStorageData('alerts', alerts);
   }, [alerts]);
 
-  useEffect(() => {
-    saveLocalStorageData('invoices', invoices);
-    saveLocalStorageData('invoices_v2', invoices);
-  }, [invoices]);
+  /*
+    Khóa `invoices` cũng rời khỏi đây ở ngày 17, cùng lý do với ba khóa trên: hóa đơn đăng ký
+    nay do máy chủ giữ. Ghi thêm một bản sao xuống trình duyệt sẽ khiến lần tải sau đọc bản
+    chụp cũ đè lên dữ liệu thật — chính là con đường mà con số 86.353.000₫ đã đi.
+  */
 
   useEffect(() => {
     savePackageUpgradeRequests(upgradeRequests);
@@ -709,7 +714,6 @@ export default function App() {
   const handleUpdateInvoiceStatus = (id: string, newStatus: Invoice['status'], paymentDetails: Partial<Invoice> = {}) => {
     const currentInvoice = invoices.find((invoice) => invoice.id === id);
     const now = new Date().toISOString();
-    const nowFormatted = now.replace('T', ' ').slice(0, 16);
 
     setInvoices((current) => current.map((inv) => inv.id === id ? normalizeInvoicePaymentData({
       ...inv,
@@ -758,27 +762,12 @@ export default function App() {
     }
 
     showToast(`Đã cập nhật hóa đơn ${id} thành trạng thái: ${newStatus}`, newStatus === 'PAID' ? 'success' : 'info');
-    if (currentInvoice && currentInvoice.status !== newStatus) {
-      recordAuditLog({
-        eventCode: newStatus === 'PAID' ? 'BILLING.PAYMENT.CONFIRMED' : 'BILLING.INVOICE.UPDATED',
-        event: newStatus === 'PAID' ? 'Xác nhận thanh toán hóa đơn' : 'Cập nhật trạng thái hóa đơn',
-        description: `Hóa đơn ${id} của tenant "${currentInvoice.tenantName}" được chuyển sang ${newStatus}.`,
-        severity: newStatus === 'CANCELLED' || newStatus === 'OVERDUE' ? 'medium' : 'low',
-        status: 'success',
-        category: 'BILLING',
-        resource: `Hóa đơn ${id}`,
-        resourceId: id,
-        method: `CLIENT /invoices/${id}`,
-        changes: [{ field: 'status', before: currentInvoice.status, after: newStatus }]
-      });
-    }
   };
 
   const handleUpdateInvoice = (id: string, updates: Partial<Invoice>) => {
     const currentInvoice = invoices.find((invoice) => invoice.id === id);
     if (!currentInvoice) return;
-    const changes = buildAuditChanges(currentInvoice, updates);
-    
+
     if (updates.status && updates.status !== currentInvoice.status) {
       handleUpdateInvoiceStatus(id, updates.status, updates);
       return;
@@ -789,18 +778,6 @@ export default function App() {
       ...updates,
       updatedAt: new Date().toISOString()
     } : invoice));
-    recordAuditLog({
-      eventCode: 'BILLING.INVOICE.DETAILS.UPDATED',
-      event: 'Cập nhật nghiệp vụ hóa đơn',
-      description: `Superadmin cập nhật ${changes.length || 1} trường của hóa đơn ${id}.`,
-      severity: updates.refundedAmount || updates.reconciliationStatus === 'MISMATCHED' ? 'medium' : 'low',
-      status: 'success',
-      category: 'BILLING',
-      resource: `Hóa đơn ${id}`,
-      resourceId: id,
-      method: `CLIENT /invoices/${id}/details`,
-      changes
-    });
   };
 
   const handleCreateInvoice = (invoice: Invoice) => {
@@ -809,13 +786,6 @@ export default function App() {
       return false;
     }
     setInvoices((current) => dedupeInvoices([normalizeInvoicePaymentData(normalizeInvoiceDueDate(invoice)), ...current]));
-    recordAuditLog({
-      eventCode: 'BILLING.INVOICE.CREATED',
-      event: 'Tạo hóa đơn thủ công',
-      description: `Superadmin tạo hóa đơn ${invoice.invoiceCode || invoice.id} cho tenant "${invoice.tenantName}".`,
-      severity: 'medium', status: 'success', category: 'BILLING', resource: `Hóa đơn ${invoice.id}`,
-      resourceId: invoice.id, method: 'CLIENT /invoices', metadata: { tenantId: invoice.tenantId, amount: invoice.amount, currency: invoice.currency || 'VND' }
-    });
     return true;
   };
 
@@ -883,20 +853,6 @@ export default function App() {
       isRead: false,
       targetTenantId: tenant.id
     }, ...current]);
-    recordAuditLog({
-      eventCode: 'PACKAGE.UPGRADE.REQUESTED',
-      event: 'Tenant Admin gửi yêu cầu nâng cấp',
-      description: `${account.displayName} gửi yêu cầu chuyển tenant "${tenant.name}" từ ${tenant.packageName} sang ${targetPackage.name}.`,
-      severity: 'medium',
-      status: 'success',
-      category: 'PACKAGE',
-      resource: `Tenant ${tenant.name}`,
-      resourceId: tenant.id,
-      method: 'POST /api/package-upgrade-requests',
-      user: account.email,
-      actorRole: 'TENANT_ADMIN',
-      metadata: { requestId: request.id, targetPackage: targetPackage.name, effectiveDate }
-    });
   };
 
   const handleReviewUpgradeRequest = async (
@@ -977,20 +933,6 @@ export default function App() {
 
     setUpgradeRequests((current) => current.map((item) => item.id === requestId ? reviewedRequest : item));
     persistPackageUpgradeReview(reviewedRequest);
-    recordAuditLog({
-      eventCode: decision === 'APPROVED' ? 'PACKAGE.UPGRADE.APPROVED' : 'PACKAGE.UPGRADE.REJECTED',
-      event: decision === 'APPROVED' ? 'Duyệt yêu cầu nâng cấp' : 'Từ chối yêu cầu nâng cấp',
-      description: decision === 'APPROVED'
-        ? `Super Admin duyệt tenant "${tenant.name}" chuyển sang gói ${targetPackage.name}.`
-        : `Super Admin từ chối yêu cầu chuyển gói của tenant "${tenant.name}".`,
-      severity: 'medium',
-      status: 'success',
-      category: 'PACKAGE',
-      resource: `Yêu cầu ${request.id}`,
-      resourceId: request.id,
-      method: `PATCH /api/package-upgrade-requests/${request.id}`,
-      metadata: { decision, targetPackage: targetPackage.name, invoiceId: invoiceId || '', effectiveDate }
-    });
     showToast(
       decision === 'APPROVED' ? 'Đã duyệt nâng cấp' : 'Đã từ chối yêu cầu',
       decision === 'APPROVED' ? 'success' : 'info',
@@ -1095,6 +1037,44 @@ export default function App() {
     unreadAlerts: alerts.filter(a => !a.isRead).length,
     openTickets: tickets.filter(t => !['RESOLVED', 'CLOSED'].includes(t.status)).length,
     pendingUpgrades: upgradeRequests.filter((request) => request.status === 'PENDING').length
+  };
+
+  /*
+    ── Dải nhãn "Dữ liệu mẫu" của cổng Superadmin ────────────────────────────────────────
+    Quyết định 8 của lộ trình: những màn nằm ngoài phạm vi backend MVP vẫn giữ
+    `localStorage` và vẫn đi qua được khi demo, nhưng phải NÓI RA rằng dữ liệu là mẫu.
+    Từ ngày 16 các màn đã nối chạy dữ liệu thật, nên hai loại số nằm cạnh nhau trong cùng
+    một cổng — im lặng ở đây là để người xem tự đoán con số nào tra được vào database.
+
+    Đặt thành một bảng ở nơi định tuyến chứ không rải `<MockDataNotice />` vào từng màn:
+    dải nhãn phải xuất hiện ở cùng một chỗ trên mọi màn, và danh sách "màn nào chưa nối"
+    là một sự thật của cả cổng chứ không phải của riêng từng tệp. Nối xong một màn thì xóa
+    đúng một dòng ở đây — không phải đi tìm dải nhãn nằm lẫn trong một tệp vài nghìn dòng.
+  */
+  const MOCK_DATA_REASONS: Record<string, string> = {
+    admins: 'Danh sách đọc thật từ máy chủ. Tài khoản chủ tiệm được cấp trong lúc lập tiệm, nên trang này chỉ để tra cứu — cấp và khóa tài khoản làm ở màn Quản lý Tenant.',
+    packages: 'Bảng giá đọc thật từ máy chủ — đúng mã gói và giá mà màn lập tiệm dùng. Nhưng module quản lý gói nằm ngoài phạm vi MVP (§0 mục 13), nên mọi thay đổi ở đây chỉ sửa bản sao trong bộ nhớ và mất khi tải lại trang.',
+    billing: 'Hóa đơn đăng ký đọc thật từ máy chủ. Nhưng mọi thao tác ghi — phát hành, đổi trạng thái, hoàn tiền — chỉ sửa bản sao trong bộ nhớ và mất khi tải lại trang.',
+    reports: 'Số liệu trên trang đọc thật từ máy chủ — cùng danh sách tiệm và hóa đơn đăng ký với màn Thanh toán. Đây là tiền SalonSys thu TỪ các tiệm (BR-REV-008); doanh thu tiệm thu từ khách nằm ở màn Báo cáo của cổng chủ tiệm. Template báo cáo, lịch gửi định kỳ và xuất file nằm ngoài phạm vi MVP.',
+    announcements: 'Bản tin hệ thống nằm ngoài phạm vi backend MVP, nên nội dung và lịch gửi chỉ lưu trên trình duyệt này.',
+    settings: 'Cấu hình hệ thống lưu trên trình duyệt này. Máy chủ chưa có bảng cấu hình, nên các tùy chọn ở đây không ảnh hưởng tới hành vi thật của API.',
+    support: 'Trung tâm hỗ trợ và phiếu yêu cầu nằm ngoài phạm vi 9 module lõi, nên mọi phiếu chỉ tồn tại trên trình duyệt này.',
+    backup: 'Sao lưu và khôi phục nằm ngoài phạm vi backend MVP. Các thao tác ở đây là mô phỏng — không có bản sao lưu nào được tạo ra.'
+  };
+
+  /*
+    Câu mở đầu riêng cho những màn KHÔNG phải dữ liệu mẫu.
+
+    Chỉ có một màn như vậy, và nó lộ ra ở buổi tổng duyệt ngày 19: Báo cáo hệ thống đọc cùng
+    danh sách tiệm và cùng mảng hóa đơn đăng ký với màn Thanh toán — cả hai đều từ máy chủ —
+    nhưng lại đeo nhãn "Dữ liệu mẫu — chưa nối máy chủ". Màn nào không có mặt ở đây thì giữ
+    nguyên câu cảnh báo mặc định.
+  */
+  const MOCK_DATA_TITLES: Record<string, string> = {
+    admins: 'Phạm vi trang này.',
+    packages: 'Phạm vi trang này.',
+    billing: 'Phạm vi trang này.',
+    reports: 'Phạm vi trang này.'
   };
 
   // Render proper sub-component view
@@ -1312,8 +1292,17 @@ export default function App() {
     portalRole === 'RECEPTIONIST' ? sessionAccount?.tenantId : tenantPortalAccount.tenantId
   );
 
+  /*
+    Bảng giá chỉ có ở phiên Superadmin — `GET /api/packages` trả 403 cho chủ tiệm. Nên với cổng
+    chủ tiệm, phép tra ở đây LUÔN trượt, và trước ngày 20 nó rơi thẳng về một hằng số Premium:
+    tiệm Enterprise bị báo "Gói Premium", chỉ được mở 3 chi nhánh thay vì 99, và thấy Kho vật tư
+    với Vệ sinh & an toàn bị khóa dù đã trả tiền cho chúng.
+
+    Dựng gói từ chính hồ sơ tiệm là đường duy nhất nói đúng: tên gói, giá đã chốt và hai hạn mức
+    đều nằm sẵn trên `GET /api/tenants/me`.
+  */
   const tenantPortalPackage = targetTenant
-    ? getSubscriptionPackageForTenant(packages, targetTenant)
+    ? getSubscriptionPackageForTenant(packages, targetTenant) || buildSubscriptionPackageFromTenant(targetTenant)
     : packages.find((pkg) => pkg.name === 'Premium') || packages[0];
 
   if (portalRole === 'TENANT_ADMIN') {
@@ -1429,6 +1418,13 @@ export default function App() {
               Đang tải màn hình...
             </div>
           )}>
+            {MOCK_DATA_REASONS[activeTab] && (
+              <MockDataNotice
+                title={MOCK_DATA_TITLES[activeTab]}
+                reason={MOCK_DATA_REASONS[activeTab]}
+                className="mb-5"
+              />
+            )}
             {renderView()}
           </Suspense>
         </main>

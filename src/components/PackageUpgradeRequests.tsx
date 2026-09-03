@@ -23,6 +23,15 @@ interface PackageUpgradeRequestsProps {
     reviewNote: string,
     effectiveDate: 'immediate' | 'next_cycle'
   ) => Promise<boolean>;
+  /**
+   * Có tự hiện dải nhãn "Dữ liệu mẫu" hay không.
+   *
+   * Mặc định là có, vì màn Quản lý tiệm của Superadmin đặt bảng này giữa các khối chạy dữ
+   * liệu THẬT — không nói ra thì hai loại số đứng cạnh nhau mà trông giống hệt nhau.
+   * Truyền `false` khi trang bao ngoài đã có dải nhãn của riêng nó (màn Hóa đơn & thanh
+   * toán): hai dải nhãn chồng lên nhau trên cùng một trang không nói thêm được gì.
+   */
+  showMockDataNotice?: boolean;
 }
 
 const statusMeta: Record<PackageUpgradeRequestStatus, { label: string; className: string; icon: typeof Clock3 }> = {
@@ -45,7 +54,7 @@ const formatMoney = (value: number, currency: string) => new Intl.NumberFormat('
   maximumFractionDigits: currency === 'VND' ? 0 : 2
 }).format(value);
 
-export default function PackageUpgradeRequests({ requests, onReview }: PackageUpgradeRequestsProps) {
+export default function PackageUpgradeRequests({ requests, onReview, showMockDataNotice = true }: PackageUpgradeRequestsProps) {
   const [statusFilter, setStatusFilter] = useState<'ALL' | PackageUpgradeRequestStatus>('PENDING');
   const [query, setQuery] = useState('');
   const [reviewing, setReviewing] = useState<PackageUpgradeRequest | null>(null);
@@ -95,7 +104,7 @@ export default function PackageUpgradeRequests({ requests, onReview }: PackageUp
 
   return (
     <div className="space-y-5">
-      <MockDataNotice reason="Module gói đăng ký nằm ngoài phạm vi backend MVP, nên yêu cầu nâng cấp chỉ lưu trên trình duyệt này." />
+      {showMockDataNotice && <MockDataNotice reason="Module gói đăng ký nằm ngoài phạm vi backend MVP, nên yêu cầu nâng cấp chỉ lưu trên trình duyệt này." />}
 
       <section className="grid gap-3 sm:grid-cols-3">
         {[

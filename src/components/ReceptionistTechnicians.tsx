@@ -28,7 +28,8 @@ import {
 import BeautifulSelect from './BeautifulSelect';
 import { PageHeader, Pagination } from './ui';
 
-type BranchCode = 'Q1' | 'Q3';
+/** Mã chi nhánh do chủ tiệm tự đặt nên tập giá trị là mở — mở kiểu ở ngày 14, cùng lúc với cổng lễ tân. */
+type BranchCode = string;
 type TechnicianStatus =
   | 'PRESENT'
   | 'NOT_CHECKED_IN'
@@ -96,8 +97,26 @@ interface ReceptionistTechniciansProps {
   selectedBranch: BranchCode;
   branchName: string;
   roleLabel?: string;
-  onTechniciansChange: (items: Technician[]) => void;
-  onAppointmentsChange: (items: Appointment[]) => void;
+  /**
+   * Phân công lại kỹ thuật viên cho một lịch hẹn.
+   *
+   * Báo **ý định** — lịch nào, giao cho ai — chứ không trả về nguyên mảng lịch hẹn đã sửa như
+   * trước. Từ ngày 14 lịch hẹn nằm ở máy chủ, nên bên nhận phải gọi API rồi nạp lại; đưa cho
+   * nó một mảng đã sửa sẵn là mời nó ghi đè dữ liệu thật bằng một bản chụp của trình duyệt.
+   */
+  onAssignStaff: (appointmentId: string, technicianName: string) => void;
+  /**
+   * Ghi nhận chấm công của một kỹ thuật viên trong ca — có mặt, nghỉ giải lao, báo ốm.
+   *
+   * Chỉ nhận phần thay đổi thay vì cả danh sách, cùng lý do với `onAssignStaff`: hồ sơ nhân
+   * viên nay đến từ máy chủ, còn chấm công thì §9.4 xếp ngoài phạm vi MVP nên nó sống ở
+   * client. Trộn hai thứ vào một mảng là mời bên nhận ghi đè cái này bằng cái kia.
+   */
+  onAttendanceChange: (
+    technicianId: string,
+    patch: { status: TechnicianStatus; checkIn?: string; checkOut?: string; leaveNote?: string }
+  ) => void;
+
   onNotify?: (message: string) => void;
   onOpenAppointments?: (query?: string) => void;
 }
@@ -355,8 +374,8 @@ export default function ReceptionistTechnicians({
   selectedBranch,
   branchName,
   roleLabel = 'Receptionist',
-  onTechniciansChange,
-  onAppointmentsChange,
+  onAttendanceChange,
+  onAssignStaff,
   onNotify,
   onOpenAppointments,
 }: ReceptionistTechniciansProps) {
@@ -520,19 +539,12 @@ export default function ReceptionistTechnicians({
       return;
     }
 
-    onTechniciansChange(
-      technicians.map((technician) =>
-        technician.id === editingTechnician.id
-          ? {
-              ...technician,
-              status: statusForm.status,
-              checkIn: statusForm.checkIn || undefined,
-              checkOut: statusForm.checkOut || undefined,
-              leaveNote: statusForm.note.trim() || undefined,
-            }
-          : technician,
-      ),
-    );
+    onAttendanceChange(editingTechnician.id, {
+      status: statusForm.status,
+      checkIn: statusForm.checkIn || undefined,
+      checkOut: statusForm.checkOut || undefined,
+      leaveNote: statusForm.note.trim() || undefined,
+    });
     setSelectedTechnician((current) =>
       current?.id === editingTechnician.id
         ? {
@@ -567,14 +579,7 @@ export default function ReceptionistTechnicians({
       return;
     }
 
-    onAppointmentsChange(
-      appointments.map((appointment) =>
-        appointment.id === assigningAppointment.id
-          ? { ...appointment, staff: selectedAssignment.technician.name }
-          : appointment,
-      ),
-    );
-    onNotify?.(
+    onAssignStaff(assigningAppointment.id, selectedAssignment.technician.name);    onNotify?.(
       `Đã phân công ${selectedAssignment.technician.name} cho ${assigningAppointment.customer}.`,
     );
     setAssigningAppointment(null);

@@ -1,4 +1,8 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import useRevenueReport from '../hooks/useRevenueReport';
+import type { RevenueReportDto } from '../services/reports';
+import type { ApiError } from '../services/apiClient';
+
 import { getTenantAdminInitialData, isTenantAdminLiveDataMode } from '../utils/mockDataReset';
 import {
   ArrowUpRight,
@@ -28,7 +32,7 @@ import {
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
 import { formatMoney as money } from '../utils/money';
-import { Button, DataTable, Field, Modal, StatusBadge, PageHeader } from './ui';
+import { Button, DataTable, Field, MockDataNotice, Modal, StatusBadge, PageHeader } from './ui';
 import type { DataTableColumn } from './ui';
 import { tenantStorageKey } from '../utils/tenantStorage';
 
@@ -36,7 +40,15 @@ type BranchCode = 'Q1' | 'Q3';
 type ReportTab = 'REVENUE' | 'OPERATIONS' | 'CUSTOMERS' | 'STAFF' | 'EXPORTS';
 type ScheduleFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 type ComparisonFilter = 'NONE' | 'PREVIOUS_PERIOD' | 'SAME_PERIOD_LAST_YEAR' | 'TARGET';
-interface TenantAdminReportsProps { searchQuery: string; onSearchQueryChange: (value: string) => void; selectedBranch: string; onSelectedBranchChange: (value: string) => void; branches?: Array<{ code: string; name: string }>; tenantName?: string; roleLabel?: string; accessMode?: 'full' | 'limited' | 'locked'; readOnlyReason?: string; onNotify?: (message: string) => void; }
+/**
+ * @param activeTenantId Tiệm đang làm việc. Rỗng thì tab doanh thu không gọi API — chế độ trình
+ *   diễn dữ liệu mẫu không có tiệm thật nào để báo cáo.
+ * @param activeBranchId Bộ lọc chi nhánh gửi lên API — **mã định danh thật**, hoặc rỗng để lấy
+ *   cả tiệm. Cố ý là một prop riêng thay vì dùng lại `selectedBranch`: ô chọn trên màn hình có
+ *   thể còn giữ một mã hiển thị kiểu `'Q3'` từ thời dữ liệu mẫu, và gửi mã ấy lên API sẽ trả về
+ *   rỗng — báo cáo trống trơn trông y hệt "kỳ này không thu được đồng nào".
+ */
+interface TenantAdminReportsProps { searchQuery: string; onSearchQueryChange: (value: string) => void; selectedBranch: string; onSelectedBranchChange: (value: string) => void; branches?: Array<{ code: string; name: string }>; tenantName?: string; roleLabel?: string; accessMode?: 'full' | 'limited' | 'locked'; readOnlyReason?: string; onNotify?: (message: string) => void; activeTenantId?: string | null; activeBranchId?: string | null; }
 interface ReportTemplate { id: string; name: string; group: string; description: string; updatedAt: string; format: string; access: string; favorite: boolean; }
 interface ReportSchedule { id: string; name: string; frequency: ScheduleFrequency; time: string; recipients: string[]; format: string; branch: BranchCode | 'ALL'; nextRun: string; active: boolean; }
 
@@ -80,6 +92,27 @@ const fromIsoDate = (value: string) => {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year, month - 1, day);
 };
+
+/**
+ * Khoảng ngày mặc định: **30 ngày gần nhất tính đến hôm nay**.
+ *
+ * Trước đó là hai hằng số `2026-07-01` – `2026-07-20`, viết ra khi trang còn chạy bằng dữ
+ * liệu mẫu nằm trọn trong tháng 7. Từ ngày 16 tab Doanh thu đọc tiền thật, mà tiền thật thì
+ * luôn nằm ở những ngày gần nhất — nên mở trang lên là báo cáo trống, kèm đúng câu
+ * "Chưa có khoản thu nào trong kỳ này". Một kỳ báo cáo cố định trong quá khứ không nói dối
+ * về con số, nhưng nó nói dối về việc **tiệm có thu được tiền hay không**.
+ *
+ * Chọn 30 ngày để khớp thẻ "Doanh thu 30 ngày qua" ở màn Tổng quan: hai màn cùng trả lời một
+ * câu hỏi thì phải mở ra cùng một kỳ, nếu không người đọc sẽ thấy hai con số khác nhau và
+ * không có gì trên màn hình giải thích vì sao.
+ */
+const defaultReportRange = (() => {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 29);
+
+  return { start: toIsoDate(start), end: toIsoDate(end) };
+})();
 
 /**
  * Khối nội dung của trang báo cáo.
@@ -210,308 +243,171 @@ function BranchComparisonTable({ branches }: { branches: Array<{ code: string; n
   </section>;
 }
 
-function RevenueReportTab({ revenue, bookings, averageTicket, branches, selectedBranch, periodLabel, comparisonSuffix }: { revenue: number; bookings: number; averageTicket: number; branches: Array<{ code: string; name: string }>; selectedBranch: string; periodLabel: string; comparisonSuffix: string }) {
-  const grossRevenue = Math.round(revenue / 0.967);
-  const discounts = Math.round(grossRevenue * 0.021);
-  const refunds = Math.max(0, grossRevenue - discounts - revenue);
-  const collected = Math.round(revenue * 0.964);
-  const outstanding = revenue - collected;
-  const target = Math.round(revenue / 0.891);
-  const targetProgress = target ? revenue / target * 100 : 0;
-  const compareText = comparisonSuffix || 'trong kỳ đã chọn';
-  const serviceRevenue = Math.round(revenue * 0.861);
-  const sourceRows = [
-    { label: 'Dịch vụ', value: serviceRevenue, share: 86.1, growth: '+17,4%', tone: chartSeries[0] },
-    { label: 'Sản phẩm bán lẻ', value: Math.round(revenue * 0.074), share: 7.4, growth: '+9,8%', tone: chartSeries[1] },
-    { label: 'Thẻ liệu trình & thành viên', value: Math.round(revenue * 0.041), share: 4.1, growth: '+12,6%', tone: chartSeries[2] },
-    { label: 'Phí khác', value: Math.round(revenue * 0.024), share: 2.4, growth: '+4,2%', tone: chartSeries[3] }
-  ];
-  const trend = [58, 66, 62, 74, 69, 81, 76, 88, 83, 92, 79, 96, 91, 100];
-  const previousTrend = [54, 58, 60, 64, 67, 70, 72, 75, 77, 79, 81, 83, 84, 86];
-  const serviceGroups = [
-    { name: 'Nail Art', share: 29.2, bookings: 318, average: 902000, growth: '+24,6%' },
-    { name: 'Gel & Extension', share: 25.3, bookings: 286, average: 868000, growth: '+16,2%' },
-    { name: 'Pedicure', share: 20, bookings: 334, average: 587000, growth: '+12,8%' },
-    { name: 'Manicure', share: 15.5, bookings: 362, average: 422000, growth: '+9,4%' },
-    { name: 'Spa & phục hồi', share: 10, bookings: 158, average: 624000, growth: '+18,1%' }
-  ].map((item) => ({ ...item, revenue: Math.round(serviceRevenue * item.share / 100) }));
-  const paymentMethods = [
-    { label: 'Chuyển khoản', share: 42, tone: chartSeries[0], reconciled: '100%' },
-    { label: 'Thẻ', share: 28, tone: chartSeries[1], reconciled: '99,8%' },
-    { label: 'Tiền mặt', share: 18, tone: chartSeries[2], reconciled: '98,9%' },
-    { label: 'Ví điện tử', share: 12, tone: chartSeries[3], reconciled: '100%' }
-  ];
-  // Vòng tròn tỷ trọng dựng từ cùng thang màu, cộng dồn theo phần trăm.
-  const paymentGradient = `conic-gradient(${paymentMethods.reduce<{ parts: string[]; offset: number }>((acc, method) => {
-    const next = acc.offset + method.share;
-    acc.parts.push(`${method.tone} ${acc.offset}% ${next}%`);
-    return { parts: acc.parts, offset: next };
-  }, { parts: [], offset: 0 }).parts.join(', ')})`;
-  const activeBranches = (selectedBranch === 'ALL' ? branches : branches.filter((branch) => branch.code === selectedBranch));
-  const branchWeights = activeBranches.map((branch, index) => branch.code === 'Q3' ? 59 : branch.code === 'Q1' ? 41 : 32 + index * 3);
-  const totalWeight = branchWeights.reduce((sum, value) => sum + value, 0) || 1;
-  const branchRows = activeBranches.map((branch, index) => {
-    const share = branchWeights[index] / totalWeight * 100;
-    const branchRevenue = Math.round(revenue * share / 100);
-    return { ...branch, revenue: branchRevenue, share, target: Math.round(branchRevenue / (0.84 + index * 0.035)), growth: `+${(18.2 - index * 3.3).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` };
-  });
-  const revenueChannels = [
-    { label: 'Khách tại cửa hàng', share: 46, value: Math.round(revenue * 0.46), growth: '+11,8%' },
-    { label: 'Đặt lịch trực tuyến', share: 31, value: Math.round(revenue * 0.31), growth: '+23,4%' },
-    { label: 'Khách thành viên', share: 17, value: Math.round(revenue * 0.17), growth: '+18,7%' },
-    { label: 'Đối tác & chiến dịch', share: 6, value: Math.round(revenue * 0.06), growth: '+7,2%' }
-  ];
+/**
+ * Bảng phân rã dùng chung cho cả bốn chiều của BR-REV-004.
+ *
+ * Một component cho cả bốn vì chúng chỉ khác nhau ở nhãn cột đầu. Dựng bốn khối gần giống hệt
+ * nhau là bốn chỗ để sửa mỗi lần đổi cách trình bày một con số tiền.
+ *
+ * Thanh tỉ trọng vẽ theo dòng lớn nhất chứ không theo tổng: mắt cần so các dòng với nhau, và
+ * chia theo tổng thì một danh sách dài toàn thanh ngắn tí, không đọc được gì.
+ */
+function RevenueBreakdown({ title, hint, rows, empty }: {
+  title: string;
+  hint: string;
+  rows: Array<{ key: string; label: string; revenue: number; invoiceCount: number; extra?: ReactNode }>;
+  empty: string;
+}) {
+  const peak = rows.reduce((max, row) => Math.max(max, row.revenue), 0);
+
+  return <section className={cardClass}>
+    <p className="text-body font-semibold text-brand-text">{title}</p>
+    <p className="mt-1 text-caption text-brand-text-muted">{hint}</p>
+
+    {rows.length === 0
+      ? <p className="mt-4 text-body text-brand-text-muted">{empty}</p>
+      : <ul className="mt-4 flex flex-col divide-y divide-brand-outline">
+        {rows.map((row) => <li key={row.key || row.label} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="min-w-0 truncate text-body text-brand-text">{row.label}</span>
+            <strong className="shrink-0 tabular-nums text-body font-semibold text-brand-text">{money(row.revenue)}</strong>
+          </div>
+          <div aria-hidden="true" className="h-1.5 overflow-hidden rounded-pill bg-brand-surface-high">
+            <div
+              className="h-full rounded-pill bg-[var(--accent)]"
+              style={{ width: `${peak > 0 ? Math.max(2, row.revenue / peak * 100) : 0}%` }}
+            />
+          </div>
+          <p className="text-caption text-brand-text-muted">
+            {row.invoiceCount.toLocaleString('vi-VN')} hóa đơn{row.extra ? <> · {row.extra}</> : null}
+          </p>
+        </li>)}
+      </ul>}
+  </section>;
+}
+
+/**
+ * Tab "Doanh thu" — dữ liệu THẬT từ ngày 16.
+ *
+ * Bản trước dựng toàn bộ con số từ hằng số nhân với nhau: doanh thu gộp là `revenue / 0.967`,
+ * hoàn tiền là phần dư của một phép trừ, tỉ trọng phương thức thanh toán là bốn số cố định
+ * 42/28/18/12. Không con số nào đến từ dữ liệu, và chúng vẫn đổi theo bộ lọc chi nhánh nên
+ * trông rất giống thật. Đã bỏ hết — cùng với các khối không có nguồn dữ liệu nào phía sau:
+ * mục tiêu kỳ, tỉ lệ tăng trưởng, kênh bán, và tỉ trọng phương thức thanh toán.
+ *
+ * BR-REV-006 nói API chỉ cung cấp endpoint tổng hợp; những khối ấy cần dữ liệu mà hệ thống cố
+ * ý không thu thập, nên giữ chúng lại chỉ để đẹp trang là để lại số bịa cạnh số thật.
+ */
+function RevenueReportTab({ report, loading, error, periodLabel, onRetry }: {
+  report: RevenueReportDto | null;
+  loading: boolean;
+  error: ApiError | null;
+  periodLabel: string;
+  onRetry: () => void;
+}) {
+  if (loading && !report) {
+    return <section className={cardClass}>
+      <p className="text-body text-brand-text-muted">Đang tải báo cáo doanh thu…</p>
+    </section>;
+  }
+
+  if (error) {
+    return <section className={cardClass}>
+      <p className="text-body font-semibold text-brand-text">Không tải được báo cáo doanh thu</p>
+      <p className="mt-1 text-body text-brand-text-muted">{error.message}</p>
+      <button type="button" onClick={onRetry} className="mt-3 text-body font-semibold text-[var(--accent)] underline">
+        Thử lại
+      </button>
+    </section>;
+  }
+
+  if (!report || report.invoiceCount === 0) {
+    return <section className={cardClass}>
+      <p className="text-body font-semibold text-brand-text">Chưa có khoản thu nào trong kỳ này</p>
+      <p className="mt-1 text-body text-brand-text-muted">
+        Doanh thu ghi nhận theo tiền thực thu, nên một kỳ chưa ai trả tiền sẽ trống — kể cả khi
+        đã có lịch hẹn. Chọn khoảng ngày khác để xem.
+      </p>
+    </section>;
+  }
 
   return <div className="flex flex-col gap-4">
-    {/* Tóm tắt kỳ — số lớn dẫn dắt, nằm trong card như các khối khác */}
+    {/* Tóm tắt kỳ — số lớn dẫn dắt, ba con số phụ chia bằng đường kẻ chứ không đóng khung riêng */}
     <section className={`flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between ${cardClass}`}>
       <div className="min-w-0">
-        <p className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">Tổng quan doanh thu · {periodLabel}</p>
-        <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2">
-          <p className="text-display font-bold tabular-nums text-brand-text">{shortMoney(revenue)}</p>
-          <span className="flex items-center gap-1 text-body font-semibold text-brand-secondary">
-            <ArrowUpRight aria-hidden="true" className="h-4 w-4" />16,8% {compareText}
-          </span>
-        </div>
+        <p className="text-caption font-semibold uppercase tracking-wide text-brand-text-muted">
+          Doanh thu tiệm · {periodLabel}
+        </p>
+        <p className="mt-2 text-display font-bold tabular-nums text-brand-text">{money(report.revenue)}</p>
         <p className="mt-2 text-body text-brand-text-muted">
-          Doanh thu thuần sau giảm giá và hoàn tiền · {bookings.toLocaleString('vi-VN')} hóa đơn hoàn tất
+          Theo tiền thực thu, đã trừ hoàn tiền và không tính tip ·{' '}
+          {report.invoiceCount.toLocaleString('vi-VN')} hóa đơn có phát sinh thu
         </p>
       </div>
-      <div className="w-full lg:max-w-sm">
-        <div className="flex items-center justify-between gap-3 text-body">
-          <span className="text-brand-text-muted">Mục tiêu kỳ</span>
-          <strong className="tabular-nums text-brand-text">{shortMoney(target)}</strong>
-        </div>
-        <div aria-hidden="true" className="mt-2 h-2 overflow-hidden rounded-pill bg-brand-surface-high">
-          <div className="h-full rounded-pill bg-[var(--accent)]" style={{ width: `${Math.min(100, targetProgress)}%` }} />
-        </div>
-        <p className="mt-2 text-caption text-brand-text-muted">
-          Đạt <strong className="tabular-nums text-brand-text">{targetProgress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</strong> · còn {shortMoney(Math.max(0, target - revenue))}
-        </p>
-      </div>
-    </section>
-
-    {/* Sáu chỉ số phụ — chia bằng đường kẻ, không đóng khung từng ô */}
-    <section aria-label="Chỉ số doanh thu trong kỳ" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">{[
-      { label: 'Doanh thu gộp', value: shortMoney(grossRevenue), detail: 'Trước giảm giá & hoàn tiền' },
-      { label: 'Doanh thu thuần', value: shortMoney(revenue), detail: '+16,8% so với đối chiếu' },
-      { label: 'Đã thực thu', value: shortMoney(collected), detail: '96,4% doanh thu thuần' },
-      { label: 'Chưa thu/đang chờ', value: shortMoney(outstanding), detail: 'Cọc, công nợ và giao dịch chờ' },
-      { label: 'Giá trị hóa đơn TB', value: money(averageTicket), detail: '+3,9% trên mỗi hóa đơn' },
-      { label: 'Giảm giá & hoàn tiền', value: `−${shortMoney(discounts + refunds)}`, detail: `${((discounts + refunds) / grossRevenue * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% doanh thu gộp` }
-    ].map(({ label, value, detail }) => <article key={label} className="flex flex-col gap-1 rounded-card border border-brand-outline bg-brand-surface p-4 shadow-card">
-      <p className="text-caption text-brand-text-muted">{label}</p>
-      <p className="text-card-title font-bold tabular-nums text-brand-text">{value}</p>
-      <p className="text-caption text-brand-text-muted">{detail}</p>
-    </article>)}</section>
-
-    <section className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
-      <ReportCard title="Xu hướng doanh thu thuần" description="Theo ngày · đối chiếu với kỳ so sánh">
-        <div
-          role="img"
-          aria-label={`Biểu đồ cột doanh thu thuần theo ngày trong ${periodLabel}, kèm đường nét đứt của kỳ đối chiếu. Ngày cao nhất 19/07.`}
-          className="relative ml-11 mt-2 h-52 border-b border-l border-brand-outline"
-        >
-          <div aria-hidden="true" className="absolute inset-0 flex flex-col justify-between">{['100%', '75%', '50%', '25%', '0'].map((value) => <div key={value} className="border-t border-dashed border-brand-outline"><span className="-ml-11 -translate-y-2 block w-9 text-right text-caption tabular-nums text-brand-text-muted">{value}</span></div>)}</div>
-          <div aria-hidden="true" className="absolute inset-0 flex items-end gap-2 px-3">{trend.map((value, index) => <div key={index} className="relative flex h-full flex-1 items-end"><span className="w-full rounded-t-control" style={{ height: `${value}%`, background: 'var(--chart-1)' }} /><span className="absolute w-full border-t-2 border-dashed border-brand-text-muted" style={{ bottom: `${previousTrend[index]}%` }} /></div>)}</div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-caption text-brand-text-muted">
-          <div className="flex gap-4">
-            <span className="flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-sm" style={{ background: 'var(--chart-1)' }} />Kỳ hiện tại</span>
-            <span className="flex items-center gap-1.5"><i aria-hidden="true" className="w-4 border-t-2 border-dashed border-brand-text-muted" />Kỳ đối chiếu</span>
-          </div>
-          <p>Ngày cao nhất: <strong className="tabular-nums text-brand-text">19/07 · {shortMoney(revenue * 0.071)}</strong></p>
-        </div>
-      </ReportCard>
-
-      <ReportCard title="Từ doanh thu gộp đến thuần" description="Các khoản điều chỉnh trong kỳ">
-        <dl>{[
-          { label: 'Doanh thu gộp', value: grossRevenue, tone: 'text-brand-text', prefix: '' },
-          { label: 'Giảm giá', value: discounts, tone: 'text-brand-error', prefix: '−' },
-          { label: 'Hoàn tiền', value: refunds, tone: 'text-brand-error', prefix: '−' },
-          { label: 'Doanh thu thuần', value: revenue, tone: 'text-[color:var(--accent-strong)]', prefix: '' }
-        ].map((item, index) => <div key={item.label} className={`flex items-center justify-between gap-3 py-2.5 ${index === 0 ? '' : 'border-t border-brand-outline'} ${index === 3 ? 'mt-1 border-t-2' : ''}`}>
-          <dt className={`text-body ${index === 3 ? 'font-semibold text-brand-text' : 'text-brand-text-muted'}`}>{item.label}</dt>
-          <dd className={`text-body font-bold tabular-nums ${item.tone}`}>{item.prefix}{shortMoney(item.value)}</dd>
-        </div>)}</dl>
-        <div className="mt-4 p-3 ui-tone ui-tone--info">
-          <p className="text-body font-semibold text-brand-text">Thuế &amp; phí cần kê khai</p>
-          <p className="mt-1 text-card-title font-bold tabular-nums text-brand-text">{shortMoney(revenue * 0.08)}</p>
-          <p className="mt-1 text-caption text-brand-text-muted">Ước tính VAT 8%, chưa trừ khỏi doanh thu thuần.</p>
-        </div>
-      </ReportCard>
-    </section>
-
-    <section className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
-      <ReportCard title="Cơ cấu nguồn doanh thu" description="Tỷ trọng và tăng trưởng theo nguồn">
-        <dl className="flex flex-col gap-4">{sourceRows.map((item) => <div key={item.label}>
-          <div className="mb-1.5 flex items-center justify-between gap-3 text-body">
-            <dt className="text-brand-text">{item.label}</dt>
-            <dd className="flex items-baseline gap-2">
-              <strong className="tabular-nums text-brand-text">{shortMoney(item.value)}</strong>
-              <span className="text-caption font-semibold text-brand-secondary">{item.growth}</span>
-            </dd>
-          </div>
-          <div aria-hidden="true" className="h-2 overflow-hidden rounded-pill bg-brand-surface-high">
-            <div className="h-full rounded-pill" style={{ width: `${item.share}%`, background: item.tone }} />
-          </div>
-          <p className="mt-1 text-right text-caption tabular-nums text-brand-text-muted">{item.share.toLocaleString('vi-VN')}%</p>
-        </div>)}</dl>
-      </ReportCard>
-
-      <ReportCard title="Phương thức thanh toán & đối soát" description="Theo giá trị giao dịch đã thu">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-[9rem_1fr]">
-          <div className="flex items-center justify-center">
-            <div aria-hidden="true" className="relative flex h-36 w-36 items-center justify-center rounded-pill" style={{ background: paymentGradient }}>
-              <div className="flex h-20 w-20 flex-col items-center justify-center rounded-pill bg-brand-surface text-center">
-                <p className="text-caption text-brand-text-muted">Đã thu</p>
-                <p className="mt-0.5 text-body font-bold tabular-nums text-brand-text">{shortMoney(collected)}</p>
-              </div>
-            </div>
-          </div>
-          <dl className="flex flex-col">{paymentMethods.map((item) => <div key={item.label} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-brand-outline py-2.5 last:border-b-0">
-            <dt className="flex items-center gap-2 text-body text-brand-text">
-              <i aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-pill" style={{ background: item.tone }} />{item.label}
-            </dt>
-            <dd className="text-body font-semibold tabular-nums text-brand-text">{shortMoney(collected * item.share / 100)}</dd>
-            <dd className="text-caption tabular-nums text-brand-text-muted">đối soát {item.reconciled}</dd>
-          </div>)}</dl>
-        </div>
-        <p className="mt-4 flex items-start gap-2 p-3 text-body leading-5 text-brand-text ui-tone ui-tone--warning">
-          <Clock3 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-          Còn 3 giao dịch thẻ và 1 ca tiền mặt cần xác nhận, tổng giá trị {shortMoney(outstanding)}.
-        </p>
-      </ReportCard>
-    </section>
-
-    <section className="min-w-0">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-card-title text-brand-text">Doanh thu theo nhóm dịch vụ</h2>
-          <p className="mt-0.5 text-body text-brand-text-muted">Doanh thu, số lượt, giá trị trung bình và tăng trưởng</p>
-        </div>
-        <p className="text-caption tabular-nums text-brand-text-muted">{serviceGroups.length} nhóm dịch vụ</p>
-      </div>
-      <DataTable<(typeof serviceGroups)[number]>
-        className="mt-4"
-        rows={serviceGroups}
-        rowKey={(item) => item.name}
-        caption="Doanh thu theo nhóm dịch vụ trong kỳ báo cáo"
-        columns={[
-          {
-            key: 'name',
-            header: 'Nhóm dịch vụ',
-            width: '28%',
-            cell: (item, index) => (
-              <span className="flex items-center gap-3">
-                <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-caption font-bold ${index === 0 ? 'bg-[var(--accent)] text-[color:var(--color-brand-on-primary)]' : 'bg-brand-surface-high text-brand-text-muted'}`}>{index + 1}</span>
-                <span className="font-semibold text-brand-text">{item.name}</span>
-              </span>
-            )
-          },
-          { key: 'revenue', header: 'Doanh thu', numeric: true, cell: (item) => <span className="font-semibold text-brand-text">{shortMoney(item.revenue)}</span> },
-          { key: 'share', header: 'Tỷ trọng', numeric: true, hideBelow: 'md', cell: (item) => `${item.share.toLocaleString('vi-VN')}%` },
-          { key: 'bookings', header: 'Số lượt', numeric: true, hideBelow: 'lg', cell: (item) => item.bookings.toLocaleString('vi-VN') },
-          { key: 'average', header: 'TB/lượt', numeric: true, hideBelow: 'lg', cell: (item) => money(item.average) },
-          { key: 'growth', header: 'Tăng trưởng', numeric: true, cell: (item) => <span className="font-semibold text-brand-secondary">{item.growth}</span> }
-        ]}
-      />
-    </section>
-
-    <section className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-      <ReportCard title="Hiệu quả theo chi nhánh" description="Doanh thu, tỷ trọng và mức hoàn thành mục tiêu">
-        <div className="mt-4">{branchRows.length ? branchRows.map((branch) => {
-          const progress = branch.target ? branch.revenue / branch.target * 100 : 0;
-          return <div key={branch.code} className="border-t border-brand-outline py-4 first:border-t-0 first:pt-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-body font-semibold text-brand-text">{branch.name}</p>
-                <p className="mt-0.5 flex items-center gap-1 text-caption font-semibold text-brand-secondary">
-                  <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />{branch.growth} {compareText}
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-card-title font-bold tabular-nums text-brand-text">{shortMoney(branch.revenue)}</p>
-                <p className="mt-0.5 text-caption tabular-nums text-brand-text-muted">{branch.share.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% toàn tenant</p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-3">
-              <div aria-hidden="true" className="h-2 flex-1 overflow-hidden rounded-pill bg-brand-surface-high">
-                <div className="h-full rounded-pill bg-[var(--accent)]" style={{ width: `${Math.min(100, progress)}%` }} />
-              </div>
-              <span className="shrink-0 text-caption tabular-nums text-brand-text-muted">{progress.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% mục tiêu</span>
-            </div>
-          </div>;
-        }) : <p className="py-8 text-center text-body text-brand-text-muted">Chưa có dữ liệu chi nhánh.</p>}</div>
-      </ReportCard>
-
-      <ReportCard title="Doanh thu theo nguồn khách" description="Kênh phát sinh giao dịch hoàn tất">
-        <dl className="mt-4">{revenueChannels.map((item, index) => <div key={item.label} className="grid grid-cols-[1fr_auto] items-center gap-4 border-t border-brand-outline py-3 first:border-t-0 first:pt-0">
-          <div className="min-w-0">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-body text-brand-text">{item.label}</dt>
-              <span className="text-caption font-semibold text-brand-secondary">{item.growth}</span>
-            </div>
-            <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-pill bg-brand-surface-high">
-              <div className="h-full rounded-pill" style={{ width: `${item.share}%`, background: chartSeries[Math.min(index, chartSeries.length - 1)] }} />
-            </div>
-          </div>
-          <dd className="shrink-0 text-right">
-            <strong className="text-body font-bold tabular-nums text-brand-text">{shortMoney(item.value)}</strong>
-            <p className="mt-0.5 text-caption tabular-nums text-brand-text-muted">{item.share}%</p>
-          </dd>
-        </div>)}</dl>
-      </ReportCard>
-    </section>
-
-
-    {/* Ba khối kết luận — chỉ đây mới dùng nền theo tông, để mắt biết đâu là
-        khoản trừ, đâu là việc phải làm, đâu là nhận định */}
-    <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <article className="p-4 ui-tone ui-tone--danger">
-        <h2 className="text-card-title text-brand-text">Giảm giá &amp; hoàn tiền</h2>
-        <dl className="mt-3">{[
-          { label: 'Ưu đãi thành viên', value: discounts * 0.48 }, { label: 'Mã khuyến mãi', value: discounts * 0.34 }, { label: 'Điều chỉnh thủ công', value: discounts * 0.18 }, { label: 'Hoàn tiền', value: refunds }
-        ].map((item) => <div key={item.label} className="flex items-center justify-between gap-3 border-t border-brand-outline py-2.5 first:border-t-0 first:pt-0">
+      <dl className="flex flex-col gap-3 sm:flex-row sm:gap-8 lg:flex-col lg:gap-3">
+        {[
+          { label: 'Tiền qua két', value: report.collected, hint: 'Gồm cả tip khách đưa' },
+          { label: 'Tip cho kỹ thuật viên', value: report.tips, hint: 'Tiệm giữ hộ, không tính doanh thu' },
+          { label: 'Đã hoàn cho khách', value: report.refunds, hint: 'Trừ vào ngày hoàn, không sửa ngày cũ' }
+        ].map((item) => <div key={item.label} className="flex items-baseline justify-between gap-6">
           <dt className="text-body text-brand-text-muted">{item.label}</dt>
-          <dd className="text-body font-semibold tabular-nums text-brand-text">−{shortMoney(item.value)}</dd>
-        </div>)}</dl>
-      </article>
-
-      <article className="p-4 ui-tone ui-tone--warning">
-        <h2 className="text-card-title text-brand-text">Khoản cần xử lý</h2>
-        <dl className="mt-3">{[
-          { label: 'Giao dịch chờ đối soát', value: '4 giao dịch', detail: shortMoney(outstanding) }, { label: 'Cọc chưa chuyển doanh thu', value: '28 lịch', detail: shortMoney(revenue * 0.031) }, { label: 'Hoàn tiền chờ duyệt', value: '2 yêu cầu', detail: shortMoney(refunds * 0.24) }
-        ].map((item) => <div key={item.label} className="border-t border-brand-outline py-2.5 first:border-t-0 first:pt-0">
-          <div className="flex justify-between gap-3">
-            <dt className="text-body text-brand-text-muted">{item.label}</dt>
-            <dd className="text-body font-semibold tabular-nums text-brand-text">{item.value}</dd>
-          </div>
-          <p className="mt-0.5 text-caption tabular-nums text-brand-text-muted">{item.detail}</p>
-        </div>)}</dl>
-      </article>
-
-      <article className="p-4 ui-tone ui-tone--success">
-        <h2 className="text-card-title text-brand-text">Nhận định doanh thu</h2>
-        <ol className="mt-3 flex flex-col gap-3">{[
-          'Nail Art đóng góp lớn nhất và tăng nhanh nhất trong kỳ.', 'Đặt lịch trực tuyến tăng 23,4%, cao hơn các nguồn khách khác.', 'Tỷ lệ thực thu đạt 96,4%; cần hoàn tất 4 giao dịch đối soát.'
-        ].map((item, index) => <li key={item} className="flex gap-3">
-          <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-control bg-brand-surface text-caption font-bold text-brand-text">{index + 1}</span>
-          <p className="text-body leading-5 text-brand-text">{item}</p>
-        </li>)}</ol>
-      </article>
+          <dd className="text-right">
+            <strong className="tabular-nums text-body font-semibold text-brand-text">{money(item.value)}</strong>
+            <p className="text-caption text-brand-text-muted">{item.hint}</p>
+          </dd>
+        </div>)}
+      </dl>
     </section>
+
+    {/* Bốn chiều của BR-REV-004. Cộng bảng nào lại cũng ra đúng con số tổng phía trên. */}
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <RevenueBreakdown
+        title="Theo ngày"
+        hint="Ngày ghi nhận là ngày khách trả tiền, không phải ngày lập hóa đơn."
+        rows={report.byDay}
+        empty="Chưa có ngày nào phát sinh thu."
+      />
+      <RevenueBreakdown
+        title="Theo chi nhánh"
+        hint="Chi nhánh của hóa đơn, tức nơi khách được phục vụ."
+        rows={report.byBranch}
+        empty="Chưa có chi nhánh nào phát sinh thu."
+      />
+      <RevenueBreakdown
+        title="Theo nhân viên"
+        hint="Nguồn tính hoa hồng. Tỉ lệ đọc từ hồ sơ nhân viên tại thời điểm xem báo cáo."
+        rows={report.byStaff.map((row) => ({
+          ...row,
+          extra: row.commissionRate > 0
+            ? <>hoa hồng {(row.commissionRate * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% ={' '}
+              <strong className="tabular-nums text-brand-text">{money(row.commission)}</strong></>
+            : 'chưa đặt tỉ lệ hoa hồng'
+        }))}
+        empty="Chưa có hóa đơn nào được ghi công."
+      />
+      <RevenueBreakdown
+        title="Theo dịch vụ"
+        hint="Doanh thu của hóa đơn chia cho từng dòng hàng theo tỉ lệ giá trị."
+        rows={report.byService}
+        empty="Chưa có dịch vụ nào phát sinh thu."
+      />
+    </div>
+
+    <p className="text-caption text-brand-text-muted">
+      Bốn bảng trên cộng lại đều ra đúng {money(report.revenue)} — mỗi bảng là một cách nhìn khác
+      nhau của cùng một số tiền, không phải bốn phép tính riêng.
+    </p>
   </div>;
 }
 
-export default function TenantAdminReports({ searchQuery, onSearchQueryChange, selectedBranch, branches = [{ code: 'Q3', name: 'Chi nhánh Quận 3' }, { code: 'Q1', name: 'Chi nhánh Quận 1' }], tenantName = 'Lumière Nail Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason, onNotify }: TenantAdminReportsProps) {
+export default function TenantAdminReports({ searchQuery, onSearchQueryChange, selectedBranch, branches = [{ code: 'Q3', name: 'Chi nhánh Quận 3' }, { code: 'Q1', name: 'Chi nhánh Quận 1' }], tenantName = 'Lumière Nail Studio', roleLabel = 'Owner · Tenant Admin', accessMode = 'full', readOnlyReason, onNotify, activeTenantId, activeBranchId }: TenantAdminReportsProps) {
   const [tab, setTab] = useState<ReportTab>('REVENUE');
   /* Phân tích chi tiết thu gọn mặc định. Để mở sẵn thì trang dài hơn 4.000px và
      phần tóm tắt lại chìm nghỉm giữa các biểu đồ — đúng thứ vừa đi sửa. */
   const [detailOpen, setDetailOpen] = useState(false);
   const [dateRangeOpen, setDateRangeOpen] = useState(false);
-  const [dateRange, setDateRange] = useState({ start: '2026-07-01', end: '2026-07-20' });
-  const [draftDateRange, setDraftDateRange] = useState({ start: '2026-07-01', end: '2026-07-20' });
+  const [dateRange, setDateRange] = useState(defaultReportRange);
+  const [draftDateRange, setDraftDateRange] = useState(defaultReportRange);
   const [dateRangeError, setDateRangeError] = useState('');
   const [compare, setCompare] = useState<ComparisonFilter>('PREVIOUS_PERIOD');
   const [groupFilter, setGroupFilter] = useState('ALL');
@@ -625,6 +521,21 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
   const lineValues = [42, 50, 47, 58, 55, 66, 61, 74, 68, 82, 77, 91, 84, 96];
   const previousValues = [39, 43, 45, 49, 51, 55, 58, 62, 64, 68, 71, 74, 76, 80];
   const periodLabel = `${formatReportDate(dateRange.start)} – ${formatReportDate(dateRange.end)}`;
+
+  /*
+    Báo cáo doanh thu — dữ liệu thật từ ngày 16.
+
+    Chỉ tab "Doanh thu" đọc nó. Bốn tab còn lại (Vận hành, Khách hàng, Nhân sự, Xuất & lịch
+    gửi) vẫn ở dữ liệu mẫu và sẽ ở đó suốt MVP: BR-REV-006 nói API chỉ cung cấp endpoint tổng
+    hợp doanh thu, còn template báo cáo và lịch gửi định kỳ nằm ngoài phạm vi.
+  */
+  const revenueReport = useRevenueReport(
+    Boolean(activeTenantId),
+    activeTenantId || null,
+    dateRange.start,
+    dateRange.end,
+    activeBranchId
+  );
   const comparisonLabel = comparisonLabels[compare];
   const comparisonSuffix = compare === 'NONE' ? '' : `so với ${comparisonLabel.toLocaleLowerCase('vi')}`;
   const applyDateRange = () => {
@@ -641,18 +552,71 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
     setDateRangeOpen(false);
   };
 
-  if (isTenantAdminLiveDataMode()) {
+  /*
+    Trước ngày 16, chế độ dữ liệu thật chặn TOÀN BỘ màn báo cáo bằng một khung trống — đúng
+    lúc đó, vì mọi con số trên trang đều dựng từ hằng số nhân với nhau.
+
+    Nay tab "Doanh thu" chạy dữ liệu thật nên khung ấy đã sai: nó giấu đi thứ duy nhất trên
+    trang có thật. Bốn tab còn lại vẫn là dữ liệu mẫu và mang dải nhãn nói rõ điều đó — theo
+    đúng quy ước §9.2 của lộ trình, và theo BR-REV-006 vốn đóng cửa vĩnh viễn cho template báo
+    cáo, lịch gửi định kỳ và xuất file trong phạm vi MVP.
+  */
+  const liveDataMode = isTenantAdminLiveDataMode();
+
+  /*
+    Chế độ dữ liệu thật có một trang RIÊNG, không dùng chung cây render bên dưới.
+
+    Lý do không phải để tiện: phần đầu trang cũ — tóm tắt kỳ, bốn thẻ KPI, biểu đồ xu hướng,
+    top dịch vụ, cơ cấu chi nhánh, "việc cần làm" — dựng toàn bộ từ hằng số nhân với nhau.
+    Mục tiêu kỳ, tỉ lệ tăng trưởng, công suất ghế và dự báo chi phí vật tư đều cần dữ liệu mà
+    hệ thống **cố ý không thu thập**: BR-REV-006 giới hạn API ở đúng một endpoint tổng hợp
+    doanh thu, và BR-REV-007 bỏ hẳn module chi phí.
+
+    Trộn chúng vào cùng trang với con số thật là điều tệ nhất có thể làm ở đây — người đọc
+    không có cách nào phân biệt, và một con số bịa nằm cạnh một con số thật thì cả hai cùng
+    mất giá trị. Bản trình diễn giữ nguyên trang cũ, nơi đã nói rõ là dữ liệu mẫu.
+  */
+  if (liveDataMode) {
     return <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Báo cáo"
-      />
-      <section className="flex min-h-96 flex-col items-center justify-center gap-3 rounded-card border border-dashed border-brand-outline px-6 py-14 text-center">
-        <FileBarChart aria-hidden="true" className="h-10 w-10 text-brand-text-muted" />
-        <h2 className="text-card-title text-brand-text">Chưa có dữ liệu để lập báo cáo</h2>
-        <p className="max-w-lg text-body leading-6 text-brand-text-muted">
-          Các số liệu mẫu đã được loại bỏ. Báo cáo sẽ xuất hiện sau khi tenant có lịch hẹn hoàn tất, thanh toán hoặc dữ liệu vận hành thực tế.
+      <PageHeader title="Báo cáo doanh thu" />
+
+      <section className={`flex flex-wrap items-end gap-4 ${cardClass}`}>
+        <Field label="Từ ngày">
+          <input
+            type="date"
+            value={dateRange.start}
+            max={dateRange.end}
+            onChange={(event) => setDateRange((current) => ({ ...current, start: event.target.value }))}
+            className="h-10 rounded-md border border-brand-outline bg-brand-surface px-3 text-body text-brand-text outline-none focus:border-[var(--accent)]"
+          />
+        </Field>
+        <Field label="Đến ngày">
+          <input
+            type="date"
+            value={dateRange.end}
+            min={dateRange.start}
+            onChange={(event) => setDateRange((current) => ({ ...current, end: event.target.value }))}
+            className="h-10 rounded-md border border-brand-outline bg-brand-surface px-3 text-body text-brand-text outline-none focus:border-[var(--accent)]"
+          />
+        </Field>
+        <p className="ml-auto max-w-md text-caption text-brand-text-muted">
+          Doanh thu ghi nhận theo <strong className="text-brand-text">tiền thực thu</strong>, không
+          theo lịch hẹn hoàn tất. Một buổi làm xong mà khách chưa trả tiền thì chưa vào báo cáo.
         </p>
       </section>
+
+      <RevenueReportTab
+        report={revenueReport.report}
+        loading={revenueReport.loading}
+        error={revenueReport.error}
+        periodLabel={periodLabel}
+        onRetry={revenueReport.reload}
+      />
+
+      <MockDataNotice
+        title="Phạm vi trang này."
+        reason="Số liệu doanh thu đọc thật từ máy chủ theo tiền thực thu. Template báo cáo, lịch gửi định kỳ và xuất file nằm ngoài phạm vi MVP theo BR-REV-006, nên trang chỉ có báo cáo doanh thu."
+      />
     </div>;
   }
 
@@ -1020,7 +984,8 @@ export default function TenantAdminReports({ searchQuery, onSearchQueryChange, s
       </section>
 
       <div className={detailOpen ? 'mt-4' : 'hidden'}>
-      {tab === 'REVENUE' && <RevenueReportTab revenue={revenue} bookings={bookings} averageTicket={averageTicket} branches={branches} selectedBranch={selectedBranch} periodLabel={periodLabel} comparisonSuffix={comparisonSuffix} />}
+      {/* Nhánh này chỉ chạy ở chế độ trình diễn; dữ liệu thật có trang riêng phía trên. */}
+      {tab === 'REVENUE' && <RevenueReportTab report={revenueReport.report} loading={revenueReport.loading} error={revenueReport.error} periodLabel={periodLabel} onRetry={revenueReport.reload} />}
 
       {tab === 'OPERATIONS' && <div className="flex flex-col gap-4">
         <section aria-label="Chỉ số vận hành" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

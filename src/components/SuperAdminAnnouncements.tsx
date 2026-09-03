@@ -41,7 +41,6 @@ import {
   saveSystemAnnouncements
 } from '../utils/systemAnnouncements';
 import { formatAlertTimestamp } from '../utils/alerts';
-import { recordAuditLog } from '../utils/auditLogs';
 import BeautifulSelect from './BeautifulSelect';
 
 interface SuperAdminAnnouncementsProps {
@@ -377,15 +376,6 @@ export default function SuperAdminAnnouncements({
       onUpdateAnnouncements(nextList);
       saveSystemAnnouncements(nextList);
 
-      recordAuditLog({
-        eventCode: 'ANNOUNCEMENT.UPDATED',
-        event: 'Cập nhật thông báo hệ thống',
-        description: `Superadmin đã cập nhật thông báo: "${updated.title}" (${getCategoryLabel(updated.category)})`,
-        category: 'SYSTEM',
-        severity: updated.priority === 'URGENT' ? 'high' : 'medium',
-        status: 'success',
-        resource: 'ANNOUNCEMENTS'
-      });
 
       onNotify?.('Đã cập nhật thông báo thành công!', 'success');
     } else {
@@ -418,15 +408,6 @@ export default function SuperAdminAnnouncements({
       onUpdateAnnouncements(nextList);
       saveSystemAnnouncements(nextList);
 
-      recordAuditLog({
-        eventCode: isPublish ? 'ANNOUNCEMENT.BROADCAST' : 'ANNOUNCEMENT.DRAFTED',
-        event: isPublish ? 'Phát sóng thông báo toàn hệ thống' : 'Lưu bản nháp thông báo',
-        description: `Superadmin đã phát sóng thông báo: "${newAnnouncement.title}" tới đối tượng: ${newAnnouncement.targetAudience}`,
-        category: 'SYSTEM',
-        severity: newAnnouncement.priority === 'URGENT' ? 'high' : 'medium',
-        status: 'success',
-        resource: 'ANNOUNCEMENTS'
-      });
 
       onNotify?.(isPublish ? 'Đã phát sóng thông báo tới các Tenant!' : 'Đã lưu bản nháp thông báo.', 'success');
     }

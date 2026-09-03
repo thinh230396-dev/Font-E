@@ -16,7 +16,8 @@ export interface PolishColor {
   monthlyUsage: number;
   linkedDesigns: number;
   status: ColorStatus;
-  branches: ("Q1" | "Q3")[];
+  /** Mã chi nhánh — chuỗi mở, không phải hai mã của dữ liệu mẫu. Mở kiểu ở ngày 14. */
+  branches: string[];
   collection: string;
   location: string;
   updatedAt: string;

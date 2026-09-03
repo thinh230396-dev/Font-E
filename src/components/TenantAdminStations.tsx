@@ -6,7 +6,7 @@ import {
   SprayCan, UserRound, Wrench, X
 } from 'lucide-react';
 import BeautifulSelect from './BeautifulSelect';
-import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader } from './ui';
+import { Button, DataTable, Field, MockDataNotice, Modal, StatusBadge, getStatusDefinition, PageHeader } from './ui';
 import { tenantStorageKey } from '../utils/tenantStorage';
 
 type StationArea = string;
@@ -450,6 +450,13 @@ export default function TenantAdminStations({
 
   return (
     <div className="space-y-5">
+      {/*
+        §9.3 xếp "Ghế & khu vực" vào mức C: có giao diện đầy đủ nhưng cố ý không có bảng nào
+        phía sau. Dải nhãn thêm ở ngày 17 vì màn này hiện những con số trông rất giống thật —
+        "9 vị trí", "64% công suất trung bình ngày" — mà không con số nào đọc từ dữ liệu.
+      */}
+      <MockDataNotice reason="Sơ đồ ghế và công suất nằm ngoài phạm vi backend MVP (§9.3), nên mọi con số ở đây là dữ liệu mẫu lưu trên trình duyệt." />
+
       {/* Đầu trang: tiêu đề, phạm vi chi nhánh và hành động chính (README §8.2, §8.3) */}
       <PageHeader
         title="Ghế & khu vực"

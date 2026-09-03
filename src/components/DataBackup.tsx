@@ -53,7 +53,6 @@ import {
   saveLocalStorageData
 } from '../data';
 import type { BackupPolicy, BackupSnapshot, RestoreJob } from '../types';
-import { recordAuditLog } from '../utils/auditLogs';
 import { Modal, useToast } from './ui';
 
 interface DataBackupProps {
@@ -308,11 +307,6 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
     setBackupProgress(12);
     setShowBackupModal(false);
     setActiveTab('snapshots');
-    recordAuditLog({
-      eventCode: 'DATA.BACKUP.STARTED', event: 'Khởi chạy sao lưu thủ công',
-      description: `Superadmin bắt đầu snapshot ${id} với phạm vi ${SCOPE_CONFIG[manualScope].label}.`, severity: 'medium', status: 'success', category: 'DATA',
-      resource: `Snapshot ${id}`, resourceId: id, method: 'CLIENT /backups', metadata: { scope: manualScope, crossRegionReplication: manualReplicate, reason: manualNote.trim() }
-    });
 
     let progress = 12;
     const interval = window.setInterval(() => {
@@ -332,11 +326,6 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
         setBackupProgress(0);
         setManualNote('');
         showToast(`Tạo thành công bản sao lưu ${id} (${manualScope === 'FULL' ? '483.8 MB' : '319.4 MB'})`);
-        recordAuditLog({
-          eventCode: 'DATA.BACKUP.COMPLETED', event: 'Hoàn tất sao lưu thủ công',
-          description: `Snapshot ${id} đã hoàn tất và được lưu an toàn tại ${policy.primaryRegion}.`, severity: 'low', status: 'success', category: 'DATA',
-          resource: `Snapshot ${id}`, resourceId: id, method: `CLIENT /backups/${id}`, metadata: { integrityVerified: policy.automaticVerification }
-        });
       }
     }, 180);
   };
@@ -349,11 +338,6 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
       const verifiedAt = new Date().toISOString();
       setBackups((current) => current.map((item) => item.id === snapshot.id ? { ...item, integrityStatus: 'VERIFIED', verifiedAt } : item));
       showToast(`Đã xác minh tính toàn vẹn: ${snapshot.id} hợp lệ 100%.`);
-      recordAuditLog({
-        eventCode: 'DATA.BACKUP.VERIFIED', event: 'Xác minh tính toàn vẹn snapshot',
-        description: `Checksum và manifest của ${snapshot.id} đã được xác minh thành công.`, severity: 'low', status: 'success', category: 'DATA',
-        resource: `Snapshot ${snapshot.id}`, resourceId: snapshot.id, method: `CLIENT /backups/${snapshot.id}/verify`
-      });
     }, 850);
   };
 
@@ -371,11 +355,6 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
     anchor.click();
     URL.revokeObjectURL(url);
     showToast(`Đã tải xuống manifest của ${snapshot.id}`);
-    recordAuditLog({
-      eventCode: 'DATA.BACKUP.MANIFEST.DOWNLOADED', event: 'Tải manifest sao lưu',
-      description: `Superadmin tải manifest của ${snapshot.id}.`, severity: 'medium', status: 'success', category: 'DATA',
-      resource: `Snapshot ${snapshot.id}`, resourceId: snapshot.id, method: `CLIENT /backups/${snapshot.id}/manifest`
-    });
   };
 
   const deleteSnapshot = (snapshot: BackupSnapshot) => {
@@ -387,11 +366,6 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
       setBackups((current) => current.filter((item) => item.id !== snapshot.id));
       if (selectedSnapshotId === snapshot.id) setSelectedSnapshotId(null);
       showToast(`Đã xóa snapshot ${snapshot.id}`);
-      recordAuditLog({
-        eventCode: 'DATA.BACKUP.DELETED', event: 'Xóa snapshot sao lưu',
-        description: `Superadmin xóa snapshot ${snapshot.id}.`, severity: 'high', status: 'success', category: 'DATA',
-        resource: `Snapshot ${snapshot.id}`, resourceId: snapshot.id, method: `CLIENT /backups/${snapshot.id}`
-      });
     });
   };
 
@@ -421,12 +395,6 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
       setRestoreSnapshotId(null);
       setActiveTab('restores');
       showToast(`Đang khởi tạo tiến trình phục hồi ${job.id}...`);
-      recordAuditLog({
-        eventCode: 'DATA.RESTORE.REQUESTED', event: 'Yêu cầu phục hồi dữ liệu',
-        description: `Superadmin yêu cầu phục hồi ${restoreSnapshot.id} vào ${restoreTarget === 'PRODUCTION' ? 'Production' : 'DR Sandbox'}.`,
-        severity: restoreTarget === 'PRODUCTION' ? 'high' : 'medium', status: 'success', category: 'DATA', resource: `Restore job ${job.id}`, resourceId: job.id,
-        method: 'CLIENT /restore-jobs', metadata: { snapshotId: restoreSnapshot.id, target: restoreTarget, maintenanceMode: job.maintenanceMode, preRestoreSnapshot: job.preRestoreSnapshot }
-      });
 
       window.setTimeout(() => setRestoreJobs((current) => current.map((item) => item.id === job.id ? { ...item, status: 'RESTORING', validationPassed: true, progress: 48 } : item)), 600);
       window.setTimeout(() => setRestoreJobs((current) => current.map((item) => item.id === job.id ? { ...item, status: 'VERIFYING', progress: 85 } : item)), 1200);
@@ -434,11 +402,6 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
         const completedAt = new Date().toISOString();
         setRestoreJobs((current) => current.map((item) => item.id === job.id ? { ...item, status: 'SUCCESS', progress: 100, completedAt } : item));
         showToast(`Phục hồi ${job.id} vào ${restoreTarget === 'PRODUCTION' ? 'Production' : 'DR Sandbox'} thành công 100%!`);
-        recordAuditLog({
-          eventCode: 'DATA.RESTORE.COMPLETED', event: 'Hoàn tất phục hồi dữ liệu',
-          description: `Restore job ${job.id} đã hoàn tất trong môi trường ${restoreTarget}.`, severity: 'medium', status: 'success', category: 'DATA',
-          resource: `Restore job ${job.id}`, resourceId: job.id, method: `CLIENT /restore-jobs/${job.id}`
-        });
       }, 1800);
     };
 
@@ -454,17 +417,8 @@ export default function DataBackup({ showConfirm }: DataBackupProps) {
   const savePolicy = () => {
     if (!draftPolicy.encryptionEnabled || !draftPolicy.kmsKeyId.trim()) return;
     const nextPolicy: BackupPolicy = { ...draftPolicy, updatedAt: new Date().toISOString(), updatedBy: 'superadmin@salonsys.vn' };
-    const changes = Object.entries(nextPolicy)
-      .filter(([key, value]) => value !== policy[key as keyof BackupPolicy] && !['updatedAt', 'updatedBy'].includes(key))
-      .slice(0, 12)
-      .map(([field, value]) => ({ field, before: String(policy[field as keyof BackupPolicy]), after: String(value) }));
     setPolicy(nextPolicy);
     setDraftPolicy(nextPolicy);
-    recordAuditLog({
-      eventCode: 'DATA.BACKUP.POLICY.UPDATED', event: 'Cập nhật chính sách sao lưu',
-      description: `Superadmin cập nhật ${changes.length} thiết lập trong chính sách backup.`, severity: 'high', status: 'success', category: 'DATA',
-      resource: 'Chính sách sao lưu hệ thống', resourceId: 'BACKUP-POLICY', method: 'CLIENT /backup-policy', changes
-    });
     showToast('Đã lưu thành công chính sách sao lưu và cập nhật lịch tự động.');
   };
 

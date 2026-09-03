@@ -9,7 +9,15 @@
 export type TenantStatus = 'ACTIVE' | 'TRIAL' | 'OVERDUE' | 'SUSPENDED';
 export type SubscriptionPackageName = string;
 export type SubscriptionPackageStatus = 'DRAFT' | 'ACTIVE' | 'DEPRECATED' | 'ARCHIVED';
-export type CurrencyCode = 'USD' | 'VND';
+/**
+ * BR-VAL-003 — tiền tệ của toàn hệ thống là **VND, số nguyên**. Quyết định 10 của
+ * `README-BACKEND-ROADMAP.md` bỏ hẳn USD ở ngày 18.
+ *
+ * Vẫn là một kiểu union một phần tử chứ không phải xóa hẳn: `Invoice`,
+ * `SubscriptionPackage` và bản ghi tiệm đều còn cột tiền tệ trong dữ liệu đã lưu, và
+ * giữ kiểu ở đây là cách rẻ nhất để `tsc` chặn ngay lần đầu ai đó viết lại `'USD'`.
+ */
+export type CurrencyCode = 'VND';
 
 export interface SubscriptionCapability {
   key: string;

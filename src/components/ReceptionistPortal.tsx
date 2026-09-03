@@ -68,8 +68,25 @@ import { resetTenantMockStorage } from '../utils/mockDataReset';
 import { validateAndCalculatePromotion, type LoyaltyProgram } from '../utils/promotionUtils';
 import { serviceSeed, type SalonService } from './TenantAdminServices';
 import { designSeed, colorSeed, type NailDesign, type PolishColor } from './TenantAdminNailGallery';
-import { Button, Field, Modal, PageHeader, StatusBadge } from './ui';
+import { Button, Field, MockDataNotice, Modal, PageHeader, StatusBadge } from './ui';
 import { tenantStorageKey, tenantStorageScope } from '../utils/tenantStorage';
+import useAppointments from '../hooks/useAppointments';
+import useStaff from '../hooks/useStaff';
+import useSalonServices from '../hooks/useSalonServices';
+import useSalesInvoices from '../hooks/useSalesInvoices';
+import type {
+  PaymentApiMethod,
+  SalesInvoiceDto,
+  SalesInvoiceLineInput
+} from '../services/salesInvoices';
+
+import useCustomers from '../hooks/useCustomers';
+import { describeApiError, type ApiError } from '../services/apiClient';
+import type {
+  AppointmentApiStatus,
+  AppointmentDto,
+  AppointmentWarning
+} from '../services/appointments';
 
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
 const TenantAdminCustomers = lazy(() => import('./TenantAdminCustomers'));
@@ -81,7 +98,15 @@ const ReceptionistTechnicians = lazy(() => import('./ReceptionistTechnicians'));
 type ReceptionPage = 'desk' | 'appointments' | 'customers' | 'products' | 'stations' | 'technicians' | 'payments';
 type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' | 'REFUNDED';
 type AppointmentSource = 'ONLINE' | 'RECEPTION' | 'PHONE' | 'ZALO';
-type BranchCode = 'Q1' | 'Q3';
+/**
+ * Mã chi nhánh, do chủ tiệm tự đặt lúc lập chi nhánh nên tập giá trị của nó là MỞ.
+ *
+ * Trước ngày 14 chỗ này là `'Q1' | 'Q3'` — hai mã của bộ dữ liệu mẫu, bị đóng cứng thành
+ * kiểu. Một tiệm thật đặt chi nhánh tên `HN-01` sẽ không lọt qua nổi phép kiểm kiểu, và
+ * mọi bản ghi của họ bị lọc rớt trong im lặng vì `appointment.branch === branchCode` không
+ * bao giờ đúng.
+ */
+type BranchCode = string;
 type PaymentMethod = 'CASH' | 'BANK' | 'CARD' | 'MOMO' | 'ZALOPAY';
 type InvoiceLineType = 'SERVICE' | 'PRODUCT';
 type TechnicianStatus = 'PRESENT' | 'NOT_CHECKED_IN' | 'SERVING' | 'BREAK' | 'SICK_REPORTED' | 'ON_LEAVE' | 'LATE';
@@ -280,6 +305,12 @@ interface InvoiceLineDraft {
 }
 
 interface CatalogItem {
+  /**
+   * Mã dịch vụ của máy chủ. Rỗng với `defaultServiceCatalog` — bảng giá mẫu dùng khi tiệm
+   * chưa khai dịch vụ nào — và khi đó lịch hẹn không đặt được: API chỉ nhận mã dịch vụ có
+   * thật, và đó là điều đúng. Bảng giá bịa không được phép sinh ra một lịch hẹn thật.
+   */
+  id?: string;
   name: string;
   price: number;
   category: string;
@@ -339,7 +370,11 @@ interface ReceptionPayment {
   deposit: number;
   paid: number;
   refunded: number;
-  status: 'PAID' | 'PARTIAL' | 'PENDING' | 'REFUNDED' | 'FAILED';
+  /**
+   * BR-INV-013 — năm trạng thái của máy chủ. `FAILED` giữ lại cho các bản ghi mẫu cũ nhưng
+   * không bao giờ được sinh ra nữa: không có cổng thanh toán thật nên không có giao dịch hỏng.
+   */
+  status: 'PAID' | 'PARTIAL' | 'PENDING' | 'REFUNDED' | 'CANCELLED' | 'FAILED';
   method?: PaymentMethod;
   reference?: string;
   splitPayments?: Array<{ method: PaymentMethod; amount: number; reference?: string }>;
@@ -450,6 +485,167 @@ const nowTime = () => {
 const money = (value: number) => `${new Intl.NumberFormat('vi-VN').format(value)}đ`;
 const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
+/**
+ * Những gì cổng lễ tân hiển thị mà **máy chủ không có chỗ để lưu**.
+ *
+ * Tám trường này không phải sơ suất của lược đồ: dị ứng, nhãn phân loại và nhắc lịch nằm ở
+ * mức D của §9.4 — bỏ hẳn khỏi MVP — còn giờ bắt đầu thật, số phút gia hạn và danh sách hóa
+ * đơn gộp là khái niệm chỉ sống trong một ca làm việc ở quầy. Giữ chúng trong một bản đồ
+ * riêng theo mã lịch hẹn, thay vì nhét vào `note` của máy chủ: nhét vào đó là biến một ô ghi
+ * chú cho người đọc thành một định dạng dữ liệu mà không ai khai báo ở đâu cả.
+ */
+interface AppointmentExtras {
+  serviceStartedAt?: string;
+  serviceExtendedMinutes?: number;
+  mergedWithAppointmentIds?: string[];
+  allergies?: string[];
+  specialTags?: string[];
+  reminderSent?: boolean;
+  firstVisit?: boolean;
+  createdBy?: string;
+}
+
+/** Sáu trạng thái máy chủ dùng, ánh xạ sang bảy trạng thái của giao diện cũ. */
+const toPortalStatus = (status: AppointmentApiStatus): AppointmentStatus => status;
+
+/**
+ * Một lịch hẹn của máy chủ, mặc lại hình dạng mà cây render đang dùng.
+ *
+ * Vì sao có lớp chuyển đổi này thay vì sửa cây render theo DTO: `ReceptionistPortal.tsx` dài
+ * hơn năm nghìn dòng và đọc `appointment.start`, `appointment.duration`, `appointment.staff`
+ * ở hàng trăm chỗ. Đổi hình dạng nghĩa là sửa từng chỗ ấy — công việc dài, rủi ro cao, và
+ * không mua lại được gì cho người dùng. Lộ trình §5 ngày 14–15 nói thẳng: đừng viết lại file
+ * này, chỉ thay chỗ khởi tạo state và các hàm ghi.
+ *
+ * @param price Tổng giá lấy từ danh mục dịch vụ. Lịch hẹn ở máy chủ **không lưu giá** —
+ *   BR-SVC-006 chốt giá tại thời điểm lập hóa đơn, không phải lúc đặt lịch — nên con số ở đây
+ *   chỉ là ước tính để quầy nhìn, và hóa đơn thật vẫn do máy chủ tính.
+ */
+/**
+ * Một hóa đơn của máy chủ, mặc lại hình dạng mà màn thu tiền đang dùng.
+ *
+ * Cùng lý do với `toReceptionAppointment`: cây render đọc `payment.paid`, `payment.items`,
+ * `payment.audit` ở hàng chục chỗ, và đổi hình dạng của chúng không mua lại gì cho người dùng.
+ *
+ * Ba chỗ đáng chú ý trong phép ánh xạ:
+ *
+ * - **`deposit` và `refunded` đọc từ các dòng thu**, không phải hai cột riêng. BR-PAY-002 nói
+ *   ba loại dòng tiền cùng nằm một bảng, và tiền cọc là loại `DEPOSIT` do BR-APT-031 chuyển
+ *   sang lúc lập hóa đơn.
+ * - **`audit` dựng lại từ chính các dòng thu.** Máy chủ không lưu nhật ký dạng câu chữ trên
+ *   hóa đơn — nó ghi vào bảng nhật ký kiểm toán (BR-AUD-001) — nhưng mỗi dòng tiền tự nó đã là
+ *   một sự kiện có giờ, có số tiền, có phương thức.
+ * - **`cashier` rỗng.** Máy chủ có lưu người lập hóa đơn nhưng không gửi ra trong DTO; tên
+ *   người thu nằm ở nhật ký kiểm toán. Bịa ra tên người đang đăng nhập sẽ ghi sai người cho
+ *   mọi hóa đơn do ca trước lập.
+ */
+/**
+ * Gộp mẫu vẽ, màu sơn và sản phẩm kèm theo vào **tên dòng hóa đơn**.
+ *
+ * Máy chủ chỉ có tên và đơn giá cho một dòng nhập tay (BR-INV-012) — không có cột nào cho
+ * "mẫu vẽ độ khó 3" hay "màu Merlot". Ba thứ đó thuộc thư viện mẫu nail, một module ở mức C
+ * của §9.3, nên chúng đi vào phần tên để hóa đơn in ra vẫn nói đủ thứ khách đã dùng.
+ */
+const describeInvoiceLine = (line: InvoiceLineDraft): string => {
+  let name = line.name.trim();
+
+  if (line.fromCustomerName) name = `[${line.fromCustomerName}] ${name}`;
+
+  if (line.designName) {
+    const difficulty = line.difficultyLabel || (line.designLevel ? `Độ khó mức ${line.designLevel}` : '');
+    name += ` + Mẫu: ${line.designName}${difficulty ? ` (${difficulty})` : ''}`;
+  }
+
+  if (line.attachedColorName) name += ` · Màu: ${line.attachedColorName}`;
+  if (line.attachedProductName) name += ` · Kèm: ${line.attachedProductName}`;
+
+  return name;
+};
+
+const toReceptionPayment = (dto: SalesInvoiceDto): ReceptionPayment => {
+  const sumOf = (type: 'DEPOSIT' | 'REFUND') => dto.payments
+    .filter((row) => row.type === type)
+    .reduce((total, row) => total + Math.abs(row.amount), 0);
+
+  const collectedRows = dto.payments.filter((row) => row.type === 'PAYMENT');
+  const last = collectedRows[collectedRows.length - 1];
+  const issuedAt = new Date(dto.createdAt);
+  const pad = (value: number) => String(value).padStart(2, '0');
+
+  return {
+    id: dto.id,
+    appointmentId: dto.appointmentId || undefined,
+    customer: dto.customerName || dto.customerPhone,
+    phone: dto.customerPhone,
+    branch: dto.branchId,
+    createdAt: `${issuedAt.toLocaleDateString('vi-VN')} · ${pad(issuedAt.getHours())}:${pad(issuedAt.getMinutes())}`,
+    subtotal: dto.subtotal,
+    discount: dto.discount,
+    tip: dto.tip,
+    deposit: sumOf('DEPOSIT'),
+    total: dto.total,
+    paid: dto.collected,
+    refunded: sumOf('REFUND'),
+    status: dto.status,
+    method: last?.method,
+    reference: last?.reference || undefined,
+    splitPayments: collectedRows.length > 1
+      ? collectedRows.map((row) => ({
+        method: row.method,
+        amount: row.amount,
+        reference: row.reference || undefined
+      }))
+      : undefined,
+    cashier: '—',
+    source: dto.appointmentId ? 'Từ lịch hẹn' : 'Bán lẻ tại quầy',
+    items: dto.lines.map((line) => ({
+      name: line.name,
+      quantity: line.quantity,
+      amount: line.lineTotal,
+      staff: dto.staffName || '—'
+    })),
+    note: dto.note || undefined,
+    audit: dto.payments.map((row) => {
+      const at = new Date(row.paidAt);
+      const clock = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+      const label = row.type === 'DEPOSIT' ? 'Tiền cọc' : row.type === 'REFUND' ? 'Hoàn tiền' : 'Thu';
+
+      return `${clock} · ${label} ${Math.abs(row.amount).toLocaleString('vi-VN')}đ (${row.method})${row.reason ? ` — ${row.reason}` : ''}`;
+    })
+  };
+};
+
+const toReceptionAppointment = (
+  dto: AppointmentDto,
+  price: number,
+  extras: AppointmentExtras
+): ReceptionAppointment => {
+  const start = new Date(dto.startAt);
+  const pad = (value: number) => String(value).padStart(2, '0');
+
+  return {
+    id: dto.id,
+    customerId: dto.customerId,
+    customer: dto.customerName || dto.customerPhone,
+    phone: dto.customerPhone,
+    date: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+    start: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+    duration: dto.totalMinutes,
+    service: dto.services[0]?.serviceName || 'Dịch vụ',
+    services: dto.services.map((line) => line.serviceName),
+    staff: dto.staffName,
+    branch: dto.branchId,
+    source: dto.source,
+    status: toPortalStatus(dto.status),
+    price,
+    deposit: dto.deposit,
+    note: dto.note || '',
+    station: dto.station || undefined,
+    createdAt: dto.createdAt,
+    ...extras
+  };
+};
+
 export const getServiceTimerStatus = (appointment: ReceptionAppointment, nowTimeString?: string) => {
   if (appointment.status !== 'IN_SERVICE') return null;
 
@@ -520,6 +716,7 @@ const seedAppointments = (): ReceptionAppointment[] => {
   ];
 };
 
+/** ⚠️ MÃ CHẾT từ ngày 15 — hóa đơn nay đến từ API. Giữ lại tới đợt dọn dẹp ngày 18. */
 const seedPayments = (): ReceptionPayment[] => {
   const todayLabel = new Date().toLocaleDateString('vi-VN');
   const yesterdayLabel = new Date(Date.now() - 86_400_000).toLocaleDateString('vi-VN');
@@ -782,10 +979,19 @@ const productCatalog: CatalogItem[] = [
 ];
 
 const invoiceStaff = ['Thảo Nguyễn', 'Minh Châu', 'Hà My', 'Quốc Bảo', 'Thuỳ Dương', 'An Nhiên', 'Gia Huy', 'Chưa phân công'];
-const stationCatalog: Record<BranchCode, string[]> = {
+/**
+ * Ghế và phòng theo chi nhánh — dữ liệu mẫu, vì "Ghế & khu vực" nằm ở mức C của §9.3 và
+ * không có bảng nào phía sau. Chi nhánh không có trong bảng này thì rơi về `DEFAULT_STATIONS`.
+ */
+const stationCatalog: Record<string, string[]> = {
   Q3: ['M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-06', 'P-01', 'P-02', 'P-03', 'P-04', 'VIP-01', 'VIP-02'],
   Q1: ['M-11', 'M-12', 'M-13', 'M-14', 'P-11', 'P-12', 'P-13', 'V-11', 'V-12'],
 };
+
+/** Chi nhánh chưa có sơ đồ ghế mẫu vẫn phải chọn được chỗ, thay vì nhận một danh sách rỗng. */
+const DEFAULT_STATIONS = ['M-01', 'M-02', 'M-03', 'M-04', 'P-01', 'P-02', 'VIP-01'];
+
+const stationsFor = (branch: BranchCode): string[] => stationCatalog[branch] || DEFAULT_STATIONS;
 
 const technicianStatusMeta: Record<TechnicianStatus, { label: string; helper: string }> = {
   PRESENT: { label: 'Có mặt', helper: 'Sẵn sàng nhận khách' },
@@ -864,21 +1070,35 @@ function MetricCard({ icon: Icon, label, value, note, tone }: { icon: typeof Cal
 export default function ReceptionistPortal({ account, themeMode, onThemeChange, onLogout }: ReceptionistPortalProps) {
   const tenantName = account.tenantName || 'Nailé Studio';
   /*
-    Mã chi nhánh thật đến từ phiên đăng nhập và có tập giá trị mở. Dữ liệu mẫu của cổng lễ tân
-    thì vẫn gắn cứng hai chi nhánh 'Q1' và 'Q3', nên phép thu hẹp ở đây là chỗ nối tạm giữa
-    hai thế giới: mã nào khớp dữ liệu mẫu thì dùng, còn lại lùi về 'Q3'.
+    Mã chi nhánh lấy thẳng từ phiên đăng nhập (BR-EMP-004), không còn thu hẹp về hai giá trị
+    mẫu nữa — phép ép `account.branchCode === 'Q1' ? 'Q1' : 'Q3'` đã bỏ ở ngày 14 cùng lúc với
+    việc mở kiểu `BranchCode`.
 
-    Nó sẽ biến mất ở ngày 8, khi màn chi nhánh lên API và các màn mức C không còn dựng danh
-    sách chi nhánh từ hằng số nữa. Cho tới lúc đó, tên chi nhánh hiển thị vẫn lấy từ phiên
-    (`account.branchName`) nên người dùng luôn thấy đúng tên chi nhánh của mình, kể cả khi mã
-    không nằm trong hai giá trị mẫu.
+    Còn lại một chỗ lùi mặc định về 'Q3': tài khoản chủ tiệm không thuộc chi nhánh nào nên
+    phiên của họ không có mã, mà màn hình này vẫn cần một chi nhánh để dựng sơ đồ ghế của dữ
+    liệu mẫu. Với lễ tân — người thật sự dùng cổng này — nhánh ấy không bao giờ chạy.
   */
-  const branchCode: BranchCode = account.branchCode === 'Q1' ? 'Q1' : 'Q3';
+  const branchCode: BranchCode = account.branchCode || 'Q3';
+
+  /*
+    Khóa chi nhánh dùng để LỌC dữ liệu thật, tách hẳn khỏi `branchCode` vốn chỉ là nhãn hiển
+    thị và là khóa tra sơ đồ ghế mẫu. Lẫn hai thứ này khiến màn hình rỗng trong im lặng: mọi
+    DTO mang `BRN-LUMIERE-Q3`, còn phép lọc thì so với "Q3".
+
+    Rỗng với chủ tiệm — họ không thuộc chi nhánh nào — và khi đó không lọc gì cả, đúng với
+    BR-ISO-004: chỉ lễ tân mới bị thu hẹp theo chi nhánh.
+  */
+  const branchScopeId = account.branchId || null;
   const branchName = account.branchName || `${tenantName} · Chi nhánh ${branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}`;
   const nextThemeMode = themeMode === 'dark' ? 'light' : 'dark';
   const appointmentStorageKey = tenantStorageKey('tenant-admin-appointments-v2');
   const paymentStorageKey = tenantStorageKey('tenant-admin-payments-v1');
   const technicianStorageKey = tenantStorageKey('receptionist-technicians-v1');
+  /*
+    Phần trang trí của lịch hẹn mà máy chủ không có cột để lưu — xem `AppointmentExtras`.
+    Khóa theo cả chi nhánh vì hai quầy không dùng chung một ca làm việc.
+  */
+  const appointmentExtrasStorageKey = `${tenantStorageKey('receptionist-appointment-extras-v1')}:${account.branchCode || 'ALL'}`;
   const shiftStorageKey = `receptionist-shift-v1:${account.email}`;
   const servicesStorageKey = tenantStorageKey('tenant-admin-services-v2');
   const designsStorageKey = tenantStorageKey('tenant-admin-nail-designs-v1');
@@ -940,14 +1160,16 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       }
     };
 
+    /*
+      Sự kiện này từng là cách hai tab của cùng một trình duyệt báo nhau rằng lịch hẹn vừa
+      đổi, hồi cả hai cùng đọc chung một khóa `localStorage`. Từ ngày 14 nguồn sự thật là máy
+      chủ, nên việc đúng là nạp lại từ đó — dữ liệu đính kèm trong sự kiện có thể đã cũ hơn
+      thứ máy chủ đang giữ, và nhận nó là tự nguyện quay về một bản chụp quá khứ.
+    */
     const handleAppointmentsUpdated = (e: Event) => {
-      const customEvent = e as CustomEvent<{ tenantName?: string; appointments?: ReceptionAppointment[] }>;
+      const customEvent = e as CustomEvent<{ tenantName?: string }>;
       if (!customEvent.detail?.tenantName || customEvent.detail.tenantName === tenantName) {
-        if (customEvent.detail?.appointments) {
-          setAppointments(customEvent.detail.appointments);
-        } else {
-          setAppointments(readStorage(appointmentStorageKey, seedAppointments()));
-        }
+        appointmentBoard.reload();
       }
     };
 
@@ -961,13 +1183,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       if (e.key === colorsStorageKey) {
         setColorsData(readStorage(colorsStorageKey, colorSeed));
       }
-      if (e.key === appointmentStorageKey && e.newValue) {
-        try {
-          setAppointments(JSON.parse(e.newValue));
-        } catch {
-          // ignore
-        }
-      }
+      // Khóa lịch hẹn trong localStorage không còn là nguồn sự thật, nên không nghe nữa.
     };
 
     window.addEventListener('salonsys_services_updated', handleServicesUpdated);
@@ -985,8 +1201,33 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     };
   }, [servicesStorageKey, designsStorageKey, colorsStorageKey, appointmentStorageKey, tenantName]);
 
-  // Catalog dịch vụ đồng bộ từ Tenant Admin theo chi nhánh hiện tại
+  /*
+    Bảng giá dịch vụ — dữ liệu THẬT từ ngày 14.
+
+    Đây là điều kiện để đặt lịch chạy được chút nào: API chỉ nhận mã dịch vụ có thật, mà bảng
+    giá mẫu trong `localStorage` thì mang những cái tên do bộ nạp giao diện bịa ra ("Nail Art
+    Premium"…). Tra một cái tên bịa trong danh mục thật sẽ không ra gì, và mọi lần tiếp nhận
+    khách đều dừng ở câu "dịch vụ không còn trong bảng giá".
+
+    Lùi về `servicesData` của localStorage khi tiệm chưa khai dịch vụ nào, để màn hình vẫn có
+    thứ để trình bày — nhưng lúc đó `id` rỗng nên lịch hẹn vẫn không đặt được, và đó là điều
+    đúng: một bảng giá bịa không được phép sinh ra lịch hẹn thật.
+  */
+  const salonServices = useSalonServices(true, account.tenantId || null);
+
   const serviceCatalog: CatalogItem[] = useMemo(() => {
+    const live = salonServices.services.filter((item) => item.status === 'ACTIVE');
+
+    if (live.length > 0) {
+      return live.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        category: item.category || 'Dịch vụ',
+        duration: item.durationMinutes
+      }));
+    }
+
     const available = servicesData.filter((s) => {
       if (s.status === 'HIDDEN') return false;
       if (s.branches && s.branches.length > 0 && !s.branches.includes(branchCode)) return false;
@@ -1014,7 +1255,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
         requiredSkill: s.requiredSkill,
       };
     });
-  }, [servicesData, branchCode]);
+  }, [salonServices.services, servicesData, branchCode]);
 
   // Catalog mẫu vẽ nail art đồng bộ từ Tenant Admin Gallery
   const nailArtTemplates: NailArtTemplate[] = useMemo(() => {
@@ -1117,9 +1358,216 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   }, [sidebarOpen]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
-  const [appointments, setAppointments] = useState<ReceptionAppointment[]>(() => readStorage(appointmentStorageKey, seedAppointments()));
-  const [payments, setPayments] = useState<ReceptionPayment[]>(() => readStorage(paymentStorageKey, seedPayments()));
-  const [technicians, setTechnicians] = useState<ReceptionTechnician[]>(() => normalizeTechnicians(readStorage(technicianStorageKey, technicianSeed)));
+  /*
+    ── Lịch hẹn: dữ liệu thật, từ ngày 14 ────────────────────────────────────────────────
+    Trước đây đây là một `useState` đọc `localStorage`. Nay nó là kết quả suy ra từ hook, và
+    đó là khác biệt quan trọng nhất của cả màn hình: KHÔNG còn hàm `setAppointments` nào.
+
+    Cố ý bỏ hẳn phép vá mảng tại chỗ. Đây là màn hình mà hai máy ở quầy cùng mở một lúc là
+    chuyện thường; vá tại chỗ thì máy này không bao giờ thấy lịch máy kia vừa đặt, và hai
+    người sẽ xếp hai khách vào cùng một giờ mà đều tin mình đúng. Mọi thao tác ghi vì vậy
+    gọi API rồi để hook nạp lại — chậm hơn một lời gọi mạng, đổi lấy việc màn hình luôn nói
+    đúng thứ máy chủ đang giữ.
+  */
+  const [boardDate, setBoardDate] = useState<string>(() => today());
+
+  const appointmentBoard = useAppointments(true, account.tenantId || null, boardDate);
+
+  const [appointmentExtras, setAppointmentExtras] = useState<Record<string, AppointmentExtras>>(
+    () => readStorage(appointmentExtrasStorageKey, {} as Record<string, AppointmentExtras>)
+  );
+
+  const appointments = useMemo(() => appointmentBoard.appointments.map((dto) => {
+    const price = dto.services.reduce((total, line) => {
+      const match = serviceCatalog.find((item) => item.name === line.serviceName);
+      return total + (match ? match.price : 0);
+    }, 0);
+
+    return toReceptionAppointment(dto, price, appointmentExtras[dto.id] || {});
+  }), [appointmentBoard.appointments, appointmentExtras, serviceCatalog]);
+
+  /** Tra ngược về bản ghi gốc của máy chủ, cho những chỗ cần `staffId` hoặc `nextStatuses`. */
+  const appointmentDtoById = useMemo(
+    () => new Map(appointmentBoard.appointments.map((dto) => [dto.id, dto])),
+    [appointmentBoard.appointments]
+  );
+
+  const staffDirectory = useStaff(true, account.tenantId || null);
+  const customerDirectory = useCustomers(true, account.tenantId || null);
+
+  /*
+    Giữ dịch vụ đang chọn trên hai biểu mẫu luôn nằm trong bảng giá THẬT.
+
+    Giá trị khởi tạo của chúng là 'Gel Manicure' — một cái tên của bộ dữ liệu mẫu. Khi bảng giá
+    lên dữ liệu thật, cái tên đó không còn tồn tại, nhưng thẻ `<select>` vẫn *hiển thị* mục đầu
+    tiên vì trình duyệt không có gì khác để vẽ. Người ở quầy thấy "Chăm sóc da chân" đang được
+    chọn, bấm gửi, rồi nhận về "dịch vụ không còn trong bảng giá" — một câu vô lý với thứ họ
+    đang nhìn. Đây là lỗi chỉ xuất hiện khi hai nguồn dữ liệu gặp nhau, và nó im lặng cho tới
+    tận lúc bấm nút.
+  */
+  /** Lỗi API hiện qua đúng dải thông báo mà màn hình này vốn dùng, không dựng cơ chế thứ hai. */
+  const reportApiError = (error: ApiError) => setToast(describeApiError(error).message);
+
+  /**
+   * BR-APT-005 và BR-APT-013 — đặt trong quá khứ và đặt ngoài ca là **cảnh báo, không chặn**.
+   * Chúng đi kèm một lần lưu ĐÃ thành công, nên phải hiện sau câu báo thành công chứ không
+   * thay thế nó: người ở quầy cần biết lịch đã lưu trước, rồi mới tới chuyện cần để ý.
+   */
+  const reportWarnings = (warnings: AppointmentWarning[]) => {
+    if (warnings.length === 0) return;
+
+    window.setTimeout(() => setToast(warnings.map((item) => item.message).join(' · ')), 1200);
+  };
+
+  /**
+   * Tên kỹ thuật viên trên biểu mẫu, đổi sang mã mà API cần.
+   *
+   * Biểu mẫu của cổng lễ tân chọn người bằng **tên** vì đó là thứ người ở quầy nói với nhau.
+   * Máy chủ thì làm việc bằng mã. Chỗ dịch giữa hai thứ đó nằm ở đây, một lần duy nhất.
+   */
+  const staffIdByName = (name: string): string | null =>
+    staffDirectory.staff.find((item) => item.fullName === name)?.id || null;
+
+  /**
+   * Hồ sơ khách theo số điện thoại, tạo mới nếu chưa có — BR-CUS-004.
+   *
+   * Mọi lịch hẹn bắt buộc gắn một hồ sơ khách, kể cả khách vãng lai vừa bước vào. Không có
+   * khách ẩn danh: tổng chi tiêu và hạng khách ở BR-CUS-007 đều đọc ngược từ hóa đơn, nên một
+   * lượt khách không có hồ sơ là một lượt biến mất khỏi mọi con số về sau.
+   *
+   * BR-CUS-002 — số điện thoại là duy nhất trong một tiệm, nên nó chính là khóa tra cứu.
+   */
+  const ensureCustomerId = async (phone: string, fullName: string): Promise<string | null> => {
+    const trimmedPhone = phone.trim();
+    const existing = customerDirectory.customers.find((item) => item.phone === trimmedPhone);
+
+    if (existing) return existing.id;
+
+    const created = await customerDirectory.createCustomer({
+      phone: trimmedPhone,
+      fullName: fullName.trim()
+    });
+
+    if (created.status === 'error') {
+      reportApiError(created.error);
+      return null;
+    }
+
+    return created.data.id;
+  };
+
+  /**
+   * Dựng lại thân request "thay trọn" từ bản ghi máy chủ đang giữ.
+   *
+   * `PUT /api/appointments/{id}` là phép thay trọn: bỏ trống một trường là xóa trường đó. Khi
+   * chỉ muốn đổi đúng một thứ — thêm ghi chú đối soát chẳng hạn — vẫn phải gửi đủ mọi trường
+   * còn lại, và đây là chỗ lấy chúng ra để không ai phải nhớ danh sách ấy bằng tay.
+   */
+  const toSaveInput = (dto: AppointmentDto) => ({
+    customerId: dto.customerId,
+    staffId: dto.staffId,
+    startAt: dto.startAt,
+    serviceIds: dto.services.map((line) => line.serviceId),
+    source: dto.source,
+    station: dto.station || undefined,
+    note: dto.note || undefined,
+    deposit: dto.deposit
+  });
+
+  /** Ghi phần trang trí chỉ sống ở client, kèm lưu xuống localStorage. */
+  const patchAppointmentExtras = (id: string, patch: AppointmentExtras) => {
+    setAppointmentExtras((current) => {
+      const next = { ...current, [id]: { ...current[id], ...patch } };
+
+      try {
+        localStorage.setItem(appointmentExtrasStorageKey, JSON.stringify(next));
+      } catch {
+        // Hết dung lượng thì bỏ qua: đây là phần trang trí, mất nó không mất dữ liệu thật.
+      }
+
+      return next;
+    });
+  };
+  /*
+    ── Hóa đơn: dữ liệu thật, từ ngày 15 ────────────────────────────────────────────────
+    Cùng khuôn với lịch hẹn ở ngày 14: không còn `setPayments`, mọi thao tác ghi gọi API rồi
+    để hook nạp lại. Ở đây phép nạp lại còn quan trọng hơn — một lần thu tiền có thể làm đổi
+    cả một bản ghi KHÁC, vì BR-APT-026 cho lịch hẹn tự hoàn tất khi hóa đơn thu đủ.
+  */
+  const invoiceBook = useSalesInvoices(true, account.tenantId || null, boardDate);
+
+  const payments = useMemo(
+    () => invoiceBook.invoices.map(toReceptionPayment),
+    [invoiceBook.invoices]
+  );
+
+  /** Tra ngược về hóa đơn gốc của máy chủ, cho những chỗ cần `remaining` hoặc danh sách dòng thu. */
+  const invoiceDtoById = useMemo(
+    () => new Map(invoiceBook.invoices.map((dto) => [dto.id, dto])),
+    [invoiceBook.invoices]
+  );
+  /*
+    ── Kỹ thuật viên: danh sách thật, chấm công ở client ─────────────────────────────────
+    Hồ sơ nhân viên đến từ API — đó là điều bắt buộc, vì phân công lịch hẹn cần MÃ nhân viên
+    có thật; một danh sách tên bịa thì không lịch nào đặt được.
+
+    Nhưng bảy trạng thái mà quầy dùng — có mặt, đang phục vụ, nghỉ giải lao, báo ốm, đi trễ —
+    là **chấm công**, và §9.4 xếp chấm công vào nhóm bỏ hẳn khỏi MVP. Máy chủ chỉ có bốn trạng
+    thái nhân sự và không có cột nào cho giờ vào ca thực tế. Nên chúng ở lại client, trong một
+    bản đồ theo mã nhân viên — cùng cách đã làm với phần trang trí của lịch hẹn.
+  */
+  const [technicianAttendance, setTechnicianAttendance] = useState<Record<string, Partial<ReceptionTechnician>>>(
+    () => readStorage(technicianStorageKey, {} as Record<string, Partial<ReceptionTechnician>>)
+  );
+
+  const patchTechnicianAttendance = (id: string, patch: Partial<ReceptionTechnician>) => {
+    setTechnicianAttendance((current) => {
+      const next = { ...current, [id]: { ...current[id], ...patch } };
+
+      try {
+        localStorage.setItem(technicianStorageKey, JSON.stringify(next));
+      } catch {
+        // Hết dung lượng thì bỏ qua: chấm công mất đi không mất dữ liệu thật nào.
+      }
+
+      return next;
+    });
+  };
+
+  const technicians: ReceptionTechnician[] = useMemo(() => {
+    const live = staffDirectory.staff.filter((item) => item.role === 'TECHNICIAN');
+
+    if (live.length === 0) return normalizeTechnicians(technicianSeed);
+
+    return live.map((item) => {
+      const attendance = technicianAttendance[item.id] || {};
+      const startHour = Number(item.shiftStart.slice(0, 2)) || 0;
+      const shift: TechnicianShift = startHour >= 13 ? 'AFTERNOON' : startHour >= 11 ? 'FULL_DAY' : 'MORNING';
+
+      // BR-EMP-005 quyết định người này có mặt hay không; chấm công của quầy chỉ tinh chỉnh
+      // bên trong nhóm "đang làm việc", không được phép biến một người đã nghỉ việc thành
+      // người sẵn sàng nhận khách.
+      const baseStatus: TechnicianStatus = item.status === 'WORKING'
+        ? 'PRESENT'
+        : item.status === 'LEAVE' ? 'ON_LEAVE' : 'NOT_CHECKED_IN';
+
+      return {
+        id: item.id,
+        name: item.fullName,
+        initials: item.fullName.split(' ').slice(-2).map((part) => part[0] || '').join('').toUpperCase(),
+        specialty: item.skills[0] || 'Nail Technician',
+        skills: item.skills.length ? item.skills : ['Nail Technician'],
+        shift,
+        shiftLabel: `${item.shiftStart}–${item.shiftEnd}`,
+        status: item.status === 'WORKING' ? (attendance.status || baseStatus) : baseStatus,
+        branch: item.branchId,
+        checkIn: attendance.checkIn,
+        checkOut: attendance.checkOut,
+        leaveNote: attendance.leaveNote,
+        avatarTone: 'from-brand-secondary to-brand-secondary'
+      };
+    });
+  }, [staffDirectory.staff, technicianAttendance]);
   const [shift, setShift] = useState<ShiftState>(() => readStorage(shiftStorageKey, { status: 'OPEN', openedAt: new Date().toISOString(), openingCash: 1000000 }));
   const [clockTick, setClockTick] = useState(() => Date.now());
   useEffect(() => {
@@ -1169,6 +1617,18 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [walkInErrors, setWalkInErrors] = useState<Record<string, string>>({});
   const [appointmentEditErrors, setAppointmentEditErrors] = useState<Record<string, string>>({});
   const [walkIn, setWalkIn] = useState({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [] as string[], specialTags: [] as string[], designName: '', designLevel: 0, designSurcharge: 0 });
+
+  useEffect(() => {
+    const firstName = serviceCatalog[0]?.name;
+    if (!firstName) return;
+
+    const known = (name: string) => serviceCatalog.some((item) => item.name === name);
+
+    if (!known(walkIn.service)) setWalkIn((current) => ({ ...current, service: firstName }));
+    if (!known(quickWalkInForm.service)) {
+      setQuickWalkInForm((current) => ({ ...current, service: firstName }));
+    }
+  }, [serviceCatalog, walkIn.service, quickWalkInForm.service]);
   const [paymentForm, setPaymentForm] = useState({ method: 'CASH' as PaymentMethod, discount: '0', tip: '0', reference: '', note: '' });
   const [invoiceLines, setInvoiceLines] = useState<InvoiceLineDraft[]>([]);
   const [invoiceCatalogTab, setInvoiceCatalogTab] = useState<'SERVICE' | 'ART' | 'PRODUCT'>('SERVICE');
@@ -1255,23 +1715,27 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       return updated;
     });
   }, [paymentAppointment, invoiceLines, paymentForm, selectedPromoId, invoiceDraftsStorageKey]);
-  useEffect(() => {
-    try {
-      localStorage.setItem(appointmentStorageKey, JSON.stringify(appointments));
-      window.dispatchEvent(new CustomEvent('salonsys_appointments_updated', { detail: { tenantName, appointments } }));
-    } catch {
-      // Local storage optional
-    }
-  }, [appointmentStorageKey, appointments, tenantName]);
+  /*
+    🔴 Effect ghi lịch hẹn xuống localStorage rồi phát sự kiện đã bị GỠ ở ngày 14, và việc gỡ
+    là bắt buộc chứ không phải dọn dẹp cho gọn.
+
+    Nó tạo ra một vòng lặp vô hạn ngay khi lịch hẹn chuyển sang dữ liệu thật: mảng đổi → effect
+    phát `salonsys_appointments_updated` → chỗ nghe gọi `reload()` → nạp lại → mảng mới có danh
+    tính khác → effect chạy lại. Lần chạy thử đầu tiên bắn hơn mười lăm request giống hệt nhau
+    trong chưa tới một giây.
+
+    Nguyên nhân sâu hơn: đây là tàn dư của thời localStorage là nguồn sự thật, khi phát sự kiện
+    là cách duy nhất để hai màn hình biết dữ liệu vừa đổi. Nay máy chủ giữ vai đó, nên việc ghi
+    một bản sao xuống trình duyệt vừa thừa vừa nguy hiểm — nó dựng lại đúng cái nguồn sự thật
+    thứ hai mà cả lát cắt này đi bỏ.
+  */
   useEffect(() => localStorage.setItem(invoiceDraftsStorageKey, JSON.stringify(invoiceDrafts)), [invoiceDraftsStorageKey, invoiceDrafts]);
   useEffect(() => localStorage.setItem(paymentStorageKey, JSON.stringify(payments)), [paymentStorageKey, payments]);
-  useEffect(() => localStorage.setItem(technicianStorageKey, JSON.stringify(technicians)), [technicianStorageKey, technicians]);
-  useEffect(() => {
-    setTechnicians((current) => {
-      const normalized = normalizeTechnicians(current);
-      return JSON.stringify(normalized) === JSON.stringify(current) ? current : normalized;
-    });
-  }, []);
+  /*
+    Hai effect cũ ghi cả danh sách kỹ thuật viên xuống localStorage rồi chuẩn hóa lại nó đã bỏ
+    ở ngày 14: danh sách nay suy ra từ API mỗi lần đọc, còn phần chấm công thì `patchTechnicianAttendance`
+    tự lưu. Giữ lại chúng là chép đè hồ sơ thật bằng một bản chụp của trình duyệt.
+  */
   useEffect(() => localStorage.setItem(shiftStorageKey, JSON.stringify(shift)), [shift, shiftStorageKey]);
   useEffect(() => {
     if (!toast) return;
@@ -1279,14 +1743,22 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  /*
+    Máy chủ đã thu hẹp theo chi nhánh cho lễ tân (BR-ISO-004) và theo ngày (tham số truy vấn
+    của hook), nên phép lọc ở đây chỉ còn là lớp phòng thân cho trường hợp chủ tiệm mở cổng
+    này — họ nhận về cả tiệm.
+  */
   const branchTodayAppointments = useMemo(() => appointments
-    .filter((appointment) => appointment.date === today())
-    .filter((appointment) => appointment.branch === branchCode), [appointments, branchCode]);
+    .filter((appointment) => !branchScopeId || appointment.branch === branchScopeId),
+  [appointments, branchScopeId]);
   const todayAppointments = useMemo(() => [...branchTodayAppointments]
     .sort((a, b) => a.start.localeCompare(b.start)), [branchTodayAppointments]);
   const activeAppointments = todayAppointments.filter((appointment) => ['CHECKED_IN', 'IN_SERVICE'].includes(appointment.status));
   const upcomingAppointments = todayAppointments.filter((appointment) => ['PENDING', 'CONFIRMED'].includes(appointment.status));
-  const branchTechnicians = useMemo(() => technicians.filter((technician) => technician.branch === branchCode), [branchCode, technicians]);
+  const branchTechnicians = useMemo(
+    () => technicians.filter((technician) => !branchScopeId || technician.branch === branchScopeId),
+    [branchScopeId, technicians]
+  );
   const technicianSpecialties = useMemo(() => ['ALL', ...Array.from(new Set(branchTechnicians.map((technician) => technician.specialty)))], [branchTechnicians]);
   const filteredTechnicians = useMemo(() => {
     const query = technicianQuery.trim().toLowerCase();
@@ -1303,11 +1775,21 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     notArrived: branchTechnicians.filter((technician) => technician.status === 'NOT_CHECKED_IN' || technician.status === 'LATE').length,
     reportedOff: branchTechnicians.filter((technician) => technician.status === 'SICK_REPORTED' || technician.status === 'ON_LEAVE').length,
   };
-  const activeAssignmentService = walkInOpen ? walkIn.service : editingAppointment ? appointmentEditForm.service : '';
-  const assignableTechnicians = branchTechnicians.filter((technician) => (
-    !['NOT_CHECKED_IN', 'SICK_REPORTED', 'ON_LEAVE'].includes(technician.status)
-    && (!activeAssignmentService || technician.skills.some((skill) => skill.toLowerCase() === activeAssignmentService.trim().toLowerCase()))
-  ));
+  /*
+    Chỉ lọc theo việc người đó có mặt hay không.
+
+    Phép lọc theo KỸ NĂNG đã bỏ ở ngày 14, và không phải vì tiện: BR-EMP-010 nói rõ kỹ năng
+    chỉ để hiển thị và hệ thống **không cưỡng chế** khi phân công, còn §9.4 xếp "ràng buộc kỹ
+    năng theo dịch vụ" vào nhóm bỏ hẳn khỏi MVP.
+
+    Lỗi này chỉ lộ ra khi dữ liệu thật về: bộ dữ liệu mẫu ghi kỹ năng trùng nguyên văn tên
+    dịch vụ nên phép so sánh luôn khớp, còn hồ sơ nhân viên thật ghi kỹ năng theo nhóm ("Gel",
+    "Nail Art"). Kết quả là ô chọn kỹ thuật viên rỗng trơn và không giải thích gì — quầy không
+    tiếp nhận được khách nào.
+  */
+  const assignableTechnicians = branchTechnicians.filter(
+    (technician) => !['NOT_CHECKED_IN', 'SICK_REPORTED', 'ON_LEAVE'].includes(technician.status)
+  );
   const completedIds = new Set(payments.filter((payment) => payment.status === 'PAID').map((payment) => payment.appointmentId));
   const protectedAppointmentIds = new Set(payments.filter((payment) => ['PAID', 'PARTIAL', 'REFUNDED'].includes(payment.status)).map((payment) => payment.appointmentId).filter(Boolean));
   const paidToday = payments.filter((payment) => payment.status === 'PAID' && payment.createdAt.includes(new Date().toLocaleDateString('vi-VN')));
@@ -1463,18 +1945,20 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
         errors.start = `Salon ngưng nhận khách mới sau 20:00 (đóng cửa lúc 20:30). Khung giờ ${draft.start} quá trễ.`;
       } else if (endMinutes > SALON_CLOSE_MINUTES) {
         errors.start = `Dịch vụ kéo dài ${duration} phút sẽ kết thúc lúc ${formatMinutes(endMinutes)} (sau giờ đóng cửa 20:30).`;
-      } else if (technician) {
-        // 6. KIỂM TRA KHỚP CA LÀM VIỆC CỦA KỸ THUẬT VIÊN
-        if (technician.shift === 'MORNING' && endMinutes > 16 * 60) {
-          errors.staff = `${technician.name} làm ca sáng (08:00–16:00). Dịch vụ kéo dài đến ${formatMinutes(endMinutes)}.`;
-        } else if (technician.shift === 'AFTERNOON' && startMinutes < 12 * 60) {
-          errors.staff = `${technician.name} làm ca chiều (12:00–20:30). Không thể nhận lịch lúc ${draft.start}.`;
-        } else if (technician.checkIn && startMinutes < minutesOf(technician.checkIn)) {
-          errors.staff = `${technician.name} hôm nay check-in lúc ${technician.checkIn}, chưa sẵn sàng lúc ${draft.start}.`;
-        } else if (technician.checkOut && endMinutes > minutesOf(technician.checkOut)) {
-          errors.staff = `${technician.name} hôm nay kết thúc ca lúc ${technician.checkOut}, không kịp hoàn thành.`;
-        }
       }
+
+      /*
+        6. NGOÀI CA CỦA KỸ THUẬT VIÊN — bỏ chặn ở ngày 14.
+
+        BR-APT-013 nói rõ: đặt lịch ngoài ca thì **cảnh báo, vẫn cho lưu**. Máy chủ đã cưỡng
+        chế đúng như vậy và gửi về mảng `warnings` bên cạnh phản hồi thành công, nên giao diện
+        chỉ việc hiện chúng.
+
+        Trước đây chỗ này chặn cứng, và nó chặn thật: khách quen nhờ đúng một kỹ thuật viên
+        làm nốt cuối ca là chuyện thường ở tiệm nail, mà quầy thì không có cách nào bỏ qua.
+        Đây cũng là điểm khác giữa hai loại luật — trùng giờ kỹ thuật viên (BR-APT-011) mới là
+        thứ chặn cứng, và nó do máy chủ trả `409 SLOT_CONFLICT`.
+      */
 
       // Xung đột lịch Kỹ thuật viên
       if (!errors.staff && draft.staff && draft.staff !== 'Chưa phân công') {
@@ -1515,19 +1999,25 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       errors.price = 'Giá dự kiến phải lớn hơn 0đ.';
     }
 
-    if (draft.station && !stationCatalog[branchCode].includes(draft.station)) {
+    if (draft.station && !stationsFor(branchCode).includes(draft.station)) {
       errors.station = 'Ghế hoặc phòng không thuộc chi nhánh hiện tại.';
     }
 
     return errors;
   };
 
+  /**
+   * Nạp lại dữ liệu mẫu cho những phần **còn ở mức C** — thu tiền, kỹ thuật viên, ca làm việc.
+   *
+   * Cố ý KHÔNG đụng tới lịch hẹn nữa: từ ngày 14 lịch hẹn là dữ liệu thật trong database, và
+   * một nút "nạp lại dữ liệu mẫu" mà ghi đè được lên nó thì đó không còn là nút trình diễn,
+   * đó là một nút xóa dữ liệu. Bảng lịch chỉ được nạp lại từ máy chủ.
+   */
   const loadMockReceptionData = () => {
-    const nextAppointments = seedAppointments();
-    const nextPayments = seedPayments();
-    setAppointments(nextAppointments);
-    setPayments(nextPayments);
-    setTechnicians(technicianSeed);
+    appointmentBoard.reload();
+    invoiceBook.reload();
+    // Danh sách kỹ thuật viên nay là dữ liệu thật; nút nạp dữ liệu mẫu không đụng tới nó.
+    staffDirectory.reload();
     setShift({ status: 'OPEN', openedAt: new Date().toISOString(), openingCash: 1500000 });
     setPaymentAppointment(null);
     setEditingAppointment(null);
@@ -1537,7 +2027,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setSearchQuery('');
     setFormError('');
     resetTenantMockStorage(tenantStorageScope());
-    setToast(`Đã nạp ${nextAppointments.length} lịch hẹn, ${nextPayments.length} hóa đơn và reset mock data toàn bộ chức năng tenant.`);
+    setToast("Đã reset mock data các chức năng còn ở dữ liệu mẫu. Lịch hẹn và hóa đơn giữ nguyên dữ liệu thật.");
   };
 
   const openTechnicianEdit = (technician: ReceptionTechnician) => {
@@ -1571,27 +2061,33 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       return;
     }
 
-    setTechnicians((current) => current.map((technician) => technician.id === editingTechnician.id ? {
-      ...technician,
+    /*
+      Chỉ ghi phần chấm công. Ca làm việc cố định của nhân viên (`shift`) là hồ sơ nhân sự do
+      chủ tiệm đặt ở màn "Nhân viên" — lễ tân ghi nhận người đó hôm nay có mặt hay không, chứ
+      không đổi ca chính thức của họ.
+    */
+    patchTechnicianAttendance(editingTechnician.id, {
       status: technicianEditForm.status,
-      shift: technicianEditForm.shift,
-      shiftLabel: technicianShiftMeta[technicianEditForm.shift],
       checkIn: technicianEditForm.checkIn || undefined,
       checkOut: technicianEditForm.checkOut || undefined,
-      leaveNote: technicianEditForm.leaveNote.trim() || undefined,
-    } : technician));
+      leaveNote: technicianEditForm.leaveNote.trim() || undefined
+    });
     setEditingTechnician(null);
     setToast(`Đã cập nhật trạng thái và thời gian làm việc của ${editingTechnician.name}.`);
   };
 
-  const updateAppointmentStatus = (appointment: ReceptionAppointment, status: AppointmentStatus) => {
+  const updateAppointmentStatus = async (appointment: ReceptionAppointment, status: AppointmentStatus) => {
     if (!requireOpenShift()) return;
-    const allowedTransitions: Partial<Record<AppointmentStatus, AppointmentStatus[]>> = {
-      PENDING: ['CHECKED_IN'],
-      CONFIRMED: ['CHECKED_IN'],
-      CHECKED_IN: ['IN_SERVICE'],
-    };
-    if (!allowedTransitions[appointment.status]?.includes(status)) {
+
+    /*
+      Sơ đồ chuyển trạng thái KHÔNG còn chép ở đây. Máy chủ gửi kèm `nextStatuses` cho từng
+      lịch hẹn, tính từ đúng bảng BR-APT-022 ở tầng Domain, nên hỏi nó là hỏi thẳng nguồn sự
+      thật. Bảng `allowedTransitions` cũ chỉ liệt kê ba dòng và đã sai với hủy lịch lẫn khách
+      không đến — đúng loại lệch mà một bản chép luôn dẫn tới.
+    */
+    const dto = appointmentDtoById.get(appointment.id);
+
+    if (dto && !dto.nextStatuses.includes(status as AppointmentApiStatus)) {
       setToast(`Không thể chuyển từ “${appointmentStatusLabel[appointment.status]}” sang “${appointmentStatusLabel[status]}”.`);
       return;
     }
@@ -1616,9 +2112,22 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
         setToast(`${appointment.staff} đang phục vụ ${otherActiveService.customer}. Vui lòng chờ hoặc phân công lại.`);
         return;
       }
-      setTechnicians((current) => current.map((item) => item.name === appointment.staff ? { ...item, status: 'SERVING' } : item));
+      const servingId = staffIdByName(appointment.staff);
+      if (servingId) patchTechnicianAttendance(servingId, { status: 'SERVING' });
     }
-    setAppointments((current) => current.map((item) => item.id === appointment.id ? { ...item, status } : item));
+    const result = await appointmentBoard.changeStatus(appointment.id, status as AppointmentApiStatus);
+
+    if (result.status === 'error') {
+      reportApiError(result.error);
+      return;
+    }
+
+    // Giờ bắt đầu phục vụ THẬT, để đồng hồ đếm ngược ở quầy chạy đúng. Máy chủ không lưu mốc
+    // này — nó chỉ giữ giờ hẹn — nên đây là một trong những thứ ở `AppointmentExtras`.
+    if (status === 'IN_SERVICE') {
+      patchAppointmentExtras(appointment.id, { serviceStartedAt: new Date().toISOString() });
+    }
+
     const messages: Partial<Record<AppointmentStatus, string>> = {
       CHECKED_IN: `${appointment.customer} đã check-in.`,
       IN_SERVICE: `${appointment.customer} đã bắt đầu dịch vụ.`,
@@ -1642,7 +2151,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setFormError('');
   };
 
-  const submitDeleteAppointment = (event: FormEvent) => {
+  const submitDeleteAppointment = async (event: FormEvent) => {
     event.preventDefault();
     if (!deletingAppointment) return;
     const trimmedReason = deleteReason.trim();
@@ -1651,11 +2160,33 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       return;
     }
     const auditNote = `[${new Date().toLocaleString('vi-VN')}] ${account.displayName} xóa khỏi quầy: ${trimmedReason}`;
-    setAppointments((current) => current.map((item) => item.id === deletingAppointment.id ? {
-      ...item,
-      status: 'CANCELLED',
-      note: [item.note, auditNote].filter(Boolean).join('\n'),
-    } : item));
+    const dto = appointmentDtoById.get(deletingAppointment.id);
+
+    /*
+      Hai lời gọi, và thứ tự có ý nghĩa: ghi lý do TRƯỚC rồi mới hủy.
+
+      BR-APT-024 không có lệnh xóa lịch hẹn — thứ giao diện gọi là "xóa" chính là chuyển sang
+      CANCELLED. Nhưng lịch đã hủy là một trạng thái cuối và không sửa được nữa, nên nếu hủy
+      trước thì lý do đối soát không còn đường nào vào hồ sơ.
+    */
+    if (dto) {
+      const noted = await appointmentBoard.updateAppointment(dto.id, {
+        ...toSaveInput(dto),
+        note: [dto.note, auditNote].filter(Boolean).join('\n')
+      });
+
+      if (noted.status === 'error') {
+        reportApiError(noted.error);
+        return;
+      }
+    }
+
+    const cancelled = await appointmentBoard.changeStatus(deletingAppointment.id, 'CANCELLED');
+
+    if (cancelled.status === 'error') {
+      reportApiError(cancelled.error);
+      return;
+    }
     if (editingAppointment?.id === deletingAppointment.id) setEditingAppointment(null);
     if (paymentAppointment?.id === deletingAppointment.id) setPaymentAppointment(null);
     setDeletingAppointment(null);
@@ -1664,7 +2195,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setToast(`Đã hủy lịch tạo nhầm của ${deletingAppointment.customer} và lưu lý do đối soát.`);
   };
 
-  const submitWalkIn = (event: FormEvent) => {
+  const submitWalkIn = async (event: FormEvent) => {
     event.preventDefault();
     setFormError('');
     if (!requireOpenShift()) return;
@@ -1675,16 +2206,56 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       return;
     }
     setWalkInErrors({});
-    const appointment: ReceptionAppointment = {
-      id: makeId('APT'), customer: walkIn.customer.trim(), phone: walkIn.phone.trim(), date: today(), start: walkIn.start,
-      duration: Number(walkIn.duration), service: walkIn.service, staff: walkIn.staff, branch: branchCode,
-      source: 'RECEPTION', status: 'CHECKED_IN', price: Number(walkIn.price), deposit: 0, note: walkIn.note.trim(),
-      station: walkIn.station || undefined, createdBy: account.displayName, firstVisit: true, createdAt: new Date().toISOString(),
-    };
-    setAppointments((current) => [appointment, ...current]);
+
+    const customerId = await ensureCustomerId(walkIn.phone, walkIn.customer);
+    if (!customerId) return;
+
+    const staffId = staffIdByName(walkIn.staff);
+    if (!staffId) {
+      setWalkInErrors({ staff: 'Chọn kỹ thuật viên phụ trách trước khi tiếp nhận khách.' });
+      setFormError('Lịch hẹn phải có kỹ thuật viên phụ trách — chi nhánh của lịch đi theo người làm.');
+      return;
+    }
+
+    const serviceId = serviceCatalog.find((item) => item.name === walkIn.service)?.id;
+    if (!serviceId) {
+      setFormError('Dịch vụ này không còn trong bảng giá. Chọn lại một dịch vụ đang bán.');
+      return;
+    }
+
+    const created = await appointmentBoard.createAppointment({
+      customerId,
+      staffId,
+      startAt: `${today()}T${walkIn.start}:00+07:00`,
+      serviceIds: [serviceId],
+      status: 'CONFIRMED',
+      source: 'RECEPTION',
+      station: walkIn.station || undefined,
+      note: walkIn.note.trim() || undefined
+    });
+
+    if (created.status === 'error') {
+      reportApiError(created.error);
+      return;
+    }
+
+    // Khách vãng lai bước vào là đã có mặt, nên check-in ngay sau khi đặt. Máy chủ không cho
+    // tạo thẳng ở CHECKED_IN: BR-APT-021 chỉ mở hai trạng thái khởi tạo.
+    await appointmentBoard.changeStatus(created.data.appointment.id, 'CHECKED_IN');
+
+    patchAppointmentExtras(created.data.appointment.id, {
+      createdBy: account.displayName,
+      firstVisit: true,
+      allergies: walkIn.allergies,
+      specialTags: walkIn.specialTags
+    });
+
+    const welcomedName = walkIn.customer.trim() || walkIn.phone.trim();
+
+    reportWarnings(created.data.warnings);
     setWalkInOpen(false);
     setWalkIn({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [], specialTags: [], designName: '', designLevel: 0, designSurcharge: 0 });
-    setToast(`Đã tiếp nhận khách vãng lai ${appointment.customer}.`);
+    setToast(`Đã tiếp nhận khách vãng lai ${welcomedName}.`);
   };
 
   const handleWalkInServiceChange = (serviceName: string) => {
@@ -1699,7 +2270,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     });
   };
 
-  const submitQuickWalkIn = (action: 'START_NOW' | 'CHECK_IN_QUEUE' = 'START_NOW') => {
+  const submitQuickWalkIn = async (action: 'START_NOW' | 'CHECK_IN_QUEUE' = 'START_NOW') => {
     if (!requireOpenShift()) return;
     const customerName = quickWalkInForm.customer.trim() || `Khách vãng lai #${Date.now().toString().slice(-4)}`;
     const phone = quickWalkInForm.phone.trim() || '0900 000 000';
@@ -1709,36 +2280,60 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     const station = quickWalkInForm.station || undefined;
     const isStartNow = action === 'START_NOW';
 
-    const newAppointment: ReceptionAppointment = {
-      id: makeId('APT'),
-      customer: customerName,
-      phone,
-      date: today(),
-      start: nowTime(),
-      duration,
-      service: quickWalkInForm.service,
-      services: [quickWalkInForm.service],
-      staff,
-      station,
-      branch: branchCode,
-      source: 'RECEPTION',
-      status: isStartNow ? 'IN_SERVICE' : 'CHECKED_IN',
-      serviceStartedAt: isStartNow ? new Date().toISOString() : undefined,
-      price,
-      deposit: 0,
-      note: quickWalkInForm.note.trim(),
-      allergies: quickWalkInForm.allergies,
-      createdBy: account.displayName,
-      firstVisit: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    setAppointments((current) => [newAppointment, ...current]);
-
-    if (isStartNow && staff !== 'Chưa phân công') {
-      setTechnicians((current) => current.map((t) => t.name === staff ? { ...t, status: 'SERVING' } : t));
+    const staffId = staffIdByName(staff);
+    if (!staffId) {
+      setToast('Chọn kỹ thuật viên phụ trách trước — chi nhánh của lịch hẹn đi theo người làm.');
+      return;
     }
 
+    const serviceId = serviceCatalog.find((item) => item.name === quickWalkInForm.service)?.id;
+    if (!serviceId) {
+      setToast('Dịch vụ này không còn trong bảng giá. Chọn lại một dịch vụ đang bán.');
+      return;
+    }
+
+    const customerId = await ensureCustomerId(phone, customerName);
+    if (!customerId) return;
+
+    const created = await appointmentBoard.createAppointment({
+      customerId,
+      staffId,
+      startAt: `${today()}T${nowTime()}:00+07:00`,
+      serviceIds: [serviceId],
+      status: 'CONFIRMED',
+      source: 'RECEPTION',
+      station,
+      note: quickWalkInForm.note.trim() || undefined
+    });
+
+    if (created.status === 'error') {
+      reportApiError(created.error);
+      return;
+    }
+
+    const newId = created.data.appointment.id;
+
+    /*
+      Hai bước, không phải một: BR-APT-021 chỉ cho tạo lịch ở PENDING hoặc CONFIRMED, còn sơ đồ
+      mục 16.1 bắt đi qua CHECKED_IN mới tới được IN_SERVICE. Nút "bắt đầu ngay" ở quầy vì vậy
+      là hai lần chuyển liên tiếp chứ không phải một lối tắt — và đó là điều đúng: một khách
+      đang được phục vụ thì chắc chắn đã đến tiệm.
+    */
+    await appointmentBoard.changeStatus(newId, 'CHECKED_IN');
+
+    if (isStartNow) {
+      await appointmentBoard.changeStatus(newId, 'IN_SERVICE');
+      patchAppointmentExtras(newId, { serviceStartedAt: new Date().toISOString() });
+      patchTechnicianAttendance(staffId, { status: 'SERVING' });
+    }
+
+    patchAppointmentExtras(newId, {
+      createdBy: account.displayName,
+      firstVisit: true,
+      allergies: quickWalkInForm.allergies
+    });
+
+    reportWarnings(created.data.warnings);
     setQuickWalkInOpen(false);
     setQuickWalkInForm({
       customer: '',
@@ -1756,14 +2351,44 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setToast(isStartNow ? `⚡ Đã tiếp nhận & bắt đầu dịch vụ ngay cho ${customerName}!` : `⚡ Đã tiếp nhận & check-in hàng chờ cho ${customerName}!`);
   };
 
+  /**
+   * Gia hạn thời gian phục vụ ngay tại ghế.
+   *
+   * Chỉ ghi ở client: đây là chuyện của đồng hồ đếm ngược trong một ca làm việc, không phải
+   * một lần dời lịch. Đổi `startAt` ở máy chủ sẽ kéo theo phép chống trùng lịch chạy lại và có
+   * thể từ chối — trong khi khách thì đang ngồi đó và việc đã kéo dài thật rồi.
+   */
+  /**
+   * Đổi kỹ thuật viên phụ trách một lịch hẹn — thao tác của màn "Kỹ thuật viên".
+   *
+   * Đây là một lần sửa thật chứ không phải đổi nhãn hiển thị: chi nhánh của lịch hẹn đi theo
+   * người làm (BR-EMP-003), và phép chống trùng lịch ở BR-APT-011 tính theo từng kỹ thuật
+   * viên — nên giao khách cho một người đang bận sẽ bị máy chủ từ chối, đúng như phải thế.
+   */
+  const assignAppointmentStaff = async (appointmentId: string, technicianName: string) => {
+    const dto = appointmentDtoById.get(appointmentId);
+    if (!dto) return;
+
+    const staffId = staffIdByName(technicianName);
+    if (!staffId) {
+      setToast(`Không tìm thấy hồ sơ nhân viên của ${technicianName}.`);
+      return;
+    }
+
+    const saved = await appointmentBoard.updateAppointment(dto.id, { ...toSaveInput(dto), staffId });
+
+    if (saved.status === 'error') {
+      reportApiError(saved.error);
+      return;
+    }
+
+    reportWarnings(saved.data.warnings);
+  };
+
   const extendServiceDuration = (appointmentId: string, extraMinutes = 15) => {
-    setAppointments((current) => current.map((a) => {
-      if (a.id !== appointmentId) return a;
-      return {
-        ...a,
-        serviceExtendedMinutes: (a.serviceExtendedMinutes || 0) + extraMinutes,
-      };
-    }));
+    const current = appointmentExtras[appointmentId]?.serviceExtendedMinutes || 0;
+
+    patchAppointmentExtras(appointmentId, { serviceExtendedMinutes: current + extraMinutes });
     const apt = appointments.find((a) => a.id === appointmentId);
     setToast(`⏱️ Đã gia hạn thêm +${extraMinutes} phút cho "${apt?.customer || 'khách'}".`);
   };
@@ -1853,7 +2478,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setFormError('');
   };
 
-  const submitAppointmentEdit = (event: FormEvent) => {
+  const submitAppointmentEdit = async (event: FormEvent) => {
     event.preventDefault();
     if (!editingAppointment) return;
     setFormError('');
@@ -1864,19 +2489,51 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       return;
     }
     setAppointmentEditErrors({});
-    setAppointments((current) => current.map((appointment) => appointment.id === editingAppointment.id ? {
-      ...appointment,
-      customer: appointmentEditForm.customer.trim(),
-      phone: appointmentEditForm.phone.trim(),
-      service: appointmentEditForm.service,
-      services: [appointmentEditForm.service],
-      staff: appointmentEditForm.staff,
+
+    const dto = appointmentDtoById.get(editingAppointment.id);
+    if (!dto) {
+      setToast('Lịch hẹn này không còn trên bảng lịch. Tải lại rồi thử lại.');
+      return;
+    }
+
+    const staffId = staffIdByName(appointmentEditForm.staff);
+    if (!staffId) {
+      setAppointmentEditErrors({ staff: 'Chọn kỹ thuật viên phụ trách.' });
+      setFormError('Lịch hẹn phải có kỹ thuật viên phụ trách.');
+      return;
+    }
+
+    const serviceId = serviceCatalog.find((item) => item.name === appointmentEditForm.service)?.id;
+    if (!serviceId) {
+      setFormError('Dịch vụ này không còn trong bảng giá. Chọn lại một dịch vụ đang bán.');
+      return;
+    }
+
+    /*
+      KHÔNG gửi `duration` và `price`. Cả hai đều do máy chủ suy ra — thời lượng từ danh sách
+      dịch vụ (BR-APT-010), giá thì chốt lúc lập hóa đơn (BR-SVC-006) — nên hai ô ấy trên biểu
+      mẫu chỉ để người ở quầy nhìn thấy con số, không phải để họ quyết định nó.
+
+      Tên và số điện thoại khách cũng không gửi: đổi khách của một lịch hẹn là lập một lịch
+      khác. Sửa hồ sơ khách thì vào màn Khách hàng.
+    */
+    const saved = await appointmentBoard.updateAppointment(dto.id, {
+      customerId: dto.customerId,
+      staffId,
+      startAt: `${appointmentEditForm.start ? `${dto.startAt.slice(0, 10)}T${appointmentEditForm.start}:00+07:00` : dto.startAt}`,
+      serviceIds: [serviceId],
+      source: dto.source,
       station: appointmentEditForm.station || undefined,
-      start: appointmentEditForm.start,
-      duration: Number(appointmentEditForm.duration),
-      price: Number(appointmentEditForm.price),
-      note: appointmentEditForm.note.trim(),
-    } : appointment));
+      note: appointmentEditForm.note.trim() || undefined,
+      deposit: dto.deposit
+    });
+
+    if (saved.status === 'error') {
+      reportApiError(saved.error);
+      return;
+    }
+
+    reportWarnings(saved.data.warnings);
     setEditingAppointment(null);
     setToast(`Đã cập nhật thông tin tiếp nhận của ${appointmentEditForm.customer.trim()}.`);
   };
@@ -2172,113 +2829,136 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setShowPaymentConfirm(true);
   };
 
-  const executeFinalPayment = () => {
+  /**
+   * Thu tiền thật — ba lời gọi, theo đúng thứ tự, và thứ tự có ý nghĩa.
+   *
+   * 1. **Lập hóa đơn từ lịch hẹn** (BR-INV-010). Gửi kèm `appointmentId` chứ không lập hóa
+   *    đơn bán lẻ, vì chính mối nối ấy là điều kiện để BR-APT-026 đóng lịch khi thu đủ — và
+   *    cũng là cách tiền cọc của lịch tự thành một dòng `DEPOSIT` (BR-APT-031).
+   * 2. **Sửa trọn bộ dòng hàng** (BR-INV-015). Cần bước này vì máy chủ dựng hóa đơn từ dịch vụ
+   *    của lịch hẹn và **bỏ qua** `lines` mà client gửi kèm lệnh lập — đúng như thiết kế, để
+   *    một hóa đơn không thể ghi tên dịch vụ khác với thứ khách đã đặt. Nhưng POS ở quầy còn
+   *    thêm sản phẩm, phụ thu mẫu vẽ và các dòng gộp từ khách khác, nên chúng vào ở bước sửa.
+   * 3. **Ghi nhận thu tiền** (BR-PAY-001), một lời gọi cho mỗi phương thức — BR-PAY-004.
+   *
+   * Số tiền phải thu KHÔNG do màn hình tự tính: sau bước 2, máy chủ trả về `remaining` đã trừ
+   * sẵn tiền cọc. Tự cộng lại ở đây là dựng phép tính thứ hai cho cùng một con số, và ngày nó
+   * lệch thì người ở quầy phát hiện ngay trước mặt khách.
+   */
+  const executeFinalPayment = async () => {
     if (!paymentAppointment) return;
-    const subtotal = invoiceLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+
     const discount = Math.max(0, Number(paymentForm.discount) || 0);
     const tip = Math.max(0, Number(paymentForm.tip) || 0);
-    const grandTotal = Math.max(0, subtotal - discount + tip);
-    const allMergedDeposits = (paymentAppointment.deposit || 0) + appointments.filter((a) => mergedAppointmentIds.includes(a.id)).reduce((sum, a) => sum + a.deposit, 0);
-    const amountDue = Math.max(0, grandTotal - allMergedDeposits);
-    const timestamp = new Date();
-    const existingInvoice = payments.find((payment) => payment.appointmentId === paymentAppointment.id && ['PARTIAL', 'PENDING'].includes(payment.status));
-    
     const allInvolvedAppointmentIds = [paymentAppointment.id, ...mergedAppointmentIds];
-    const mergedCustomers = appointments.filter((a) => mergedAppointmentIds.includes(a.id)).map((a) => a.customer);
-    const customerDisplay = mergedCustomers.length ? `${paymentAppointment.customer} (+ ${mergedCustomers.join(', ')})` : paymentAppointment.customer;
-    const paymentMethodUsed = splitPaymentMode ? (splitPaymentsList[0]?.method || 'CASH') : paymentForm.method;
 
-    const payment: ReceptionPayment = {
-      id: existingInvoice?.id || makeId('INV'),
-      appointmentId: paymentAppointment.id,
-      mergedAppointmentIds: mergedAppointmentIds.length ? mergedAppointmentIds : undefined,
-      customer: customerDisplay,
-      phone: paymentAppointment.phone,
-      branch: paymentAppointment.branch,
-      createdAt: `${timestamp.toLocaleDateString('vi-VN')} · ${nowTime()}`,
-      subtotal,
-      discount,
-      tip,
-      deposit: allMergedDeposits,
-      total: grandTotal,
-      paid: grandTotal,
-      refunded: 0,
-      status: 'PAID',
-      method: paymentMethodUsed,
-      reference: splitPaymentMode ? 'Tách thanh toán' : (paymentForm.reference.trim() || undefined),
-      splitPayments: splitPaymentMode ? splitPaymentsList.map((s) => ({ method: s.method, amount: s.amount, reference: s.reference?.trim() || undefined })) : undefined,
-      cashier: account.displayName,
-      source: 'POS tại quầy',
-      items: invoiceLines.map((line) => {
-        let displayName = line.name.trim();
-        if (line.fromCustomerName) {
-          displayName = `[${line.fromCustomerName}] ` + displayName;
-        }
-        if (line.designName) {
-          const diffText = line.difficultyLabel || (line.designLevel ? `Độ khó mức ${line.designLevel}` : '');
-          displayName += ` + Mẫu: ${line.designName}${diffText ? ` (${diffText})` : ''}${line.designSurcharge ? ` [+${money(line.designSurcharge)}]` : ''}`;
-        }
-        if (line.attachedColorName) {
-          displayName += ` · Màu: ${line.attachedColorName}`;
-        }
-        if (line.attachedProductName) {
-          displayName += ` · Kèm: ${line.attachedProductName}${line.attachedProductPrice ? ` [+${money(line.attachedProductPrice)}]` : ''}`;
-        }
-        return {
-          name: displayName,
-          quantity: line.quantity,
-          amount: line.quantity * line.unitPrice,
-          staff: line.staff,
-          basePrice: line.basePrice,
-          designName: line.designName,
-          designLevel: line.designLevel,
-          difficultyLabel: line.difficultyLabel,
-          designSurcharge: line.designSurcharge,
-          attachedColorName: line.attachedColorName,
-          attachedProductName: line.attachedProductName,
-          customArtNote: line.customArtNote,
-        };
-      }),
-      note: paymentForm.note.trim() || undefined,
-      audit: [
-        ...(existingInvoice?.audit || []),
-        `${nowTime()} · ${account.displayName} hoàn tất thanh toán hóa đơn ${mergedAppointmentIds.length ? `gộp ${1 + mergedAppointmentIds.length} khách` : ''}`,
-        splitPaymentMode
-          ? `${nowTime()} · Tách thanh toán: ${splitPaymentsList.map((s) => `${methodMeta[s.method].label} (${money(s.amount)})`).join(' + ')}`
-          : `${nowTime()} · Thanh toán qua ${methodMeta[paymentForm.method].label}`,
-        `${nowTime()} · Áp dụng cọc ${money(allMergedDeposits)}, thực thu tại quầy ${money(amountDue)}`,
-      ],
-    };
-    setPayments((current) => existingInvoice
-      ? current.map((item) => item.id === existingInvoice.id ? payment : item)
-      : [payment, ...current]);
+    // Bấm "Thanh toán" hai lần vì màn hình chậm là chuyện thường ở quầy. Máy chủ đã chặn hóa
+    // đơn thứ hai cho cùng một lịch, nhưng dùng lại hóa đơn đang mở thì người dùng không phải
+    // nhìn thấy lỗi nào cả.
+    const openInvoice = invoiceBook.invoices.find((item) => (
+      item.appointmentId === paymentAppointment.id
+      && ['PENDING', 'PARTIAL'].includes(item.status)
+    ));
 
-    setAppointments((current) => current.map((item) => {
-      if (allInvolvedAppointmentIds.includes(item.id)) {
-        const itemLines = invoiceLines.filter((l) => l.fromAppointmentId ? l.fromAppointmentId === item.id : item.id === paymentAppointment.id);
-        const serviceNames = itemLines.filter((line) => line.type === 'SERVICE').map((line) => line.name.trim());
-        const serviceSubtotal = itemLines.filter((line) => line.type === 'SERVICE').reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
-        return {
-          ...item,
-          status: 'COMPLETED',
-          service: serviceNames.join(' + ') || item.service,
-          services: serviceNames.length ? serviceNames : item.services,
-          price: serviceSubtotal > 0 ? serviceSubtotal : item.price,
-        };
+    let invoice: SalesInvoiceDto | null = openInvoice || null;
+
+    if (!invoice) {
+      const created = await invoiceBook.createInvoice({ appointmentId: paymentAppointment.id });
+
+      if (created.status === 'error') {
+        setShowPaymentConfirm(false);
+        reportApiError(created.error);
+        return;
       }
-      return item;
-    }));
+
+      invoice = created.data;
+    }
+
+    /*
+      Dòng nào có mã dịch vụ thì gửi mã — máy chủ đọc giá hiện tại từ bảng giá (BR-SVC-007),
+      và giá client gửi kèm bị bỏ qua. Dòng còn lại — sản phẩm, phụ thu mẫu vẽ, dòng nhập tay —
+      là mục tự do của BR-INV-012 và giữ nguyên giá quầy nhập.
+    */
+    const lines: SalesInvoiceLineInput[] = invoiceLines.map((line) => {
+      const catalogMatch = line.type === 'SERVICE'
+        ? serviceCatalog.find((item) => item.name === line.name.trim())
+        : undefined;
+
+      if (catalogMatch?.id && !line.designSurcharge && !line.attachedProductPrice) {
+        return { serviceId: catalogMatch.id, quantity: line.quantity };
+      }
+
+      return {
+        name: describeInvoiceLine(line),
+        unitPrice: line.unitPrice,
+        quantity: line.quantity
+      };
+    });
+
+    const revised = await invoiceBook.updateInvoice(invoice.id, {
+      staffId: appointmentDtoById.get(paymentAppointment.id)?.staffId,
+      lines,
+      discount,
+      discountReason: discount > 0 ? (paymentForm.note.trim() || 'Giảm giá tại quầy') : undefined,
+      tip,
+      note: paymentForm.note.trim() || undefined
+    });
+
+    if (revised.status === 'error') {
+      setShowPaymentConfirm(false);
+      reportApiError(revised.error);
+      return;
+    }
+
+    // `remaining` của máy chủ đã trừ tiền cọc. Đây là con số thật khách phải đưa.
+    const amountDue = revised.data.remaining;
+
+    const installments = splitPaymentMode
+      ? splitPaymentsList.map((item) => ({
+        method: item.method as PaymentApiMethod,
+        amount: item.amount,
+        reference: item.reference?.trim() || undefined
+      }))
+      : [{
+        method: paymentForm.method as PaymentApiMethod,
+        amount: amountDue,
+        reference: paymentForm.reference.trim() || undefined
+      }];
+
+    for (const installment of installments) {
+      if (installment.amount <= 0) continue;
+
+      const paid = await invoiceBook.recordPayment(revised.data.id, installment);
+
+      if (paid.status === 'error') {
+        setShowPaymentConfirm(false);
+        reportApiError(paid.error);
+        // Dừng ngay: các lần thu trước đó ĐÃ vào sổ và không được cuộn ngược. Người ở quầy mở
+        // lại hóa đơn sẽ thấy đúng phần đã thu và phần còn thiếu.
+        invoiceBook.reload();
+        return;
+      }
+    }
+    /*
+      BR-APT-026 — lịch hẹn tự hoàn tất, và việc đó xảy ra **ở máy chủ**, bên trong cùng giao
+      dịch với lần thu cuối. Giao diện không đặt trạng thái nào cả; nó chỉ nạp lại bảng lịch để
+      thấy kết quả.
+
+      Đây chính là chỗ ngày 14 để dở. Khi ấy màn thu tiền còn chạy dữ liệu mẫu nên không có gì
+      đóng lịch được: lễ tân không có quyền đặt tay `COMPLETED` (BR-APT-027), và đánh dấu ở
+      client trong khi máy chủ thấy khác là đúng loại nói dối cả lát cắt này đi sửa.
+    */
+    appointmentBoard.reload();
 
     const involvedStaffs = appointments.filter((a) => allInvolvedAppointmentIds.includes(a.id)).map((a) => a.staff);
-    setTechnicians((current) => current.map((item) => {
+    technicians.forEach((item) => {
       if (involvedStaffs.includes(item.name) && item.status === 'SERVING') {
         const stillHasOther = appointments.some((a) => !allInvolvedAppointmentIds.includes(a.id) && a.staff === item.name && a.status === 'IN_SERVICE');
         if (!stillHasOther) {
-          return { ...item, status: 'PRESENT' };
+          patchTechnicianAttendance(item.id, { status: 'PRESENT' });
         }
       }
-      return item;
-    }));
+    });
 
     setInvoiceDrafts((current) => {
       const next = { ...current };
@@ -2294,7 +2974,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setPaymentAppointment(null);
     setMergedAppointmentIds([]);
     setSplitPaymentMode(false);
-    setToast(`Đã thu ${money(amountDue)} từ khách hàng ${payment.customer}.`);
+    setToast(`Đã thu ${money(amountDue)} từ khách hàng ${paymentAppointment.customer}.`);
   };
 
   const openShiftDialog = (mode: 'OPEN' | 'CLOSE') => {
@@ -2322,9 +3002,11 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
 
   const navigate = (nextPage: ReceptionPage) => {
     if (nextPage === 'desk') {
-      setAppointments(readStorage(appointmentStorageKey, seedAppointments()));
-      setPayments(readStorage(paymentStorageKey, seedPayments()));
-      setTechnicians(normalizeTechnicians(readStorage(technicianStorageKey, technicianSeed)));
+      // Quay về màn quầy là lúc đáng nạp lại nhất: người dùng vừa rời đi làm việc khác, và
+      // trong lúc đó máy bên cạnh có thể đã đặt thêm lịch.
+      appointmentBoard.reload();
+      invoiceBook.reload();
+      staffDirectory.reload();
     }
     setPage(nextPage);
     setSidebarOpen(false);
@@ -2332,7 +3014,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   };
 
   const renderDesk = () => {
-    const currentStations = stationCatalog[branchCode] || [];
+    const currentStations = stationsFor(branchCode);
     const totalStations = currentStations.length;
     const availableTechsCount = availableTechnicians.length;
     const isShiftOpen = shift.status === 'OPEN';
@@ -3271,6 +3953,20 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     </div>
   );
 
+  /*
+    ── Dải nhãn "Dữ liệu mẫu" của cổng lễ tân ────────────────────────────────────────────
+    Cổng này chạy dữ liệu THẬT ở gần hết các màn — lịch hẹn, khách, kỹ thuật viên, bảng giá,
+    hóa đơn và thu tiền. Đúng vì thế mà hai màn còn lại là chỗ dễ nhầm nhất trong cả dự án:
+    người ở quầy vừa thu một khoản tiền thật xong thì bấm sang Sản phẩm và thấy một kho hàng
+    không có thật, trên cùng một thanh điều hướng.
+
+    Quyết định 8 — giữ màn để mạch demo không đứt, nhưng nói ra rằng dữ liệu là mẫu.
+  */
+  const MOCK_DATA_REASONS: Record<string, string> = {
+    products: 'Kho sản phẩm bán lẻ nằm ngoài phạm vi 9 module lõi, nên tồn kho và lượt bán ở đây chỉ lưu trên trình duyệt này. Bán một món cho khách thì thêm nó thành dòng nhập tay trên hóa đơn — dòng đó là thật.',
+    stations: 'Sơ đồ ghế & khu vực nằm ngoài phạm vi backend MVP (§9.3), nên tình trạng ghế ở đây là dữ liệu mẫu, không phải chỗ ngồi thật của khách đang ở tiệm.'
+  };
+
   const renderPage = () => {
     if (page === 'desk') return renderDesk();
     if (page === 'technicians') return (
@@ -3280,8 +3976,11 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
         selectedBranch={branchCode}
         branchName={branchName}
         roleLabel={`Receptionist · ${account.displayName}`}
-        onTechniciansChange={setTechnicians}
-        onAppointmentsChange={setAppointments}
+        onAssignStaff={(appointmentId, technicianName) => {
+          void assignAppointmentStaff(appointmentId, technicianName);
+        }}
+        onAttendanceChange={patchTechnicianAttendance}
+
         onNotify={setToast}
         onOpenAppointments={(query) => {
           setSearchQuery(query || '');
@@ -3516,7 +4215,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
             )}
           </div>
         </header>
-        <main className="role-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8"><Suspense fallback={<div className="py-24 text-center text-xs font-bold text-brand-text-muted">Đang tải không gian lễ tân...</div>}>{renderPage()}</Suspense></main>
+        <main className="role-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8"><Suspense fallback={<div className="py-24 text-center text-xs font-bold text-brand-text-muted">Đang tải không gian lễ tân...</div>}>{MOCK_DATA_REASONS[page] && <MockDataNotice reason={MOCK_DATA_REASONS[page]} className="mb-5" />}{renderPage()}</Suspense></main>
       </div>
 
       {toast && <div role="status" className="fixed bottom-5 right-5 z-[120] flex max-w-sm items-center gap-3 rounded-2xl border border-brand-secondary bg-brand-secondary px-4 py-3 text-xs font-bold text-white shadow-2xl"><CheckCircle2 className="h-5 w-5 shrink-0 text-brand-secondary" />{toast}</div>}
@@ -3668,7 +4367,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                   className="reception-input"
                 >
                   <option value="">Xếp sau khi check-in</option>
-                  {stationCatalog[branchCode].map((station) => <option key={station} value={station}>{station}</option>)}
+                  {stationsFor(branchCode).map((station) => <option key={station} value={station}>{station}</option>)}
                 </select>
               </Field>
               <Field label="Giờ bắt đầu *" helper="Salon mở cửa từ 08:00 đến 20:30" error={walkInErrors.start}>
@@ -3777,7 +4476,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                   className="reception-input font-bold"
                 >
                   <option value="">-- Chọn ghế salon --</option>
-                  {stationCatalog[branchCode]?.map((st) => (
+                  {stationsFor(branchCode).map((st) => (
                     <option key={st} value={st}>
                       💺 {st}
                     </option>
@@ -3919,7 +4618,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                   className="reception-input"
                 >
                   <option value="">Chưa xếp ghế</option>
-                  {stationCatalog[branchCode].map((station) => <option key={station} value={station}>{station}</option>)}
+                  {stationsFor(branchCode).map((station) => <option key={station} value={station}>{station}</option>)}
                 </select>
               </Field>
               <Field label="Giờ bắt đầu *" helper="Salon mở cửa từ 08:00 đến 20:30" error={appointmentEditErrors.start}>
@@ -4796,11 +5495,28 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                             />
                           </div>
 
-                          {/* Người trả / Mã GD */}
+                          {/*
+                            Người trả (tiền mặt) hoặc mã giao dịch (mọi phương thức khác).
+
+                            🔴 Ô này từng ghi vào `payerName` trong khi phép kiểm ở `submitPayment`
+                            đọc `reference`, nên **chia tiền với bất kỳ phương thức không phải tiền
+                            mặt nào cũng bất khả thi**: gõ mã xong vẫn nhận "cần nhập mã giao dịch
+                            để đối soát", và không có cách nào qua được. BR-PAY-004 vì vậy bị chặn
+                            hẳn ở giao diện dù máy chủ hỗ trợ đầy đủ. Sửa ở ngày 15.
+
+                            Với tiền mặt, ô này vẫn là tên người trả và cố ý KHÔNG gửi lên: máy chủ
+                            chỉ có cột `reference` cho mã giao dịch (BR-PAY-005), và nhét tên người
+                            vào đó là làm bẩn một cột dùng để đối soát với sao kê ngân hàng.
+                          */}
                           <input
                             type="text"
-                            value={splitRow.payerName}
-                            onChange={(e) => updateSplitRow(splitRow.id, { payerName: e.target.value })}
+                            value={splitRow.method === 'CASH' ? (splitRow.payerName || '') : (splitRow.reference || '')}
+                            onChange={(e) => updateSplitRow(
+                              splitRow.id,
+                              splitRow.method === 'CASH'
+                                ? { payerName: e.target.value }
+                                : { reference: e.target.value }
+                            )}
                             placeholder={splitRow.method === 'CASH' ? `Phần ${idx + 1}...` : 'Mã GD / Tên...'}
                             className="h-8 w-full rounded-md border border-brand-outline bg-brand-surface-high px-2 text-[11px] text-brand-text outline-none"
                           />
@@ -5250,7 +5966,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
               </Button>
               <Button
                 variant="primary"
-                onClick={executeFinalPayment}
+                onClick={() => { void executeFinalPayment(); }}
                 className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md shadow-emerald-600/25 cursor-pointer"
                 iconLeading={<ShieldCheck className="h-4 w-4" />}
               >

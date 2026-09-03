@@ -44,7 +44,8 @@ import { formatMoney as money } from '../utils/money';
 import { SalonService, serviceSeed } from './TenantAdminServices';
 import { tenantStorageKey } from '../utils/tenantStorage';
 
-type BranchCode = 'Q1' | 'Q3';
+/** Mã chi nhánh do chủ tiệm tự đặt nên tập giá trị là mở — mở kiểu ở ngày 14, cùng lúc với cổng lễ tân. */
+type BranchCode = string;
 type LibraryTab = 'DESIGNS' | 'COLORS';
 type ViewMode = 'GRID' | 'LIST';
 export type DesignStatus = 'TRENDING' | 'ACTIVE' | 'DRAFT' | 'HIDDEN';

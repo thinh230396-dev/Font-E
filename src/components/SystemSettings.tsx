@@ -27,7 +27,6 @@ import {
   type SystemSettingsModel,
   type SystemSettingsSection
 } from '../utils/systemSettings';
-import { recordAuditLog } from '../utils/auditLogs';
 import { Modal } from './ui';
 
 type SettingsTab = 'general' | 'billing' | 'notifications' | 'security';
@@ -84,28 +83,7 @@ export default function SystemSettings() {
     }
 
     const saved: SystemSettingsModel = { ...draft, version: 2, updatedAt: new Date().toISOString() };
-    const sections = (['general', 'billing', 'email', 'security'] as const).filter((section) => JSON.stringify(savedSettings[section]) !== JSON.stringify(saved[section]));
-    const securityChanges = Object.entries(saved.security)
-      .filter(([field, value]) => value !== savedSettings.security[field as keyof SystemSettingsModel['security']])
-      .map(([field, value]) => ({
-        field: `security.${field}`,
-        before: String(savedSettings.security[field as keyof SystemSettingsModel['security']]),
-        after: String(value)
-      }));
     saveSystemSettings(saved);
-    recordAuditLog({
-      eventCode: securityChanges.length > 0 ? 'SECURITY.POLICY.UPDATED' : 'SYSTEM.SETTINGS.UPDATED',
-      event: securityChanges.length > 0 ? 'Cập nhật chính sách bảo mật' : 'Cập nhật cấu hình hệ thống',
-      description: `Superadmin đã lưu thay đổi tại ${sections.length} nhóm cấu hình: ${sections.join(', ')}.`,
-      severity: securityChanges.length > 0 ? 'high' : 'medium',
-      status: 'success',
-      category: securityChanges.length > 0 ? 'SECURITY' : 'SYSTEM',
-      resource: securityChanges.length > 0 ? 'Chính sách bảo mật' : 'Cấu hình hệ thống',
-      resourceId: securityChanges.length > 0 ? 'SECURITY-POLICY' : 'SYSTEM-SETTINGS',
-      method: 'CLIENT /settings',
-      changes: securityChanges,
-      metadata: { changedSections: sections.join(',') }
-    });
     setSavedSettings(saved);
     setDraft(saved);
     setNotice({ type: 'success', message: 'Đã lưu toàn bộ cấu hình hệ thống trên trình duyệt này.' });
@@ -211,14 +189,17 @@ export default function SystemSettings() {
                       <option value="en">English</option>
                     </BeautifulSelect>
                   </Field>
+                  {/* Ô chọn tiền tệ đã bỏ ở ngày 18 — quyết định 10 bỏ USD khỏi toàn hệ thống
+                      (BR-VAL-003: VND, số nguyên). Một ô select còn đúng một lựa chọn là mời
+                      người dùng bấm vào rồi không có gì để chọn, nên chỗ này chỉ còn một dòng
+                      nói ra đơn vị mà hệ thống đang tính. */}
                   <Field
-                    label="Tiền tệ báo cáo mặc định"
-                    hint="Dùng để quy đổi và tổng hợp doanh thu, công nợ trên các màn quản trị; đồng thời là giá trị mặc định khi tạo gói hoặc hóa đơn mới."
+                    label="Tiền tệ báo cáo"
+                    hint="Toàn hệ thống tính bằng VND, số nguyên — không có phần thập phân và không quy đổi."
                   >
-                    <BeautifulSelect className="form-control" value={draft.general.currency} onChange={(event) => updateSection('general', { currency: event.target.value as 'VND' | 'USD' })}>
-                      <option value="VND">VND — Việt Nam Đồng</option>
-                      <option value="USD">USD — US Dollar</option>
-                    </BeautifulSelect>
+                    <p className="flex h-10 items-center px-1 text-body font-semibold text-brand-text">
+                      VND — Việt Nam Đồng
+                    </p>
                   </Field>
                   <Field label="Múi giờ" className="sm:col-span-2">
                     <BeautifulSelect className="form-control" value={draft.general.timezone} onChange={(event) => updateSection('general', { timezone: event.target.value })}>
@@ -229,15 +210,6 @@ export default function SystemSettings() {
                       <option value="Europe/London">Europe/London (GMT+0)</option>
                     </BeautifulSelect>
                   </Field>
-                </div>
-                <div className="rounded-lg border border-brand-primary/20 bg-brand-primary/5 p-3 text-[11px] leading-relaxed text-brand-text-muted">
-                  <div className="flex items-start gap-2">
-                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-primary" />
-                    <p>
-                      <strong className="text-brand-text">Không thay đổi giá đã niêm yết:</strong> mỗi gói vẫn có thể dùng VND hoặc USD riêng.
-                      Khi tổng hợp báo cáo, hệ thống mới quy đổi các giá trị đó về <strong className="text-brand-text">{draft.general.currency}</strong>.
-                    </p>
-                  </div>
                 </div>
               </SettingsPanel>
 

@@ -828,15 +828,12 @@ export default function TenantAdminSettings({
               </BeautifulSelect>
             </Field>
 
-            <Field label="Tiền tệ mặc định">
-              <BeautifulSelect
-                value={brandInfo.currency}
-                onChange={(event) => onBrandInfoChange('currency', event.target.value as BrandInfo['currency'])}
-                className="w-full"
-              >
-                <option value="VND">VND — Việt Nam đồng</option>
-                <option value="USD">USD — Đô la Mỹ</option>
-              </BeautifulSelect>
+            {/* Ô chọn tiền tệ đã bỏ ở ngày 18 cùng với USD — BR-VAL-003 chốt VND số nguyên
+                cho toàn hệ thống, nên đây chỉ còn là một câu nói ra đơn vị đang dùng. */}
+            <Field label="Tiền tệ">
+              <p className="flex h-10 items-center px-1 text-body font-semibold text-brand-text">
+                VND — Việt Nam đồng
+              </p>
             </Field>
 
             <Field label="Ngôn ngữ mặc định">

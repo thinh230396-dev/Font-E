@@ -8,7 +8,9 @@
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "rehearsal": "node scripts/rehearsal.mjs",
+    "build:server": "npm run build && node scripts/copy-build-to-server.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

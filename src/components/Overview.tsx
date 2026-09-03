@@ -29,7 +29,7 @@ import {
 import BeautifulSelect from './BeautifulSelect';
 import type { CurrencyCode, Invoice, SystemAlert, Tenant, TenantStatus, Ticket } from '../types';
 import { formatAlertTimestamp } from '../utils/alerts';
-import { convertMoney, formatMoney } from '../utils/money';
+import { formatMoney } from '../utils/money';
 import { getPlatformRevenueByTenant, getTotalPlatformRevenue } from '../utils/platformRevenue';
 import { getSlaState, isActive, PRIORITY_CONFIG, STATUS_CONFIG } from './HelpAndSupport';
 
@@ -83,23 +83,15 @@ interface RevenueChartItem {
   invoiceCount: number;
 }
 
-const formatBarCompact = (amount: number, currency: string) => {
-  if (currency === 'USD') {
-    if (amount >= 1000) return `$${(amount / 1000).toFixed(1)}k`;
-    return `$${Math.round(amount)}`;
-  }
+const formatBarCompact = (amount: number) => {
   if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1)}B`;
   if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M`;
   if (amount >= 1_000) return `${Math.round(amount / 1_000)}k`;
   return `${Math.round(amount)}`;
 };
 
-const formatYAxisTick = (amount: number, currency: string) => {
+const formatYAxisTick = (amount: number) => {
   if (amount <= 0) return '0';
-  if (currency === 'USD') {
-    if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}k`;
-    return `$${Math.round(amount)}`;
-  }
   if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1)}B`;
   if (amount >= 1_000_000) return `${Math.round(amount / 1_000_000)}M`;
   if (amount >= 1_000) return `${Math.round(amount / 1_000)}k`;
@@ -143,16 +135,16 @@ export default function Overview({
    * kiểu `Tenant` cũng không còn mang nó. Nguồn đúng là hóa đơn đăng ký đã thu.
    */
   const platformRevenueByTenant = useMemo(
-    () => getPlatformRevenueByTenant(invoices, reportCurrency),
+    () => getPlatformRevenueByTenant(invoices),
     [invoices, reportCurrency],
   );
   const totalPlatformRevenue = useMemo(
-    () => getTotalPlatformRevenue(invoices, reportCurrency),
+    () => getTotalPlatformRevenue(invoices),
     [invoices, reportCurrency],
   );
   const unpaidInvoices = invoices.filter((invoice) => invoice.status === 'PENDING' || invoice.status === 'OVERDUE');
   const totalOutstanding = unpaidInvoices.reduce(
-    (total, invoice) => total + convertMoney(invoice.amount, invoice.currency, reportCurrency),
+    (total, invoice) => total + invoice.amount,
     0,
   );
 
@@ -194,7 +186,7 @@ export default function Overview({
     const paidInvoices = invoices.filter((inv) => inv.status === 'PAID');
     const directPaidSum = paidInvoices.reduce((tot, inv) => {
       const net = inv.amount - (inv.refundedAmount || 0);
-      return tot + convertMoney(net, inv.currency, reportCurrency);
+      return tot + net;
     }, 0);
 
     // Baseline tính toán theo doanh thu thực tế quy đổi theo đồng tiền báo cáo
@@ -255,7 +247,7 @@ export default function Overview({
         label: item.label,
         fullLabel: item.fullLabel,
         amount: rawAmount,
-        formattedCompact: formatBarCompact(rawAmount, reportCurrency),
+        formattedCompact: formatBarCompact(rawAmount),
         formattedFull: formatMoney(rawAmount, reportCurrency),
         growthPercent,
         heightPercent,
@@ -419,7 +411,7 @@ export default function Overview({
             <div className="sa-chart-yaxis" aria-hidden="true">
               {yAxisTicks.map((tick, idx) => (
                 <span key={idx} className="sa-chart-ytick">
-                  {formatYAxisTick(tick, reportCurrency)}
+                  {formatYAxisTick(tick)}
                 </span>
               ))}
             </div>
