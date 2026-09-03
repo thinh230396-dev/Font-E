@@ -57,6 +57,8 @@ Mười hai quyết định này chốt trong phiên lập lộ trình, bổ sun
 | 6′ | **xUnit + `WebApplicationFactory`** trên **SQL Server LocalDB riêng**, không Vitest và không SQLite. Bộ kiểm thử dùng lại `DemoDataSeeder` của máy chủ thật | Chốt ở ngày 12. Là quyết định cuối cùng của bản gốc còn sót lại sau khi đổi sang ASP.NET Core — Vitest là công cụ của JavaScript nên không chạy được ở đây. Kéo theo §5 ngày 12 nói "SQLite trong bộ nhớ" cũng đã lỗi thời từ quyết định 11′ |
 | 11″ | **SQL Server 2022 Developer Edition** (instance mặc định `MSSQLSERVER`, Windows authentication), thay cho LocalDB. Chốt **03/09/2026** | Chỉ đổi chuỗi kết nối ở hai chỗ — `appsettings.json` và `SalonSysFactory.cs` — vì lược đồ không dùng tính năng riêng của phiên bản nào. Kéo theo hai việc: **BR-BAK-003** đổi công cụ từ Visual Studio sang SSMS, và **máy người chấm nay phải cài SQL Server thật** chứ không còn dùng ké bản LocalDB đi kèm Visual Studio — xem §7 rủi ro 6. Máy chủ mới dùng collation `Vietnamese_CI_AS` thay vì `SQL_Latin1_General_CP1_CI_AS`, làm đổi thứ tự sắp xếp danh mục và lộ ra một giả định ngầm trong `SalonScenario.NextSlot()` |
 
+| 15′ | **Thu hồi phiên đăng nhập từ xa được đưa trở lại phạm vi.** Chốt **03/09/2026**, sau khi §9.4 đã liệt nó vào nhóm bỏ hẳn | Đổi ý vì chi phí hóa ra gần bằng không, chứ không phải vì phạm vi nới ra: bảng `app_sessions` đã có sẵn `revoked_at`, `ip`, `user_agent`, `last_active` từ ngày dựng nên **không cần migration**, và cơ chế cưỡng chế thì BR-AUTH-022 đã lo — thu hồi chỉ là đặt một cột. Kéo theo hai rule mới **BR-AUTH-032** và **BR-AUTH-033**, một ô quyền mới `Feature.Sessions`, hai endpoint, và bảy phép thử. Phần §9.2 từng hoãn màn này vì *"cần nghiệp vụ chưa định nghĩa"* — hai rule kia chính là phần nghiệp vụ ấy |
+
 > **Đọc 11′ và 6′ ở trên với mốc thời gian:** cả hai chốt ngày 24/08 khi nền tảng còn là LocalDB, và quyết định 11″ đã thay phần nền tảng ấy. Phần lập luận của chúng thì vẫn nguyên giá trị — lý do chọn một SQL Server thật thay vì SQLite hay EF Core InMemory không phụ thuộc vào việc đó là LocalDB hay bản đầy đủ.
 
 > Quyết định 11 suy ra từ source, không phải lựa chọn: `scripts/sites-worker.js:191-258` đã làm đúng mô hình cookie + bảng phiên, chuyển sang Express gần như bê nguyên.
@@ -618,7 +620,7 @@ Ba điểm dễ bị hỏi:
 
 | Nhóm | Bỏ những gì |
 |---|---|
-| Tài khoản | Đổi mật khẩu · Quên mật khẩu · Kích hoạt qua email · Xác minh email và số điện thoại · MFA · Thu hồi phiên từ xa |
+| Tài khoản | Đổi mật khẩu · Quên mật khẩu · Kích hoạt qua email · Xác minh email và số điện thoại · MFA · ~~Thu hồi phiên từ xa~~ *(đã làm 03/09 — xem quyết định 15′)* |
 | Khách hàng | Toàn bộ app khách: đăng nhập, chọn tiệm, tự đặt lịch, xem lịch sử |
 | Lịch hẹn | Giờ mở cửa chi nhánh · Ngày nghỉ lễ · Nhắc lịch tự động · Nhiều kỹ thuật viên cho một lịch · Ràng buộc kỹ năng |
 | Tiền | Cổng thanh toán thật · VAT · Hóa đơn điện tử Việt Nam · Luật hoàn cọc và mất cọc · Mã voucher · Module chi phí và lợi nhuận |
@@ -3224,3 +3226,333 @@ báo theo tiệm — nên nhãn "nội dung chỉ lưu trên trình duyệt" v�
 | Mười bảy màn còn lại | Giữ nguyên nhãn cảnh báo, không đổi một chữ |
 | `npm run lint` · `npm run build` | Xanh |
 | `npm run rehearsal` | **174/174** |
+
+### Ngày 21 (lát cắt đầu) — xong: màn Lịch hẹn chủ tiệm chạy dữ liệu thật
+
+Màn cuối cùng trong nhóm *"có API nhưng chưa nối"* của §9.2. **Không thêm endpoint nào**: sáu
+endpoint lịch hẹn viết ngày 11 đã đủ, chỉ là cổng chủ tiệm chưa bao giờ dùng tới chúng. Ba tệp,
++650 −66 dòng, và không dòng nào ở phía máy chủ.
+
+Mục này viết bù sau lát cắt thu hồi phiên. Nội dung dựng lại từ commit `a7e9a5d` và diff của nó,
+nên phần kiểm chứng ở cuối ghi lại lượt kiểm lúc làm chứ không phải lượt chạy mới.
+
+#### Nạp theo tuần, không theo ngày — và vì sao phải tách hook thay vì chép
+
+`useAppointments` trước đây nạp đúng **một ngày**, vì nó sinh ra cho cổng lễ tân và quầy chỉ bao
+giờ nhìn ca hôm nay. Màn của chủ tiệm thì khác: dải chọn ngày ở đầu bảng vẽ vạch mật độ cho **cả
+bảy ngày** trong tuần, nên nạp một ngày thì sáu ngày còn lại luôn hiện "0 lịch" — trang nói sai
+về chính nó.
+
+Phần lõi tách thành `useAppointmentRange` nhận khoảng bất kỳ; hook cũ còn lại là một lớp mỏng
+gọi vào đó qua `dayRange`, nên **cổng lễ tân không phải sửa một dòng**. Chia như vậy chứ không
+chép thành hook thứ hai vì bốn hàm ghi bên dưới đều phải `reload()` sau khi thành công, và hai
+bản sao của quy tắc ấy sẽ lệch nhau ngay lần sửa đầu tiên. Tầng service vốn đã nhận khoảng bất
+kỳ — `listAppointments(from, to)` — nên đây là mở đúng thứ đã có sẵn ở dưới.
+
+Một cái lợi không định trước: bấm qua lại giữa các ngày trong cùng một tuần không gọi mạng lần
+nào.
+
+#### `toTenantAppointment` — bộ chuyển đổi thứ hai, cùng khuôn với ngày 14
+
+File này hơn ba nghìn dòng và đọc `appointment.start`, `appointment.duration`,
+`appointment.staff` ở hàng trăm chỗ. Đổi hình dạng nghĩa là sửa từng chỗ ấy — dài, rủi ro, và
+không mua lại được gì cho người dùng. Nên `AppointmentDto` được mặc lại đúng bộ tên trường mà
+cây render đang đọc, y như `toReceptionAppointment` đã làm cho cổng lễ tân.
+
+Hai con số trong bộ chuyển đổi không lấy thẳng từ lịch hẹn được:
+
+| Con số | Lấy từ đâu | Vì sao |
+|---|---|---|
+| Giá | Tra bảng giá dịch vụ hiện hành | Lịch hẹn ở máy chủ **không lưu giá**: BR-SVC-009 chốt giá tại thời điểm lập hóa đơn. Con số hiện ra là **giá dự kiến**, không phải tiền đã thu |
+| Thời lượng | `durationMinutes + bufferMinutes` | BR-SVC-003 và BR-APT-010 — đúng con số phép chống trùng lịch ở máy chủ tính trên. Lấy thiếu vế sau thì giao diện vẽ buổi hẹn ngắn hơn chỗ nó thật sự chiếm, và người xếp lịch tưởng còn trống |
+
+#### Mười ba trường máy chủ cố ý không có
+
+Giữ trong một bản đồ riêng theo mã lịch hẹn, ghi xuống `localStorage` qua `tenantStorageKey`.
+Ba nhóm, ba lý do khác nhau, và không nhóm nào là sơ suất của lược đồ:
+
+| Nhóm | Trường | Vì sao máy chủ không có |
+|---|---|---|
+| Nhắc lịch và nhãn hiển thị | `reminderSent`, `firstVisit`, `createdBy` | Nhắc lịch nằm ở mức D của §9.4. Hai cái sau suy được từ hồ sơ khách, không phải thuộc tính của buổi hẹn |
+| Hủy lịch | 4 trường `cancellation*` | `PATCH /status` chỉ nhận trạng thái. BR-APT-024 định nghĩa **việc hủy**, không định nghĩa việc khai vì sao hủy |
+| Hoàn tiền | 9 trường `refund*` cộng cờ `refunded` | **Hoàn tiền là chuyện của hóa đơn.** `REFUNDED` đã bị gỡ khỏi bảy trạng thái của lịch hẹn; đường hoàn tiền thật nằm ở `IssueRefundUseCase` của hóa đơn bán hàng |
+
+Không nhét chúng vào ô `note` của máy chủ: nhét vào đó là biến một ô ghi chú cho người đọc thành
+một định dạng dữ liệu mà không ai khai báo ở đâu cả.
+
+Nhóm thứ ba đáng nói nhất, vì nó là chỗ duy nhất trong màn có thể làm người dùng tin sai về
+tiền. Khối hoàn tiền được giữ lại nguyên vẹn, nhưng ở **chế độ dữ liệu thật** nó mang thêm một
+câu phạm vi nói thẳng: số nhập ở đây chỉ lưu trên máy này và **không vào báo cáo doanh thu**,
+muốn có sổ sách thì làm ở hóa đơn. Ở chế độ trình bày thì câu ấy không hiện, vì cả trang đã đeo
+nhãn dữ liệu mẫu rồi.
+
+Trạng thái `REFUNDED` cũng dựng lại bằng chính cờ ấy: bộ chuyển đổi đè nó lên trạng thái thật
+lúc đọc, và đường ghi chặn nó trước khi gửi lên vì máy chủ sẽ từ chối.
+
+#### `live` là một biến, không phải hai màn
+
+`live = Boolean(activeTenantId)`. Chế độ trình bày và chế độ chưa chọn tiệm đi chung một đường,
+giống `TenantAdminReports`. Mỗi danh mục có một bảng thật và một bảng mẫu — dịch vụ, kỹ thuật
+viên, khách, chi nhánh, ghế — và cây render không biết mình đang đọc bảng nào.
+
+Hai hiệu ứng của bộ mẫu — ghi lịch xuống `localStorage` và phát sự kiện cho tab khác — nay
+**dừng ngay ở chế độ thật**. Giữ lại thì đó là một bản sao thứ hai của sự thật, và bản sao ấy
+già đi ngay khi có người đặt lịch ở máy khác. Việc đồng bộ do `board.reload()` lo: mỗi lần ghi
+thành công là một lần nạp lại cả tuần.
+
+Cùng lý do ấy, ngăn chi tiết được đồng bộ lại sau mỗi lượt nạp. `endAt`, `totalMinutes` và
+`nextStatuses` đều do máy chủ suy ra, nên bản vừa nạp mới là bản đúng — không đồng bộ thì ngăn
+chi tiết giữ ảnh chụp lúc bấm, và nếu máy chủ **từ chối** bước chuyển trạng thái thì nó vẫn hiện
+trạng thái mà người dùng tưởng đã đổi được.
+
+#### Bốn chỗ vỡ khi chạy thử, và cả bốn cùng một hình dạng
+
+##### 🔴 Đầu cột kỹ thuật viên in `BRN-LUMIERE-Q1` và đẩy mất tên người
+
+Bộ mẫu dùng mã hai ký tự `Q1`/`Q3` nên con chip vừa vặn. Chi nhánh thật mang mã bản ghi kiểu
+`BRN-LUMIERE-Q3`: đặt nguyên vào chip thì chip chiếm hết bề ngang và **tên kỹ thuật viên bên
+cạnh bị cắt sạch**. Nay có hai bảng nhãn — `branchNames` đầy đủ cho những chỗ rộng,
+`branchShortNames` ưu tiên mã do tiệm tự đặt, rồi mới tới tên, cuối cùng mới tới mã bản ghi.
+
+Phép lọc chi nhánh cũng hỏng vì cùng gốc ấy: bộ mẫu khóa theo `Q1`/`Q3`, cổng truyền xuống mã
+bản ghi, không mã nào khớp nên bộ lọc loại sạch. Nay mỗi chế độ có bảng nhãn riêng và
+`branchFilter` hỏi đúng bảng của chế độ đang chạy.
+
+##### 🔴 Ô ghế bắt buộc trong khi không có ghế nào để chọn — không đặt được lịch nào
+
+Sơ đồ ghế nằm ở mức C của §9.3: không bảng, không endpoint. Máy chủ vốn nhận `station` như một
+trường **tùy chọn**, nhưng biểu mẫu thì bắt buộc — nên ở chế độ dữ liệu thật ô này không bao giờ
+điền được và phép kiểm chặn mọi lượt lưu. Nay dấu bắt buộc đi theo việc chi nhánh có ghế hay
+không, và ô mang dòng phụ nói rõ vì sao đang trống.
+
+`stationsFor` trả mảng rỗng chứ không để `undefined` chạy tiếp: chỗ gọi cũ lấy thẳng phần tử
+`[0]` và sẽ ném lỗi ngay giữa lúc mở biểu mẫu.
+
+##### 🔴 `emptyForm` chép cứng danh mục của bộ mẫu
+
+Ở chế độ thật không cái nào trong đó tồn tại: ô dịch vụ hiện "1 đã chọn" mà không ô nào được
+tick, ô kỹ thuật viên rỗng, chi nhánh trỏ vào một mã không có trong danh sách. Nay biểu mẫu
+trống được điền bằng phần tử đầu của từng danh mục **đang thật sự có**. Đổi chi nhánh cũng đổi
+luôn kỹ thuật viên, vì BR-EMP-003 buộc nhân viên thuộc đúng một chi nhánh nên người đang chọn có
+thể không còn hợp lệ.
+
+##### 🟡 Dòng "Tạo lúc" in chuỗi ISO thô
+
+`2026-09-03T07:22:43.933369+00:00` — đúng dữ liệu, sai chỗ đọc. Bộ mẫu vốn chứa sẵn chuỗi đã
+định dạng nên cây render in thẳng ra màn hình.
+
+> Cả bốn là **cùng một lỗi**: một hằng số mang hình dạng của bộ dữ liệu mẫu gặp mã định danh
+> thật. Đây là lần thứ năm hình dạng ấy xuất hiện, sau `nailModuleConfigs.staff.rows.length`
+> (ngày 20), `branchLabels` khóa theo `Q1`/`Q3` (ngày 19), `EVENT_META` khóa theo tên enum C#
+> (ngày 19), và năm huy hiệu của thanh bên (ngày 20). Không lượt quét tự động nào bắt được
+> chúng, vì mỗi giá trị tự nó đều hợp lệ — chỉ sai khi đứng cạnh dữ liệu thật.
+
+#### Biểu mẫu giữ tên, API nhận mã — ba phép dịch trước khi gửi
+
+Tên khách → mã hồ sơ, tên kỹ thuật viên → mã nhân viên, tên dịch vụ → mã dịch vụ. Tên trùng nhau
+thì lấy người đầu tiên khớp: chấp nhận được ở quy mô một tiệm, và là cái giá để **không phải
+viết lại biểu mẫu** ở hàng chục chỗ.
+
+Phép dịch đầu tiên không phải tra bảng mà có thể là một lần ghi: đặt lịch cho khách mới chạy
+`POST /api/customers` trước, rồi mới `POST /api/appointments`. BR-CUS-002 làm số điện thoại
+thành khóa tra cứu, còn BR-CUS-007 đọc ngược hạng khách và tổng chi tiêu từ hóa đơn — nên một
+lượt khách không có hồ sơ là một lượt **biến mất khỏi mọi con số về sau**.
+
+Hai điều nữa trên đường ghi:
+
+- `warnings` hiện như một lời nhắc chứ không phải lỗi. BR-APT-005 và BR-APT-013 **cho phép** đặt
+  ngoài ca hoặc đặt lùi giờ, chỉ nói cho người đặt biết.
+- Đổi trạng thái **cố ý không vá lạc quan** vào ngăn chi tiết. Vá rồi để hiệu ứng đồng bộ kéo bản
+  cũ về trước khi lượt nạp lại kịp tới thì người dùng thấy trạng thái nhảy ba lần — mới, cũ, rồi
+  mới lại. Máy chủ trả lời trong khoảng trăm mili-giây; một lần đổi vẫn nhanh hơn ba lần nhấp
+  nháy.
+
+Ở ngăn chi tiết, điểm tích lũy chỉ hiện khi lớn hơn 0. Loyalty nằm ngoài phạm vi (§9.3) nên ở
+chế độ thật mọi khách đều 0 điểm — in ra "0 điểm tích luỹ" là nói rằng hệ thống đã tính và khách
+chưa có điểm, trong khi thật ra chưa có gì tính cả. Bảy trường cùng loại — sở thích, dị ứng,
+tình trạng móng, thẻ, lịch sử — cũng để trống thay vì bịa, để cây render tự ẩn các khối ấy bằng
+chính phép kiểm nó đã có.
+
+#### Kiểm chứng
+
+Ghi lại từ lượt kiểm lúc làm, trên SQL Server 2022 với cả ba vai:
+
+| Phép thử | Kết quả |
+|---|---|
+| Đặt lịch cho khách mới | `POST /api/customers` rồi `POST /api/appointments`, bản ghi có mặt trong bảng `Appointments` |
+| Đổi trạng thái · hủy lịch | `PATCH` trả `200` cả hai |
+| Chống trùng lịch · so ca · giờ đóng cửa | Chặn đúng bằng dữ liệu thật |
+| Cổng lễ tân sau khi tách hook | Không sửa một dòng, hành vi không đổi |
+
+`npm run lint` và `npm run build` xanh — chạy lại ở cuối lát cắt hai, phủ cả hai lát cắt.
+
+Dải nhãn của màn này biến mất bằng cách xóa **đúng một dòng** trong `MOCK_DATA_REASONS` của
+`NailTenantAdminPortal` — đúng thứ mà bảng ấy được dựng ra để làm ở ngày 18.
+
+### Ngày 21 (lát cắt hai) — xong: thu hồi phiên đăng nhập từ xa, thứ đầu tiên quay lại từ nhóm "bỏ hẳn"
+
+Lát cắt thứ hai của ngày 03/09, sau màn Lịch hẹn chủ tiệm. Khác mọi ngày trước ở một điểm: đây
+không phải nối một màn có sẵn vào một API có sẵn, mà là **lấy lại một tính năng đã bị gạch khỏi
+phạm vi** — §9.4 xếp "thu hồi phiên từ xa" vào nhóm bỏ hẳn, §20 của `README-BUSINESS-RULES.md`
+cũng vậy. Quyết định 15′ ở §0 ghi lý do đổi ý.
+
+Tổng cộng: **2 endpoint · 1 ô quyền · 2 rule mới · 7 phép thử · 0 migration.**
+
+#### Vì sao một thứ đã "bỏ hẳn" lại quay lại được trong một ngày
+
+Ba thứ vốn tưởng phải làm, hóa ra đã có sẵn:
+
+| Tưởng phải làm | Thật ra | Có từ |
+|---|---|---|
+| Migration thêm `revoked_at`, `ip`, `user_agent`, `last_active` | Bảng `AppSessions` đã có đủ bốn cột | Ngày dựng bảng |
+| Cơ chế cưỡng chế: làm sao phiên bị đóng mất hiệu lực ngay | `SessionMiddleware` đã đọc lại phiên ở **mọi** request (BR-AUTH-022); thu hồi chỉ là đặt một cột | Ngày dựng tầng phiên |
+| Hạ tầng quản lý thiết bị | Không cần: `User-Agent` vẫn được lưu, chỉ thiếu chỗ rút gọn cho người đọc | — |
+
+Phần thật sự còn thiếu không phải mã nguồn mà là **nghiệp vụ**: §9.2 hoãn màn này với đúng câu
+*"cần nghiệp vụ chưa định nghĩa"*. BR-AUTH-032 và BR-AUTH-033 chính là phần ấy — ai thấy được
+phiên của ai, và ai đóng được phiên của ai.
+
+> Bài học cho phần còn lại của bảng §9.4: **danh sách "bỏ hẳn" được lập bằng cách ước lượng chi
+> phí, không phải bằng cách đo.** Mục này nằm trong đó vì lúc lập bảng ai cũng tưởng nó kéo theo
+> hạ tầng quản lý thiết bị. Trước khi bỏ tiếp thứ gì trong bảng ấy, nên mở lược đồ database ra
+> xem trước — có thể nửa việc đã nằm sẵn ở đó.
+
+#### Backend — hai endpoint, và một controller riêng
+
+| Endpoint | Vai gọi được | Trả về |
+|---|---|---|
+| `GET /api/sessions?take=` | Superadmin · chủ tiệm | Danh sách phiên, đã thu hẹp theo vai |
+| `POST /api/sessions/{id}/revoke` | Superadmin · chủ tiệm | Phiên sau khi đóng |
+
+Tách `SessionsController` khỏi `AuthController` dù cả hai làm việc trên cùng bảng `AppSessions`.
+Ranh giới không nằm ở bảng mà ở **chủ thể**: `AuthController` nói về phiên *của chính người gọi*
+— đăng nhập, đọc phiên mình, đổi tiệm, đăng xuất — ai cũng gọi được; controller mới nói về phiên
+*của người khác* và đứng sau ô quyền `Feature.Sessions`. Gộp chung thì một controller mang hai
+mức quyền, và đó là chỗ dễ gắn nhầm attribute nhất.
+
+`Feature.Sessions = 18` cũng cố ý tách khỏi `Feature.AuditLogs` dù hai thứ nằm chung một màn:
+nhật ký là dữ liệu **chỉ đọc và không sửa được** (BR-AUD-002), còn ô mới mang một thao tác ghi
+có hậu quả tức thì. Gộp lại thì cho quyền đọc nhật ký hóa ra cũng là cho quyền đá người đang làm
+việc ra ngoài. Lễ tân không có ô này: danh sách phiên mang theo email và địa chỉ IP của mọi tài
+khoản, không phải thứ cần ở quầy.
+
+`RequiresTenant = false` ở cả hai endpoint, vì Superadmin không có tiệm đang làm việc. Việc chủ
+tiệm bắt buộc phải chọn tiệm do use case tự đòi — cùng lối đã dùng cho nhật ký kiểm toán.
+
+#### Phần khó không nằm ở việc thu hồi, mà ở việc ai thu hồi được phiên của ai
+
+`RevokeSessionUseCase` đặt đúng một cột. Toàn bộ phần còn lại của lớp ấy là ba phép chặn:
+
+| Tình huống | Trả về | Vì sao |
+|---|---|---|
+| Tự thu hồi phiên mình đang dùng | `403` | Việc đó là của nút Đăng xuất, đường ấy còn dọn cookie tử tế. Cho phép ở đây thì người dùng tự đá mình ra giữa lúc thao tác và không hiểu vì sao |
+| Chủ tiệm đóng phiên của người ngoài tiệm | `404` | **Không phải `403`.** Trả `403` là xác nhận phiên đó tồn tại, tức rò rỉ một mẩu thông tin về tiệm khác — cùng lối BR-ISO-003 đặt cho mọi tài nguyên xuyên tiệm |
+| Thu hồi lần thứ hai | `200`, trạng thái hiện có | Màn hình đã ẩn nút với phiên đã đóng, nên lần gọi lặp gần như chắc chắn là cú bấm đúp hoặc một tab cũ. Ném lỗi thì người dùng tưởng mình vừa làm sai |
+
+Use case tự kiểm vai một lần nữa dù ma trận quyền ở tầng ngoài đã chặn lễ tân — để nó đứng vững
+kể cả khi về sau có người gọi nó từ một đường khác.
+
+**Phép thu hẹp của chủ tiệm đi theo chủ tài khoản, không theo phiên.** Bộ lọc hỏi bảng
+`UserTenants` chứ không hỏi `ActiveTenantId` của phiên, và đây là chỗ dễ làm sai nhất trong cả
+lát cắt: một tài khoản quản nhiều tiệm (BR-AUTH-023) có thể đang mở phiên trỏ sang tiệm khác,
+nhưng người đó vẫn là người của tiệm này và chủ tiệm vẫn phải thấy để đóng được. Lọc theo
+`ActiveTenantId` sẽ giấu mất **đúng những phiên đáng lo nhất**.
+
+#### Ba trạng thái tính lúc đọc, và thứ tự kiểm là bắt buộc
+
+`ACTIVE · EXPIRED · REVOKED` không phải cột được lưu mà tính ở `SessionMapper`. Lý do là
+BR-TENANT-003: toàn hệ thống không có job chạy nền, nên một phiên hết hạn vẫn nằm nguyên trong
+bảng cho tới khi có người hỏi tới nó.
+
+Thứ tự hỏi thì **thu hồi thắng hết hạn**. Một phiên bị đóng rồi để quá ngày sẽ đúng cả hai điều
+kiện; hỏi hết hạn trước thì màn hình báo "hết hạn" cho một phiên mà người quản trị đã chủ động
+đóng — xóa mất dấu vết của một thao tác có chủ ý, đúng thứ mà màn Bảo mật sinh ra để hiển thị.
+
+#### Rút gọn `User-Agent` — chỗ duy nhất có logic thật trong mapper, và ba cái bẫy thứ tự
+
+Không kéo thêm thư viện phân tích User-Agent: chuỗi này chỉ để người quản trị nhận ra máy nào là
+máy nào trước khi bấm thu hồi, không phải để thống kê. Nhưng các phép hỏi phải đúng thứ tự:
+
+- **Chrome hỏi sau Edge, Brave và Opera.** Cả ba dựng trên Chromium nên chuỗi của chúng đều chứa
+  `Chrome`; hỏi trước thì mọi trình duyệt hóa ra Chrome. Brave có mặt trong danh sách vì đó là
+  trình duyệt dùng để kiểm chứng dự án này.
+- **Safari hỏi sau cùng**, vì mọi trình duyệt Chromium cũng mang chữ `Safari`.
+- **iPhone và iPad hỏi trước Mac**, vì chuỗi của iOS cũng chứa `like Mac OS X`.
+
+Nhận không ra thì trả **nguyên chuỗi gốc**, không phải chữ "Không rõ". Ngày 19 và 20 rút ra bài
+học rằng một giá trị dự phòng là một lời nói dối chờ đúng hoàn cảnh; ở đây là vế ngược của cùng
+nguyên tắc — nói "Không rõ" trong khi vẫn còn thông tin trong tay là giấu mất manh mối duy nhất
+người quản trị có.
+
+Một cái bẫy nữa, tránh được chứ chưa kịp vấp: vai trò phải đi qua `AccountMapper.ToWireFormat`
+chứ không được `ToString().ToUpperInvariant()`. Phép ấy biến `TenantAdmin` thành `TENANTADMIN`
+trong khi frontend đọc `TENANT_ADMIN` — và **hai vai kia trùng nhau một cách tình cờ**, nên lỗi
+này chỉ lộ ra ở đúng một vai trong ba.
+
+#### Frontend — tab Phiên đăng nhập bỏ được dải nhãn dữ liệu mẫu
+
+Hai lớp quen thuộc, `services/sessions.ts` và `hooks/useSessions.ts`. Ba điểm đáng ghi:
+
+**Hàm gọi API không có tham số phạm vi nào cả.** Máy chủ tự quyết người gọi thấy được gì; thêm
+một tham số kiểu `?tenantId=` là mời trình duyệt tự khai mình được xem gì.
+
+**Nạp lại sau khi ghi là bắt buộc, không phải tối ưu.** Thu hồi làm đổi trạng thái của đúng một
+bản ghi, nhưng nó cũng làm đổi thứ tự cả danh sách — phiên đã đóng tụt xuống dưới. Vá tại chỗ
+thì hàng vẫn nằm nguyên vị trí cũ và người dùng tưởng thao tác chưa ăn.
+
+**`toAdminSession` là bộ chuyển đổi thứ ba của dự án**, cùng khuôn với `toReceptionAppointment`
+(ngày 14) và `toTenantAppointment` (màn Lịch hẹn). Hai trường máy chủ có mà kiểu cũ không có —
+`userEmail` và `activeTenantId` — cố ý **bỏ qua** thay vì nhét thêm vào `AdminSession`: cây
+render không hiện chúng, và một trường không ai đọc là một trường sẽ lệch trong im lặng.
+
+Kiểu `AdminSession` lộ ra hai chỗ sai khi đối chiếu với máy chủ:
+
+| Trường | Trước | Sau |
+|---|---|---|
+| `role` | `'SUPERADMIN' \| 'SUPPORT'` | `'SUPERADMIN' \| 'TENANT_ADMIN' \| 'RECEPTIONIST'` |
+| `status` | `'active' \| 'revoked'` | thêm `'expired'` |
+
+`SUPPORT` là một vai **chưa bao giờ tồn tại** trong hệ thống, còn hai vai có thật thì thiếu. Bộ
+dữ liệu mẫu cũ chỉ dựng phiên của Superadmin, nên không có gì lộ ra điều đó suốt hai mươi ngày.
+
+Ba thứ nữa sửa cùng lượt:
+
+- Câu mô tả cũ hứa "vị trí" và "xác thực MFA" — thực thể `AppSession` ghi rõ **cố ý không lưu**
+  `Location`, `Trusted`, `Suspicious`, `MfaVerified` vì chúng không có nguồn dữ liệu thật. Nay
+  tiêu đề nói đúng những gì hiện ra: thiết bị, địa chỉ IP, lần hoạt động cuối.
+- Nút "Đăng xuất thiết bị khác" gửi **tuần tự từng request**. Máy chủ không có endpoint thu hồi
+  hàng loạt và cố ý không có: mỗi lần thu hồi là một quyết định về một người cụ thể. Tuần tự chứ
+  không song song để thứ tự lỗi khớp thứ tự trên màn hình; báo kết quả dạng "thu hồi được 3/4".
+- Bỏ dòng đồng bộ qua `localStorage` giữa các tab: nguồn sự thật nay là máy chủ.
+
+Đây là dải nhãn nội tuyến thứ tư, và cũng là cái cuối cùng thuộc dạng "cả tab là dữ liệu mẫu" —
+`CLAUDE.md` nay ghi ba màn giữ nhãn riêng thay vì bốn.
+
+#### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| `dotnet test` | **82/82**, 10 giây — trước lát cắt này là 75 |
+| `dotnet build -warnaserror` | 0 warning · 0 error |
+| `npm run lint` | Xanh |
+| `npm run build` | Xanh, 4,92 giây |
+| Bảy phép thử mới | Superadmin thấy cả ba vai · chủ tiệm không thấy phiên Superadmin · lễ tân `403` · tự thu hồi `403` · thu hồi xuyên tiệm `404` · **người bị thu hồi nhận `401` ngay ở request kế tiếp** · thu hồi hai lần đều `200` |
+| Migration | Không có cái nào |
+
+Phép thử đáng giá nhất là cái thứ sáu: nó chứng minh thu hồi **thật sự có hiệu lực** chứ không
+chỉ đổi một cột. Lễ tân gọi `GET /api/appointments` được `200`, bị đóng phiên, gọi lại đúng
+endpoint ấy nhận `401`. Nếu `SessionMiddleware` ngừng đọc lại phiên ở mỗi request thì phép thử
+này đỏ — và đó đúng là thứ BR-AUTH-022 hứa.
+
+> **Chưa kiểm chứng trên trình duyệt.** Những phép trên đều là kiểm ở tầng mã nguồn và API. Lượt
+> bấm tay trên giao diện — mở hai trình duyệt, đóng phiên bên này, xem bên kia bị đá ra ở thao
+> tác kế tiếp — vẫn còn nợ.
+
+#### Việc còn treo sau ngày 21
+
+Mười hai việc treo sau ngày 20 giữ nguyên. Lát cắt này thêm hai:
+
+| # | Việc | Mức |
+|---|---|---|
+| 13 | **Thu hồi một phiên không ghi nhật ký kiểm toán.** `AuditEvent` không có mục nào cho việc này, trong khi nó là thao tác bảo mật có hậu quả tức thì — và nó nằm ngay cạnh danh sách nhật ký, trên cùng một màn | Trung bình |
+| 14 | **Chủ tiệm có quyền nhưng chưa có màn.** Ma trận cho `TenantAdmin` ô `Feature.Sessions`, máy chủ thu hẹp đúng theo tiệm và đã có phép thử che, nhưng `SecurityAndLogs` chỉ nằm trong cổng Superadmin — chưa cổng nào của chủ tiệm gọi tới `useSessions` | Thấp |

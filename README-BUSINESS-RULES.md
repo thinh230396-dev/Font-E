@@ -166,6 +166,18 @@ Chủ tiệm xem báo cáo doanh thu theo ngày / chi nhánh / nhân viên / d�
 
 **BR-AUTH-031** — Không có chức năng đăng nhập thay tenant (impersonate). *(Q14A)*
 
+**BR-AUTH-032** — Danh sách phiên đăng nhập đang mở **xem được từ màn Bảo mật**, và phạm vi nhìn thấy phụ thuộc vai trò: `SUPERADMIN` thấy mọi phiên của toàn hệ thống; `TENANT_ADMIN` chỉ thấy phiên của những tài khoản **có liên kết với tiệm đang làm việc** trong bảng `user_tenants`; `RECEPTIONIST` **không thấy gì** — danh sách này mang theo email và địa chỉ IP của mọi tài khoản, không phải thứ cần ở quầy.
+
+> Phép thu hẹp của chủ tiệm đi theo **chủ tài khoản**, không theo `active_tenant_id` của phiên. Một tài khoản quản nhiều tiệm (BR-AUTH-023) có thể đang mở phiên trỏ sang tiệm khác, nhưng người đó vẫn là người của tiệm này và chủ tiệm vẫn phải thấy để đóng được. Lọc theo `active_tenant_id` sẽ giấu mất đúng những phiên đáng lo nhất. *(chốt 03/09/2026)*
+
+**BR-AUTH-033** — Thu hồi một phiên là đặt `revoked_at`; phiên bị thu hồi **mất hiệu lực ngay ở request kế tiếp** theo đúng cơ chế của BR-AUTH-022. Ba ràng buộc:
+
+1. **Không ai tự thu hồi phiên mình đang dùng.** Việc đó là của nút Đăng xuất, đường ấy còn dọn cookie tử tế. Máy chủ trả `403`.
+2. **Chủ tiệm chỉ thu hồi được phiên của người thuộc tiệm mình.** Thu hồi phiên ngoài phạm vi trả `404` chứ không phải `403` — trả `403` là xác nhận phiên đó tồn tại, tức rò rỉ một mẩu thông tin về tiệm khác, trái tinh thần BR-ISO-003.
+3. **Thu hồi hai lần không phải lỗi.** Lần thứ hai trả về trạng thái hiện có; màn hình đã ẩn nút với phiên đã đóng nên lần gọi lặp gần như chắc chắn là cú bấm đúp hoặc một tab cũ.
+
+> ⚠️ **Hai rule này chuyển "thu hồi phiên từ xa" ra khỏi Mức D.** §20 từng liệt nó vào nhóm bỏ hẳn, và §9.2 của `README-BACKEND-ROADMAP.md` hoãn phần này vì *"cần nghiệp vụ chưa định nghĩa"* — hai mã trên chính là phần nghiệp vụ ấy. Đổi ý được vì chi phí hóa ra gần bằng không: bảng `app_sessions` đã có sẵn cả `revoked_at`, `ip`, `user_agent` và `last_active` từ ngày dựng, nên **không cần migration nào**, và cơ chế cưỡng chế thì BR-AUTH-022 đã lo. *(chốt 03/09/2026)*
+
 ---
 
 ## 4. Tenant Rules
@@ -791,12 +803,14 @@ Bảng này ghi lại **những gì đã cố ý đơn giản hóa** và lý do 
 
 | Nhóm | Nội dung |
 |---|---|
-| **Tài khoản** | Đổi mật khẩu · Quên mật khẩu · Kích hoạt qua email · Xác minh email/SĐT · MFA · Thu hồi phiên từ xa |
+| **Tài khoản** | Đổi mật khẩu · Quên mật khẩu · Kích hoạt qua email · Xác minh email/SĐT · MFA · ~~Thu hồi phiên từ xa~~ |
 | **Khách hàng** | Toàn bộ vai trò Customer: đăng nhập, chọn tiệm, tự đặt lịch, xem lịch sử |
 | **Lịch hẹn** | Giờ mở cửa chi nhánh · Ngày nghỉ lễ · Nhắc lịch tự động · Nhiều KTV cho một lịch |
 | **Tiền** | Cổng thanh toán thật · VAT · Hóa đơn điện tử VN · Hoàn cọc / mất cọc · Chi phí và lợi nhuận |
 | **Nhân sự** | Lịch tuần · Nghỉ phép · Chấm công · Bảng lương và hoa hồng có chốt kỳ |
 | **Hệ thống** | Thông báo · Email/SMS/Zalo · Sao lưu thật · Upload tệp · Deep-link/URL routing · Test tự động |
+
+> **"Thu hồi phiên từ xa" đã ra khỏi bảng này ngày 03/09/2026** — xem BR-AUTH-032 và BR-AUTH-033. Nó nằm ở đây vì lúc lập bảng, ai cũng tưởng nó kéo theo hạ tầng quản lý thiết bị. Hóa ra không: bảng `app_sessions` đã có sẵn `revoked_at`, `ip`, `user_agent`, `last_active`, nên làm nó **không tốn một migration nào**. Dòng "Test tự động" ở hàng Hệ thống cũng đã lỗi thời từ ngày 12 — bộ xUnit hiện có 82 phép thử.
 
 ### 21.3 Nợ kỹ thuật đã biết, cần xử lý khi làm backend
 
