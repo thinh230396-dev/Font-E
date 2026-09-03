@@ -3556,3 +3556,117 @@ Mười hai việc treo sau ngày 20 giữ nguyên. Lát cắt này thêm hai:
 |---|---|---|
 | 13 | **Thu hồi một phiên không ghi nhật ký kiểm toán.** `AuditEvent` không có mục nào cho việc này, trong khi nó là thao tác bảo mật có hậu quả tức thì — và nó nằm ngay cạnh danh sách nhật ký, trên cùng một màn | Trung bình |
 | 14 | **Chủ tiệm có quyền nhưng chưa có màn.** Ma trận cho `TenantAdmin` ô `Feature.Sessions`, máy chủ thu hẹp đúng theo tiệm và đã có phép thử che, nhưng `SecurityAndLogs` chỉ nằm trong cổng Superadmin — chưa cổng nào của chủ tiệm gọi tới `useSessions` | Thấp |
+
+### Ngày 22 — xong: bộ nạp dữ liệu mẫu dựng lịch ở tương lai
+
+Việc treo số 2 sau ngày 20, và là mục duy nhất trong danh sách có thể làm hỏng **chính buổi bảo
+vệ** chứ không chỉ làm xấu một màn hình. Ba tệp ở máy chủ, một dòng ở `CLAUDE.md`, không endpoint
+nào và không migration nào.
+
+#### Vấn đề: một database có hạn dùng, mà không ai ghi hạn ấy ở đâu
+
+`DemoDataSeeder` dựng lịch sử bằng cách **lùi từ đúng thời điểm nó chạy**, và bản trước không đặt
+gì ở phía trước. Nghĩa là mọi thứ trong database neo vào ngày dựng: nạp hôm nay thì hôm nay đẹp,
+còn hôm sau cổng lễ tân **trống trơn** — 0 khách, 0 ca, doanh thu ca 0đ. Màn hình xử lý đúng và
+không lỗi, nhưng đó là màn trung tâm của buổi demo.
+
+Cách phòng khi ấy là một câu ghi chú: *"dựng lại vào đúng buổi sáng hôm demo"*. Đó là một quy
+trình dựa vào trí nhớ, thực hiện dưới áp lực, vào đúng buổi sáng mà người làm có nhiều thứ khác
+để lo. Sửa ở bộ nạp thì hạn dùng của database giãn từ **một ngày lên bảy ngày**, và câu ghi chú
+kia thôi làm hàng rào duy nhất.
+
+#### Một vòng lặp, không phải hai
+
+```csharp
+for (var dayOffset = 29; dayOffset >= -UpcomingDays; dayOffset--)
+```
+
+Đếm lùi xuyên qua mốc 0 chứ không viết thêm vòng lặp thứ hai cho phần tương lai, và lý do không
+phải là gọn mắt: bộ sinh số ngẫu nhiên dùng **hạt giống cố định** để hai máy nạp ra cùng một bộ
+dữ liệu. Mọi lượt rút của phần quá khứ phải diễn ra đúng thứ tự cũ, nếu không thì ba mươi ngày
+lịch sử — cùng toàn bộ hóa đơn, doanh thu và hạng khách suy ra từ chúng — đổi số. Thêm vòng lặp
+mới ở **sau** vòng cũ giữ được điều đó; chèn vào trước hay trộn vào giữa thì không.
+
+`UpcomingDays = 7` cũng không phải con số chọn bừa. Nó phủ trọn dải chọn ngày một tuần của màn
+Lịch hẹn chủ tiệm, và nó là quãng dài nhất mà một database nạp sẵn còn dùng được.
+
+#### Ba ràng buộc, và cái thứ nhất là quan trọng nhất
+
+**Lịch tương lai không sinh hóa đơn.** `PlayOutAppointment` có nhánh mới dừng ở PENDING hoặc
+CONFIRMED — đúng hai trạng thái BR-APT-021 cho phép lúc đặt — rồi trả về ngay. Một buổi hẹn chưa
+diễn ra mà đã có hóa đơn đã thu là **tiền chưa tồn tại được ghi vào sổ**: báo cáo doanh thu
+(BR-REV-004) cộng nó vào, hạng khách suy từ hóa đơn đã trả đủ (BR-CUS-007) nhảy lên, và cả hai
+con số ấy đều lên slide bảo vệ. Một phần tư để nguyên PENDING, để quầy lễ tân có việc để xác
+nhận chứ không phải một danh sách đã xong hết phần việc của chính nó.
+
+**Ngày tạo không được nằm ở thì tương lai.** `CreateAppointment` vốn luôn lấy `start.AddDays(-1)`
+— hợp lý khi mọi lịch đều ở quá khứ. Với lịch của tuần sau thì phép trừ ấy cho ra một ngày tạo
+cũng ở tuần sau, tức một bản ghi tự khai rằng nó được tạo ở tương lai. Nay lịch phía trước mang
+ngày tạo bằng đúng lúc nạp, và đó cũng là sự thật.
+
+**Trần trên là 120 ngày.** `SalonScenario.NextSlot()` của bộ xUnit đặt mọi khung giờ thử nghiệm ở
+mốc 120 ngày sau, cách nhau tám tiếng, cho **cùng một** kỹ thuật viên — và chú thích ở đó trước
+kia nói rõ nó an toàn vì *"bộ dữ liệu mẫu không đặt gì ở tương lai"*. Câu ấy nay không còn đúng.
+Bảy ngày để lại 113 ngày đệm, nhưng ràng buộc đã được ghi vào **cả hai phía**: hằng số bên bộ nạp
+nói về mốc 120 ngày, chú thích bên phép thử nói về `UpcomingDays`. Một ràng buộc chỉ ghi ở một
+đầu là một ràng buộc sẽ bị phá từ đầu kia.
+
+#### 🟡 Chú thích tôi vừa viết ra đã sai, và chỉ phép đo mới cho thấy
+
+Trong lần sửa đầu tôi ghi vào mã nguồn rằng dữ liệu cũ *"không đổi một con số nào"*. Lập luận
+đúng — thứ tự rút số của phần quá khứ quả thật không đổi — nhưng kết luận thì rộng quá.
+
+Phép đo cách này: `git stash` phần sửa, nạp lại database, ghi số, khôi phục, nạp lại lần nữa, so.
+
+| Phép đo | Trước | Sau |
+|---|---:|---:|
+| Nailé — lịch hẹn quá khứ và hôm nay | 169 | **169** |
+| Nailé — hóa đơn | 145 | **145** |
+| Nailé — tổng tiền hóa đơn | 72.260.000 ₫ | **72.260.000 ₫** |
+| Muse — hóa đơn | 6 | **7** |
+| Muse — tổng tiền hóa đơn | 2.420.000 ₫ | **2.800.000 ₫** |
+
+`SeedMuse` chạy **sau** `SeedLumiere` và rút từ cùng bộ sinh số, nên bảy lượt rút của nó bị đẩy
+đi và một buổi hẹn trước kia bị hủy nay chạy trọn vòng đời. Vô hại — Muse có mặt để kiểm chứng
+cách ly và chặn ghi, không phép thử nào và không con số nào trên slide đọc tới doanh thu của nó —
+nhưng chú thích thì đã sửa để nói đúng cả hai vế thay vì chỉ vế đẹp.
+
+> Đây là lần thứ hai trong dự án một câu chữ đúng-về-lập-luận hóa ra sai-về-phạm-vi, sau vụ
+> `SalonScenario.NextSlot()` tin rằng dịch vụ đầu danh sách luôn ngắn. Cùng một cách chữa:
+> **đo, đừng suy.**
+
+#### Kiểm chứng
+
+Đo trên database `NailManagementTests` do chính bộ nạp dựng, bằng `sqlcmd`:
+
+| Phép thử | Kết quả |
+|---|---|
+| Lịch trong 7 ngày tới (Nailé) | **37** — 26 CONFIRMED, 11 PENDING |
+| Hóa đơn gắn vào lịch tương lai của bộ nạp | **0** |
+| Bản ghi khai ngày tạo ở thì tương lai | **0** |
+| Nailé quá khứ, trước và sau khi sửa | Khớp từng đồng |
+| `dotnet test` | **82/82**, 11 giây |
+| `dotnet build -warnaserror` | 0 warning · 0 error |
+
+Năm hóa đơn gắn vào lịch ở tương lai xa là **của bộ xUnit** chứ không phải của bộ nạp: các phép
+thử tự đặt lịch ở mốc 120 ngày rồi lập hóa đơn cho chúng. Phép đếm phải lọc theo cửa sổ bảy ngày
+mới tách được hai nguồn ra — và đó cũng là một cách kiểm chứng gián tiếp rằng hai vùng thời gian
+không giẫm lên nhau.
+
+> **Chưa chạy trên database demo thật.** Bộ nạp **chỉ chạy khi bảng gói còn rỗng**, nên database
+> demo hiện có sẽ không tự mọc thêm lịch tương lai vì chạy lại máy chủ. Muốn thấy thay đổi này
+> thì phải `dotnet ef database drop --force` rồi dựng lại từ số 0 — thao tác đó xóa mọi thứ đã
+> tạo tay, nên để người vận hành tự quyết lúc nào làm.
+
+#### Ba tài liệu nói sai sau thay đổi này, đã sửa kèm
+
+| Tệp | Trước | Sau |
+|---|---|---|
+| `README.md` máy chủ, mục 3 | "⚠️ Dựng lại vào đúng buổi sáng hôm demo" | "Hạn dùng của một database đã dựng: bảy ngày", kèm cảnh báo bộ nạp chỉ chạy khi bảng gói rỗng |
+| `SalonScenario.cs` | "bộ dữ liệu mẫu không đặt gì ở tương lai" | Ràng buộc hai chiều với `UpcomingDays`, ghi rõ khoảng đệm 113 ngày |
+| `CLAUDE.md` | "Re-seed on the morning of any demo" | Bảy ngày lịch phía trước, không hóa đơn, và phải drop trước khi seed lại |
+
+#### Việc còn treo sau ngày 22
+
+Treo số 2 đóng lại. Còn 13 việc, không thêm việc mới. Việc đáng làm kế tiếp theo thứ tự đã bàn là
+treo số 1 — giảm giá âm lúc lập hóa đơn bị bỏ qua trong im lặng.

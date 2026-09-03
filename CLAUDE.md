@@ -29,7 +29,7 @@ There is no unit-test runner in **this** repo (no Jest/Vitest). Verify frontend 
 dotnet ef database drop --force --project NailManagement.Infrastructure --startup-project NailManagement.API
 ```
 
-Note that `DemoDataSeeder` builds its history backwards from the moment it runs and puts nothing in the future — so a database seeded yesterday leaves the receptionist desk empty today. Re-seed on the morning of any demo.
+Note that `DemoDataSeeder` builds its history backwards from the moment it runs, so everything in it is anchored to the day you seeded. It also lays down seven days of appointments *ahead* of that moment (`DemoDataSeeder.UpcomingDays`), which is what keeps the receptionist desk from being empty on a database seeded earlier in the week — those future appointments stop at PENDING/CONFIRMED and carry no invoices, so revenue figures are unaffected. Past a week, re-seed. And re-seeding means dropping first: the seeder only runs when the `Packages` table is empty, so an existing database never grows the new rows on its own.
 
 The dev server only proxies `/api`; it does not serve it. Start the backend first, or every API call 502s:
 
