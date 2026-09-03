@@ -457,7 +457,11 @@ export interface SystemLog {
 export interface AdminSession {
   id: string;
   user: string;
-  role: 'SUPERADMIN' | 'SUPPORT';
+  /**
+   * Ba vai thật của hệ thống. Bản trước ghi `'SUPERADMIN' | 'SUPPORT'` — `SUPPORT`
+   * là một vai chưa bao giờ tồn tại, còn hai vai có thật thì thiếu.
+   */
+  role: 'SUPERADMIN' | 'TENANT_ADMIN' | 'RECEPTIONIST';
   device: string;
   browser: string;
   os: string;
@@ -466,7 +470,12 @@ export interface AdminSession {
   lastActive: string;
   expiresAt: string;
   isCurrent: boolean;
-  status: 'active' | 'revoked';
+  /**
+   * `expired` là trạng thái thứ ba mà bộ dữ liệu mẫu không có: phiên quá hạn vẫn
+   * nằm nguyên trong bảng cho tới khi có người hỏi tới, vì BR-TENANT-003 không
+   * cho chạy job nền nào dọn chúng.
+   */
+  status: 'active' | 'revoked' | 'expired';
 }
 
 export interface BackupSnapshot {

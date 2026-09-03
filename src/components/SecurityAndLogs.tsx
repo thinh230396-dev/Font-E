@@ -31,13 +31,15 @@ import {
 } from 'lucide-react';
 import type { AdminSession, SystemLog } from '../types';
 import useAuditLogs from '../hooks/useAuditLogs';
+import useSessions from '../hooks/useSessions';
+import type { SessionDto } from '../services/sessions';
 import {
   loadSystemSettings,
   SYSTEM_SETTINGS_STORAGE_KEY,
   SYSTEM_SETTINGS_UPDATED_EVENT,
   type SystemSettingsModel
 } from '../utils/systemSettings';
-import { MockDataNotice, Modal, useToast } from './ui';
+import { Modal, useToast } from './ui';
 
 interface SecurityAndLogsProps {
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
@@ -50,9 +52,7 @@ type CategoryFilter = 'ALL' | SystemLog['category'];
 type StatusFilter = 'ALL' | SystemLog['status'];
 type SeverityFilter = 'ALL' | SystemLog['severity'];
 
-const SESSIONS_STORAGE_KEY = 'salonsys_admin_sessions';
 const PAGE_SIZE = 8;
-const LEGACY_MOCK_SESSION_IDS = new Set(['SES-CURRENT-001', 'SES-REMOTE-002', 'SES-REMOTE-003']);
 
 const CATEGORY_LABELS: Record<SystemLog['category'], string> = {
   AUTH: 'Xác thực',
@@ -123,26 +123,33 @@ const formatRelativeTime = (value: string) => {
   return `${Math.floor(hours / 24)} ngày trước`;
 };
 
-const loadSessions = (): AdminSession[] => {
-  try {
-    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as AdminSession[];
-    if (!Array.isArray(parsed)) return [];
-
-    const sessions = parsed.filter((session) => !LEGACY_MOCK_SESSION_IDS.has(session.id));
-    if (sessions.length !== parsed.length) {
-      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
-    }
-    return sessions;
-  } catch {
-    return [];
-  }
-};
-
-const saveSessions = (sessions: AdminSession[]) => {
-  localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
-};
+/**
+ * Một phiên của máy chủ, mặc lại hình dạng mà cây render đang dùng.
+ *
+ * Cùng lối adapter đã dùng ở cổng lễ tân và màn Lịch hẹn chủ tiệm: cây render
+ * bên dưới đọc `session.os`, `session.browser`, `session.user` ở nhiều chỗ, và
+ * đổi hình dạng nghĩa là sửa từng chỗ ấy mà không mua lại được gì.
+ *
+ * Hai trường máy chủ có mà kiểu cũ không có — `userEmail` và `activeTenantId` —
+ * **cố ý bỏ qua** ở đây thay vì nhét thêm vào `AdminSession`: cây render không
+ * hiện chúng, và một trường không ai đọc là một trường sẽ lệch trong im lặng.
+ */
+const toAdminSession = (dto: SessionDto): AdminSession => ({
+  id: dto.id,
+  user: dto.userDisplayName,
+  role: dto.userRole,
+  device: dto.device,
+  // Rỗng thay vì "Không rõ": cây render nối hai chuỗi này bằng dấu chấm giữa, và
+  // "Không rõ · Không rõ" chiếm chỗ mà không nói thêm điều gì.
+  browser: dto.browser || '',
+  os: dto.os || '',
+  ip: dto.ip || '—',
+  createdAt: dto.createdAt,
+  lastActive: dto.lastActive,
+  expiresAt: dto.expiresAt,
+  isCurrent: dto.isCurrent,
+  status: dto.status === 'ACTIVE' ? 'active' : dto.status === 'REVOKED' ? 'revoked' : 'expired'
+});
 
 const escapeCsvCell = (value: unknown) => {
   const text = String(value ?? '');
@@ -210,7 +217,19 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
     ai đó ghi đè.
   */
   const { logs } = useAuditLogs(true);
-  const [sessions, setSessions] = useState<AdminSession[]>(loadSessions);
+
+  /**
+   * Phiên đăng nhập đọc thật từ máy chủ — BR-AUTH-032.
+   *
+   * `'superadmin'` là khóa phạm vi cố định vì màn này chỉ tồn tại trong cổng
+   * Superadmin, và phạm vi của họ không phụ thuộc tiệm nào. Cùng lối
+   * `useAuditLogs(true)` ngay trên.
+   */
+  const sessionDirectory = useSessions(true, 'superadmin');
+  const sessions = useMemo(
+    () => sessionDirectory.sessions.map(toAdminSession),
+    [sessionDirectory.sessions]
+  );
   const [settings, setSettings] = useState<SystemSettingsModel>(loadSystemSettings);
   const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -227,7 +246,8 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
     };
     const handleStorage = (event: StorageEvent) => {
       if (event.key === SYSTEM_SETTINGS_STORAGE_KEY) setSettings(loadSystemSettings());
-      if (event.key === SESSIONS_STORAGE_KEY) setSessions(loadSessions());
+      // Không còn dòng đồng bộ phiên qua `localStorage`: nguồn sự thật nay là máy
+      // chủ, và tab khác đổi gì thì `sessionDirectory.reload()` mới là đường đúng.
     };
 
     window.addEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSettingsUpdate);
@@ -332,15 +352,16 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
      đường nào đi tới sự thật. Chính sách lưu trữ vẫn hiện ở tab Tổng quan bảo mật. */
 
   const revokeSession = (session: AdminSession) => {
-    if (session.isCurrent || session.status === 'revoked') return;
+    if (session.isCurrent || session.status !== 'active') return;
     showConfirm(
       'Thu hồi phiên đăng nhập?',
-      `Phiên trên ${session.device} (IP ${session.ip}) sẽ bị vô hiệu ngay. Người dùng phải đăng nhập lại để tiếp tục truy cập.`,
+      `Phiên của ${session.user} trên ${session.device} (IP ${session.ip}) sẽ bị vô hiệu ngay ở request kế tiếp. Người đó phải đăng nhập lại để tiếp tục làm việc.`,
       () => {
-        const next = sessions.map((item) => item.id === session.id ? { ...item, status: 'revoked' as const } : item);
-        setSessions(next);
-        saveSessions(next);
-        showToast('Đã thu hồi phiên đăng nhập.');
+        void sessionDirectory.revokeSession(session.id).then((result) => {
+          showToast(result.status === 'ok'
+            ? `Đã thu hồi phiên của ${session.user}.`
+            : result.error.message);
+        });
       }
     );
   };
@@ -352,10 +373,22 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
       'Đăng xuất khỏi các thiết bị khác?',
       `${revocable.length} phiên khác sẽ bị thu hồi. Phiên hiện tại trên thiết bị này vẫn được giữ lại.`,
       () => {
-        const next = sessions.map((session) => session.isCurrent ? session : { ...session, status: 'revoked' as const });
-        setSessions(next);
-        saveSessions(next);
-        showToast('Đã đăng xuất khỏi tất cả thiết bị khác.');
+        // Máy chủ không có endpoint thu hồi hàng loạt, và cố ý không có: mỗi lần
+        // thu hồi là một quyết định về một người cụ thể, nên nó đi một request một.
+        // Gửi tuần tự chứ không song song để nếu có cái nào bị từ chối thì thứ tự
+        // lỗi vẫn khớp với thứ tự trên màn hình.
+        void (async () => {
+          let failed = 0;
+
+          for (const session of revocable) {
+            const result = await sessionDirectory.revokeSession(session.id);
+            if (result.status === 'error') failed += 1;
+          }
+
+          showToast(failed === 0
+            ? `Đã thu hồi ${revocable.length} phiên trên các thiết bị khác.`
+            : `Thu hồi được ${revocable.length - failed}/${revocable.length} phiên; ${failed} phiên bị từ chối.`);
+        })();
       }
     );
   };
@@ -641,17 +674,12 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
 
       {activeTab === 'sessions' && (
         <div className="space-y-5">
-          {/*
-            §9.2 để phần thu hồi phiên ngoài phạm vi vì nghiệp vụ của nó chưa được định nghĩa,
-            và §9.4 bỏ hẳn "thu hồi phiên từ xa". Máy chủ CÓ bảng `AppSessions` thật, nhưng
-            không có endpoint đọc — nên bảng dưới đây rỗng, và một bảng rỗng không nói gì thì
-            trông y hệt "chưa ai từng đăng nhập".
-          */}
-          <MockDataNotice reason="Danh sách phiên đăng nhập nằm ngoài phạm vi backend MVP (§9.2). Máy chủ vẫn quản phiên thật trong bảng AppSessions; chỉ là chưa có màn đọc." />
           <div className="flex flex-col gap-3 rounded-xl border border-brand-outline/40 bg-brand-surface p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-sm font-bold text-brand-text">Phiên đăng nhập Superadmin</h2>
-              <p className="mt-1 text-[10px] text-brand-text-muted">Theo dõi thiết bị, vị trí, xác thực MFA và thu hồi phiên không còn tin cậy.</p>
+              <h2 className="text-sm font-bold text-brand-text">Phiên đăng nhập đang mở</h2>
+              {/* Câu mô tả cũ hứa "vị trí" và "xác thực MFA" — hai thứ hệ thống không có và
+                  đã bị gỡ khỏi bảng từ ngày 4. Nói đúng những gì thật sự hiện ra. */}
+              <p className="mt-1 text-[10px] text-brand-text-muted">Thiết bị, địa chỉ IP và lần hoạt động cuối của mọi tài khoản đang đăng nhập. Thu hồi một phiên là vô hiệu nó ngay ở request kế tiếp.</p>
             </div>
             <button type="button" onClick={revokeOtherSessions} disabled={activeSessions.filter((session) => !session.isCurrent).length === 0} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500/25 bg-red-500/8 px-3.5 py-2 text-xs font-bold text-red-500 cursor-pointer disabled:cursor-not-allowed">
               <Ban className="h-4 w-4" /> Đăng xuất thiết bị khác
