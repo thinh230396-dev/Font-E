@@ -212,5 +212,28 @@ export const renewTenant = async (id: string, expiresAt: string) =>
 export const changeTenantStatus = async (id: string, status: 'ACTIVE' | 'SUSPENDED') =>
   unwrapTenant(await apiPatch<{ tenant: TenantDetailDto }>(`/api/tenants/${id}/status`, { status }));
 
+/**
+ * BR-AUTH-020 — khóa tạm hoặc mở khóa một tài khoản chủ tiệm.
+ *
+ * Nằm cạnh `listTenantAdminAccounts` chứ không tách sang tệp riêng: hai hàm đọc và ghi trên
+ * cùng một tài nguyên, và tách chúng ra hai chỗ là bắt người sửa phải nhớ cả hai.
+ *
+ * **Không nhận `'INACTIVE'`, và kiểu ở đây là hàng rào thứ nhất.** Vô hiệu vĩnh viễn là một
+ * quyết định không hoàn tác được (BR-DEL-001 không cho xóa để tạo lại), nên nó phải có đường
+ * riêng chứ không nấp sau cùng một tham số. Máy chủ cũng từ chối, nhưng để `tsc` bắt trước thì
+ * lỗi lộ ra lúc gõ chứ không lúc chạy.
+ */
+export const changeTenantAdminStatus = async (
+  id: string,
+  status: 'ACTIVE' | 'SUSPENDED'
+): Promise<ApiResult<TenantAdminAccountDto>> => {
+  const result = await apiPatch<{ account: TenantAdminAccountDto }>(
+    `/api/accounts/${id}/status`,
+    { status }
+  );
+
+  return result.status === 'ok' ? { status: 'ok', data: result.data.account } : result;
+};
+
 /** BR-TENANT-020 — xóa mềm. Mã tiệm vẫn bị chiếm sau khi xóa. */
 export const deleteTenant = (id: string) => apiDelete<void>(`/api/tenants/${id}`);

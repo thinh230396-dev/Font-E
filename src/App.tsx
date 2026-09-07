@@ -1120,7 +1120,15 @@ export default function App() {
           />
         );
       case 'admins':
-        return <TenantAdminManagement tenants={tenants} packages={packages} invitedAdmins={tenantAdmins} showConfirm={triggerConfirm} />;
+        return (
+          <TenantAdminManagement
+            tenants={tenants}
+            packages={packages}
+            invitedAdmins={tenantAdmins}
+            showConfirm={triggerConfirm}
+            onChangeAdminStatus={directory.changeTenantAdminStatus}
+          />
+        );
       case 'packages':
         return (
           <SubscriptionPackages

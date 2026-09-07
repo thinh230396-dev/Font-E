@@ -32,7 +32,12 @@ const EVENT_META: Record<AuditEventCode, {
   TENANT_UPDATED: { label: 'Cập nhật hồ sơ tiệm', category: 'TENANT', severity: 'low', status: 'success' },
   TENANT_DELETED: { label: 'Xóa mềm tiệm', category: 'TENANT', severity: 'high', status: 'success' },
   ACCOUNT_CREATED: { label: 'Cấp tài khoản', category: 'USER', severity: 'medium', status: 'success' },
-  ACCOUNT_LOCKED: { label: 'Khóa tài khoản', category: 'SECURITY', severity: 'high', status: 'success' },
+  // Ba dòng dưới đây đọc gần giống nhau trên màn hình nhưng là ba chuyện khác nhau, nên nhãn
+  // phải nói rõ chuyện nào: ACCOUNT_LOCKED là hệ thống tự khóa sau năm lần nhập sai mật khẩu —
+  // không ai bấm — còn hai dòng kia là quyết định của Superadmin, có người chịu trách nhiệm.
+  ACCOUNT_LOCKED: { label: 'Tự khóa do nhập sai mật khẩu', category: 'SECURITY', severity: 'high', status: 'success' },
+  ACCOUNT_SUSPENDED: { label: 'Khóa tài khoản chủ tiệm', category: 'SECURITY', severity: 'high', status: 'success' },
+  ACCOUNT_RESTORED: { label: 'Mở khóa tài khoản chủ tiệm', category: 'SECURITY', severity: 'medium', status: 'success' },
   PAYMENT_RECEIVED: { label: 'Ghi nhận thu tiền', category: 'BILLING', severity: 'low', status: 'success' },
   REFUND_ISSUED: { label: 'Hoàn tiền cho khách', category: 'BILLING', severity: 'high', status: 'success' },
   PACKAGE_CHANGED: { label: 'Đổi gói dịch vụ', category: 'PACKAGE', severity: 'medium', status: 'success' }

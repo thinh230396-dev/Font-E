@@ -25,6 +25,7 @@ import {
   Users,
   X
 } from 'lucide-react';
+import type { ApiResult } from '../services/apiClient';
 import { SubscriptionPackage, Tenant, TenantAdminAccount } from '../types';
 import {
   getSubscriptionBranchLimit,
@@ -39,6 +40,16 @@ interface TenantAdminManagementProps {
   packages: SubscriptionPackage[];
   invitedAdmins: TenantAdminAccount[];
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  /**
+   * BR-AUTH-020 — khóa tạm hoặc mở khóa một tài khoản chủ tiệm.
+   *
+   * Nhận qua prop chứ không gọi `useTenants` ngay trong màn này: hook ấy nạp cả danh sách tiệm,
+   * gói và tài khoản, và `App.tsx` đã giữ đúng một bản. Gọi lần thứ hai ở đây là hai bản sao
+   * cùng một sự thật, và sau một lần ghi thì chỉ một trong hai được nạp lại.
+   */
+  onChangeAdminStatus: (
+    id: string, status: 'ACTIVE' | 'SUSPENDED'
+  ) => Promise<ApiResult<TenantAdminAccount>>;
 }
 
 type AdminRole = 'Owner' | 'Manager' | 'Staff';
@@ -233,7 +244,7 @@ const getDefaultTimezoneForCountry = (country: string) => {
   }
 };
 
-export default function TenantAdminManagement({ tenants, packages, invitedAdmins, showConfirm }: TenantAdminManagementProps) {
+export default function TenantAdminManagement({ tenants, packages, invitedAdmins, showConfirm, onChangeAdminStatus }: TenantAdminManagementProps) {
   const showToast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | AdminRole>('ALL');
@@ -307,32 +318,53 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
     return [...tenantAdmins, ...visibleInvitedAdmins];
   }, [tenantAdmins, invitedAdmins]);
 
-  const updateAdminStatus = (admin: AdminUser, nextStatus: AdminStatus) => {
-    setStatusOverrides((prev) => ({ ...prev, [admin.id]: nextStatus }));
+  /**
+   * Mã tài khoản mà **máy chủ biết tới**.
+   *
+   * `buildTenantAdmins` đặt `id = tenant.tenantAdminId` khi tiệm có chủ, và rơi về một mã tự
+   * chế `ADM-<email>` khi không. Gửi mã tự chế lên `PATCH /api/accounts/{id}/status` thì nhận
+   * `404` — nên nút phải biết trước dòng nào bấm được, thay vì để người dùng bấm rồi đọc lỗi.
+   */
+  const serverKnownAdminIds = useMemo(
+    () => new Set([
+      ...invitedAdmins.map((admin) => admin.id),
+      ...tenants.map((tenant) => tenant.tenantAdminId).filter((id): id is string => Boolean(id))
+    ]),
+    [invitedAdmins, tenants]
+  );
 
-    // Đồng bộ trạng thái admin xuống các tenant thuộc quyền quản lý của admin này
-    // Khi Admin bị khóa/mở khóa, toàn bộ tenant thuộc quyền quản lý cũng đồng thời chuyển trạng thái SUSPENDED / ACTIVE
-    admin.tenantIds.forEach((tenantId) => {
-      onUpdateTenant(tenantId, {
-        adminStatus: nextStatus,
-        status: nextStatus === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE'
-      });
-    });
+  /**
+   * Khóa hoặc mở khóa một tài khoản chủ tiệm — BR-AUTH-020.
+   *
+   * **Chỉ đổi trạng thái tài khoản, KHÔNG đụng tới các tiệm người đó quản.** Bản trước gọi
+   * `onUpdateTenant` cho từng tiệm để đẩy chúng sang `SUSPENDED` cùng lúc — một hàm rỗng nên
+   * chưa bao giờ xảy ra thật, nhưng câu chữ trên màn hình thì vẫn hứa như vậy.
+   *
+   * Nối vào máy chủ là lúc phải chọn dứt khoát, và hai vế tách nhau: khóa **tiệm** làm cả tiệm
+   * chỉ đọc với mọi người trong đó (BR-TENANT-010), tức lễ tân ngừng thu được tiền; khóa **tài
+   * khoản** chỉ chặn đúng một người đăng nhập. Một chủ tiệm bị nghi lộ mật khẩu không phải là
+   * lý do để cả tiệm ngừng bán hàng. Chiều ngược lại còn hỏng rõ hơn: mở khóa cho chủ tiệm sẽ
+   * kích hoạt lại cả những tiệm mà Superadmin đã khóa vì lý do khác, chẳng hạn nợ phí.
+   */
+  const updateAdminStatus = async (admin: AdminUser, nextStatus: AdminStatus): Promise<boolean> => {
+    if (nextStatus !== 'ACTIVE' && nextStatus !== 'SUSPENDED') return false;
 
-    if (
-      admin.source === 'INVITED' ||
-      invitedAdmins.some((item) => item.id === admin.id || item.email.toLowerCase() === admin.email.toLowerCase())
-    ) {
-      setInvitedAdmins(
-        invitedAdmins.map((item) =>
-          item.id === admin.id || item.email.toLowerCase() === admin.email.toLowerCase()
-            ? { ...item, status: nextStatus }
-            : item
-        )
-      );
+    const result = await onChangeAdminStatus(admin.id, nextStatus);
+
+    // Trả về kết quả thay vì tự báo thành công: chỗ gọi biết mình vừa khóa hay vừa mở, nên câu
+    // thông báo nằm ở đó. Còn câu lỗi thì nằm đây, vì nó giống nhau cho cả hai chiều.
+    if (result.status === 'error') {
+      showToast(result.error.message);
+      return false;
     }
 
-    setSelectedAdmin((current) => current?.id === admin.id ? { ...current, status: nextStatus } : current);
+    // Máy chủ là nguồn sự thật, nhưng `tenantAdmins` được dựng lại từ danh sách tiệm mà lượt
+    // nạp lại chưa kịp về. Giữ một lớp phủ tại chỗ để dòng vừa bấm đổi ngay, rồi lượt nạp lại
+    // ghi đè bằng số thật — thay vì để người dùng nhìn một dòng không phản ứng.
+    setStatusOverrides((prev) => ({ ...prev, [admin.id]: result.data.status }));
+    setSelectedAdmin((current) => current?.id === admin.id ? { ...current, status: result.data.status } : current);
+
+    return true;
   };
 
   const resetInviteForm = () => {
@@ -670,27 +702,38 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
   };
 
   const toggleAdminStatus = (admin: AdminUser) => {
+    if (!serverKnownAdminIds.has(admin.id)) {
+      showToast('Tiệm này chưa có tài khoản chủ tiệm trên máy chủ nên chưa khóa được.');
+      return;
+    }
+
     if (admin.status === 'ACTIVE' || admin.status === 'PENDING_VERIFICATION') {
       const tenantCount = admin.tenantCount || admin.tenantIds.length;
+
+      // Câu chữ nói đúng phạm vi thật của thao tác. Bản trước hứa rằng "toàn bộ tiệm liên kết
+      // sẽ tự động chuyển sang SUSPENDED" — điều chưa bao giờ xảy ra, và nay càng không nên
+      // xảy ra: khóa tiệm làm lễ tân ngừng thu được tiền, còn khóa tài khoản thì không.
       const tenantDesc = tenantCount > 0
-        ? `Tài khoản này đang quản lý ${tenantCount} tenant (${admin.tenantName || 'tiệm liên kết'}). Khi bị khóa, tài khoản Tenant Admin và toàn bộ tiệm liên kết sẽ tự động chuyển sang trạng thái tạm khóa ("SUSPENDED").`
-        : `Tài khoản này sẽ bị đình chỉ quyền truy cập vào hệ thống.`;
+        ? `Tài khoản này đang quản lý ${tenantCount} tiệm (${admin.tenantName || 'tiệm liên kết'}). Các tiệm ấy VẪN hoạt động bình thường — lễ tân vẫn đặt lịch và thu tiền được; chỉ riêng người này không đăng nhập được nữa.`
+        : 'Tài khoản này sẽ không đăng nhập được nữa cho tới khi được mở khóa.';
 
       showConfirm(
         'Xác nhận khóa Tenant Admin',
-        `Bạn có chắc chắn muốn khóa tài khoản Tenant Admin "${admin.name}" (${admin.email})?\n\n${tenantDesc}`,
+        `Bạn có chắc chắn muốn khóa tài khoản Tenant Admin "${admin.name}" (${admin.email})?\n\n${tenantDesc}\n\nPhiên đang mở của họ mất hiệu lực ngay ở thao tác kế tiếp.`,
         () => {
-          updateAdminStatus(admin, 'SUSPENDED');
-          showToast(`Đã khóa tài khoản Tenant Admin "${admin.name}" và tạm ngưng hoạt động các tiệm liên kết.`);
+          void updateAdminStatus(admin, 'SUSPENDED').then((done) => {
+            if (done) showToast(`Đã khóa tài khoản Tenant Admin "${admin.name}".`);
+          });
         }
       );
     } else {
       showConfirm(
         'Xác nhận mở khóa Tenant Admin',
-        `Bạn có chắc chắn muốn mở khóa cho Tenant Admin "${admin.name}" (${admin.email})? Quyền đăng nhập quản trị và toàn bộ tiệm liên kết (${admin.tenantName || 'tiệm liên kết'}) sẽ được khôi phục hoạt động.`,
+        `Bạn có chắc chắn muốn mở khóa cho Tenant Admin "${admin.name}" (${admin.email})? Người này đăng nhập lại được ngay sau đó.`,
         () => {
-          updateAdminStatus(admin, 'ACTIVE');
-          showToast(`Đã kích hoạt lại tài khoản Tenant Admin "${admin.name}" và các tiệm liên kết.`);
+          void updateAdminStatus(admin, 'ACTIVE').then((done) => {
+            if (done) showToast(`Đã mở khóa tài khoản Tenant Admin "${admin.name}".`);
+          });
         }
       );
     }
@@ -705,8 +748,9 @@ export default function TenantAdminManagement({ tenants, packages, invitedAdmins
         : `Bạn chắc chắn muốn gỡ quyền quản trị của ${admin.name}?`,
       () => {
         if (isTenantAdmin) {
-          updateAdminStatus(admin, 'SUSPENDED');
-          showToast('Đã khóa tạm thời Tenant Admin.');
+          void updateAdminStatus(admin, 'SUSPENDED').then((done) => {
+            if (done) showToast('Đã khóa tạm thời Tenant Admin.');
+          });
           return;
         }
         setInvitedAdmins(invitedAdmins.filter((item) => item.id !== admin.id));

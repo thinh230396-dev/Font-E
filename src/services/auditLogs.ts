@@ -31,7 +31,9 @@ export type AuditEventCode =
   | 'ACCOUNT_LOCKED'
   | 'PAYMENT_RECEIVED'
   | 'REFUND_ISSUED'
-  | 'PACKAGE_CHANGED';
+  | 'PACKAGE_CHANGED'
+  | 'ACCOUNT_SUSPENDED'
+  | 'ACCOUNT_RESTORED';
 
 export interface AuditLogDto {
   id: string;

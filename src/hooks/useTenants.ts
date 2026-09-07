@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ApiError, ApiResult } from '../services/apiClient';
 import {
+  changeTenantAdminStatus as changeTenantAdminStatusRequest,
   changeTenantStatus as changeTenantStatusRequest,
   createTenant as createTenantRequest,
   deleteTenant as deleteTenantRequest,
@@ -214,6 +215,17 @@ export interface TenantDirectory {
   updateTenant: (id: string, input: UpdateTenantInput) => Promise<ApiResult<Tenant>>;
   renewTenant: (id: string, expiresAt: string) => Promise<ApiResult<Tenant>>;
   changeTenantStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED') => Promise<ApiResult<Tenant>>;
+  /**
+   * BR-AUTH-020 — khóa tạm hoặc mở khóa tài khoản chủ tiệm.
+   *
+   * Tách hẳn khỏi `changeTenantStatus` dù hai nút nằm gần nhau trên màn hình, vì chúng làm hai
+   * việc khác nhau: khóa **tiệm** chuyển tiệm sang chỉ đọc cho mọi người trong đó (BR-TENANT-010),
+   * còn khóa **tài khoản** chỉ chặn đúng một người đăng nhập. Lễ tân của tiệm vẫn thu tiền được
+   * khi chủ tiệm bị khóa, và đó là hành vi đúng.
+   */
+  changeTenantAdminStatus: (
+    id: string, status: 'ACTIVE' | 'SUSPENDED'
+  ) => Promise<ApiResult<TenantAdminAccount>>;
   deleteTenant: (id: string) => Promise<ApiResult<void>>;
 }
 
@@ -332,6 +344,25 @@ export default function useTenants(enabled: boolean): TenantDirectory {
     return { status: 'ok' as const, data: toTenant(result.data) };
   }, [reload]);
 
+  /**
+   * Nạp lại cả danh sách sau khi đổi trạng thái tài khoản, cùng lý do với các hàm ghi ở trên —
+   * và ở đây còn một lý do riêng: trạng thái chủ tiệm hiện ra ở **hai chỗ** trên cùng màn hình,
+   * dòng tài khoản và cột chủ tiệm của bảng tiệm. Vá tại chỗ thì phải nhớ vá cả hai, và chỗ
+   * quên vá sẽ nói ngược lại chỗ kia.
+   */
+  const changeTenantAdminStatus = useCallback(async (id: string, status: 'ACTIVE' | 'SUSPENDED') => {
+    const result = await changeTenantAdminStatusRequest(id, status);
+
+    if (result.status === 'error') return result;
+
+    reload();
+
+    return {
+      status: 'ok' as const,
+      data: toTenantAdminAccount(result.data, new Map(tenants.map((tenant) => [tenant.id, tenant])))
+    };
+  }, [reload, tenants]);
+
   const deleteTenant = useCallback(async (id: string) => {
     const result = await deleteTenantRequest(id);
 
@@ -351,6 +382,7 @@ export default function useTenants(enabled: boolean): TenantDirectory {
     updateTenant,
     renewTenant,
     changeTenantStatus,
+    changeTenantAdminStatus,
     deleteTenant
   };
 }
