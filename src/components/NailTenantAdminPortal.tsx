@@ -32,6 +32,7 @@ import {
   Megaphone,
   Menu,
   MapPin,
+  MonitorSmartphone,
   Mail,
   MoreHorizontal,
   PackageCheck,
@@ -109,6 +110,7 @@ const TenantAdminOnlineBooking = lazy(() => import('./TenantAdminOnlineBooking')
 const TenantAdminFinance = lazy(() => import('./TenantAdminFinanceCompact'));
 const TenantAdminSanitation = lazy(() => import('./TenantAdminSanitation'));
 const TenantAdminReports = lazy(() => import('./TenantAdminReports'));
+const TenantAdminSessions = lazy(() => import('./TenantAdminSessions'));
 const TenantAdminSubscription = lazy(() => import('./TenantAdminSubscription'));
 const TenantAdminAnnouncements = lazy(() => import('./TenantAdminAnnouncements'));
 const TenantAdminHelpAndSupport = lazy(() => import('./TenantAdminHelpAndSupport'));
@@ -213,6 +215,7 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
       { id: 'finance', label: 'Thu & Chi', icon: WalletCards },
       { id: 'sanitation', label: 'Vệ sinh & an toàn', icon: ShieldCheck },
       { id: 'reports', label: 'Báo cáo', icon: BarChart3 },
+      { id: 'sessions', label: 'Phiên đăng nhập', icon: MonitorSmartphone },
       { id: 'subscription', label: 'Gói đăng ký', icon: BadgePercent },
       { id: 'support', label: 'Trung tâm trợ giúp', icon: Headphones },
       { id: 'settings', label: 'Cài đặt tiệm', icon: Settings }
@@ -1523,8 +1526,10 @@ export default function NailTenantAdminPortal({
     return branchSelectionList.find((b) => b.id === branch)?.code || branch;
   }, [branch, branchSelectionList]);
 
-  const currentConfig = activePage === 'overview' || activePage === 'subscription' || activePage === 'support' ? null : (nailModuleConfigs[activePage] || null);
-  const currentRows = activePage === 'overview' || activePage === 'subscription' || activePage === 'support'
+  // `sessions` đứng cùng nhóm với ba màn kia: nó đọc thẳng từ máy chủ nên không có cấu hình bảng
+  // dữ liệu mẫu để lấy, và bỏ sót nó ở đây là để một màn thật đi mượn `rows` của bộ mẫu.
+  const currentConfig = activePage === 'overview' || activePage === 'subscription' || activePage === 'support' || activePage === 'sessions' ? null : (nailModuleConfigs[activePage] || null);
+  const currentRows = activePage === 'overview' || activePage === 'subscription' || activePage === 'support' || activePage === 'sessions'
     ? []
     : activePage === 'branches'
       ? branchRows
@@ -2592,6 +2597,13 @@ export default function NailTenantAdminPortal({
                 activeBranchId={
                   !demoMode && branchDirectory.branches.some((item) => item.id === branch) ? branch : null
                 }
+              />
+            </Suspense>
+          ) : activePage === 'sessions' ? (
+            <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-caption font-bold text-slate-400">Đang tải phiên đăng nhập...</div>}>
+              <TenantAdminSessions
+                activeTenantId={demoMode ? null : tenant?.id}
+                tenantName={tenantName}
               />
             </Suspense>
           ) : activePage === 'announcements' ? (

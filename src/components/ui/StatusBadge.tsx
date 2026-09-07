@@ -84,7 +84,10 @@ export type StatusKey =
   | 'LATE'
   // Yêu cầu vật tư
   | 'SENT'
-  | 'FULFILLED';
+  | 'FULFILLED'
+  // Phiên đăng nhập — BR-AUTH-032
+  | 'EXPIRED'
+  | 'REVOKED';
 
 interface StatusDefinition {
   label: string;
@@ -148,6 +151,12 @@ export const STATUS_MAP: Record<StatusKey, StatusDefinition> = {
   // Yêu cầu vật tư.
   SENT: { label: 'Đã gửi', tone: 'info', icon: Send },
   FULFILLED: { label: 'Đã cấp hàng', tone: 'success', icon: PackageCheck },
+
+  // Phiên đăng nhập. Hai trạng thái này KHÁC nhau ở chỗ có người bấm hay không, nên tông màu
+  // cũng khác: hết hạn là chuyện thời gian trôi và không ai làm gì cả — trung tính; thu hồi là
+  // một quyết định có chủ ý, và người đọc bảng cần nhận ra ngay dòng nào là quyết định.
+  EXPIRED: { label: 'Đã hết hạn', tone: 'neutral', icon: Clock },
+  REVOKED: { label: 'Đã thu hồi', tone: 'danger', icon: Ban },
 };
 
 export interface StatusBadgeProps {

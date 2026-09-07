@@ -19,6 +19,9 @@ export type NailPageId =
   | 'finance'
   | 'sanitation'
   | 'reports'
+  // Phiên đăng nhập — BR-AUTH-032. Không có mục tương ứng trong `nailModuleConfigs`: màn này
+  // đọc thẳng từ máy chủ nên không cần cấu hình bảng dữ liệu mẫu, giống `reports` và `overview`.
+  | 'sessions'
   | 'settings'
   | 'support';
 
@@ -156,7 +159,15 @@ export interface NailModuleConfig {
 
 const d = (label: string, value: string) => ({ label, value });
 
-export const nailModuleConfigs: Record<Exclude<NailPageId, 'overview' | 'subscription' | 'support' | 'announcements'>, NailModuleConfig> = {
+/**
+ * Bốn màn cũ và `sessions` nằm ngoài bảng này vì cùng một lý do: chúng **không dựng từ cấu hình
+ * bảng dữ liệu mẫu**. `overview`, `subscription` và `sessions` đọc thẳng từ máy chủ; `support`
+ * và `announcements` có cây render riêng.
+ */
+export const nailModuleConfigs: Record<
+  Exclude<NailPageId, 'overview' | 'subscription' | 'support' | 'announcements' | 'sessions'>,
+  NailModuleConfig
+> = {
   branches: {
     id: 'branches', eyebrow: 'Phạm vi quản trị tenant', title: 'Chi nhánh', description: 'Quản lý các chi nhánh thuộc tenant, người phụ trách, giờ hoạt động và hiệu suất theo gói đăng ký.', primaryAction: 'Thêm chi nhánh', secondaryAction: 'Xuất danh sách',
     stats: [
