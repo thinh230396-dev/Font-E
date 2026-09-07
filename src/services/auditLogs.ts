@@ -33,7 +33,8 @@ export type AuditEventCode =
   | 'REFUND_ISSUED'
   | 'PACKAGE_CHANGED'
   | 'ACCOUNT_SUSPENDED'
-  | 'ACCOUNT_RESTORED';
+  | 'ACCOUNT_RESTORED'
+  | 'SESSION_REVOKED';
 
 export interface AuditLogDto {
   id: string;

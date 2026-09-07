@@ -38,6 +38,9 @@ const EVENT_META: Record<AuditEventCode, {
   ACCOUNT_LOCKED: { label: 'Tự khóa do nhập sai mật khẩu', category: 'SECURITY', severity: 'high', status: 'success' },
   ACCOUNT_SUSPENDED: { label: 'Khóa tài khoản chủ tiệm', category: 'SECURITY', severity: 'high', status: 'success' },
   ACCOUNT_RESTORED: { label: 'Mở khóa tài khoản chủ tiệm', category: 'SECURITY', severity: 'medium', status: 'success' },
+  // Nhẹ hơn hai dòng trên một bậc, và có lý do: thu hồi phiên chỉ đóng một thiết bị, người đó
+  // đăng nhập lại được ngay. Để cùng mức "cao" thì mọi thao tác bảo mật đều trông như nhau.
+  SESSION_REVOKED: { label: 'Thu hồi phiên đăng nhập', category: 'SECURITY', severity: 'medium', status: 'success' },
   PAYMENT_RECEIVED: { label: 'Ghi nhận thu tiền', category: 'BILLING', severity: 'low', status: 'success' },
   REFUND_ISSUED: { label: 'Hoàn tiền cho khách', category: 'BILLING', severity: 'high', status: 'success' },
   PACKAGE_CHANGED: { label: 'Đổi gói dịch vụ', category: 'PACKAGE', severity: 'medium', status: 'success' }
