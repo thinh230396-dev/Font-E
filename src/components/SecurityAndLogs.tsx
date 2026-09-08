@@ -265,16 +265,25 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
 
   const activeSessions = sessions.filter((session) => session.status === 'active');
   const now = Date.now();
-  const riskyLogs24h = logs.filter((log) => (
-    now - new Date(log.timestamp).getTime() <= 24 * 60 * 60 * 1000
-    && log.severity === 'high'
-    && log.status !== 'success'
-  ));
-  const failedAuth24h = logs.filter((log) => (
-    now - new Date(log.timestamp).getTime() <= 24 * 60 * 60 * 1000
-    && (log.category === 'AUTH' || log.category === 'SECURITY')
-    && log.status !== 'success'
-  )).length;
+  /*
+    ── Một tập hợp và một tập con của nó, không phải hai phép đếm khác nhau ──────────────────
+    Bản trước có hai bộ lọc độc lập: con số lớn trên thẻ đếm sự kiện **mức cao**, còn dòng chú
+    thích ngay dưới nó đếm **đăng nhập thất bại**. Hai phép đếm khác nhau chồng lên nhau trong
+    cùng một thẻ, nên trên dữ liệu thật thẻ đọc ra "0" màu xanh nằm trên "2 yêu cầu xác thực
+    thất bại" — một cái nói không có gì, cái kia nói có hai.
+
+    Lý do hai số lệch nhau: `LOGIN_FAILED` mang mức **medium** trong `EVENT_META`, nên nó không
+    bao giờ lọt vào phép đếm "mức cao". Sửa bằng cách đổi mức của nó là nói dối về mức nghiêm
+    trọng để hai con số khớp nhau; sửa đúng là để dòng dưới mô tả **chính tập hợp** ở dòng trên.
+  */
+  const withinDay = (log: SystemLog) =>
+    now - new Date(log.timestamp).getTime() <= 24 * 60 * 60 * 1000;
+
+  /** Mọi sự kiện 24 giờ qua **không thành công** — tập việc cần ngó tới. */
+  const alerts24h = logs.filter((log) => withinDay(log) && log.status !== 'success');
+
+  /** Tập con mức cao. Chỉ nó mới bật dải cảnh báo đỏ ở đầu trang. */
+  const highAlerts24h = alerts24h.filter((log) => log.severity === 'high');
 
   const securityChecks = [
     { label: 'MFA bắt buộc cho Superadmin', passed: settings.security.requireMfaForSuperadmin, weight: 30 },
@@ -444,12 +453,12 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
 
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {riskyLogs24h.length > 0 && (
+          {highAlerts24h.length > 0 && (
             <div className="flex flex-col gap-3 rounded-xl border border-red-500/25 bg-red-500/8 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-500"><AlertTriangle className="h-5 w-5" /></div>
                 <div>
-                  <p className="text-xs font-bold text-brand-text">Phát hiện {riskyLogs24h.length} sự kiện rủi ro cao trong 24 giờ</p>
+                  <p className="text-xs font-bold text-brand-text">Phát hiện {highAlerts24h.length} sự kiện rủi ro cao trong 24 giờ</p>
                   <p className="mt-1 text-[10px] leading-relaxed text-brand-text-muted">Ưu tiên kiểm tra các lần đăng nhập thất bại, truy cập lạ hoặc hành động đã bị chặn.</p>
                 </div>
               </div>
@@ -461,7 +470,20 @@ export default function SecurityAndLogs({ showConfirm, onOpenSecuritySettings }:
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard icon={<ShieldCheck className="h-5 w-5" />} label="Điểm bảo mật" value={`${securityScore}/100`} detail={`${passedChecks}/${securityChecks.length} kiểm soát đạt yêu cầu`} tone={securityScore >= 80 ? 'success' : securityScore >= 60 ? 'warning' : 'danger'} />
-            <MetricCard icon={<AlertTriangle className="h-5 w-5" />} label="Rủi ro 24 giờ" value={riskyLogs24h.length} detail={`${failedAuth24h} yêu cầu xác thực thất bại/đã chặn`} tone={riskyLogs24h.length ? 'danger' : 'success'} />
+            {/* Con số lớn và dòng chú thích nay nói về CÙNG một tập hợp: tổng số sự kiện không
+                thành công, rồi trong đó bao nhiêu ở mức cao. Tông màu theo tập con mức cao —
+                hai lần đăng nhập sai không phải màu đỏ, nhưng cũng không phải màu xanh. */}
+            <MetricCard
+              icon={<AlertTriangle className="h-5 w-5" />}
+              label="Rủi ro 24 giờ"
+              value={alerts24h.length}
+              detail={
+                alerts24h.length === 0
+                  ? 'Không có sự kiện thất bại nào'
+                  : `${highAlerts24h.length} trong số đó ở mức cao`
+              }
+              tone={highAlerts24h.length ? 'danger' : alerts24h.length ? 'warning' : 'success'}
+            />
             <MetricCard icon={<MonitorSmartphone className="h-5 w-5" />} label="Phiên đang hoạt động" value={activeSessions.length} detail={`${sessions.length - activeSessions.length} phiên đã thu hồi`} tone="primary" />
             <MetricCard icon={<Database className="h-5 w-5" />} label="Thời gian lưu log" value={`${settings.security.auditRetentionDays} ngày`} detail={`${logs.length} bản ghi đang được lưu trên trình duyệt`} />
           </div>
