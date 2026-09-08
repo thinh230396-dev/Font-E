@@ -3670,3 +3670,177 @@ không giẫm lên nhau.
 
 Treo số 2 đóng lại. Còn 13 việc, không thêm việc mới. Việc đáng làm kế tiếp theo thứ tự đã bàn là
 treo số 1 — giảm giá âm lúc lập hóa đơn bị bỏ qua trong im lặng.
+
+### Ngày 23 — xong: đóng bảy việc treo, và soát lại luồng đăng nhập
+
+Ngày dài nhất kể từ Mốc ③. Bảy mục trong bảng việc còn treo đóng lại, và một lượt soát luồng
+đăng nhập sinh thêm ba bản vá không nằm trong bảng ấy — trong đó có một lỗ hổng thật.
+
+Bộ kiểm thử đi từ **82 lên 100** phép thử trong ngày.
+
+#### A. Quản trị tài khoản và phiên — treo #11, #13, #14
+
+| Treo | Việc | Ghi chú |
+|---|---|---|
+| #11 | **Khóa tạm và mở khóa tài khoản chủ tiệm** | Treo từ ngày 7. `AccountStatus.Suspended` có trong enum, được BR-AUTH-020 nhắc tới, mà **không đường nào sinh ra nó** |
+| #13 | **Thu hồi phiên ghi nhật ký kiểm toán** | Sự kiện riêng `SESSION_REVOKED`, không dùng lại `ACCOUNT_SUSPENDED` |
+| #14 | **Màn Phiên đăng nhập cho cổng chủ tiệm** | Quyền đã cấp, phép thử đã che, chỉ thiếu lối vào |
+
+Cả ba đều rẻ nhờ cùng một thứ: BR-AUTH-022 bắt mọi request đọc lại phiên và tài khoản. Khóa
+tài khoản là đặt một cột, thu hồi phiên là đặt một cột — phần cưỡng chế đã nằm sẵn từ ngày 2.
+**Đây là chỗ quyết định "cookie + bảng phiên thay vì JWT" trả cổ tức**, và nó đáng được kể
+đúng như vậy khi bảo vệ.
+
+Một quyết định đổi hành vi cần ghi rõ: nút khóa tài khoản trước đây hứa trong câu xác nhận rằng
+nó sẽ **khóa luôn mọi tiệm** người đó quản. Đoạn code làm việc ấy là một hàm rỗng nên chưa bao
+giờ xảy ra. Nối vào máy chủ là lúc phải chọn dứt khoát, và tôi **không** làm nó: khóa tiệm làm
+cả tiệm chỉ đọc (BR-TENANT-010), tức lễ tân ngừng thu được tiền — một chủ tiệm bị nghi lộ mật
+khẩu không phải lý do để cả tiệm ngừng bán hàng. Chiều ngược lại còn hỏng rõ hơn: mở khóa cho
+chủ tiệm sẽ kích hoạt lại cả những tiệm mà Superadmin đã khóa vì nợ phí.
+
+#### B. Bốn việc treo còn lại — #1, #5, #6, #3
+
+**#1 — Giảm giá âm bị bỏ qua trong im lặng.** Lỗi thực chất là một dấu so sánh: `> 0` thay vì
+`!= 0`, nên số âm không bao giờ tới được `ApplyDiscount` — nơi duy nhất biết từ chối nó. Máy chủ
+trả `201` với hóa đơn giảm giá 0đ, và người gửi `discount: -50000` không có cách nào biết yêu cầu
+của mình đã bị nuốt.
+
+Phát hiện làm bản vá gọn hẳn: `UpdateSalesInvoiceUseCase` gọi thẳng hai hàm ấy **không kèm điều
+kiện nào**, nên đường sửa hóa đơn luôn chặn đúng. Hai đường đi của cùng một luật đang nói khác
+nhau, và đường sửa mới là đường đúng — bản vá chỉ là kéo đường lập về giống nó.
+
+**#5 — Thẻ "Rủi ro 24 giờ" tự mâu thuẫn.** Con số lớn đếm sự kiện *mức cao*, dòng chú thích ngay
+dưới đếm *đăng nhập thất bại*: hai bộ lọc độc lập trong một thẻ, nên trên dữ liệu thật nó đọc ra
+"0" màu xanh nằm trên "2 yêu cầu xác thực thất bại".
+
+Nguyên nhân: `LOGIN_FAILED` mang mức `medium` nên không lọt vào phép đếm mức cao. Cách sửa dễ là
+nâng nó lên `high` cho hai số khớp nhau — **nhưng đó là nói dối về mức nghiêm trọng để che một
+lỗi trình bày**. Làm ngược lại: một tập hợp (mọi sự kiện không thành công) và một tập con của nó
+(mức cao). Dòng dưới nay mô tả chính tập ở dòng trên.
+
+**#6 — Nhật ký in `USR-SUPERADMIN` thay cho tên người.** Bảng nhật ký **vẫn chỉ lưu mã** — tên
+đổi được còn mã thì không, nên chép tên vào bản ghi là để nó nói sai về quá khứ ngay lần đầu ai
+đó đổi tên. Tên nay tra **lúc đọc**, một lượt cho cả trang qua `IUserRepository.ListByIdsAsync`
+mới. `Distinct()` là phần đáng giá: ba trăm dòng nhật ký thường chỉ do dăm bảy người tạo ra.
+
+**#3 — Biểu mẫu lập tiệm thiếu ô mã chi nhánh.** `CreateTenantInput.primaryBranchCode` nhận
+trường này từ đầu nhưng biểu mẫu chưa bao giờ có ô nhập. Không phải chuyện trang trí: màn Lịch
+hẹn chủ tiệm dùng mã ngắn ấy làm nhãn cho chip ở đầu cột kỹ thuật viên, và khi thiếu thì chip rơi
+về mã bản ghi `BRN-LUMIERE-Q3` — đúng lỗi đã phải sửa ở ngày 21.
+
+#### C. Soát luồng đăng nhập — ba lỗ hổng ngoài bảng treo
+
+Lượt soát này không đi theo danh sách mà đi theo câu hỏi *"chỗ nào trong luồng đăng nhập sẽ bị
+hỏi khi bảo vệ"*. Ba thứ lộ ra, và cái đầu tiên là lỗ hổng thật.
+
+##### 🔴 Lỗ hổng 1 — email nào có thật vẫn dò được, bằng đồng hồ bấm giây
+
+`LoginUseCase` cố ý trả **cùng một thông điệp** cho "không có tài khoản" và "sai mật khẩu", đúng
+như chú thích ghi. Nhưng hai nhánh đi hai đường dài ngắn khác nhau:
+
+- Không tìm thấy tài khoản → ghi nhật ký rồi **thoát ngay**.
+- Có tài khoản, sai mật khẩu → chạy `Verify`, tức **PBKDF2 210.000 vòng**, hàng chục mili-giây.
+
+Câu chữ thì kín, thời gian thì hở. Vá bằng cách thêm `IPasswordHasher.Decoy` — một cặp hash/salt
+hợp lệ nhưng không thuộc về ai — và nhánh không-tìm-thấy vẫn chạy `Verify` với nó trước khi ném
+lỗi. Kết quả chắc chắn `false` và bị bỏ đi: thứ cần là **thời gian đã tiêu**, không phải câu trả
+lời. Cặp mồi viết cứng chứ không sinh ngẫu nhiên, vì nó phải đúng độ dài để `Verify` đi trọn
+đường tính toán thay vì thoát sớm ở bước kiểm độ dài.
+
+##### 🟡 Lỗ hổng 2 — cookie phiên không đặt `Secure`
+
+Ghi cứng `Secure = false` với lý do "frontend gọi qua proxy Vite trên HTTP" — đúng cho máy đang
+code, nhưng nó đi thẳng vào bản triển khai và ở đó thì cookie phiên đi được qua HTTP. Nay là
+`!environment.IsDevelopment()`. Đã kiểm `launchSettings.json`: **cả hai profile đều đặt
+Development**, kể cả profile dùng lúc trình bày, nên buổi demo không bị ảnh hưởng.
+
+##### 🟡 Lỗ hổng 3 — không có gì chặn dò mật khẩu theo IP
+
+Khóa tạm đếm theo **tài khoản** (5 lần / 15 phút), nên một người rải cùng một mật khẩu phổ biến
+qua trăm tài khoản khác nhau **không bao giờ chạm ngưỡng nào** — mỗi tài khoản chỉ sai đúng một
+lần. Nay có thêm bộ giới hạn theo IP, 30 lần / 5 phút, chỉ gắn cho endpoint đăng nhập.
+
+Con số 30 chọn có căn cứ chứ không phải cho đẹp: `npm run rehearsal` gọi đăng nhập **10 lần** từ
+cùng một IP, nên trần phải rộng hơn đủ để chạy lại vài lượt liên tiếp mà không tự khóa mình.
+
+Phần từ chối trả đúng contract lỗi JSON của dự án với mã mới `TOO_MANY_REQUESTS`. Mặc định của
+framework là 429 với **thân rỗng**, mà `apiClient` đọc `error.code` — thân rỗng thì màn hình báo
+"không đọc được phản hồi" thay vì nói cho người dùng biết họ cần chờ.
+
+#### D. Quy trình kiểm thử bắt được hai thứ mà mắt không thấy
+
+Yêu cầu của ngày hôm nay là *"sửa xong thì test lại, còn lỗi thì sửa tiếp, test thật gắt gao"*.
+Nó có kết quả thật, và cả hai đều là lỗi **trong chính bản vá** chứ không phải trong mã cũ.
+
+##### 🔴 Bộ giới hạn chạy bằng một con số khác con số được cấu hình
+
+Lượt chạy đầu, phép thử trần đăng nhập **đỏ**. Cấu hình được đọc ở
+`builder.Configuration.GetSection(...)` — tức lúc dựng builder — mà `ConfigureAppConfiguration`
+của `WebApplicationFactory` chỉ được áp dụng **sau đó**. Mọi phép ghi đè bị bỏ qua trong im lặng
+và hàng rào chạy bằng giá trị mặc định.
+
+Đây đúng là cái bẫy mà chú thích ở `SalonSysFactory` đã tả cho chuỗi kết nối từ ngày 12, lặp lại
+nguyên vẹn ở một chỗ khác. Vá bằng cách đọc cấu hình **lúc có request**; tới lúc ấy cấu hình đã
+dựng xong hoàn toàn. Không có phép thử này thì hàng rào sẽ *trông như* đang chạy suốt phần đời
+còn lại của dự án.
+
+##### 🟡 Một phép thử xanh ở cả hai phía bản vá thì vô giá trị
+
+Phép thử cờ `Secure` ban đầu chạy ở môi trường Development, nơi cờ **đúng ra phải tắt** — nên nó
+xanh cả trước lẫn sau lần vá, và không phân biệt được bản đã sửa với bản ghi cứng `false`. Thêm
+`ProductionLikeFactory` chạy môi trường Staging để hỏi ở phía bên kia của điều kiện.
+
+> Từ đó thành một phép kiểm bắt buộc cho mọi bản vá về sau: **lật ngược bản vá rồi chạy lại;
+> phép thử phải chuyển đỏ.** Còn xanh nghĩa là nó đang đo nhầm thứ.
+
+Áp phép kiểm ấy cho cả ba lỗ hổng: lật ngược đồng thời cả ba, chạy lại, và **đúng ba phép thử
+chuyển đỏ — mỗi bản vá một phép, không thừa không thiếu.**
+
+##### Hai cái bẫy khi viết phép thử
+
+- **Phép đo thời gian suýt khóa mất tài khoản dùng chung.** Mỗi lượt đo là một lần đăng nhập
+  sai, và năm lần sai là khóa 15 phút. Đo trên tài khoản Superadmin là làm đỏ gần như cả bộ. Nó
+  dùng tài khoản chủ tiệm Bloom, giới hạn bốn lượt, và kết thúc bằng một lần đăng nhập **đúng**
+  để `RegisterSuccessfulLogin` xóa sạch bộ đếm.
+- **Trần đăng nhập làm đỏ cả bộ.** Máy chủ dựng trong bộ nhớ không có IP thật nên mọi request
+  của cả lần chạy rơi vào cùng một ngăn đếm, mà một lần chạy đăng nhập hơn trăm lượt.
+  `SalonSysFactory` nới trần lên 100.000; riêng hàng rào ấy được kiểm bằng
+  `ThrottledLoginFactory` — một máy chủ thứ hai trần bằng 3, **không xóa database** vì nó dùng
+  lại database mà factory dùng chung đã dựng.
+
+#### Kiểm chứng
+
+| Phép thử | Kết quả |
+|---|---|
+| `dotnet test` | **100/100** — đầu ngày là 82 |
+| `dotnet build -warnaserror` | 0 warning · 0 error |
+| `npm run lint` · `npm run build` | Xanh |
+| **Lật ngược ba bản vá đăng nhập** | Đúng 3 phép thử đỏ, mỗi bản vá một phép |
+| Lật ngược bản vá giảm giá âm | 2 phép thử đỏ: `Expected 422, Actual 201` |
+| Chạy lại phép đo thời gian 3 lượt | 7/7 mỗi lượt — không mong manh |
+
+Bảy phép thử mới của lát cắt đăng nhập gồm cả hai phép canh **chiều ngược**: cookie phải KHÔNG
+có `Secure` ở Development (giữ cho buổi demo không hỏng nếu ai đó đổi điều kiện thành "luôn
+bật"), và giới hạn KHÔNG được chạm tới endpoint khác — gắn nhầm cho cả controller thì lệnh đọc
+phiên cũng bị đếm, và người dùng tự khóa mình chỉ bằng cách bấm chuyển màn hình vài chục lần.
+
+> **Chưa chạy `npm run rehearsal` và chưa bấm tay trên trình duyệt.** Cả hai cần máy chủ đang
+> chạy. Kịch bản tổng duyệt đáng chạy lại sớm vì hôm nay có một hàng rào mới đứng chắn ngay
+> trước lệnh đăng nhập mà nó gọi mười lần.
+
+#### Việc còn treo sau ngày 23
+
+Bảy việc đóng lại: #1, #3, #5, #6, #11, #13, #14. **Còn sáu**, và không việc nào còn thuộc nhóm
+nhìn thấy được khi demo:
+
+| # | Việc | Loại |
+|---|---|---|
+| 4 · 7 · 8 | Bốn "việc cần xử lý" hằng số · `reportCurrency` qua 7 tệp · `general.currency` thừa | Dọn mã, người dùng không thấy |
+| 10 · 12 | §3.1 lệch số đếm · `README-MIGRATION.md` mô tả sai kiến trúc | Tài liệu |
+| 9 | Bốn tiệm phụ seed rỗng — đừng mở khi trình bày | Lưu ý, không phải việc |
+
+Lượt soát đăng nhập cũng để lại một danh sách điểm yếu **đã biết và cố ý chưa làm**: không có
+token chống CSRF (chỉ dựa vào `SameSite=Strict`), không có đường đổi hay cấp lại mật khẩu, không
+giới hạn số phiên đồng thời, và không xác thực lại cho thao tác nhạy cảm. Chúng không vào bảng
+treo vì đều thuộc phạm vi đã cắt ở §9.4 — nhưng có danh sách ấy trong báo cáo là bằng chứng cho
+câu trả lời "biết mà chọn không làm", thứ mà hội đồng phân biệt rất rõ với "không biết".
