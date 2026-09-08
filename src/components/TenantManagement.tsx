@@ -280,6 +280,16 @@ export default function TenantManagement({
   const [formSalonEmail, setFormSalonEmail] = useState('');
   const [formTimezone, setFormTimezone] = useState('Asia/Ho_Chi_Minh');
   const [formPrimaryBranchName, setFormPrimaryBranchName] = useState('');
+  /**
+   * Mã chi nhánh chính — mã ngắn do tiệm tự đặt, ví dụ `Q3`.
+   *
+   * `CreateTenantInput.primaryBranchCode` nhận trường này từ đầu nhưng biểu mẫu chưa bao giờ
+   * có ô nhập, nên **mọi tiệm lập qua giao diện đều có chi nhánh không mã** và huy hiệu ở màn
+   * chi nhánh đọc "CHƯA ĐẶT". Mã ấy không phải thứ trang trí: màn Lịch hẹn của chủ tiệm dùng
+   * nó làm nhãn ngắn cho con chip ở đầu cột kỹ thuật viên, và khi thiếu thì chip rơi về mã bản
+   * ghi kiểu `BRN-LUMIERE-Q3` — đúng lỗi đã phải sửa ở ngày 21.
+   */
+  const [formPrimaryBranchCode, setFormPrimaryBranchCode] = useState('');
 
   const [formAdminName, setFormAdminName] = useState('');
   const [formAdminEmail, setFormAdminEmail] = useState('');
@@ -307,6 +317,7 @@ export default function TenantManagement({
     setFormSalonEmail('');
     setFormTimezone('Asia/Ho_Chi_Minh');
     setFormPrimaryBranchName('');
+    setFormPrimaryBranchCode('');
     setFormAdminName('');
     setFormAdminEmail('');
     setFormAdminUsername('');
@@ -523,6 +534,7 @@ export default function TenantManagement({
       packageId: selectedPackageForForm ? selectedPackageForForm.id : '',
       expiresAt: formExpiresAt,
       primaryBranchName: formPrimaryBranchName,
+      primaryBranchCode: formPrimaryBranchCode,
       adminMode: adminCreationMode,
       selectedAdminId: selectedTenantAdminId,
       adminName: formAdminName,
@@ -621,6 +633,7 @@ export default function TenantManagement({
           contactEmail: formSalonEmail.trim() || undefined,
           timezone: formTimezone,
           primaryBranchName: formPrimaryBranchName.trim() || undefined,
+          primaryBranchCode: formPrimaryBranchCode.trim().toUpperCase() || undefined,
           owner: adminCreationMode === 'existing'
             ? { mode: 'existing', existingUserId: selectedTenantAdminId }
             : {
@@ -1448,20 +1461,41 @@ export default function TenantManagement({
                 </div>
               </div>
 
-              <div data-tenant-field="primaryBranchName">
-                <Field
-                  label="Tên chi nhánh chính"
-                  error={addFormErrors.primaryBranchName}
-                  helper="Bỏ trống thì máy chủ đặt là “Chi nhánh chính”. Mỗi tiệm có đúng một chi nhánh chính và nó sinh ra cùng tiệm (BR-BRANCH-001)."
-                >
-                  <input
-                    type="text"
-                    value={formPrimaryBranchName}
-                    onChange={(e) => setFormPrimaryBranchName(e.target.value)}
-                    placeholder="Chi nhánh Quận 3"
-                    className="form-control"
-                  />
-                </Field>
+              <div className="grid gap-4 md:grid-cols-[1.6fr_1fr]">
+                <div data-tenant-field="primaryBranchName">
+                  <Field
+                    label="Tên chi nhánh chính"
+                    error={addFormErrors.primaryBranchName}
+                    helper="Bỏ trống thì máy chủ đặt là “Chi nhánh chính”. Mỗi tiệm có đúng một chi nhánh chính và nó sinh ra cùng tiệm (BR-BRANCH-001)."
+                  >
+                    <input
+                      type="text"
+                      value={formPrimaryBranchName}
+                      onChange={(e) => setFormPrimaryBranchName(e.target.value)}
+                      placeholder="Chi nhánh Quận 3"
+                      className="form-control"
+                    />
+                  </Field>
+                </div>
+
+                <div data-tenant-field="primaryBranchCode">
+                  <Field
+                    label="Mã chi nhánh"
+                    error={addFormErrors.primaryBranchCode}
+                    helper="Mã ngắn tiệm tự đặt, dùng làm nhãn ở bảng lịch. Bỏ trống thì huy hiệu chi nhánh đọc “CHƯA ĐẶT”."
+                  >
+                    <input
+                      type="text"
+                      value={formPrimaryBranchCode}
+                      // Viết hoa ngay lúc gõ chứ không đợi lúc gửi: ô này hiện ra ở nhiều chỗ
+                      // dưới dạng nhãn ngắn, và "q3" lẫn "Q3" trong cùng một bảng thì lệch mắt.
+                      onChange={(e) => setFormPrimaryBranchCode(e.target.value.toUpperCase())}
+                      placeholder="Q3"
+                      maxLength={16}
+                      className="form-control"
+                    />
+                  </Field>
+                </div>
               </div>
             </section>
 

@@ -23,6 +23,7 @@ export type TenantFieldKey =
   | 'packageId'
   | 'expiresAt'
   | 'primaryBranchName'
+  | 'primaryBranchCode'
   | 'adminSelection'
   | 'adminName'
   | 'adminEmail'
@@ -51,6 +52,7 @@ export interface TenantDraft {
   /** Ngày ở dạng `YYYY-MM-DD` lấy thẳng từ ô nhập. */
   expiresAt: string;
   primaryBranchName: string;
+  primaryBranchCode: string;
   adminMode: 'existing' | 'new';
   selectedAdminId: string;
   adminName: string;
@@ -132,6 +134,14 @@ export const validateTenantDraft = (
   const primaryBranchName = draft.primaryBranchName.trim();
   if (primaryBranchName && primaryBranchName.length < 3) {
     errors.primaryBranchName = 'Tên chi nhánh chính phải có ít nhất 3 ký tự.';
+  }
+
+  /* Mã chi nhánh để trống được — máy chủ chấp nhận, chỉ là huy hiệu sẽ đọc "CHƯA ĐẶT". Nhưng
+     nếu đã nhập thì phải là một mã ngắn dùng được làm nhãn: chữ và số, tối đa 16 ký tự. Cho
+     phép khoảng trắng hay dấu tiếng Việt ở đây là để một con chip rộng bằng nửa bảng lịch. */
+  const primaryBranchCode = draft.primaryBranchCode.trim();
+  if (primaryBranchCode && !/^[A-Z0-9-]{1,16}$/.test(primaryBranchCode.toUpperCase())) {
+    errors.primaryBranchCode = 'Mã chi nhánh chỉ gồm chữ, số hoặc dấu gạch ngang, tối đa 16 ký tự.';
   }
 
   if (draft.adminMode === 'existing') {
