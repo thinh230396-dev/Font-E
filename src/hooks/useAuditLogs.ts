@@ -89,9 +89,11 @@ const toSystemLog = (dto: AuditLogDto): SystemLog => {
     eventCode: dto.event,
     event: meta.label,
     description: describe(dto),
-    // Máy chủ lưu mã tài khoản, không lưu tên hiển thị — và đó là điều đúng cho một chứng từ:
-    // tên người đổi được, mã thì không.
-    user: dto.actorUserId || 'Hệ thống',
+    // Bản ghi vẫn chỉ lưu MÃ tài khoản, và đó là điều đúng cho một chứng từ: tên người đổi
+    // được, mã thì không. Nhưng "USR-SUPERADMIN" thì không ai đọc được, nên máy chủ tra tên
+    // lúc đọc và gửi kèm. Thiếu tên thì quay về mã — một dòng nhật ký không nói được ai làm
+    // thì vô dụng, nên thà hiện mã còn hơn để trống.
+    user: dto.actorDisplayName || dto.actorUserId || 'Hệ thống',
     actorRole: ROLE_MAP[dto.actorRole || ''] || 'SYSTEM',
     ip: dto.ip || '—',
     severity: meta.severity,

@@ -40,6 +40,13 @@ export interface AuditLogDto {
   id: string;
   event: string;
   actorUserId?: string | null;
+  /**
+   * Tên người thao tác, máy chủ tra từ bảng tài khoản **lúc đọc** chứ không lưu vào bản ghi.
+   *
+   * Rỗng khi bản ghi không có người thực hiện, hoặc khi tài khoản không còn tra ra được — khi
+   * ấy màn hình quay về hiển thị `actorUserId`.
+   */
+  actorDisplayName?: string | null;
   actorRole?: string | null;
   tenantId?: string | null;
   targetType?: string | null;
