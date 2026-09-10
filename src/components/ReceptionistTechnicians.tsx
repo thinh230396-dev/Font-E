@@ -1043,9 +1043,13 @@ export default function ReceptionistTechnicians({
           {!filteredTechnicians.length && (
             <section className="rounded-2xl border border-dashed border-brand-outline bg-brand-surface p-12 text-center">
               <UsersRound className="mx-auto h-9 w-9 text-brand-text-muted" />
-              <p className="mt-3 text-sm font-black text-brand-text">Không tìm thấy kỹ thuật viên</p>
+              <p className="mt-3 text-sm font-black text-brand-text">
+                {technicians.length === 0 ? 'Chưa có kỹ thuật viên nào' : 'Không tìm thấy kỹ thuật viên'}
+              </p>
               <p className="mt-1 text-[10px] font-semibold text-brand-text-muted">
-                Hãy thay đổi từ khóa hoặc bộ lọc đang áp dụng.
+                {technicians.length === 0
+                  ? 'Hồ sơ kỹ thuật viên do chủ tiệm khai ở màn Nhân viên. Chưa có ai thì chưa phân công lịch được.'
+                  : 'Hãy thay đổi từ khóa hoặc bộ lọc đang áp dụng.'}
               </p>
             </section>
           )}

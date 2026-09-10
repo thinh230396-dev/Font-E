@@ -28,6 +28,7 @@ import {
   Info,
   Layers,
   LayoutDashboard,
+  Loader2,
   LogOut,
   MapPin,
   Menu,
@@ -306,9 +307,9 @@ interface InvoiceLineDraft {
 
 interface CatalogItem {
   /**
-   * Mã dịch vụ của máy chủ. Rỗng với `defaultServiceCatalog` — bảng giá mẫu dùng khi tiệm
-   * chưa khai dịch vụ nào — và khi đó lịch hẹn không đặt được: API chỉ nhận mã dịch vụ có
-   * thật, và đó là điều đúng. Bảng giá bịa không được phép sinh ra một lịch hẹn thật.
+   * Mã dịch vụ của máy chủ. Để trống được vì kiểu này dùng chung cho cả `productCatalog` —
+   * hàng bán lẻ ở quầy vốn không có mã dịch vụ nào. Riêng bảng giá dịch vụ thì luôn có mã, vì
+   * từ ngày 25 nó chỉ nhận dữ liệu thật; API cũng chỉ nhận mã dịch vụ có thật.
    */
   id?: string;
   name: string;
@@ -949,23 +950,6 @@ const methodMeta: Record<PaymentMethod, { label: string; icon: typeof Banknote }
   ZALOPAY: { label: 'Ví ZaloPay', icon: Smartphone },
 };
 
-const defaultServiceCatalog: CatalogItem[] = [
-  { name: 'Gel Manicure', price: 450000, category: 'Sơn móng', duration: 60 },
-  { name: 'Pedicure Spa', price: 550000, category: 'Chăm sóc móng', duration: 75 },
-  { name: 'Sơn gel Hàn Quốc', price: 620000, category: 'Sơn móng', duration: 60 },
-  { name: 'Nail Art cơ bản', price: 400000, category: 'Vẽ nghệ thuật', duration: 45 },
-  { name: 'Nail Art Premium', price: 980000, category: 'Vẽ nghệ thuật', duration: 120 },
-  { name: 'Combo Manicure', price: 620000, category: 'Combo', duration: 75 },
-  { name: 'Combo VIP', price: 1650000, category: 'Combo', duration: 120 },
-  { name: 'Tháo gel & phục hồi móng', price: 280000, category: 'Chăm sóc móng', duration: 40 },
-  { name: 'Đắp bột', price: 850000, category: 'Đắp bột', duration: 90 },
-  { name: 'Nối móng Tips', price: 750000, category: 'Nối móng', duration: 90 },
-  { name: 'Đính đá nghệ thuật', price: 250000, category: 'Đính đá', duration: 30 },
-  { name: 'Waxing tay', price: 320000, category: 'Waxing', duration: 30 },
-  { name: 'Sơn thạch Ombre', price: 520000, category: 'Sơn móng', duration: 60 },
-  { name: 'Chà gót chân & ngâm thảo mộc', price: 350000, category: 'Chăm sóc móng', duration: 45 },
-];
-
 const productCatalog: CatalogItem[] = [
   { name: 'Dầu dưỡng móng Keratin', price: 170000, category: 'Dưỡng móng', stock: 24 },
   { name: 'Kem dưỡng tay Hạnh Nhân', price: 220000, category: 'Chăm sóc tay', stock: 18 },
@@ -1008,29 +992,6 @@ const technicianShiftMeta: Record<TechnicianShift, string> = {
   AFTERNOON: 'Ca chiều · 12:00–20:00',
   FULL_DAY: 'Ca nguyên ngày · 08:00–20:00',
 };
-
-const technicianSeed: ReceptionTechnician[] = [
-  { id: 'TECH-001', name: 'Thảo Nguyễn', initials: 'TN', specialty: 'Nail Art Premium', skills: ['Nail Art Premium', 'Nail Art cơ bản', 'Gel Manicure', 'Đính đá nghệ thuật', 'Combo VIP'], shift: 'FULL_DAY', shiftLabel: technicianShiftMeta.FULL_DAY, status: 'SERVING', branch: 'Q3', checkIn: '07:52', avatarTone: 'from-brand-primary to-brand-primary' },
-  { id: 'TECH-002', name: 'Minh Châu', initials: 'MC', specialty: 'Pedicure Spa', skills: ['Pedicure Spa', 'Gel Manicure', 'Sơn gel Hàn Quốc', 'Combo Manicure', 'Chà gót chân & ngâm thảo mộc'], shift: 'MORNING', shiftLabel: technicianShiftMeta.MORNING, status: 'PRESENT', branch: 'Q3', checkIn: '08:05', avatarTone: 'from-brand-primary to-brand-secondary' },
-  { id: 'TECH-003', name: 'Quốc Bảo', initials: 'QB', specialty: 'Manicure & Waxing', skills: ['Gel Manicure', 'Combo Manicure', 'Tháo gel & phục hồi móng', 'Waxing tay'], shift: 'MORNING', shiftLabel: technicianShiftMeta.MORNING, status: 'LATE', branch: 'Q3', checkIn: '08:34', avatarTone: 'from-brand-tertiary to-brand-tertiary' },
-  { id: 'TECH-004', name: 'Thuỳ Dương', initials: 'TD', specialty: 'Sơn gel Hàn Quốc', skills: ['Sơn gel Hàn Quốc', 'Gel Manicure', 'Tháo gel & phục hồi móng', 'Sơn thạch Ombre'], shift: 'AFTERNOON', shiftLabel: technicianShiftMeta.AFTERNOON, status: 'NOT_CHECKED_IN', branch: 'Q3', avatarTone: 'from-brand-secondary to-brand-secondary' },
-  { id: 'TECH-005', name: 'An Nhiên', initials: 'AN', specialty: 'Đính đá nghệ thuật', skills: ['Đính đá nghệ thuật', 'Nail Art cơ bản', 'Nail Art Premium', 'Nối móng Tips'], shift: 'AFTERNOON', shiftLabel: technicianShiftMeta.AFTERNOON, status: 'SERVING', branch: 'Q3', checkIn: '11:58', avatarTone: 'from-brand-primary to-brand-error' },
-  { id: 'TECH-006', name: 'Khánh Vy', initials: 'KV', specialty: 'Đắp bột', skills: ['Đắp bột', 'Nối móng Tips', 'Combo VIP'], shift: 'FULL_DAY', shiftLabel: technicianShiftMeta.FULL_DAY, status: 'SICK_REPORTED', branch: 'Q3', leaveNote: 'Báo sốt lúc 07:10, quản lý đã xác nhận.', avatarTone: 'from-brand-secondary to-brand-secondary' },
-  { id: 'TECH-011', name: 'Hà My', initials: 'HM', specialty: 'Combo VIP', skills: ['Combo VIP', 'Nail Art Premium', 'Gel Manicure', 'Đính đá nghệ thuật'], shift: 'FULL_DAY', shiftLabel: technicianShiftMeta.FULL_DAY, status: 'PRESENT', branch: 'Q1', checkIn: '07:56', avatarTone: 'from-brand-primary to-brand-primary' },
-  { id: 'TECH-012', name: 'Gia Huy', initials: 'GH', specialty: 'Manicure Nam & Dưỡng móng', skills: ['Gel Manicure', 'Combo Manicure', 'Tháo gel & phục hồi móng'], shift: 'MORNING', shiftLabel: technicianShiftMeta.MORNING, status: 'PRESENT', branch: 'Q1', checkIn: '08:10', avatarTone: 'from-brand-secondary to-brand-primary' },
-  { id: 'TECH-013', name: 'Mai Lan', initials: 'ML', specialty: 'Pedicure Spa & Nail Art', skills: ['Pedicure Spa', 'Sơn gel Hàn Quốc', 'Nail Art cơ bản'], shift: 'AFTERNOON', shiftLabel: technicianShiftMeta.AFTERNOON, status: 'NOT_CHECKED_IN', branch: 'Q1', avatarTone: 'from-brand-primary to-brand-secondary' },
-];
-
-const normalizeTechnicians = (items: ReceptionTechnician[]) => items.map((technician) => {
-  const seed = technicianSeed.find((item) => item.id === technician.id || item.name === technician.name);
-  return {
-    ...technician,
-    skills: seed?.skills?.length ? seed.skills : technician.skills?.length ? technician.skills : [technician.specialty],
-    avatarTone: technician.avatarTone || seed?.avatarTone || 'from-brand-secondary to-brand-secondary',
-    specialty: technician.specialty || seed?.specialty || 'Nail Technician',
-    shiftLabel: technicianShiftMeta[technician.shift] || technician.shiftLabel || seed?.shiftLabel || '',
-  };
-});
 
 const navItems: Array<{ id: ReceptionPage; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'desk', label: 'Bàn lễ tân', icon: LayoutDashboard },
@@ -1089,7 +1050,13 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     BR-ISO-004: chỉ lễ tân mới bị thu hẹp theo chi nhánh.
   */
   const branchScopeId = account.branchId || null;
-  const branchName = account.branchName || `${tenantName} · Chi nhánh ${branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}`;
+  /*
+    Tên chi nhánh đến từ phiên đăng nhập. Trước đây mọi mã khác 'Q1' đều bị đoán thành "Quận 3"
+    — phép đoán ấy chỉ đúng với đúng hai chi nhánh của bộ dữ liệu mẫu, còn với tiệm thật thì nó
+    nói sai tên chi nhánh ngay trên thanh bên, chỗ người ở quầy nhìn cả ngày.
+  */
+  const branchLabel = account.branchName || `Chi nhánh ${branchCode}`;
+  const branchName = account.branchName || `${tenantName} · ${branchLabel}`;
   const nextThemeMode = themeMode === 'dark' ? 'light' : 'dark';
   const appointmentStorageKey = tenantStorageKey('tenant-admin-appointments-v2');
   const paymentStorageKey = tenantStorageKey('tenant-admin-payments-v1');
@@ -1202,60 +1169,32 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   }, [servicesStorageKey, designsStorageKey, colorsStorageKey, appointmentStorageKey, tenantName]);
 
   /*
-    Bảng giá dịch vụ — dữ liệu THẬT từ ngày 14.
+    Bảng giá dịch vụ — dữ liệu THẬT từ ngày 14, và CHỈ dữ liệu thật từ ngày 25.
 
     Đây là điều kiện để đặt lịch chạy được chút nào: API chỉ nhận mã dịch vụ có thật, mà bảng
     giá mẫu trong `localStorage` thì mang những cái tên do bộ nạp giao diện bịa ra ("Nail Art
     Premium"…). Tra một cái tên bịa trong danh mục thật sẽ không ra gì, và mọi lần tiếp nhận
     khách đều dừng ở câu "dịch vụ không còn trong bảng giá".
 
-    Lùi về `servicesData` của localStorage khi tiệm chưa khai dịch vụ nào, để màn hình vẫn có
-    thứ để trình bày — nhưng lúc đó `id` rỗng nên lịch hẹn vẫn không đặt được, và đó là điều
-    đúng: một bảng giá bịa không được phép sinh ra lịch hẹn thật.
+    Ngày 14 vẫn lùi về `servicesData` của localStorage khi máy chủ trả danh sách rỗng, để màn
+    hình có thứ trình bày. Nay bỏ hẳn phép lùi ấy: nó trộn ba chuyện khác hẳn nhau vào cùng một
+    hình — đang tải, gọi hỏng, và tiệm thật sự chưa khai dịch vụ nào — mà người ở quầy thì không
+    có cách nào phân biệt. Ba trạng thái ấy nay do phần hiển thị nói ra, mỗi trạng thái một câu.
   */
   const salonServices = useSalonServices(true, account.tenantId || null);
 
-  const serviceCatalog: CatalogItem[] = useMemo(() => {
-    const live = salonServices.services.filter((item) => item.status === 'ACTIVE');
-
-    if (live.length > 0) {
-      return live.map((item) => ({
+  const serviceCatalog: CatalogItem[] = useMemo(
+    () => salonServices.services
+      .filter((item) => item.status === 'ACTIVE')
+      .map((item) => ({
         id: item.id,
         name: item.name,
         price: item.price,
         category: item.category || 'Dịch vụ',
         duration: item.durationMinutes
-      }));
-    }
-
-    const available = servicesData.filter((s) => {
-      if (s.status === 'HIDDEN') return false;
-      if (s.branches && s.branches.length > 0 && !s.branches.includes(branchCode)) return false;
-      return true;
-    });
-    if (available.length === 0) return defaultServiceCatalog;
-    return available.map((s) => {
-      let catName: string = s.category;
-      if (s.category === 'MANICURE') catName = 'Sơn móng & Manicure';
-      else if (s.category === 'PEDICURE') catName = 'Chăm sóc móng & Pedicure';
-      else if (s.category === 'GEL') catName = 'Sơn & Đắp Gel';
-      else if (s.category === 'ACRYLIC') catName = 'Đắp bột & Nối móng';
-      else if (s.category === 'NAIL_ART') catName = 'Vẽ nghệ thuật & Art';
-      else if (s.category === 'SPA') catName = 'Spa & Chăm sóc móng';
-      else if (s.category === 'COMBO') catName = 'Combo trọn gói';
-
-      return {
-        id: s.id,
-        name: s.name,
-        price: s.price, // FIXED BASE PRICE từ Tenant Admin
-        category: catName,
-        duration: s.duration,
-        addOns: s.addOns,
-        description: s.description,
-        requiredSkill: s.requiredSkill,
-      };
-    });
-  }, [salonServices.services, servicesData, branchCode]);
+      })),
+    [salonServices.services]
+  );
 
   // Catalog mẫu vẽ nail art đồng bộ từ Tenant Admin Gallery
   const nailArtTemplates: NailArtTemplate[] = useMemo(() => {
@@ -1535,9 +1474,10 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   };
 
   const technicians: ReceptionTechnician[] = useMemo(() => {
+    // Không lùi về danh sách mẫu khi máy chủ trả rỗng — cùng lý do đã ghi ở bảng giá dịch vụ.
+    // Ở đây hậu quả còn nặng hơn: phân công lịch hẹn cần MÃ nhân viên có thật, nên một cái tên
+    // bịa chỉ dẫn tới một lời từ chối ở bước cuối, sau khi người ở quầy đã hỏi khách xong.
     const live = staffDirectory.staff.filter((item) => item.role === 'TECHNICIAN');
-
-    if (live.length === 0) return normalizeTechnicians(technicianSeed);
 
     return live.map((item) => {
       const attendance = technicianAttendance[item.id] || {};
@@ -3967,6 +3907,78 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     stations: 'Sơ đồ ghế & khu vực nằm ngoài phạm vi backend MVP (§9.3), nên tình trạng ghế ở đây là dữ liệu mẫu, không phải chỗ ngồi thật của khách đang ở tiệm.'
   };
 
+  /*
+    ── Ba trạng thái của dữ liệu quầy ────────────────────────────────────────────────────
+    Từ ngày 25 màn lễ tân không còn lùi về dữ liệu mẫu khi máy chủ trả rỗng, nên ba trạng thái
+    "đang tải", "gọi hỏng" và "chưa có gì" phải tự nói ra tên mình — trước đây cả ba đều hiện
+    ra thành một danh sách demo trông y như thật.
+
+    Dải nhãn này nói hai trạng thái đầu, cho cả bốn nguồn cùng lúc: lịch hẹn, hóa đơn, bảng giá
+    dịch vụ, kỹ thuật viên. Gộp chung vì chúng nạp song song và một sự cố mạng thường quật cả
+    bốn — bốn dải nhãn giống nhau xếp chồng lên nhau thì thành nhiễu, không thành thông tin.
+
+    Trạng thái thứ ba, "chưa có gì", thuộc về từng danh sách và nằm ngay tại danh sách ấy.
+
+    Mỏng và không bóng, cùng khuôn với MockDataNotice: đây là chú thích về dữ liệu chứ không
+    phải một khối nội dung mới trên trang.
+  */
+  const receptionSources = [
+    { label: 'lịch hẹn', book: appointmentBoard },
+    { label: 'hóa đơn', book: invoiceBook },
+    { label: 'bảng giá dịch vụ', book: salonServices },
+    { label: 'kỹ thuật viên', book: staffDirectory }
+  ];
+
+  const failedSources = receptionSources.filter((source) => source.book.error);
+  const loadingSources = receptionSources.filter((source) => source.book.loading);
+
+  const renderDataState = () => {
+    if (failedSources.length > 0) {
+      return (
+        <p className="mb-5 flex items-start gap-2 rounded-control border border-brand-error/30 bg-brand-error/5 px-3 py-2 text-caption text-brand-error">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            <span className="font-bold">
+              Không tải được {failedSources.map((source) => source.label).join(', ')}.
+            </span>{' '}
+            {failedSources[0].book.error?.message}{' '}
+            <button
+              type="button"
+              onClick={() => failedSources.forEach((source) => source.book.reload())}
+              className="font-bold underline underline-offset-2"
+            >
+              Thử lại
+            </button>
+          </span>
+        </p>
+      );
+    }
+
+    if (loadingSources.length > 0) {
+      return (
+        <p className="mb-5 flex items-center gap-2 text-caption text-brand-text-muted">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+          Đang tải {loadingSources.map((source) => source.label).join(', ')}…
+        </p>
+      );
+    }
+
+    return null;
+  };
+
+  /*
+    Ô chọn dịch vụ khi bảng giá rỗng. Một thẻ <select> không có lựa chọn nào trông y hệt một
+    thẻ hỏng, nên nó phải tự nói ra đang thiếu gì — và nói khác nhau giữa "đang tải" với "tiệm
+    chưa khai dịch vụ nào", vì hai chuyện ấy cần hai hành động khác nhau từ người ở quầy.
+  */
+  const emptyServiceOption = serviceCatalog.length === 0
+    ? (
+      <option value="">
+        {salonServices.loading ? 'Đang tải bảng giá…' : 'Tiệm chưa khai dịch vụ nào'}
+      </option>
+    )
+    : null;
+
   const renderPage = () => {
     if (page === 'desk') return renderDesk();
     if (page === 'technicians') return (
@@ -4093,7 +4105,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
             </span>
             <div className={`min-w-0 flex-1 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
               <p className="truncate text-xs font-bold text-white">{account.displayName}</p>
-              <p className="truncate text-[10px] text-slate-400 font-medium">Lễ tân · {branchCode === 'Q1' ? 'Quận 1' : 'Quận 3'}</p>
+              <p className="truncate text-[10px] text-slate-400 font-medium">Lễ tân · {branchLabel}</p>
             </div>
             <button
               type="button"
@@ -4162,7 +4174,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
           </button>
           <div className="hidden min-w-0 sm:block"><p className="text-caption font-bold uppercase tracking-wider text-brand-text-muted">{new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</p><p className="mt-0.5 text-body font-bold text-brand-text">{navItems.find((item) => item.id === page)?.label}</p></div>
           <div className="relative ml-auto hidden w-full max-w-sm md:block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={page === 'products' ? 'Tìm tên, SKU, lô sản phẩm...' : page === 'stations' ? 'Tìm mã ghế, khách, kỹ thuật viên...' : 'Tìm tên, số điện thoại, dịch vụ...'} className="h-[var(--size-control)] w-full rounded-control border border-brand-outline bg-brand-surface-lowest pl-10 pr-4 text-body outline-none focus:border-brand-secondary" /></div>
-          <span className="hidden sm:flex" title="Tài khoản chỉ được điều phối chi nhánh này"><StatusBadge status="ACTIVE" label={branchCode === 'Q1' ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3'} /></span>
+          <span className="hidden sm:flex" title="Tài khoản chỉ được điều phối chi nhánh này"><StatusBadge status="ACTIVE" label={branchLabel} /></span>
           <button
             type="button"
             onClick={() => onThemeChange(nextThemeMode)}
@@ -4215,7 +4227,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
             )}
           </div>
         </header>
-        <main className="role-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8"><Suspense fallback={<div className="py-24 text-center text-xs font-bold text-brand-text-muted">Đang tải không gian lễ tân...</div>}>{MOCK_DATA_REASONS[page] && <MockDataNotice reason={MOCK_DATA_REASONS[page]} className="mb-5" />}{renderPage()}</Suspense></main>
+        <main className="role-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8"><Suspense fallback={<div className="py-24 text-center text-xs font-bold text-brand-text-muted">Đang tải không gian lễ tân...</div>}>{MOCK_DATA_REASONS[page] && <MockDataNotice reason={MOCK_DATA_REASONS[page]} className="mb-5" />}{renderDataState()}{renderPage()}</Suspense></main>
       </div>
 
       {toast && <div role="status" className="fixed bottom-5 right-5 z-[120] flex max-w-sm items-center gap-3 rounded-2xl border border-brand-secondary bg-brand-secondary px-4 py-3 text-xs font-bold text-white shadow-2xl"><CheckCircle2 className="h-5 w-5 shrink-0 text-brand-secondary" />{toast}</div>}
@@ -4341,6 +4353,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                   }}
                   className="reception-input"
                 >
+                  {emptyServiceOption}
                   {serviceCatalog.map((service) => <option key={service.name}>{service.name}</option>)}
                 </select>
               </Field>
@@ -4461,6 +4474,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                   }}
                   className="reception-input font-bold"
                 >
+                  {emptyServiceOption}
                   {serviceCatalog.map((s) => (
                     <option key={s.name} value={s.name}>
                       {s.name} · {money(s.price)} ({s.duration}p)
@@ -4592,6 +4606,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                   }}
                   className="reception-input"
                 >
+                  {emptyServiceOption}
                   {serviceCatalog.map((service) => <option key={service.name}>{service.name}</option>)}
                 </select>
               </Field>
@@ -4874,7 +4889,13 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
                       </div>
                     );
                   })}
-                  {!filteredCatalog.length && <div className="col-span-full py-16 text-center text-xs text-brand-text-muted">Không tìm thấy mục phù hợp.</div>}
+                  {!filteredCatalog.length && (
+                    <div className="col-span-full py-16 text-center text-xs text-brand-text-muted">
+                      {invoiceCatalogTab === 'SERVICE' && activeCatalog.length === 0
+                        ? (salonServices.loading ? 'Đang tải bảng giá dịch vụ…' : 'Tiệm chưa khai dịch vụ nào.')
+                        : 'Không tìm thấy mục phù hợp.'}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
