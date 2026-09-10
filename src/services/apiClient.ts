@@ -35,6 +35,10 @@ export type ApiFailureKind =
   | 'notFound'
   /** 409 — vượt hạn mức gói, hoặc trùng lịch kỹ thuật viên. */
   | 'conflict'
+  /** 423 — tài khoản bị khóa tạm sau nhiều lần sai mật khẩu. Nói rõ tới khi nào mở lại. */
+  | 'locked'
+  /** 429 — gọi quá dày từ cùng một địa chỉ IP. Bảo người dùng chờ, đừng bảo họ thử lại ngay. */
+  | 'rateLimited'
   /** `fetch` ném lỗi — mất mạng hoặc máy chủ chưa chạy. Cho thử lại. */
   | 'network'
   /** 5xx — lỗi hệ thống. Cho thử lại. */
@@ -90,6 +94,13 @@ const kindFromStatus = (status: number): ApiFailureKind => {
   if (status === 404) return 'notFound';
   if (status === 409) return 'conflict';
   if (status === 400 || status === 422) return 'validation';
+
+  // Hai mã dưới đây từng rơi vào 'server', và rơi vào đó là nói sai với người dùng: backend
+  // có mã lỗi riêng cho cả hai, còn 'server' thì hiện câu "máy chủ gặp sự cố, vui lòng thử
+  // lại" — đúng thứ KHÔNG nên bảo một người vừa bị khóa tài khoản hoặc vừa gọi quá dày.
+  if (status === 423) return 'locked';
+  if (status === 429) return 'rateLimited';
+
   return 'server';
 };
 
@@ -123,9 +134,10 @@ const readErrorBody = async (response: Response): Promise<ApiError> => {
  * lỗi nói rằng *bối cảnh đăng nhập* đã đổi, và lúc đó màn hình hiện tại không còn là chỗ đúng
  * để đứng — mọi lời gọi sau đó cũng sẽ hỏng theo cùng một cách. Chúng đi qua đây.
  *
- * Hiện có một tín hiệu. Mã `UNAUTHENTICATED` giữa chừng phiên sẽ vào cùng đường này ở mục #6.
+ * Hai tín hiệu, và cả hai đều nói rằng phiên đăng nhập không còn dùng được như giao diện
+ * đang tưởng — một cái mất hẳn, một cái mất phạm vi tiệm.
  */
-export type ApiAuthSignal = 'tenantNotSelected';
+export type ApiAuthSignal = 'unauthenticated' | 'tenantNotSelected';
 
 const authSignalListeners = new Set<(signal: ApiAuthSignal) => void>();
 
@@ -144,6 +156,14 @@ export const onApiAuthSignal = (listener: (signal: ApiAuthSignal) => void): (() 
  * thì tuyệt đối không được làm gì cả.
  */
 const emitAuthSignal = (error: ApiError): void => {
+  // Đọc theo `kind` chứ không theo mã lỗi: một phản hồi 401 không có thân JSON — proxy chết,
+  // hoặc máy chủ trả trang HTML — vẫn là phiên đã mất, và vẫn phải đưa người dùng ra ngoài.
+  if (error.kind === 'unauthenticated') {
+    authSignalListeners.forEach((listener) => listener('unauthenticated'));
+
+    return;
+  }
+
   if (error.code !== 'TENANT_NOT_SELECTED') return;
 
   authSignalListeners.forEach((listener) => listener('tenantNotSelected'));
@@ -159,6 +179,10 @@ const defaultMessageFor = (kind: ApiFailureKind): string => {
       return 'Không tìm thấy dữ liệu yêu cầu.';
     case 'conflict':
       return 'Thao tác bị từ chối vì xung đột dữ liệu.';
+    case 'locked':
+      return 'Tài khoản đang bị khóa tạm. Vui lòng thử lại sau.';
+    case 'rateLimited':
+      return 'Bạn thao tác quá nhanh. Chờ một lát rồi thử lại.';
     case 'validation':
       return 'Dữ liệu nhập chưa hợp lệ.';
     default:
@@ -256,7 +280,12 @@ export const apiDelete = <T>(path: string) => apiRequest<T>(path, { method: 'DEL
  */
 export const describeApiError = (error: ApiError): { message: string; tone: ToastTone } => ({
   message: error.message,
-  tone: error.kind === 'validation' || error.kind === 'conflict' ? 'warning' : 'error'
+  tone: error.kind === 'validation'
+    || error.kind === 'conflict'
+    || error.kind === 'locked'
+    || error.kind === 'rateLimited'
+    ? 'warning'
+    : 'error'
 });
 
 /** Gộp danh sách lỗi theo ô nhập thành một bản đồ để form tra nhanh. */

@@ -380,21 +380,42 @@ export default function App() {
   }, [showToast]);
 
   /*
-    ── Mất tiệm đang làm việc giữa chừng phiên ──────────────────────────────────────────
-    Chủ tiệm quản nhiều tiệm có thể rơi vào trạng thái "chưa chọn tiệm" mà không hề bấm gì:
-    quyền với tiệm đang mở bị gỡ, hoặc tiệm bị xóa mềm. Máy chủ khi ấy trả TENANT_NOT_SELECTED
-    cho MỌI endpoint nghiệp vụ, và nếu giao diện không biết chuyện đó thì người dùng ngồi trước
-    một cổng quản trị mà mọi ô đều rỗng, không màn nào nói được vì sao.
+    ── Phiên đổi trạng thái giữa chừng, không phải do người dùng bấm gì ──────────────────
+    Hai tình huống, cùng một hình: máy chủ nói phiên không còn dùng được như giao diện đang
+    tưởng, nhưng nó nói qua một lời gọi API của màn hình bất kỳ chứ không qua một hành động
+    nào của người dùng.
 
-    Cách chữa là đọc lại phiên chứ không tự dựng trạng thái: cờ `mustSelectTenant` do máy chủ
-    tính, và chính nó là thứ đưa màn chọn tiệm hiện lên ở cuối tệp này.
+    · Phiên hết hạn hoặc bị thu hồi (BR-AUTH-033) → mọi endpoint trả 401. Trước đây App chỉ
+      xử lý 401 ở lần bootstrap, nên giữa chừng phiên thì các hook nhận lỗi mà giao diện vẫn
+      nghĩ người dùng đang đăng nhập: hết màn này tới màn khác rỗng, không chỗ nào nói vì sao.
+
+    · Mất quyền với tiệm đang mở, hoặc tiệm bị xóa mềm → mọi endpoint nghiệp vụ trả
+      TENANT_NOT_SELECTED. Đọc lại phiên là đủ, vì cờ `mustSelectTenant` do máy chủ tính và
+      chính nó đưa màn chọn tiệm hiện lên.
+
+    Hiệu ứng chỉ chạy khi ĐANG có phiên. Lúc chưa đăng nhập thì 401 là câu trả lời bình
+    thường của máy chủ, không phải một cú đẩy ra ngoài, và báo "phiên đã hết hạn" ở màn đăng
+    nhập chỉ làm người dùng hoang mang.
   */
   useEffect(() => {
-    // Lỗi loại này thường nổ ở nhiều hook cùng lúc — mỗi màn đang mở một lời gọi. Chốt dưới
-    // đây gộp chúng lại thành đúng một lần đọc phiên.
+    if (!session) return;
+
+    // Lỗi loại này thường nổ ở nhiều hook cùng lúc — mỗi màn đang mở một lời gọi. Hai chốt
+    // dưới đây gộp chúng lại thành đúng một lần phản ứng.
+    let handled = false;
     let refreshing = false;
 
     return onApiAuthSignal((signal) => {
+      if (signal === 'unauthenticated') {
+        if (handled) return;
+
+        handled = true;
+        setSession(null);
+        showToast('Phiên đăng nhập đã hết hạn hoặc bị thu hồi. Vui lòng đăng nhập lại.', 'warning');
+
+        return;
+      }
+
       if (signal !== 'tenantNotSelected' || refreshing) return;
 
       refreshing = true;
@@ -407,7 +428,7 @@ export default function App() {
           refreshing = false;
         });
     });
-  }, []);
+  }, [session, showToast]);
 
   /**
    * Tải danh sách tiệm của tài khoản — BR-AUTH-023.
