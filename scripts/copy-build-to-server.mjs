@@ -11,8 +11,9 @@
  * Chế độ phát triển KHÔNG đổi: `npm run dev` vẫn chạy Vite ở cổng 3000 và proxy `/api` sang
  * 5282. Máy chủ chỉ phục vụ giao diện khi `wwwroot/index.html` có thật.
  *
- * Đường dẫn máy chủ lấy từ biến môi trường `SERVER_WWWROOT`, mặc định là solution
- * `NailManagement` cạnh repo này.
+ * Đường dẫn máy chủ lấy từ biến môi trường `SERVER_WWWROOT`. Không đặt thì dùng mặc định — chỗ
+ * solution `NailManagement` đang nằm trên máy phát triển hiện tại, viết thẳng ra vì hai repo KHÔNG
+ * nằm cạnh nhau nên không suy ra được. Máy khác thì đặt biến ấy, đừng sửa dòng mặc định.
  *
  * ## Vì sao có tệp kê khai
  *
@@ -35,12 +36,14 @@ const distDir = path.join(repoRoot, 'dist');
 // repo không nằm cạnh nhau, nên mọi phép `..` đều là một câu đố chứ không phải một lời giải.
 const DEFAULT_SERVER_WWWROOT = 'C:/Users/letru/source/repos/NailManagement/NailManagement.API/wwwroot';
 const serverWwwroot = path.resolve(process.env.SERVER_WWWROOT || DEFAULT_SERVER_WWWROOT);
+const wwwrootSource = process.env.SERVER_WWWROOT ? 'biến SERVER_WWWROOT' : 'mặc định của máy phát triển';
 
 const MANIFEST = '.build-manifest.json';
 
 /**
- * Hai thư mục của bản mẫu Cloudflare Worker, `npm run build` vẫn sinh ra chúng.
- * CLAUDE.md ghi rõ bản đó đã bị thay thế và chỉ giữ làm lịch sử — đừng mang sang máy chủ.
+ * Hai thư mục của bản mẫu Cloudflare Worker. Từ ngày 26 chỉ `npm run build:legacy` sinh ra chúng,
+ * còn `npm run build` thì không — nhưng vẫn bỏ qua ở đây, vì một lần chạy `build:legacy` trước đó
+ * để lại chúng trong `dist/` và chúng không có việc gì ở `wwwroot/` của máy chủ thật.
  */
 const SKIP = new Set(['server', '.openai', MANIFEST]);
 
@@ -96,6 +99,7 @@ await writeFile(
 );
 
 console.log(`Đã chép ${copied.length} mục sang ${serverWwwroot}`);
+console.log(`  (đường dẫn lấy từ ${wwwrootSource})`);
 console.log(`  ${copied.join(' · ')}`);
 console.log(`\nGiờ chạy máy chủ, giao diện nằm cùng cổng với API:`);
 console.log(`  dotnet run --project NailManagement.API --launch-profile http`);
