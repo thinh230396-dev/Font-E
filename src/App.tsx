@@ -36,7 +36,7 @@ import {
 } from './utils/packageUpgradeRequests';
 import { resetTenantMockStorage } from './utils/mockDataReset';
 import { setTenantStorageScope } from './utils/tenantStorage';
-import { describeApiError } from './services/apiClient';
+import { describeApiError, onApiAuthSignal } from './services/apiClient';
 import useMyTenant from './hooks/useMyTenant';
 import useTenants from './hooks/useTenants';
 import useSubscriptionInvoices from './hooks/useSubscriptionInvoices';
@@ -378,6 +378,36 @@ export default function App() {
       active = false;
     };
   }, [showToast]);
+
+  /*
+    ── Mất tiệm đang làm việc giữa chừng phiên ──────────────────────────────────────────
+    Chủ tiệm quản nhiều tiệm có thể rơi vào trạng thái "chưa chọn tiệm" mà không hề bấm gì:
+    quyền với tiệm đang mở bị gỡ, hoặc tiệm bị xóa mềm. Máy chủ khi ấy trả TENANT_NOT_SELECTED
+    cho MỌI endpoint nghiệp vụ, và nếu giao diện không biết chuyện đó thì người dùng ngồi trước
+    một cổng quản trị mà mọi ô đều rỗng, không màn nào nói được vì sao.
+
+    Cách chữa là đọc lại phiên chứ không tự dựng trạng thái: cờ `mustSelectTenant` do máy chủ
+    tính, và chính nó là thứ đưa màn chọn tiệm hiện lên ở cuối tệp này.
+  */
+  useEffect(() => {
+    // Lỗi loại này thường nổ ở nhiều hook cùng lúc — mỗi màn đang mở một lời gọi. Chốt dưới
+    // đây gộp chúng lại thành đúng một lần đọc phiên.
+    let refreshing = false;
+
+    return onApiAuthSignal((signal) => {
+      if (signal !== 'tenantNotSelected' || refreshing) return;
+
+      refreshing = true;
+
+      void getSession()
+        .then((result) => {
+          if (result.status === 'ok') setSession(result.data);
+        })
+        .finally(() => {
+          refreshing = false;
+        });
+    });
+  }, []);
 
   /**
    * Tải danh sách tiệm của tài khoản — BR-AUTH-023.

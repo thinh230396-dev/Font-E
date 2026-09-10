@@ -116,6 +116,39 @@ const readErrorBody = async (response: Response): Promise<ApiError> => {
   };
 };
 
+/**
+ * Tín hiệu mà **cả ứng dụng** phải phản ứng, chứ không phải riêng màn hình vừa gọi API.
+ *
+ * Một lỗi thường thì nơi gọi tự xử: hiện toast, tô đỏ ô nhập, cho bấm thử lại. Nhưng có những
+ * lỗi nói rằng *bối cảnh đăng nhập* đã đổi, và lúc đó màn hình hiện tại không còn là chỗ đúng
+ * để đứng — mọi lời gọi sau đó cũng sẽ hỏng theo cùng một cách. Chúng đi qua đây.
+ *
+ * Hiện có một tín hiệu. Mã `UNAUTHENTICATED` giữa chừng phiên sẽ vào cùng đường này ở mục #6.
+ */
+export type ApiAuthSignal = 'tenantNotSelected';
+
+const authSignalListeners = new Set<(signal: ApiAuthSignal) => void>();
+
+/** Đăng ký nghe, và trả về hàm gỡ đăng ký để `useEffect` dọn đúng cách. */
+export const onApiAuthSignal = (listener: (signal: ApiAuthSignal) => void): (() => void) => {
+  authSignalListeners.add(listener);
+
+  return () => {
+    authSignalListeners.delete(listener);
+  };
+};
+
+/**
+ * Phát tín hiệu dựa vào **mã lỗi**, không dựa vào mã HTTP: `TENANT_NOT_SELECTED` và
+ * `FORBIDDEN` cùng đi với 403, nhưng một cái cần đưa người dùng tới màn chọn tiệm còn cái kia
+ * thì tuyệt đối không được làm gì cả.
+ */
+const emitAuthSignal = (error: ApiError): void => {
+  if (error.code !== 'TENANT_NOT_SELECTED') return;
+
+  authSignalListeners.forEach((listener) => listener('tenantNotSelected'));
+};
+
 const defaultMessageFor = (kind: ApiFailureKind): string => {
   switch (kind) {
     case 'unauthenticated':
@@ -158,7 +191,11 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<A
   }
 
   if (!response.ok) {
-    return { status: 'error', error: await readErrorBody(response) };
+    const error = await readErrorBody(response);
+
+    emitAuthSignal(error);
+
+    return { status: 'error', error };
   }
 
   // 204 No Content — thao tác thành công và cố ý không có thân phản hồi.
