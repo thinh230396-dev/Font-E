@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev          # vite --port=3000 --host=0.0.0.0 — proxies /api to the .NET backend
-npm run build        # vite build && node scripts/prepare-sites-build.mjs
+npm run build        # vite build — SPA only
+npm run build:legacy # vite build + scripts/prepare-sites-build.mjs — the superseded Cloudflare Worker bundle
 npm run build:server # build, then copy dist/ into the backend's wwwroot — one port, one command
 npm run preview      # vite preview — serve the production build locally
 npm run lint         # tsc --noEmit — this is the only lint/typecheck step; there is no ESLint config
@@ -28,6 +29,8 @@ There is no unit-test runner in **this** repo (no Jest/Vitest). Verify frontend 
 ```bash
 dotnet ef database drop --force --project NailManagement.Infrastructure --startup-project NailManagement.API
 ```
+
+Both seeders now run only when the environment is Development **and** `DemoSeed:Enabled` is set — see `NailManagement.API/Startup/DemoSeedPolicy.cs`. The flag ships turned on in `appsettings.Development.json`, so a dev machine behaves as before; anywhere else the server creates nothing and expects `Bootstrap__AdminEmail` / `Bootstrap__AdminPassword` instead.
 
 Note that `DemoDataSeeder` builds its history backwards from the moment it runs, so everything in it is anchored to the day you seeded. It also lays down seven days of appointments *ahead* of that moment (`DemoDataSeeder.UpcomingDays`), which is what keeps the receptionist desk from being empty on a database seeded earlier in the week — those future appointments stop at PENDING/CONFIRMED and carry no invoices, so revenue figures are unaffected. Past a week, re-seed. And re-seeding means dropping first: the seeder only runs when the `Packages` table is empty, so an existing database never grows the new rows on its own.
 
@@ -55,7 +58,7 @@ The backend lives **outside this repo**, at `C:\Users\letru\source\repos\NailMan
 
 `vite.config.ts` proxies `/api` to `http://localhost:5282` (override with `API_ORIGIN`). Same-origin proxying is deliberate — it keeps the `SameSite=Strict` session cookie working and means the backend opens CORS for nobody.
 
-Roughly 51 endpoints across 14 controllers cover auth/sessions, tenants, branches, services, staff, customers, appointments, sales invoices and payments, revenue reporting, audit logs, and session administration. Sessions are a cookie plus an `AppSessions` table (not JWT), so account status is re-checked on every request. `dotnet test` runs an xUnit suite (82 tests) that drives the real server in-memory over HTTP against a throwaway `NailManagementTests` database on the same SQL Server instance.
+Roughly 51 endpoints across 14 controllers cover auth/sessions, tenants, branches, services, staff, customers, appointments, sales invoices and payments, revenue reporting, audit logs, and session administration. Sessions are a cookie plus an `AppSessions` table (not JWT), so account status is re-checked on every request. `dotnet test` runs an xUnit suite (115 tests) that drives the real server in-memory over HTTP against a throwaway `NailManagementTests` database on the same SQL Server instance.
 
 Test layout: `Infrastructure/` is the harness (client, factory, throwaway DB, xUnit collection); `Scenarios/SalonScenario.cs` builds business data (appointments, invoices) and is shared via `using static`. That sharing is load-bearing, not cosmetic — every test class books for the same technician, so `SalonScenario.NextSlot()` must stay the *single* slot counter for the whole run or classes collide on BR-APT-011 and go red for reasons unrelated to what they test. Its 8-hour slot spacing is load-bearing too, and for a less obvious reason: the scenario books whichever service the catalogue returns *first*, `ServiceRepository` orders by name **in the database**, and Vietnamese collation sorts "Combo" (200 minutes) ahead of "Chăm sóc" (55 minutes) because Vietnamese treats "Ch" as a letter after "C". Spacing must therefore clear the *longest* service in the seed, not the one that happens to sort first — a 2-hour gap turned 11 tests red the day the server collation changed. Test classes themselves are grouped by rule area: `Authorization/`, `Isolation/`, `Appointments/`, `Invoices/`, `Payments/`, `Sessions/`.
 
@@ -69,7 +72,7 @@ Those notices are **not** written into each screen. Each portal keeps one `MOCK_
 
 Money is VND-only (BR-VAL-003). `CurrencyCode` is a one-member union, deliberately kept as a type so `tsc` rejects the next `'USD'` someone writes; there is no `convertMoney` and no exchange rate. `formatMoney`'s second argument survives only because 86 call sites pass a record's currency field.
 
-`ReceptionistPortal` is the one to read before connecting anything else — it is 5,400 lines and was migrated without rewriting its render tree. Two ideas carried the whole thing: an **adapter** (`toReceptionAppointment`, `toReceptionPayment`) that redresses server DTOs into the shapes the existing JSX already reads, and a small **client-side extras map** for the handful of fields the backend deliberately has no column for (attendance, allergies, reminders — all cut in §9.4 of the roadmap). Deleting the old `setAppointments` / `setPayments` setters outright turned `tsc` into the checklist of every write path that needed rewiring.
+`ReceptionistPortal` is the one to read before connecting anything else — it is ~6,100 lines and was migrated without rewriting its render tree. Two ideas carried the whole thing: an **adapter** (`toReceptionAppointment`, `toReceptionPayment`) that redresses server DTOs into the shapes the existing JSX already reads, and a small **client-side extras map** for the handful of fields the backend deliberately has no column for (attendance, allergies, reminders — all cut in §9.4 of the roadmap). Deleting the old `setAppointments` / `setPayments` setters outright turned `tsc` into the checklist of every write path that needed rewiring.
 
 The pattern for connecting a new domain is two layers, and both already exist to copy from:
 
@@ -80,9 +83,9 @@ The pattern for connecting a new domain is two layers, and both already exist to
 
 ### Design system and shared UI components
 
-`src/index.css` (~5,600 lines) defines the full token system via Tailwind v4's `@theme static` block — typography, spacing, radius, shadow, z-index, motion, and one `--accent` per role shell (Superadmin indigo, Tenant Admin pink, Receptionist green). `src/components/ui/` holds the shared primitive/composite components (`Button`, `Field`, `Modal`, `DataTable`, `StatusBadge`) — check here before adding new UI primitives to a screen; `StatusBadge`'s `STATUS_MAP` is the single place status→label/tone/icon mapping should live (don't create a second mapping table per screen).
+`src/index.css` (~7,700 lines) defines the full token system via Tailwind v4's `@theme static` block — typography, spacing, radius, shadow, z-index, motion, and one `--accent` per role shell (Superadmin indigo, Tenant Admin pink, Receptionist green). `src/components/ui/` holds the shared primitive/composite components (`Button`, `Field`, `Modal`, `DataTable`, `StatusBadge`) — check here before adding new UI primitives to a screen; `StatusBadge`'s `STATUS_MAP` is the single place status→label/tone/icon mapping should live (don't create a second mapping table per screen).
 
-`README.md` is the project's own 26-chapter UI/UX design specification (in Vietnamese) — the binding reference for typography scale, spacing, color roles, component states, accessibility, and responsive rules. `README-MIGRATION.md` tracks an in-progress effort to bring existing screens into compliance with that spec (token consolidation done; component library done; screen-by-screen migration ~3/38 complete) and documents hard constraints for that work: don't invent a new design system, don't change fonts/icons/role accents, no decorative gradients/blur/glassmorphism, no full-screen backdrop `<button>` overlays, and — importantly — **don't change business logic, API, database, data model, authentication, or permissions** as part of UI migration work. Read `README-MIGRATION.md` §11 before doing any UI cleanup pass.
+`README.md` is the project's own 15-section state-of-the-source document (in Vietnamese) — what runs where, which screens are connected, which are still mock, and how to start both processes. It promises to match the source, so correct it when you change behaviour rather than letting it drift. `README-MIGRATION.md` tracks an in-progress effort to bring existing screens into compliance with the design system in `src/index.css` and `src/components/ui/` (token consolidation done; component library done; screen-by-screen migration ~3/38 complete) and documents hard constraints for that work: don't invent a new design system, don't change fonts/icons/role accents, no decorative gradients/blur/glassmorphism, no full-screen backdrop `<button>` overlays, and — importantly — **don't change business logic, API, database, data model, authentication, or permissions** as part of UI migration work. Read `README-MIGRATION.md` §11 before doing any UI cleanup pass.
 
 ### Known structural issues to be aware of
 

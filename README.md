@@ -70,7 +70,7 @@ Suy ra từ các màn hình và model dữ liệu đang tồn tại trong code:
 
 **Không có trong project:** react-router, thư viện state management (Redux/Zustand/Jotai), thư viện form, thư viện data-fetching (React Query/SWR), ORM đang hoạt động, test runner, ESLint.
 
-Design system nằm trong **`src/index.css` (~5.600 dòng)** dùng khối `@theme static` của Tailwind v4 — token typography, spacing, radius, shadow, z-index, motion, và một `--accent` cho từng cổng.
+Design system nằm trong **`src/index.css` (~7.700 dòng)** dùng khối `@theme static` của Tailwind v4 — token typography, spacing, radius, shadow, z-index, motion, và một `--accent` cho từng cổng.
 
 ---
 
@@ -97,22 +97,43 @@ Lưu ý: `package.json` chỉ ghi `@vitejs/plugin-react: ^5.0.4`, nên bản th�
 npm install
 ```
 
-**Lưu ý về lockfile:** repo hiện có `bun.lock` nhưng file **rỗng (0 byte)** và **chưa được commit** (đang ở trạng thái untracked). **Không có `package-lock.json`.** Nghĩa là hiện tại **project không có lockfile hợp lệ nào** — mỗi lần cài lại có thể ra cây phụ thuộc khác nhau. Nên chọn một trình quản lý gói và commit lockfile của nó.
+**Lưu ý về lockfile:** repo dùng **npm**, và `package-lock.json` đã được commit. `bun.lock` từng tồn tại ở dạng file rỗng và đã bị xóa có chủ ý — đừng đưa lại, hai lockfile cạnh nhau là hai cây phụ thuộc có thể lệch nhau mà không ai để ý.
 
 ---
 
 ## 5. Cách chạy project local
 
+Có **hai cách chạy**, và chúng dành cho hai tình huống khác nhau.
+
+### Cách 1 — Phát triển: hai tiến trình, hai cổng
+
 ```bash
+# Cửa sổ 1 — backend, phải chạy TRƯỚC
+dotnet run --project C:/Users/letru/source/repos/NailManagement/NailManagement.API --launch-profile http
+
+# Cửa sổ 2 — giao diện
 npm run dev
 ```
 
 - Mở `http://localhost:3000` (Vite bind `0.0.0.0`, `allowedHosts: true` — xem `vite.config.ts`).
-- Dev server đồng thời phục vụ **API auth giả lập** qua plugin `scripts/vite-local-auth.ts` (chi tiết §11).
+- Dev server **chỉ proxy `/api` sang `http://localhost:5282`**, nó KHÔNG tự phục vụ API. Chạy Vite mà quên backend thì mọi lời gọi trả 502. Đổi đích bằng biến `API_ORIGIN`.
+- Đổi lại sự phiền phức hai cửa sổ là có HMR: sửa file `.tsx` thì trình duyệt cập nhật ngay.
+
+### Cách 2 — Trình bày: một tiến trình, một cổng
+
+```bash
+npm run build:server
+dotnet run --project C:/Users/letru/source/repos/NailManagement/NailManagement.API --launch-profile http
+# → http://localhost:5282  (cả giao diện lẫn API)
+```
+
+`build:server` build giao diện rồi chép vào `wwwroot/` của backend; từ đó `dotnet run` phục vụ cả hai và **không cần Node**. Máy chủ chỉ phục vụ file tĩnh khi `wwwroot/index.html` có thật, nên máy chưa build thì hành vi không đổi. Chép xong không tự cập nhật — **sửa giao diện thì phải chạy lại `build:server`**.
+
+> Đường dẫn tới solution backend lấy từ biến `SERVER_WWWROOT`; mặc định là chỗ solution đang nằm trên máy phát triển hiện tại. Solution nằm chỗ khác thì đặt biến ấy, đừng sửa script.
 
 ### Tài khoản đăng nhập khi chạy local
 
-Hard-code trong [scripts/vite-local-auth.ts:19](scripts/vite-local-auth.ts#L19):
+Do backend nạp khi database còn trống — `DemoAccountSeeder` trong solution `NailManagement`, và **chỉ nạp ở môi trường Development khi cờ `DemoSeed:Enabled` được bật** (xem `DemoSeedPolicy`):
 
 | Vai trò | Email / username | Mật khẩu |
 |---|---|---|
@@ -120,15 +141,11 @@ Hard-code trong [scripts/vite-local-auth.ts:19](scripts/vite-local-auth.ts#L19):
 | Tenant Admin | `tenantadmin@lumierehair.vn` / `nguyenvanboss` | `Lumiere@2026` |
 | Receptionist | `receptionist@nailestudio.vn` / `receptionist` | `Reception@2026` |
 
-> Đây là tài khoản demo dùng cho phát triển, không phải bí mật production.
+> Đây là tài khoản demo dùng cho phát triển, không phải bí mật production. Ngoài Development, backend không nạp gì cả và tài khoản quản trị đầu tiên đọc từ biến môi trường `Bootstrap__AdminEmail` / `Bootstrap__AdminPassword`.
 
-### Cửa đăng nhập nhanh (tắt mặc định)
-
-Nếu đặt `SALONSYS_DEV_LOGIN=1`, dev server mở thêm `GET /api/auth/dev-login?role=SUPERADMIN|TENANT_ADMIN|RECEPTIONIST` để cấp phiên **không cần mật khẩu** ([scripts/vite-local-auth.ts:229](scripts/vite-local-auth.ts#L229)). Plugin khai `apply: 'serve'` nên không tồn tại trong bản build.
+> `scripts/vite-local-auth.ts` — plugin xác thực giả lập của thời chưa có backend — đã bị gỡ khỏi `vite.config.ts` vì nó chặn `/api/auth/*` trước khi proxy kịp chạy. File còn nằm đó chỉ như một mẩu lịch sử; cả cửa đăng nhập nhanh `SALONSYS_DEV_LOGIN` của nó cũng không còn tác dụng.
 
 ### Xem thư viện component riêng lẻ
-
-```bash
 npm run dev
 # rồi mở http://localhost:3000/ui-preview.html
 ```
@@ -141,13 +158,18 @@ Entry `src/ui-preview.tsx`, không cần đăng nhập. Vite chỉ build `index.
 
 | Script | Lệnh | Mục đích |
 |---|---|---|
-| `dev` | `vite --port=3000 --host=0.0.0.0` | Dev server + API auth local |
-| `build` | `vite build && node scripts/prepare-sites-build.mjs` | Build SPA, rồi copy `scripts/sites-worker.js` → `dist/server/index.js` và `.openai/hosting.json` → `dist/.openai/hosting.json` |
-| `preview` | `vite preview` | Phục vụ bản build tĩnh (**không có API** — worker không chạy ở đây) |
-| `lint` | `tsc --noEmit` | **Bước kiểm tra duy nhất** của project. Hiện đang **pass** (exit 0) |
+| `dev` | `vite --port=3000 --host=0.0.0.0` | Dev server, proxy `/api` sang backend .NET ở cổng 5282 |
+| `build` | `vite build` | Build SPA vào `dist/` |
+| `build:server` | `npm run build && node scripts/copy-build-to-server.mjs` | Build rồi chép sang `wwwroot/` của backend — một cổng, một lệnh |
+| `build:legacy` | `vite build && node scripts/prepare-sites-build.mjs` | Bản build cho Cloudflare Worker đã bị thay thế. Xem ghi chú ngay dưới |
+| `preview` | `vite preview` | Phục vụ bản build tĩnh (**không có API**) |
+| `lint` | `tsc --noEmit` | **Bước kiểm tra duy nhất** của repo này. Hiện đang **pass** (exit 0) |
+| `rehearsal` | `node scripts/rehearsal.mjs` | 174 bước tổng duyệt qua HTTP trên backend **đang chạy** với dữ liệu demo thật |
 | `clean` | `rm -rf dist server.js` | Lệnh Unix; trên Windows cần Git Bash |
 
-**Không có test runner** (không Jest, không Vitest, không script `test`). Cách xác minh thay đổi: chạy `npm run lint` và chạy thử app.
+**Vì sao `build` và `build:legacy` tách đôi:** trước ngày 26 chỉ có một lệnh `build`, và nó luôn đóng gói `scripts/sites-worker.js` thành `dist/server/index.js`. Worker ấy chỉ xử lý `/api/auth/*` và `/api/package-upgrade-requests`, trong khi giao diện gọi hàng chục endpoint .NET khác — nên một bản deploy dựng từ nó đăng nhập được nhưng gần như mọi màn còn lại trả 404. Nó cũng băm mật khẩu bằng SHA-256 một vòng, yếu hơn hẳn PBKDF2 210.000 vòng của backend thật. Giữ lại dưới tên `build:legacy` để tra cứu, còn `build` nay chỉ dựng SPA.
+
+**Repo này không có test runner** (không Jest, không Vitest, không script `test`). Xác minh thay đổi giao diện bằng `npm run lint` và chạy thử app. Backend là solution riêng và **có** bộ kiểm thử: `dotnet test` chạy 115 test xUnit đi qua HTTP trên một database dùng một lần.
 
 ---
 
@@ -157,17 +179,17 @@ Entry `src/ui-preview.tsx`, không cần đăng nhập. Vite chỉ build `index.
 .
 ├── index.html                    # Entry SPA chính
 ├── ui-preview.html               # Entry harness xem component (chỉ dev)
-├── vite.config.ts                # Vite + plugin auth local + alias @ → gốc repo
+├── vite.config.ts                # Vite + proxy /api sang backend .NET + alias @ → gốc repo
 ├── tsconfig.json                 # target ES2022, alias "@/*": ["./*"], noEmit
 ├── metadata.json                 # Metadata bản export AI Studio
-├── .openai/hosting.json          # Cấu hình binding D1 khi deploy
+├── .openai/hosting.json          # Di tích của bản Cloudflare Worker, chỉ `build:legacy` dùng
 │
 ├── src/
 │   ├── main.tsx                  # createRoot + LanguageProvider + ToastProvider
-│   ├── App.tsx                   # ~2.100 dòng — state tree + business logic toàn hệ thống
+│   ├── App.tsx                   # ~1.500 dòng — state tree + business logic của các domain chưa nối API
 │   ├── types.ts                  # Model dữ liệu tầng nền tảng (Tenant, Invoice, Package…)
 │   ├── data.ts                   # Mock seed cấp hệ thống + helper localStorage
-│   ├── index.css                 # ~5.600 dòng — toàn bộ design token & class
+│   ├── index.css                 # ~7.700 dòng — toàn bộ design token & class
 │   │
 │   ├── auth/demoAccounts.ts      # PortalRole + danh sách account demo phía client
 │   ├── mockData/supportTickets.ts# Seed ticket hỗ trợ
@@ -228,13 +250,16 @@ Ba vai trò này được **backend công nhận** trong `scripts/sites-worker.j
 
 ### Quan hệ tài khoản ↔ tenant: **một Tenant Admin quản lý được nhiều tenant** (đã chốt)
 
-Đây là quyết định nghiệp vụ đã được chốt. Frontend hiện đang đi đúng hướng này, backend thì chưa:
+Đây là quyết định nghiệp vụ đã được chốt, và **backend .NET đã làm xong** — bảng nối `UserTenants` giữ quan hệ nhiều–nhiều, tiệm đang làm việc nằm trong phiên đăng nhập (BR-AUTH-024), và đổi tiệm là một thao tác trên phiên chứ không phải một tham số gửi kèm từng request (BR-AUTH-025).
 
 | Nơi | Hiện trạng |
 |---|---|
-| `TenantAdminAccount.tenantIds: string[]` + `tenantCount` — [src/types.ts:170](src/types.ts#L170) | Hỗ trợ nhiều tenant ✅ |
-| Màn hình gán tiệm "Tiệm đang quản lí" — [TenantAdminManagement.tsx:410](src/components/TenantAdminManagement.tsx#L410) | Cho phép gán nhiều tenant cho một admin ✅ |
-| `app_users.tenant_id TEXT` — [db/schema.ts:41](db/schema.ts#L41) | **Chỉ chứa được một tenant** ❌ |
+| `TenantAdminAccount.tenantIds: string[]` + `tenantCount` — [src/types.ts:170](src/types.ts#L170) | Hỗ trợ nhiều tiệm ✅ |
+| Màn hình gán tiệm "Tiệm đang quản lí" — [TenantAdminManagement.tsx:410](src/components/TenantAdminManagement.tsx#L410) | Cho phép gán nhiều tiệm cho một admin ✅ |
+| Bảng `UserTenants` + `AppSessions.ActiveTenantId` trong solution `NailManagement` | Hỗ trợ nhiều tiệm, có màn chọn tiệm ✅ |
+| `app_users.tenant_id TEXT` — [db/schema.ts:41](db/schema.ts#L41) | Chỉ chứa được một tiệm — nhưng đây là schema của bản Cloudflare Worker **đã bị thay thế**, giữ làm lịch sử |
+
+**Đoạn mô tả bên dưới nói về bản Worker cũ, không còn là hiện trạng.** Giữ lại vì phần phân tích frontend quanh nó vẫn đúng.
 
 **Hệ quả đang là lỗi thật trong code:** khi đồng bộ tài khoản đăng nhập, [App.tsx:660](src/App.tsx#L660) chỉ gửi `admin.tenantIds[0]` lên backend — các tenant còn lại bị rơi mất. Và vì `sites-worker.js` lọc dữ liệu bằng `tenant_id = session.tenantId`, một admin được gán 3 tiệm khi đăng nhập **chỉ thấy được tiệm đầu tiên**.
 
