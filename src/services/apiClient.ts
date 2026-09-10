@@ -62,11 +62,14 @@ export interface ApiError {
 /**
  * Kết quả của một lời gọi API.
  *
- * Khóa phân biệt là chuỗi `status` chứ không phải cờ `ok: boolean` — và đó là
- * một ràng buộc kỹ thuật, không phải sở thích: `tsconfig.json` của dự án không
- * bật `strictNullChecks`, và ở chế độ đó TypeScript **không thu hẹp được kiểu**
- * theo khóa phân biệt kiểu boolean. Viết `if (!result.ok)` rồi đọc `result.error`
- * sẽ báo lỗi "Property 'error' does not exist". Với chuỗi thì thu hẹp chạy đúng.
+ * Khóa phân biệt là chuỗi `status` chứ không phải cờ `ok: boolean`. Ban đầu đó
+ * là một ràng buộc kỹ thuật: dự án chưa bật `strictNullChecks`, và ở chế độ đó
+ * TypeScript không thu hẹp được kiểu theo khóa phân biệt kiểu boolean — viết
+ * `if (!result.ok)` rồi đọc `result.error` sẽ báo "Property 'error' does not exist".
+ *
+ * Ngày 26 đã bật cờ ấy, nên ràng buộc không còn. Vẫn giữ khóa dạng chuỗi vì nó
+ * đọc rõ hơn ở chỗ gọi và vì đổi đi là sửa hàng trăm điểm gọi mà không mua lại
+ * được gì cho người dùng.
  */
 export type ApiResult<T> =
   | { status: 'ok'; data: T }

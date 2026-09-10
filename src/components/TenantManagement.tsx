@@ -468,7 +468,7 @@ export default function TenantManagement({
        trên màn hình, còn mã định danh là thứ xuất hiện trong URL, log và thông báo lỗi. */
     const matchesSearch = !effectiveSearch
       || tenant.name.toLowerCase().includes(effectiveSearch)
-      || tenant.code.toLowerCase().includes(effectiveSearch)
+      || (tenant.code || '').toLowerCase().includes(effectiveSearch)
       || tenant.id.toLowerCase().includes(effectiveSearch)
       || tenant.adminEmail.toLowerCase().includes(effectiveSearch)
       || tenant.adminName.toLowerCase().includes(effectiveSearch);

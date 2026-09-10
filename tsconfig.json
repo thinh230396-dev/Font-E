@@ -14,6 +14,18 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
+
+    /*
+      Bật từ ngày 26. DTO của frontend là những kiểu VIẾT TAY để khớp với backend, nên chỗ dễ
+      lệch nhất giữa hai bên là một trường có thể vắng mặt — mà đó đúng là thứ cờ này bắt.
+
+      Chi phí thật hóa ra rất nhỏ: 116 file, đúng một lỗi. Mã ngắn của tiệm khai là tùy chọn
+      nhưng ô tìm kiếm đọc thẳng, nên một tiệm chưa đặt mã sẽ làm hỏng cả bộ lọc.
+
+      `strict` đầy đủ còn 20 lỗi nữa, phần lớn là tham số thiếu kiểu trong hàm callback. Để
+      sau MVP: chúng là lỗi hình thức, không phải lỗi có thể làm sai một con số nào.
+    */
+    "strictNullChecks": true,
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
