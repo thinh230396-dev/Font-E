@@ -300,9 +300,18 @@ export default function App() {
 
     Cố ý KHÔNG còn ghi xuống `localStorage`: giữ lại thì lần tải sau sẽ đọc bản chụp cũ đè lên
     dữ liệu máy chủ, và con số bịa quay lại theo đúng con đường vừa đi chặn.
+
+    Từ ngày 24 chủ tiệm cũng đọc thật, không riêng Superadmin: máy chủ đã thu hẹp phạm vi theo
+    vai trò nên mỗi bên chỉ nhận phần của mình (BR-INV-032). Trước đó hook chỉ bật cho
+    Superadmin, và màn "Lịch sử hóa đơn" của chủ tiệm vì thế luôn rỗng.
+
+    Chủ tiệm phải chọn tiệm xong mới gọi: chưa chọn thì máy chủ trả TENANT_NOT_SELECTED, và một
+    lời gọi chắc chắn hỏng ngay lúc dựng màn không đáng để gửi đi.
   */
   const subscriptionInvoiceBook = useSubscriptionInvoices(
     session?.account.role === 'SUPERADMIN'
+      || (session?.account.role === 'TENANT_ADMIN' && Boolean(session?.activeTenantId)),
+    session?.activeTenantId || null
   );
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);

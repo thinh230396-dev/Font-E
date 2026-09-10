@@ -1,8 +1,11 @@
 /**
  * Sổ hóa đơn đăng ký của toàn hệ thống — nguồn của **doanh thu nền tảng** (BR-REV-008).
  *
- * Chỉ Superadmin gọi được. Là hook chỉ đọc thứ hai của dự án, sau `useRevenueReport`, và cùng
- * lý do: lát cắt gói đăng ký đã bị cắt khỏi MVP nên không có thao tác ghi nào để bày ra.
+ * Phạm vi do máy chủ quyết theo vai trò: Superadmin nhận hóa đơn của mọi tiệm, chủ tiệm chỉ
+ * nhận hóa đơn của tiệm đang làm việc (BR-INV-032). Hook không tự lọc gì thêm.
+ *
+ * Là hook chỉ đọc thứ hai của dự án, sau `useRevenueReport`, và cùng lý do: lát cắt gói đăng ký
+ * đã bị cắt khỏi MVP nên không có thao tác ghi nào để bày ra.
  *
  * Trả về đúng hình dạng `Invoice` mà các màn Superadmin đang dùng, thay vì DTO thô. Cả ba màn
  * — Tổng quan, Thanh toán & hóa đơn, và ngăn chi tiết tiệm — đọc chung một mảng ấy ở hàng chục
@@ -59,7 +62,15 @@ export interface SubscriptionInvoiceBook {
   reload: () => void;
 }
 
-export default function useSubscriptionInvoices(enabled: boolean): SubscriptionInvoiceBook {
+/**
+ * `scopeKey` là mã tiệm đang làm việc, và nó KHÔNG chặn phép gọi như ở các hook khác — nó chỉ
+ * nằm trong danh sách phụ thuộc để đổi tiệm thì nạp lại. Superadmin không thuộc tiệm nào
+ * (BR-AUTH-031) nên với họ giá trị này luôn rỗng, mà họ vẫn phải đọc được cả sổ.
+ */
+export default function useSubscriptionInvoices(
+  enabled: boolean,
+  scopeKey: string | null
+): SubscriptionInvoiceBook {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<ApiError | null>(null);
@@ -98,7 +109,7 @@ export default function useSubscriptionInvoices(enabled: boolean): SubscriptionI
     return () => {
       active = false;
     };
-  }, [enabled, reloadToken]);
+  }, [enabled, scopeKey, reloadToken]);
 
   return { invoices, loading, error, reload };
 }
