@@ -1,13 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Activity,
-  AlertCircle,
   AlertOctagon,
   AlertTriangle,
   Bell,
   BadgeCheck,
   CalendarCheck2,
-  CalendarClock,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -28,18 +26,14 @@ import {
   PanelLeftOpen,
   Scissors,
   Search,
-  ShieldCheck,
   Store,
   Sun,
   Tag,
-  Trash2,
   UserCheck,
   UserRound,
   Users,
-  WalletCards,
   Wand2,
   X,
-  Zap,
 } from 'lucide-react';
 import type { DemoAccount } from '../auth/demoAccounts';
 import { resetTenantMockStorage } from '../utils/mockDataReset';
@@ -116,7 +110,8 @@ import type {
   SplitPaymentEntry,
   TechnicianEditForm,
   TechnicianShift,
-  TechnicianStatus
+  TechnicianStatus,
+  WalkInForm
 } from '../features/reception/types';
 const TenantAdminAppointments = lazy(() => import('./TenantAdminAppointments'));
 const TenantAdminCustomers = lazy(() => import('./TenantAdminCustomers'));
@@ -128,6 +123,11 @@ const DeskScreen = lazy(() => import('../features/reception/screens/DeskScreen')
 const ArtCustomizerDialog = lazy(() => import('../features/reception/dialogs/ArtCustomizerDialog'));
 const PaymentConfirmDialog = lazy(() => import('../features/reception/dialogs/PaymentConfirmDialog'));
 const InvoiceDialog = lazy(() => import('../features/reception/dialogs/InvoiceDialog'));
+const WalkInDialog = lazy(() => import('../features/reception/dialogs/WalkInDialog'));
+const QuickWalkInDialog = lazy(() => import('../features/reception/dialogs/QuickWalkInDialog'));
+const AppointmentEditDialog = lazy(() => import('../features/reception/dialogs/AppointmentEditDialog'));
+const CancelAppointmentDialog = lazy(() => import('../features/reception/dialogs/CancelAppointmentDialog'));
+const ShiftDialog = lazy(() => import('../features/reception/dialogs/ShiftDialog'));
 
 
 
@@ -537,7 +537,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [formError, setFormError] = useState('');
   const [walkInErrors, setWalkInErrors] = useState<Record<string, string>>({});
   const [appointmentEditErrors, setAppointmentEditErrors] = useState<Record<string, string>>({});
-  const [walkIn, setWalkIn] = useState({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [] as string[], specialTags: [] as string[], designName: '', designLevel: 0, designSurcharge: 0 });
+  const [walkIn, setWalkIn] = useState<WalkInForm>({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [] as string[], specialTags: [] as string[], designName: '', designLevel: 0, designSurcharge: 0 });
 
   useEffect(() => {
     const firstName = serviceCatalog[0]?.name;
@@ -2298,454 +2298,68 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       {toast && <div role="status" className="fixed bottom-5 right-5 z-[120] flex max-w-sm items-center gap-3 rounded-2xl border border-brand-secondary bg-brand-secondary px-4 py-3 text-xs font-bold text-white shadow-2xl"><CheckCircle2 className="h-5 w-5 shrink-0 text-brand-secondary" />{toast}</div>}
 
       {deletingAppointment && (
-        <Modal
-          open
-          size="medium"
-          icon={<Trash2 />}
-          title="Xác nhận hủy lịch tạo nhầm"
-          description="Lịch không bị xóa mất dấu vết. Hệ thống sẽ chuyển sang trạng thái Đã hủy và lưu lý do để đối soát."
-          onClose={() => { setDeletingAppointment(null); setDeleteReason('Tạo nhầm lịch'); setFormError(''); }}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => { setDeletingAppointment(null); setDeleteReason('Tạo nhầm lịch'); setFormError(''); }}>
-                Giữ lại lịch
-              </Button>
-              <Button type="submit" form="reception-delete-appointment" variant="danger" iconLeading={<Trash2 />}>
-                Xác nhận hủy
-              </Button>
-            </>
-          }
-        >
-          <form id="reception-delete-appointment" onSubmit={submitDeleteAppointment} noValidate className="space-y-4">
-            <div className="p-4 ui-tone ui-tone--danger">
-              <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-brand-surface text-brand-error">
-                  <Trash2 className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-black text-brand-text">{deletingAppointment.customer}</p>
-                  <p className="mt-1 text-xs font-semibold text-brand-text-muted">
-                    {deletingAppointment.start} · {deletingAppointment.service} · {deletingAppointment.phone}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <StatusBadge status={deletingAppointment.status} label={appointmentStatusLabel[deletingAppointment.status]} size="small" />
-                    <span className="rounded-full bg-brand-surface px-2.5 py-1 text-caption font-black text-brand-text-muted ring-1 ring-brand-outline">
-                      {deletingAppointment.staff}
-                    </span>
-                    <span className="rounded-full bg-brand-surface px-2.5 py-1 text-caption font-black text-brand-text-muted ring-1 ring-brand-outline">
-                      {money(deletingAppointment.price)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 rounded-2xl border border-brand-outline bg-brand-surface-high/35 p-3 text-body font-bold leading-5 text-brand-text-muted sm:grid-cols-2">
-              <p className="rounded-xl bg-brand-surface px-3 py-2">✓ Chỉ cho hủy lịch chưa bắt đầu dịch vụ</p>
-              <p className="rounded-xl bg-brand-surface px-3 py-2">✓ Không cho hủy lịch đã thanh toán</p>
-              <p className="rounded-xl bg-brand-surface px-3 py-2">✓ Không cho hủy lịch đã có cọc</p>
-              <p className="rounded-xl bg-brand-surface px-3 py-2">✓ Lưu người thao tác và thời gian</p>
-            </div>
-
-            <Field
-              label="Lý do hủy/xóa khỏi quầy"
-              required
-              error={formError || undefined}
-              helper="Lý do được lưu kèm người thao tác để đối soát."
-            >
-              <textarea
-                value={deleteReason}
-                onChange={(event) => setDeleteReason(event.target.value)}
-                className="min-h-24 resize-none py-3"
-                placeholder="Ví dụ: Tạo nhầm lịch, khách đặt trùng, nhập sai số điện thoại..."
-              />
-            </Field>
-          </form>
-        </Modal>
+        <CancelAppointmentDialog
+          deletingAppointment={deletingAppointment}
+          setDeletingAppointment={setDeletingAppointment}
+          deleteReason={deleteReason}
+          setDeleteReason={setDeleteReason}
+          formError={formError}
+          setFormError={setFormError}
+          submitDeleteAppointment={submitDeleteAppointment}
+        />
       )}
-
       {walkInOpen && (
-        <Modal
-          open
-          size="large"
-          icon={<UserCheck />}
-          title="Tiếp nhận khách vãng lai"
-          description="Tạo lượt phục vụ tại quầy và đưa khách vào hàng chờ ngay lập tức."
-          onClose={() => { setWalkInOpen(false); setFormError(''); setWalkInErrors({}); }}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => { setWalkInOpen(false); setFormError(''); setWalkInErrors({}); }}>Hủy</Button>
-              <Button type="submit" form="reception-walkin" variant="primary" iconLeading={<UserCheck />}>Tạo &amp; check-in</Button>
-            </>
-          }
-        >
-          <form id="reception-walkin" onSubmit={submitWalkIn} noValidate className="space-y-5">
-            <div className="flex items-start gap-3 rounded-2xl border border-brand-tertiary/25 bg-brand-tertiary/10 p-3 text-body font-bold leading-5 text-brand-tertiary">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              Giờ mở cửa salon: 08:00 – 20:30 (Khung giờ tiếp nhận khách: 08:00 – 20:00). Hệ thống kiểm tra trùng KTV, ca làm việc, giờ đóng cửa và ghế phục vụ.
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Tên khách hàng *" error={walkInErrors.customer}>
-                <input
-                  value={walkIn.customer}
-                  onChange={(event) => {
-                    setWalkIn({ ...walkIn, customer: event.target.value });
-                    if (walkInErrors.customer) setWalkInErrors((prev) => ({ ...prev, customer: '' }));
-                  }}
-                  className="reception-input"
-                  placeholder="Nguyễn Minh Anh"
-                  autoFocus
-                />
-              </Field>
-              <Field label="Số điện thoại *" helper="10 số di động VN (09xx, 08xx, 03xx, 07xx, 05xx)" error={walkInErrors.phone}>
-                <input
-                  type="tel"
-                  value={walkIn.phone}
-                  onChange={(event) => {
-                    setWalkIn({ ...walkIn, phone: event.target.value });
-                    if (walkInErrors.phone) setWalkInErrors((prev) => ({ ...prev, phone: '' }));
-                  }}
-                  className="reception-input"
-                  placeholder="0903123456"
-                />
-              </Field>
-              <Field label="Dịch vụ *" error={walkInErrors.service}>
-                <select
-                  value={walkIn.service}
-                  onChange={(event) => {
-                    handleWalkInServiceChange(event.target.value);
-                    if (walkInErrors.service) setWalkInErrors((prev) => ({ ...prev, service: '' }));
-                  }}
-                  className="reception-input"
-                >
-                  {emptyServiceOption}
-                  {serviceCatalog.map((service) => <option key={service.name}>{service.name}</option>)}
-                </select>
-              </Field>
-              <Field label="Kỹ thuật viên *" error={walkInErrors.staff}>
-                <select
-                  value={walkIn.staff}
-                  onChange={(event) => {
-                    setWalkIn({ ...walkIn, staff: event.target.value });
-                    if (walkInErrors.staff) setWalkInErrors((prev) => ({ ...prev, staff: '' }));
-                  }}
-                  className="reception-input"
-                >
-                  <option>Chưa phân công</option>
-                  {assignableTechnicians.map((technician) => <option key={technician.id} value={technician.name}>{technician.name} · {technicianStatusMeta[technician.status].label}</option>)}
-                </select>
-              </Field>
-              <Field label="Ghế / phòng" error={walkInErrors.station}>
-                <select
-                  value={walkIn.station}
-                  onChange={(event) => {
-                    setWalkIn({ ...walkIn, station: event.target.value });
-                    if (walkInErrors.station) setWalkInErrors((prev) => ({ ...prev, station: '' }));
-                  }}
-                  className="reception-input"
-                >
-                  <option value="">Xếp sau khi check-in</option>
-                  {stationsFor(branchCode).map((station) => <option key={station} value={station}>{station}</option>)}
-                </select>
-              </Field>
-              <Field label="Giờ bắt đầu *" helper="Salon mở cửa từ 08:00 đến 20:30" error={walkInErrors.start}>
-                <input
-                  type="time"
-                  min="08:00"
-                  max="20:00"
-                  value={walkIn.start}
-                  onChange={(event) => {
-                    setWalkIn({ ...walkIn, start: event.target.value });
-                    if (walkInErrors.start) setWalkInErrors((prev) => ({ ...prev, start: '' }));
-                  }}
-                  className="reception-input"
-                />
-              </Field>
-              <Field label="Thời lượng *" error={walkInErrors.duration}>
-                <select
-                  value={walkIn.duration}
-                  onChange={(event) => {
-                    setWalkIn({ ...walkIn, duration: event.target.value });
-                    if (walkInErrors.duration) setWalkInErrors((prev) => ({ ...prev, duration: '' }));
-                  }}
-                  className="reception-input"
-                >
-                  {[30, 40, 45, 60, 75, 90, 120].map((duration) => <option key={duration} value={duration}>{duration} phút</option>)}
-                </select>
-              </Field>
-              <Field label="Giá dự kiến *" error={walkInErrors.price}>
-                <input
-                  type="number"
-                  min="1000"
-                  step="1000"
-                  value={walkIn.price}
-                  onChange={(event) => {
-                    setWalkIn({ ...walkIn, price: event.target.value });
-                    if (walkInErrors.price) setWalkInErrors((prev) => ({ ...prev, price: '' }));
-                  }}
-                  className="reception-input"
-                />
-              </Field>
-            </div>
-            <Field label="Ghi chú phục vụ">
-              <textarea value={walkIn.note} onChange={(event) => setWalkIn({ ...walkIn, note: event.target.value })} className="reception-input min-h-20 resize-none" placeholder="Dị ứng, sở thích hoặc yêu cầu đặc biệt..." />
-            </Field>
-            {formError && <p role="alert" className="p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger">{formError}</p>}
-          </form>
-        </Modal>
+        <WalkInDialog
+          walkIn={walkIn}
+          setWalkIn={setWalkIn}
+          walkInErrors={walkInErrors}
+          setWalkInErrors={setWalkInErrors}
+          setWalkInOpen={setWalkInOpen}
+          serviceCatalog={serviceCatalog}
+          emptyServiceOption={emptyServiceOption}
+          assignableTechnicians={assignableTechnicians}
+          branchCode={branchCode}
+          handleWalkInServiceChange={handleWalkInServiceChange}
+          formError={formError}
+          setFormError={setFormError}
+          submitWalkIn={submitWalkIn}
+        />
       )}
 
       {/* ⚡ Chế độ Walk-in cấp tốc (1-Click Walk-in 5 giây) */}
       {quickWalkInOpen && (
-        <Modal
-          open
-          size="medium"
-          icon={<Zap className="text-amber-500" />}
-          title="⚡ Walk-in Cấp tốc (5 Giây)"
-          description="Nhận khách vãng lai tức thì không bắt buộc nhập tên hay SĐT nếu khách đang vội."
-          onClose={() => { setQuickWalkInOpen(false); setFormError(''); }}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => { setQuickWalkInOpen(false); setFormError(''); }}>Hủy</Button>
-              <Button
-                type="button"
-                onClick={() => submitQuickWalkIn('START_NOW')}
-                variant="primary"
-                iconLeading={<Zap className="h-4 w-4" />}
-                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black shadow-md shadow-amber-500/25 cursor-pointer"
-              >
-                Nhận khách ngay (5s)
-              </Button>
-            </>
-          }
-        >
-          <div className="space-y-4">
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs font-semibold text-amber-800 dark:text-amber-300">
-              ⚡ Hệ thống tự động gán mã định danh, giờ bắt đầu và đưa khách trực tiếp vào trạng thái <strong>Đang làm dịch vụ</strong> mà không gián đoạn luồng phục vụ.
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Dịch vụ cơ bản *">
-                <select
-                  value={quickWalkInForm.service}
-                  onChange={(e) => {
-                    const foundService = serviceCatalog.find((s) => s.name === e.target.value);
-                    setQuickWalkInForm({
-                      ...quickWalkInForm,
-                      service: e.target.value,
-                      price: foundService ? String(foundService.price) : quickWalkInForm.price,
-                      duration: foundService?.duration ? String(foundService.duration) : quickWalkInForm.duration,
-                    });
-                  }}
-                  className="reception-input font-bold"
-                >
-                  {emptyServiceOption}
-                  {serviceCatalog.map((s) => (
-                    <option key={s.name} value={s.name}>
-                      {s.name} · {money(s.price)} ({s.duration}p)
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Chọn ghế trống *">
-                <select
-                  value={quickWalkInForm.station}
-                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, station: e.target.value })}
-                  className="reception-input font-bold"
-                >
-                  <option value="">-- Chọn ghế salon --</option>
-                  {stationsFor(branchCode).map((st) => (
-                    <option key={st} value={st}>
-                      💺 {st}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Chỉ định KTV (Tùy chọn)">
-                <select
-                  value={quickWalkInForm.staff}
-                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, staff: e.target.value })}
-                  className="reception-input"
-                >
-                  <option value="Chưa phân công">Chưa phân công (Chọn sau)</option>
-                  {assignableTechnicians.map((tech) => (
-                    <option key={tech.id} value={tech.name}>
-                      {tech.name} ({technicianStatusMeta[tech.status].label})
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Tên khách (Để trống = Khách Vãng Lai)">
-                <input
-                  type="text"
-                  value={quickWalkInForm.customer}
-                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, customer: e.target.value })}
-                  placeholder="Khách Vãng Lai..."
-                  className="reception-input"
-                />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Số điện thoại (Không bắt buộc)">
-                <input
-                  type="tel"
-                  value={quickWalkInForm.phone}
-                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, phone: e.target.value })}
-                  placeholder="09xx..."
-                  className="reception-input"
-                />
-              </Field>
-
-              <Field label="Lưu ý / Dị ứng nhanh">
-                <input
-                  type="text"
-                  value={quickWalkInForm.note}
-                  onChange={(e) => setQuickWalkInForm({ ...quickWalkInForm, note: e.target.value })}
-                  placeholder="Ví dụ: Da nhạy cảm, móng mỏng, vội..."
-                  className="reception-input"
-                />
-              </Field>
-            </div>
-
-            {formError && <p role="alert" className="p-2.5 text-xs font-bold text-rose-600 bg-rose-500/10 rounded-xl border border-rose-500/20">{formError}</p>}
-          </div>
-        </Modal>
+        <QuickWalkInDialog
+          quickWalkInForm={quickWalkInForm}
+          setQuickWalkInForm={setQuickWalkInForm}
+          setQuickWalkInOpen={setQuickWalkInOpen}
+          serviceCatalog={serviceCatalog}
+          emptyServiceOption={emptyServiceOption}
+          assignableTechnicians={assignableTechnicians}
+          branchCode={branchCode}
+          formError={formError}
+          setFormError={setFormError}
+          submitQuickWalkIn={submitQuickWalkIn}
+        />
       )}
 
       {editingAppointment && (
-        <Modal
-          open
-          size="large"
-          icon={<CalendarClock />}
-          headerAside={<StatusBadge status={editingAppointment.status} label={appointmentStatusLabel[editingAppointment.status]} size="small" />}
-          title={`Điều phối lịch ${editingAppointment.start}`}
-          description={`${editingAppointment.customer} · ${branchName}`}
-          onClose={() => { setEditingAppointment(null); setFormError(''); setAppointmentEditErrors({}); }}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => { setEditingAppointment(null); setFormError(''); setAppointmentEditErrors({}); }}>Hủy</Button>
-              <Button type="submit" form="reception-edit-appointment" variant="primary" iconLeading={<Check />}>Lưu điều phối</Button>
-            </>
-          }
-        >
-          <form id="reception-edit-appointment" onSubmit={submitAppointmentEdit} noValidate className="space-y-5">
-            <div className="flex items-start gap-3 rounded-2xl border border-brand-secondary/25 bg-brand-secondary/10 p-3 text-body font-bold leading-5 text-brand-secondary">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-              Giờ mở cửa salon: 08:00 – 20:30. Chỉ kỹ thuật viên đang làm việc, trong ca trực và có đúng chuyên môn mới được phân công.
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Tên khách hàng *" error={appointmentEditErrors.customer}>
-                <input
-                  value={appointmentEditForm.customer}
-                  onChange={(event) => {
-                    setAppointmentEditForm({ ...appointmentEditForm, customer: event.target.value });
-                    if (appointmentEditErrors.customer) setAppointmentEditErrors((prev) => ({ ...prev, customer: '' }));
-                  }}
-                  className="reception-input"
-                  autoFocus
-                />
-              </Field>
-              <Field label="Số điện thoại *" helper="10 số di động VN (09xx, 08xx, 03xx, 07xx, 05xx)" error={appointmentEditErrors.phone}>
-                <input
-                  type="tel"
-                  value={appointmentEditForm.phone}
-                  onChange={(event) => {
-                    setAppointmentEditForm({ ...appointmentEditForm, phone: event.target.value });
-                    if (appointmentEditErrors.phone) setAppointmentEditErrors((prev) => ({ ...prev, phone: '' }));
-                  }}
-                  className="reception-input"
-                />
-              </Field>
-              <Field label="Dịch vụ *" error={appointmentEditErrors.service}>
-                <select
-                  value={appointmentEditForm.service}
-                  onChange={(event) => {
-                    handleAppointmentEditServiceChange(event.target.value);
-                    if (appointmentEditErrors.service) setAppointmentEditErrors((prev) => ({ ...prev, service: '' }));
-                  }}
-                  className="reception-input"
-                >
-                  {emptyServiceOption}
-                  {serviceCatalog.map((service) => <option key={service.name}>{service.name}</option>)}
-                </select>
-              </Field>
-              <Field label="Kỹ thuật viên *" error={appointmentEditErrors.staff}>
-                <select
-                  value={appointmentEditForm.staff}
-                  onChange={(event) => {
-                    setAppointmentEditForm({ ...appointmentEditForm, staff: event.target.value });
-                    if (appointmentEditErrors.staff) setAppointmentEditErrors((prev) => ({ ...prev, staff: '' }));
-                  }}
-                  className="reception-input"
-                >
-                  <option>Chưa phân công</option>
-                  {assignableTechnicians.map((technician) => <option key={technician.id} value={technician.name}>{technician.name} · {technicianStatusMeta[technician.status].label}</option>)}
-                </select>
-              </Field>
-              <Field label="Ghế / phòng" error={appointmentEditErrors.station}>
-                <select
-                  value={appointmentEditForm.station}
-                  onChange={(event) => {
-                    setAppointmentEditForm({ ...appointmentEditForm, station: event.target.value });
-                    if (appointmentEditErrors.station) setAppointmentEditErrors((prev) => ({ ...prev, station: '' }));
-                  }}
-                  className="reception-input"
-                >
-                  <option value="">Chưa xếp ghế</option>
-                  {stationsFor(branchCode).map((station) => <option key={station} value={station}>{station}</option>)}
-                </select>
-              </Field>
-              <Field label="Giờ bắt đầu *" helper="Salon mở cửa từ 08:00 đến 20:30" error={appointmentEditErrors.start}>
-                <input
-                  type="time"
-                  min="08:00"
-                  max="20:00"
-                  value={appointmentEditForm.start}
-                  onChange={(event) => {
-                    setAppointmentEditForm({ ...appointmentEditForm, start: event.target.value });
-                    if (appointmentEditErrors.start) setAppointmentEditErrors((prev) => ({ ...prev, start: '' }));
-                  }}
-                  className="reception-input"
-                />
-              </Field>
-              <Field label="Thời lượng *" error={appointmentEditErrors.duration}>
-                <select
-                  value={appointmentEditForm.duration}
-                  onChange={(event) => {
-                    setAppointmentEditForm({ ...appointmentEditForm, duration: event.target.value });
-                    if (appointmentEditErrors.duration) setAppointmentEditErrors((prev) => ({ ...prev, duration: '' }));
-                  }}
-                  className="reception-input"
-                >
-                  {[30, 40, 45, 60, 75, 90, 120].map((duration) => <option key={duration} value={duration}>{duration} phút</option>)}
-                </select>
-              </Field>
-              <Field label="Giá dự kiến *" error={appointmentEditErrors.price}>
-                <input
-                  type="number"
-                  min="1000"
-                  step="1000"
-                  value={appointmentEditForm.price}
-                  onChange={(event) => {
-                    setAppointmentEditForm({ ...appointmentEditForm, price: event.target.value });
-                    if (appointmentEditErrors.price) setAppointmentEditErrors((prev) => ({ ...prev, price: '' }));
-                  }}
-                  className="reception-input"
-                />
-              </Field>
-            </div>
-            <Field label="Ghi chú phục vụ">
-              <textarea value={appointmentEditForm.note} onChange={(event) => setAppointmentEditForm({ ...appointmentEditForm, note: event.target.value })} className="reception-input min-h-20 resize-none" placeholder="Yêu cầu của khách, dị ứng, mẫu tham khảo..." />
-            </Field>
-            {formError && <p role="alert" className="p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger">{formError}</p>}
-          </form>
-        </Modal>
+        <AppointmentEditDialog
+          editingAppointment={editingAppointment}
+          setEditingAppointment={setEditingAppointment}
+          appointmentEditForm={appointmentEditForm}
+          setAppointmentEditForm={setAppointmentEditForm}
+          appointmentEditErrors={appointmentEditErrors}
+          setAppointmentEditErrors={setAppointmentEditErrors}
+          serviceCatalog={serviceCatalog}
+          emptyServiceOption={emptyServiceOption}
+          assignableTechnicians={assignableTechnicians}
+          branchCode={branchCode}
+          branchName={branchName}
+          handleAppointmentEditServiceChange={handleAppointmentEditServiceChange}
+          formError={formError}
+          setFormError={setFormError}
+          submitAppointmentEdit={submitAppointmentEdit}
+        />
       )}
 
       {paymentAppointment && (
@@ -2890,64 +2504,20 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       </Modal>}
 
       {shiftModal && (
-        <Modal
-          open
-          size="medium"
-          icon={<WalletCards />}
-          title={shiftModal === 'OPEN' ? 'Mở ca lễ tân' : 'Đối soát & chốt ca'}
-          description={shiftModal === 'OPEN' ? 'Ghi nhận quỹ tiền mặt trước khi bắt đầu vận hành.' : 'Kiểm tra khách đang phục vụ, doanh thu tiền mặt và số quỹ thực tế.'}
-          onClose={() => { setShiftModal(null); setFormError(''); }}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => { setShiftModal(null); setFormError(''); }}>Hủy</Button>
-              <Button
-                type="submit"
-                form="reception-shift"
-                variant="primary"
-                disabled={shiftModal === 'CLOSE' && activeAppointments.length > 0}
-              >
-                {shiftModal === 'OPEN' ? 'Xác nhận mở ca' : 'Xác nhận chốt ca'}
-              </Button>
-            </>
-          }
-        >
-          <form id="reception-shift" onSubmit={submitShift} noValidate className="space-y-4">
-            {shiftModal === 'CLOSE' && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-brand-surface-high/60 p-3">
-                    <p className="text-caption font-black uppercase tracking-wide text-brand-text-muted">Quỹ đầu ca</p>
-                    <p className="mt-2 text-sm font-black text-brand-text">{money(shift.openingCash)}</p>
-                  </div>
-                  <div className="rounded-2xl bg-brand-secondary/10 p-3 ring-1 ring-brand-secondary/18">
-                    <p className="text-caption font-black uppercase tracking-wide text-brand-secondary">Thu tiền mặt</p>
-                    <p className="mt-2 text-sm font-black text-brand-secondary">+ {money(cashCollectedToday)}</p>
-                  </div>
-                  <div className="col-span-2 flex items-center justify-between rounded-2xl bg-brand-text p-4 text-white">
-                    <span className="text-body font-bold text-brand-text-muted">Quỹ hệ thống dự kiến</span>
-                    <strong className="text-lg font-black">{money(expectedClosingCash)}</strong>
-                  </div>
-                </div>
-                {activeAppointments.length > 0 && (
-                  <div className="flex items-start gap-2 rounded-xl border border-brand-error bg-brand-error/10 p-3 text-body font-bold leading-5 text-brand-error">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    Còn {activeAppointments.length} khách đang chờ hoặc đang phục vụ. Chưa thể chốt ca.
-                  </div>
-                )}
-              </>
-            )}
-            <Field label={shiftModal === 'OPEN' ? 'Tiền quỹ đầu ca' : 'Tiền mặt đếm thực tế cuối ca'}>
-              <input type="number" min="0" step="1000" value={cashAmount} onChange={(event) => setCashAmount(event.target.value)} className="reception-input" autoFocus />
-            </Field>
-            {shiftModal === 'CLOSE' && (
-              <div className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-body font-black ${closingCashDifference === 0 ? 'bg-brand-secondary/10 text-brand-secondary' : 'bg-brand-tertiary/10 text-brand-tertiary'}`}>
-                <span>Chênh lệch quỹ</span>
-                <strong>{closingCashDifference === 0 ? 'Khớp hệ thống' : `${closingCashDifference > 0 ? 'Thừa' : 'Thiếu'} ${money(Math.abs(closingCashDifference))}`}</strong>
-              </div>
-            )}
-            {formError && <p role="alert" className="p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger">{formError}</p>}
-          </form>
-        </Modal>
+        <ShiftDialog
+          shiftModal={shiftModal}
+          setShiftModal={setShiftModal}
+          shift={shift}
+          cashAmount={cashAmount}
+          setCashAmount={setCashAmount}
+          cashCollectedToday={cashCollectedToday}
+          expectedClosingCash={expectedClosingCash}
+          closingCashDifference={closingCashDifference}
+          activeAppointments={activeAppointments}
+          formError={formError}
+          setFormError={setFormError}
+          submitShift={submitShift}
+        />
       )}
     </div>
   );

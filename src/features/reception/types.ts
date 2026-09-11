@@ -288,3 +288,12 @@ export interface PaymentForm {
   reference: string;
   note: string;
 }
+
+/**
+ * Biểu mẫu tiếp nhận khách vãng lai.
+ *
+ * Cùng hình dạng với biểu mẫu sửa lịch hẹn, và đó không phải trùng hợp: cả hai đều mô tả **một
+ * lượt hẹn do người ở quầy gõ tay**, chỉ khác lúc nào thì gõ. Khai bằng bí danh thay vì chép lại
+ * mười bốn trường — chép lại là mở đường cho hai bản lệch nhau sau vài lần sửa.
+ */
+export type WalkInForm = AppointmentEditForm;
