@@ -3985,7 +3985,7 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
       <ReceptionistTechnicians
         technicians={technicians}
         appointments={appointments}
-        selectedBranch={branchCode}
+        branchScopeId={branchScopeId}
         branchName={branchName}
         roleLabel={`Receptionist · ${account.displayName}`}
         onAssignStaff={(appointmentId, technicianName) => {

@@ -29,7 +29,14 @@ import BeautifulSelect from './BeautifulSelect';
 import { PageHeader, Pagination } from './ui';
 
 /** Mã chi nhánh do chủ tiệm tự đặt nên tập giá trị là mở — mở kiểu ở ngày 14, cùng lúc với cổng lễ tân. */
-type BranchCode = string;
+/**
+ * Mã định danh chi nhánh do máy chủ cấp — dạng `BRN-LUMIERE-Q3`, KHÔNG phải mã ngắn `Q3`.
+ *
+ * Tên cũ của kiểu này là `BranchCode`, và chính cái tên ấy là nguồn gốc lỗi ngày 03/09: màn này
+ * nhận mã ngắn từ cổng lễ tân rồi đem so với `branch` của kỹ thuật viên — vốn là id — nên danh
+ * sách luôn rỗng dù tiệm có người. Đổi tên để lần sau ai đọc cũng thấy ngay hai thứ đó khác nhau.
+ */
+type BranchId = string;
 type TechnicianStatus =
   | 'PRESENT'
   | 'NOT_CHECKED_IN'
@@ -60,7 +67,7 @@ interface Technician {
   shift: TechnicianShift;
   shiftLabel: string;
   status: TechnicianStatus;
-  branch: BranchCode;
+  branch: BranchId;
   checkIn?: string;
   checkOut?: string;
   leaveNote?: string;
@@ -78,7 +85,7 @@ interface Appointment {
   service: string;
   services?: string[];
   staff: string;
-  branch: BranchCode;
+  branch: BranchId;
   source: AppointmentSource;
   status: AppointmentStatus;
   price: number;
@@ -94,7 +101,13 @@ interface Appointment {
 interface ReceptionistTechniciansProps {
   technicians: Technician[];
   appointments: Appointment[];
-  selectedBranch: BranchCode;
+  /**
+   * Chi nhánh đang thu hẹp phạm vi, theo **id** chứ không phải mã ngắn (BR-ISO-004).
+   *
+   * Rỗng nghĩa là không thu hẹp — hiện mọi chi nhánh của tiệm. Lễ tân luôn có id này từ hồ sơ
+   * nhân viên của họ, nên trên thực tế nhánh rỗng chỉ xảy ra khi dữ liệu thiếu.
+   */
+  branchScopeId: string | null;
   branchName: string;
   roleLabel?: string;
   /**
@@ -371,7 +384,7 @@ const profileFor = (technician: Technician) => profiles[technician.name] || {
 export default function ReceptionistTechnicians({
   technicians,
   appointments,
-  selectedBranch,
+  branchScopeId,
   branchName,
   roleLabel = 'Receptionist',
   onAttendanceChange,
@@ -391,7 +404,7 @@ export default function ReceptionistTechnicians({
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [query, statusFilter, shiftFilter, skillFilter, selectedBranch]);
+  }, [query, statusFilter, shiftFilter, skillFilter, branchScopeId]);
   const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null);
   const [assigningAppointment, setAssigningAppointment] = useState<Appointment | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState('');
@@ -406,16 +419,16 @@ export default function ReceptionistTechnicians({
   const todayAppointments = useMemo(
     () =>
       appointments
-        .filter((appointment) => appointment.branch === selectedBranch)
+        .filter((appointment) => !branchScopeId || appointment.branch === branchScopeId)
         .filter((appointment) => appointment.date === getToday())
         .filter((appointment) => !['CANCELLED', 'NO_SHOW'].includes(appointment.status))
         .sort((first, second) => first.start.localeCompare(second.start)),
-    [appointments, selectedBranch],
+    [appointments, branchScopeId],
   );
 
   const branchTechnicians = useMemo(
-    () => technicians.filter((technician) => technician.branch === selectedBranch),
-    [selectedBranch, technicians],
+    () => technicians.filter((technician) => !branchScopeId || technician.branch === branchScopeId),
+    [branchScopeId, technicians],
   );
 
   const skills = useMemo(
