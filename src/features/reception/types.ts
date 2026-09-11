@@ -172,14 +172,6 @@ export interface ReceptionTechnician {
   avatarTone: string;
 }
 
-export interface TechnicianEditForm {
-  status: TechnicianStatus;
-  shift: TechnicianShift;
-  checkIn: string;
-  checkOut: string;
-  leaveNote: string;
-}
-
 export interface AppointmentEditForm {
   customer: string;
   phone: string;

@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AlertTriangle, Check, CheckCircle2, Loader2, UserCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import type { DemoAccount } from '../auth/demoAccounts';
 import { resetTenantMockStorage } from '../utils/mockDataReset';
 import { normalizePhone } from '../utils/phone';
 import { validateAndCalculatePromotion, type LoyaltyProgram } from '../utils/promotionUtils';
 import { serviceSeed, type SalonService } from './TenantAdminServices';
 import { designSeed, colorSeed, type NailDesign, type PolishColor } from './TenantAdminNailGallery';
-import { Button, Field, MockDataNotice, Modal, StatusBadge } from './ui';
+import { MockDataNotice } from './ui';
 import { tenantStorageKey, tenantStorageScope } from '../utils/tenantStorage';
 import useReceptionDesk from '../features/reception/useReceptionDesk';
 import type {
@@ -34,7 +34,6 @@ import {
 import {
   appointmentStatusLabel,
   methodMeta,
-  technicianShiftMeta,
   technicianStatusMeta
 } from '../features/reception/constants';
 import { productCatalog, stationsFor } from '../features/reception/mockSeed';
@@ -74,7 +73,6 @@ import type {
   ReceptionistPortalProps,
   ShiftState,
   SplitPaymentEntry,
-  TechnicianEditForm,
   TechnicianShift,
   TechnicianStatus,
   WalkInForm
@@ -529,8 +527,6 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   const [technicianSpecialtyFilter, setTechnicianSpecialtyFilter] = useState('ALL');
   const [deskQueueFilter, setDeskQueueFilter] = useState<DeskQueueFilter>('ACTION');
   const [deskViewMode, setDeskViewMode] = useState<'QUEUE' | 'STATIONS' | 'STAFF'>('QUEUE');
-  const [editingTechnician, setEditingTechnician] = useState<ReceptionTechnician | null>(null);
-  const [technicianEditForm, setTechnicianEditForm] = useState<TechnicianEditForm>({ status: 'PRESENT', shift: 'FULL_DAY', checkIn: '', checkOut: '', leaveNote: '' });
   const [appointmentEditForm, setAppointmentEditForm] = useState<AppointmentEditForm>({ customer: '', phone: '', service: 'Gel Manicure', staff: 'Chưa phân công', station: '', start: getOperationalDefaultTime(), duration: '60', price: '450000', note: '', allergies: [] as string[], specialTags: [] as string[], designName: '', designLevel: 0, designSurcharge: 0 });
 
   // Modal tùy chỉnh mẫu vẽ & sản phẩm đi kèm cho 1 dòng dịch vụ
@@ -895,59 +891,12 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     setShift({ status: 'OPEN', openedAt: new Date().toISOString(), openingCash: 1500000 });
     setPaymentAppointment(null);
     setEditingAppointment(null);
-    setEditingTechnician(null);
     setInvoiceLines([]);
     setPaymentForm({ method: 'CASH', discount: '0', tip: '0', reference: '', note: '' });
     setSearchQuery('');
     setFormError('');
     resetTenantMockStorage(tenantStorageScope());
     setToast("Đã reset mock data các chức năng còn ở dữ liệu mẫu. Lịch hẹn và hóa đơn giữ nguyên dữ liệu thật.");
-  };
-
-  const openTechnicianEdit = (technician: ReceptionTechnician) => {
-    setEditingTechnician(technician);
-    setTechnicianEditForm({
-      status: technician.status,
-      shift: technician.shift,
-      checkIn: technician.checkIn || '',
-      checkOut: technician.checkOut || '',
-      leaveNote: technician.leaveNote || '',
-    });
-    setFormError('');
-  };
-
-  const submitTechnicianEdit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!editingTechnician) return;
-    setFormError('');
-    const timePattern = /^$|^([01]\d|2[0-3]):[0-5]\d$/;
-    if (!timePattern.test(technicianEditForm.checkIn) || !timePattern.test(technicianEditForm.checkOut)) {
-      setFormError('Giờ check-in/check-out phải theo định dạng HH:mm, ví dụ 08:30.');
-      return;
-    }
-    if (technicianEditForm.checkIn && technicianEditForm.checkOut && technicianEditForm.checkOut < technicianEditForm.checkIn) {
-      setFormError('Giờ check-out không được sớm hơn giờ check-in.');
-      return;
-    }
-    const activeCustomer = branchTodayAppointments.find((appointment) => appointment.staff === editingTechnician.name && appointment.status === 'IN_SERVICE');
-    if (activeCustomer && (['NOT_CHECKED_IN', 'SICK_REPORTED', 'ON_LEAVE'].includes(technicianEditForm.status) || technicianEditForm.checkOut)) {
-      setFormError(`${editingTechnician.name} đang phục vụ ${activeCustomer.customer}. Vui lòng hoàn tất hoặc bàn giao khách trước khi cho nghỉ/check-out.`);
-      return;
-    }
-
-    /*
-      Chỉ ghi phần chấm công. Ca làm việc cố định của nhân viên (`shift`) là hồ sơ nhân sự do
-      chủ tiệm đặt ở màn "Nhân viên" — lễ tân ghi nhận người đó hôm nay có mặt hay không, chứ
-      không đổi ca chính thức của họ.
-    */
-    patchTechnicianAttendance(editingTechnician.id, {
-      status: technicianEditForm.status,
-      checkIn: technicianEditForm.checkIn || undefined,
-      checkOut: technicianEditForm.checkOut || undefined,
-      leaveNote: technicianEditForm.leaveNote.trim() || undefined
-    });
-    setEditingTechnician(null);
-    setToast(`Đã cập nhật trạng thái và thời gian làm việc của ${editingTechnician.name}.`);
   };
 
   const updateAppointmentStatus = async (appointment: ReceptionAppointment, status: AppointmentStatus) => {
@@ -2265,62 +2214,6 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
           executeFinalPayment={executeFinalPayment}
         />
       )}
-
-      {editingTechnician && <Modal
-        open
-        size="medium"
-        icon={<UserCheck />}
-        headerAside={<StatusBadge status={editingTechnician.status} label={technicianStatusMeta[editingTechnician.status].label} size="small" />}
-        title={`Cập nhật ${editingTechnician.name}`}
-        description="Chỉnh trạng thái hôm nay, ca làm, giờ đi làm, giờ nghỉ và ghi chú nghỉ nếu có."
-        onClose={() => { setEditingTechnician(null); setFormError(''); }}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => { setEditingTechnician(null); setFormError(''); }}>Hủy</Button>
-            <Button type="submit" form="reception-technician-edit" variant="primary" iconLeading={<Check />}>Lưu cập nhật</Button>
-          </>
-        }
-      >
-        <form id="reception-technician-edit" onSubmit={submitTechnicianEdit} noValidate className="space-y-4">
-          {formError && <p role="alert" className="p-3 text-body font-bold text-brand-text ui-tone ui-tone--danger">{formError}</p>}
-          <div className="rounded-2xl border border-brand-outline bg-brand-surface-high/35 p-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-card bg-brand-secondary/15 text-body font-black text-brand-secondary">{editingTechnician.initials}</span>
-              <div>
-                <p className="text-sm font-black text-brand-text">{editingTechnician.name}</p>
-                <p className="mt-1 text-body font-bold text-brand-text-muted">{editingTechnician.specialty} · {editingTechnician.branch}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label>
-              <span className="mb-1.5 block text-body font-black text-brand-text-muted">Trạng thái hôm nay</span>
-              <select value={technicianEditForm.status} onChange={(event) => setTechnicianEditForm((current) => ({ ...current, status: event.target.value as TechnicianStatus }))} className="h-11 w-full rounded-xl border border-brand-outline bg-brand-surface-high/50 px-3 text-xs font-bold text-brand-text outline-none focus:border-brand-secondary focus:ring-4 focus:ring-brand-secondary/10">
-                {Object.entries(technicianStatusMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className="mb-1.5 block text-body font-black text-brand-text-muted">Ca làm việc</span>
-              <select value={technicianEditForm.shift} onChange={(event) => setTechnicianEditForm((current) => ({ ...current, shift: event.target.value as TechnicianShift }))} className="h-11 w-full rounded-xl border border-brand-outline bg-brand-surface-high/50 px-3 text-xs font-bold text-brand-text outline-none focus:border-brand-secondary focus:ring-4 focus:ring-brand-secondary/10">
-                {Object.entries(technicianShiftMeta).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className="mb-1.5 block text-body font-black text-brand-text-muted">Giờ đi làm / check-in</span>
-              <input type="time" value={technicianEditForm.checkIn} onChange={(event) => setTechnicianEditForm((current) => ({ ...current, checkIn: event.target.value }))} className="h-11 w-full rounded-xl border border-brand-outline bg-brand-surface-high/50 px-3 text-xs font-black text-brand-text outline-none focus:border-brand-secondary focus:ring-4 focus:ring-brand-secondary/10" />
-            </label>
-            <label>
-              <span className="mb-1.5 block text-body font-black text-brand-text-muted">Giờ nghỉ / check-out</span>
-              <input type="time" value={technicianEditForm.checkOut} onChange={(event) => setTechnicianEditForm((current) => ({ ...current, checkOut: event.target.value }))} className="h-11 w-full rounded-xl border border-brand-outline bg-brand-surface-high/50 px-3 text-xs font-black text-brand-text outline-none focus:border-brand-secondary focus:ring-4 focus:ring-brand-secondary/10" />
-            </label>
-          </div>
-
-          <Field label="Ghi chú nghỉ / đi trễ / bàn giao ca" helper="Không bắt buộc.">
-            <textarea value={technicianEditForm.leaveNote} onChange={(event) => setTechnicianEditForm((current) => ({ ...current, leaveNote: event.target.value }))} placeholder="Ví dụ: báo nghỉ ốm lúc 07:10, nghỉ phép đã duyệt, vào trễ do kẹt xe..." className="min-h-24 resize-y py-3" />
-          </Field>
-        </form>
-      </Modal>}
 
       {shiftModal && (
         <ShiftDialog
