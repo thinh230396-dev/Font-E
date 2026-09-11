@@ -48,7 +48,7 @@ This is a frontend export from Google AI Studio: a multi-tenant nail/beauty salo
 
 ### No router, one state tree
 
-There is no `react-router`. The current screen is plain React state (`activeTab` in `src/App.tsx`), not the URL — the browser Back button and bookmarking do not work as a normal SPA would. `src/App.tsx` (~1,440 lines) still holds most app state as `useState`, with `useEffect` hooks that sync each piece to `localStorage` and run business logic that would normally belong to a backend (auto-expiring subscriptions, auto-generating invoices, writing audit log entries).
+There is no `react-router`. The current screen is plain React state (`activeTab` in `src/App.tsx`), not the URL — the browser Back button and bookmarking do not work as a normal SPA would. `src/App.tsx` (~1,500 lines) still holds most app state as `useState`, with `useEffect` hooks that sync each piece to `localStorage` and run business logic that would normally belong to a backend (auto-expiring subscriptions, auto-generating invoices, writing audit log entries).
 
 That is shrinking. Tenants now come from the real API via `useTenants` / `useMyTenant`; `alerts`, `tickets`, `announcements`, `systemSettings` and `themeMode` are deliberately staying in `localStorage` for the MVP. When touching business rules for the *unmigrated* domains, expect the logic inside `App.tsx`'s effects, not in the component that renders the screen — but do not add new logic there for a domain that already has a service and hook.
 
@@ -72,7 +72,20 @@ Those notices are **not** written into each screen. Each portal keeps one `MOCK_
 
 Money is VND-only (BR-VAL-003). `CurrencyCode` is a one-member union, deliberately kept as a type so `tsc` rejects the next `'USD'` someone writes; there is no `convertMoney` and no exchange rate. `formatMoney`'s second argument survives only because 86 call sites pass a record's currency field.
 
-`ReceptionistPortal` is the one to read before connecting anything else — it is ~6,100 lines and was migrated without rewriting its render tree. Two ideas carried the whole thing: an **adapter** (`toReceptionAppointment`, `toReceptionPayment`) that redresses server DTOs into the shapes the existing JSX already reads, and a small **client-side extras map** for the handful of fields the backend deliberately has no column for (attendance, allergies, reminders — all cut in §9.4 of the roadmap). Deleting the old `setAppointments` / `setPayments` setters outright turned `tsc` into the checklist of every write path that needed rewiring.
+`ReceptionistPortal` is the one to read before connecting anything else. It was migrated without rewriting its render tree, and two ideas carried the whole thing: an **adapter** (`toReceptionAppointment`, `toReceptionPayment`) that redresses server DTOs into the shapes the existing JSX already reads, and a small **client-side extras map** for the handful of fields the backend deliberately has no column for (attendance, allergies, reminders — all cut in §9.4 of the roadmap). Deleting the old `setAppointments` / `setPayments` setters outright turned `tsc` into the checklist of every write path that needed rewiring.
+
+It is no longer one file. It was ~6,200 lines; the reception code now lives in `src/features/reception/` and the portal itself is ~2,200 lines whose job is exactly three things — hold state, wire actions, pick a screen:
+
+| Folder | What is in it |
+|---|---|
+| `types.ts` · `constants.ts` · `catalogs.ts` · `format.ts` · `storage.ts` · `mockSeed.ts` | The vocabulary: shapes the JSX reads, display labels, nail-art catalogues, money/time formatting, the localStorage keys, and the last remaining mock seeds (products, stations) |
+| `adapters.ts` | Server DTO → the shapes above. This is the layer the migration turned on, so a field that looks wrong on screen is almost always wrong here rather than in a component |
+| `useReceptionDesk.ts` | Every read the desk performs, in one hook |
+| `screens/DeskScreen.tsx` | The desk itself |
+| `dialogs/*.tsx` | Eight dialogs — invoice, payment confirmation, nail-art customiser, walk-in (full and quick), appointment edit, cancel, shift open/close |
+| `shell/*.tsx` | Sidebar (plus the mobile overlay, which is the other half of the same gesture) and topbar |
+
+Props are passed individually and the signatures are long on purpose. Bundling them into objects would shorten the signature but force hundreds of edits inside the JSX bodies — and that is exactly the kind of change no test in this repo would catch. Each extraction moved its JSX **byte for byte**; keep that rule for the ones still to come, because `tsc` plus an unchanged body is the only real safety net here.
 
 The pattern for connecting a new domain is two layers, and both already exist to copy from:
 
@@ -89,7 +102,7 @@ The pattern for connecting a new domain is two layers, and both already exist to
 
 ### Known structural issues to be aware of
 
-- Several screen components are very large (`TenantAdminOnlineBooking.tsx` ~3,800 lines, `TenantAdminInventory.tsx` ~3,100 lines, `TenantAdminFinanceCompact.tsx` ~2,800 lines) — UI and data-fetching concerns are not separated.
+- Several screen components are still very large (`TenantAdminOnlineBooking.tsx` ~3,900 lines, `TenantAdminAppointments.tsx` ~3,800, `TenantAdminInventory.tsx` ~3,300, `TenantAdminFinanceCompact.tsx` ~2,800, `NailTenantAdminPortal.tsx` ~2,800) — UI and data-fetching concerns are not separated. `ReceptionistPortal` used to head this list and no longer does; see `src/features/reception/` above for the shape that replaced it.
 - `src/components/TenantAdminPortal.tsx` is dead code (not imported anywhere; `App.tsx` imports `NailTenantAdminPortal` instead). `src/components/TenantAdminFinance.tsx` is a 4-line re-export shim for `TenantAdminFinanceCompact`.
 - npm is the package manager; `bun.lock` was deleted deliberately, don't reintroduce it.
 - Path alias `@/*` maps to the repo root (see `tsconfig.json` / `vite.config.ts`).
