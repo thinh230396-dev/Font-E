@@ -223,3 +223,33 @@ export interface AppointmentExtras {
   firstVisit?: boolean;
   createdBy?: string;
 }
+
+/**
+ * Biểu mẫu "Walk-in cấp tốc" — khách vào không hẹn, người ở quầy điền năm ô rồi bấm một nút.
+ *
+ * Khai thành kiểu riêng từ ngày 27, khi bàn lễ tân tách thành component: hàm cập nhật biểu mẫu
+ * này được truyền xuống làm prop, mà một prop thì phải có kiểu gọi được tên.
+ */
+export interface QuickWalkInForm {
+  customer: string;
+  phone: string;
+  service: string;
+  staff: string;
+  station: string;
+  duration: string;
+  price: string;
+  allergies: string[];
+  note: string;
+  quickAction: 'START_NOW' | 'CHECK_IN_QUEUE';
+}
+
+/**
+ * Phần hóa đơn nháp mà **bàn lễ tân** cần biết: chỉ số dòng đã chọn, để hiện "Hóa đơn (3)" hay
+ * "Tạo HĐ" trên thẻ khách.
+ *
+ * Hẹp hơn hẳn bản nháp thật đang nằm trong màn hình — và cố ý hẹp: bàn lễ tân không có việc gì
+ * với phương thức thanh toán hay tiền giảm giá, nên đừng cho nó thấy.
+ */
+export interface InvoiceDraftSummary {
+  lines: InvoiceLineDraft[];
+}
