@@ -11,14 +11,12 @@ import {
   BadgeCheck,
   CalendarCheck2,
   CalendarClock,
-  CalendarDays,
   Check,
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
   Clock,
   Clock3,
-  CreditCard,
   DoorOpen,
   Edit3,
   Flame,
@@ -27,7 +25,6 @@ import {
   Image,
   Info,
   Layers,
-  LayoutDashboard,
   Loader2,
   LogOut,
   MapPin,
@@ -40,14 +37,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Phone,
-  PackageSearch,
   Plus,
   ReceiptText,
   Scissors,
   Search,
   ShieldCheck,
   Sliders,
-  Smartphone,
   Sparkles,
   Split,
   Store,
@@ -71,17 +66,13 @@ import { serviceSeed, type SalonService } from './TenantAdminServices';
 import { designSeed, colorSeed, type NailDesign, type PolishColor } from './TenantAdminNailGallery';
 import { Button, Field, MockDataNotice, Modal, PageHeader, StatusBadge } from './ui';
 import { tenantStorageKey, tenantStorageScope } from '../utils/tenantStorage';
-import useAppointments from '../hooks/useAppointments';
-import useStaff from '../hooks/useStaff';
-import useSalonServices from '../hooks/useSalonServices';
-import useSalesInvoices from '../hooks/useSalesInvoices';
+import useReceptionDesk from '../features/reception/useReceptionDesk';
 import type {
   PaymentApiMethod,
   SalesInvoiceDto,
   SalesInvoiceLineInput
 } from '../services/salesInvoices';
 
-import useCustomers from '../hooks/useCustomers';
 import { describeApiError, type ApiError } from '../services/apiClient';
 import type {
   AppointmentApiStatus,
@@ -99,12 +90,24 @@ import {
   type NailArtTemplate,
   type PolishColorOption
 } from '../features/reception/catalogs';
+import MetricCard from '../features/reception/MetricCard';
+import {
+  appointmentStatusLabel,
+  methodMeta,
+  navItems,
+  technicianShiftMeta,
+  technicianStatusMeta
+} from '../features/reception/constants';
+import {
+  invoiceStaff,
+  productCatalog,
+  stationsFor
+} from '../features/reception/mockSeed';
+import { readStorage } from '../features/reception/storage';
 import {
   describeInvoiceLine,
   extractCustomerAlerts,
-  getServiceTimerStatus,
-  toReceptionAppointment,
-  toReceptionPayment
+  getServiceTimerStatus
 } from '../features/reception/adapters';
 import {
   SALON_CLOSE_MINUTES,
@@ -149,107 +152,6 @@ const ReceptionistTechnicians = lazy(() => import('./ReceptionistTechnicians'));
 
 
 
-/**
- * Tông màu và icon của trạng thái do STATUS_MAP dùng chung quản lý.
- * Ở đây chỉ giữ cách gọi riêng tại quầy lễ tân (§2.6 — giữ từ vựng nghiệp vụ),
- * truyền vào StatusBadge qua prop `label`.
- */
-const appointmentStatusLabel: Record<AppointmentStatus, string> = {
-  PENDING: 'Chờ xác nhận',
-  CONFIRMED: 'Đã xác nhận',
-  CHECKED_IN: 'Đang chờ',
-  IN_SERVICE: 'Đang phục vụ',
-  COMPLETED: 'Hoàn tất',
-  CANCELLED: 'Đã hủy',
-  NO_SHOW: 'Không đến',
-  REFUNDED: 'Đã hoàn tiền',
-};
-
-const methodMeta: Record<PaymentMethod, { label: string; icon: typeof Banknote }> = {
-  CASH: { label: 'Tiền mặt', icon: Banknote },
-  BANK: { label: 'Chuyển khoản (VietQR)', icon: WalletCards },
-  CARD: { label: 'Thẻ POS', icon: CreditCard },
-  MOMO: { label: 'Ví MoMo', icon: Smartphone },
-  ZALOPAY: { label: 'Ví ZaloPay', icon: Smartphone },
-};
-
-const productCatalog: CatalogItem[] = [
-  { name: 'Dầu dưỡng móng Keratin', price: 170000, category: 'Dưỡng móng', stock: 24 },
-  { name: 'Kem dưỡng tay Hạnh Nhân', price: 220000, category: 'Chăm sóc tay', stock: 18 },
-  { name: 'Serum phục hồi móng Keratin', price: 290000, category: 'Dưỡng móng', stock: 12 },
-  { name: 'Sơn dưỡng bóng tại nhà', price: 260000, category: 'Sơn bán lẻ', stock: 16 },
-  { name: 'Bộ chăm sóc móng mini', price: 390000, category: 'Bộ sản phẩm', stock: 8 },
-  { name: 'Nước rửa tay dưỡng ẩm', price: 145000, category: 'Chăm sóc tay', stock: 22 },
-  { name: 'Dũa móng cao cấp OPI', price: 85000, category: 'Phụ kiện', stock: 35 },
-  { name: 'Set Sticker Nail Art 3D', price: 95000, category: 'Phụ kiện', stock: 28 },
-  { name: 'Muối ngâm chân thảo mộc 500g', price: 180000, category: 'Chăm sóc chân', stock: 15 },
-];
-
-const invoiceStaff = ['Thảo Nguyễn', 'Minh Châu', 'Hà My', 'Quốc Bảo', 'Thuỳ Dương', 'An Nhiên', 'Gia Huy', 'Chưa phân công'];
-/**
- * Ghế và phòng theo chi nhánh — dữ liệu mẫu, vì "Ghế & khu vực" nằm ở mức C của §9.3 và
- * không có bảng nào phía sau. Chi nhánh không có trong bảng này thì rơi về `DEFAULT_STATIONS`.
- */
-const stationCatalog: Record<string, string[]> = {
-  Q3: ['M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-06', 'P-01', 'P-02', 'P-03', 'P-04', 'VIP-01', 'VIP-02'],
-  Q1: ['M-11', 'M-12', 'M-13', 'M-14', 'P-11', 'P-12', 'P-13', 'V-11', 'V-12'],
-};
-
-/** Chi nhánh chưa có sơ đồ ghế mẫu vẫn phải chọn được chỗ, thay vì nhận một danh sách rỗng. */
-const DEFAULT_STATIONS = ['M-01', 'M-02', 'M-03', 'M-04', 'P-01', 'P-02', 'VIP-01'];
-
-const stationsFor = (branch: BranchCode): string[] => stationCatalog[branch] || DEFAULT_STATIONS;
-
-const technicianStatusMeta: Record<TechnicianStatus, { label: string; helper: string }> = {
-  PRESENT: { label: 'Có mặt', helper: 'Sẵn sàng nhận khách' },
-  NOT_CHECKED_IN: { label: 'Chưa check-in', helper: 'Chưa vào ca' },
-  SERVING: { label: 'Đang phục vụ', helper: 'Đang có khách' },
-  BREAK: { label: 'Đang nghỉ giữa ca', helper: 'Tạm ngưng nhận khách' },
-  SICK_REPORTED: { label: 'Báo nghỉ', helper: 'Đã báo nghỉ hôm nay' },
-  ON_LEAVE: { label: 'Nghỉ phép', helper: 'Nghỉ theo lịch phép' },
-  LATE: { label: 'Đi trễ', helper: 'Check-in trễ ca' },
-};
-
-const technicianShiftMeta: Record<TechnicianShift, string> = {
-  MORNING: 'Ca sáng · 08:00–16:00',
-  AFTERNOON: 'Ca chiều · 12:00–20:00',
-  FULL_DAY: 'Ca nguyên ngày · 08:00–20:00',
-};
-
-const navItems: Array<{ id: ReceptionPage; label: string; icon: typeof LayoutDashboard }> = [
-  { id: 'desk', label: 'Bàn lễ tân', icon: LayoutDashboard },
-  { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays },
-  { id: 'customers', label: 'Khách hàng', icon: UsersRound },
-  { id: 'products', label: 'Sản phẩm quầy', icon: PackageSearch },
-  { id: 'stations', label: 'Ghế & phòng', icon: Armchair },
-  { id: 'technicians', label: 'Kỹ thuật viên', icon: UserCheck },
-  { id: 'payments', label: 'Thanh toán & POS', icon: ReceiptText },
-];
-
-function readStorage<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) as T : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function MetricCard({ icon: Icon, label, value, note, tone }: { icon: typeof CalendarDays; label: string; value: string; note: string; tone: string }) {
-  return (
-    <div className="rounded-2xl border border-brand-outline bg-brand-surface p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-body font-extrabold uppercase tracking-[0.1em] text-brand-text-muted">{label}</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-brand-text">{value}</p>
-          <p className="mt-1 text-body text-brand-text-muted">{note}</p>
-        </div>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></div>
-      </div>
-    </div>
-  );
-}
 
 export default function ReceptionistPortal({ account, themeMode, onThemeChange, onLogout }: ReceptionistPortalProps) {
   const tenantName = account.tenantName || 'Nailé Studio';
@@ -391,34 +293,6 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     };
   }, [servicesStorageKey, designsStorageKey, colorsStorageKey, appointmentStorageKey, tenantName]);
 
-  /*
-    Bảng giá dịch vụ — dữ liệu THẬT từ ngày 14, và CHỈ dữ liệu thật từ ngày 25.
-
-    Đây là điều kiện để đặt lịch chạy được chút nào: API chỉ nhận mã dịch vụ có thật, mà bảng
-    giá mẫu trong `localStorage` thì mang những cái tên do bộ nạp giao diện bịa ra ("Nail Art
-    Premium"…). Tra một cái tên bịa trong danh mục thật sẽ không ra gì, và mọi lần tiếp nhận
-    khách đều dừng ở câu "dịch vụ không còn trong bảng giá".
-
-    Ngày 14 vẫn lùi về `servicesData` của localStorage khi máy chủ trả danh sách rỗng, để màn
-    hình có thứ trình bày. Nay bỏ hẳn phép lùi ấy: nó trộn ba chuyện khác hẳn nhau vào cùng một
-    hình — đang tải, gọi hỏng, và tiệm thật sự chưa khai dịch vụ nào — mà người ở quầy thì không
-    có cách nào phân biệt. Ba trạng thái ấy nay do phần hiển thị nói ra, mỗi trạng thái một câu.
-  */
-  const salonServices = useSalonServices(true, account.tenantId || null);
-
-  const serviceCatalog: CatalogItem[] = useMemo(
-    () => salonServices.services
-      .filter((item) => item.status === 'ACTIVE')
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        category: item.category || 'Dịch vụ',
-        duration: item.durationMinutes
-      })),
-    [salonServices.services]
-  );
-
   // Catalog mẫu vẽ nail art đồng bộ từ Tenant Admin Gallery
   const nailArtTemplates: NailArtTemplate[] = useMemo(() => {
     const available = designsData.filter((d) => {
@@ -520,42 +394,36 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
   }, [sidebarOpen]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
-  /*
-    ── Lịch hẹn: dữ liệu thật, từ ngày 14 ────────────────────────────────────────────────
-    Trước đây đây là một `useState` đọc `localStorage`. Nay nó là kết quả suy ra từ hook, và
-    đó là khác biệt quan trọng nhất của cả màn hình: KHÔNG còn hàm `setAppointments` nào.
-
-    Cố ý bỏ hẳn phép vá mảng tại chỗ. Đây là màn hình mà hai máy ở quầy cùng mở một lúc là
-    chuyện thường; vá tại chỗ thì máy này không bao giờ thấy lịch máy kia vừa đặt, và hai
-    người sẽ xếp hai khách vào cùng một giờ mà đều tin mình đúng. Mọi thao tác ghi vì vậy
-    gọi API rồi để hook nạp lại — chậm hơn một lời gọi mạng, đổi lấy việc màn hình luôn nói
-    đúng thứ máy chủ đang giữ.
-  */
   const [boardDate, setBoardDate] = useState<string>(() => today());
 
-  const appointmentBoard = useAppointments(true, account.tenantId || null, boardDate);
-
-  const [appointmentExtras, setAppointmentExtras] = useState<Record<string, AppointmentExtras>>(
-    () => readStorage(appointmentExtrasStorageKey, {} as Record<string, AppointmentExtras>)
-  );
-
-  const appointments = useMemo(() => appointmentBoard.appointments.map((dto) => {
-    const price = dto.services.reduce((total, line) => {
-      const match = serviceCatalog.find((item) => item.name === line.serviceName);
-      return total + (match ? match.price : 0);
-    }, 0);
-
-    return toReceptionAppointment(dto, price, appointmentExtras[dto.id] || {});
-  }), [appointmentBoard.appointments, appointmentExtras, serviceCatalog]);
-
-  /** Tra ngược về bản ghi gốc của máy chủ, cho những chỗ cần `staffId` hoặc `nextStatuses`. */
-  const appointmentDtoById = useMemo(
-    () => new Map(appointmentBoard.appointments.map((dto) => [dto.id, dto])),
-    [appointmentBoard.appointments]
-  );
-
-  const staffDirectory = useStaff(true, account.tenantId || null);
-  const customerDirectory = useCustomers(true, account.tenantId || null);
+  /*
+    Toàn bộ phần ĐỌC của quầy nằm trong một hook — xem `features/reception/useReceptionDesk`.
+    Tên trả về giữ nguyên như khi chúng còn nằm rải trong tệp này, nên cây render bên dưới không
+    phải sửa một dòng nào.
+  */
+  const {
+    salonServices,
+    serviceCatalog,
+    appointmentBoard,
+    appointments,
+    appointmentDtoById,
+    appointmentExtras,
+    setAppointmentExtras,
+    patchAppointmentExtras,
+    staffDirectory,
+    customerDirectory,
+    invoiceBook,
+    payments,
+    invoiceDtoById,
+    technicianAttendance,
+    patchTechnicianAttendance,
+    technicians
+  } = useReceptionDesk({
+    tenantId: account.tenantId || null,
+    boardDate,
+    appointmentExtrasStorageKey,
+    technicianStorageKey
+  });
 
   /*
     Giữ dịch vụ đang chọn trên hai biểu mẫu luôn nằm trong bảng giá THẬT.
@@ -636,101 +504,6 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
     deposit: dto.deposit
   });
 
-  /** Ghi phần trang trí chỉ sống ở client, kèm lưu xuống localStorage. */
-  const patchAppointmentExtras = (id: string, patch: AppointmentExtras) => {
-    setAppointmentExtras((current) => {
-      const next = { ...current, [id]: { ...current[id], ...patch } };
-
-      try {
-        localStorage.setItem(appointmentExtrasStorageKey, JSON.stringify(next));
-      } catch {
-        // Hết dung lượng thì bỏ qua: đây là phần trang trí, mất nó không mất dữ liệu thật.
-      }
-
-      return next;
-    });
-  };
-  /*
-    ── Hóa đơn: dữ liệu thật, từ ngày 15 ────────────────────────────────────────────────
-    Cùng khuôn với lịch hẹn ở ngày 14: không còn `setPayments`, mọi thao tác ghi gọi API rồi
-    để hook nạp lại. Ở đây phép nạp lại còn quan trọng hơn — một lần thu tiền có thể làm đổi
-    cả một bản ghi KHÁC, vì BR-APT-026 cho lịch hẹn tự hoàn tất khi hóa đơn thu đủ.
-  */
-  const invoiceBook = useSalesInvoices(true, account.tenantId || null, boardDate);
-
-  const payments = useMemo(
-    () => invoiceBook.invoices.map(toReceptionPayment),
-    [invoiceBook.invoices]
-  );
-
-  /** Tra ngược về hóa đơn gốc của máy chủ, cho những chỗ cần `remaining` hoặc danh sách dòng thu. */
-  const invoiceDtoById = useMemo(
-    () => new Map(invoiceBook.invoices.map((dto) => [dto.id, dto])),
-    [invoiceBook.invoices]
-  );
-  /*
-    ── Kỹ thuật viên: danh sách thật, chấm công ở client ─────────────────────────────────
-    Hồ sơ nhân viên đến từ API — đó là điều bắt buộc, vì phân công lịch hẹn cần MÃ nhân viên
-    có thật; một danh sách tên bịa thì không lịch nào đặt được.
-
-    Nhưng bảy trạng thái mà quầy dùng — có mặt, đang phục vụ, nghỉ giải lao, báo ốm, đi trễ —
-    là **chấm công**, và §9.4 xếp chấm công vào nhóm bỏ hẳn khỏi MVP. Máy chủ chỉ có bốn trạng
-    thái nhân sự và không có cột nào cho giờ vào ca thực tế. Nên chúng ở lại client, trong một
-    bản đồ theo mã nhân viên — cùng cách đã làm với phần trang trí của lịch hẹn.
-  */
-  const [technicianAttendance, setTechnicianAttendance] = useState<Record<string, Partial<ReceptionTechnician>>>(
-    () => readStorage(technicianStorageKey, {} as Record<string, Partial<ReceptionTechnician>>)
-  );
-
-  const patchTechnicianAttendance = (id: string, patch: Partial<ReceptionTechnician>) => {
-    setTechnicianAttendance((current) => {
-      const next = { ...current, [id]: { ...current[id], ...patch } };
-
-      try {
-        localStorage.setItem(technicianStorageKey, JSON.stringify(next));
-      } catch {
-        // Hết dung lượng thì bỏ qua: chấm công mất đi không mất dữ liệu thật nào.
-      }
-
-      return next;
-    });
-  };
-
-  const technicians: ReceptionTechnician[] = useMemo(() => {
-    // Không lùi về danh sách mẫu khi máy chủ trả rỗng — cùng lý do đã ghi ở bảng giá dịch vụ.
-    // Ở đây hậu quả còn nặng hơn: phân công lịch hẹn cần MÃ nhân viên có thật, nên một cái tên
-    // bịa chỉ dẫn tới một lời từ chối ở bước cuối, sau khi người ở quầy đã hỏi khách xong.
-    const live = staffDirectory.staff.filter((item) => item.role === 'TECHNICIAN');
-
-    return live.map((item) => {
-      const attendance = technicianAttendance[item.id] || {};
-      const startHour = Number(item.shiftStart.slice(0, 2)) || 0;
-      const shift: TechnicianShift = startHour >= 13 ? 'AFTERNOON' : startHour >= 11 ? 'FULL_DAY' : 'MORNING';
-
-      // BR-EMP-005 quyết định người này có mặt hay không; chấm công của quầy chỉ tinh chỉnh
-      // bên trong nhóm "đang làm việc", không được phép biến một người đã nghỉ việc thành
-      // người sẵn sàng nhận khách.
-      const baseStatus: TechnicianStatus = item.status === 'WORKING'
-        ? 'PRESENT'
-        : item.status === 'LEAVE' ? 'ON_LEAVE' : 'NOT_CHECKED_IN';
-
-      return {
-        id: item.id,
-        name: item.fullName,
-        initials: item.fullName.split(' ').slice(-2).map((part) => part[0] || '').join('').toUpperCase(),
-        specialty: item.skills[0] || 'Nail Technician',
-        skills: item.skills.length ? item.skills : ['Nail Technician'],
-        shift,
-        shiftLabel: `${item.shiftStart}–${item.shiftEnd}`,
-        status: item.status === 'WORKING' ? (attendance.status || baseStatus) : baseStatus,
-        branch: item.branchId,
-        checkIn: attendance.checkIn,
-        checkOut: attendance.checkOut,
-        leaveNote: attendance.leaveNote,
-        avatarTone: 'from-brand-secondary to-brand-secondary'
-      };
-    });
-  }, [staffDirectory.staff, technicianAttendance]);
   const [shift, setShift] = useState<ShiftState>(() => readStorage(shiftStorageKey, { status: 'OPEN', openedAt: new Date().toISOString(), openingCash: 1000000 }));
   const [clockTick, setClockTick] = useState(() => Date.now());
   useEffect(() => {
