@@ -1,40 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import {
-  Activity,
-  AlertOctagon,
-  AlertTriangle,
-  Bell,
-  BadgeCheck,
-  CalendarCheck2,
-  Check,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  Edit3,
-  Flame,
-  HelpCircle,
-  Hourglass,
-  Image,
-  Info,
-  Layers,
-  Loader2,
-  LogOut,
-  Menu,
-  Merge,
-  Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Scissors,
-  Search,
-  Store,
-  Sun,
-  Tag,
-  UserCheck,
-  UserRound,
-  Users,
-  Wand2,
-  X,
-} from 'lucide-react';
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { AlertTriangle, Check, CheckCircle2, Loader2, UserCheck } from 'lucide-react';
 import type { DemoAccount } from '../auth/demoAccounts';
 import { resetTenantMockStorage } from '../utils/mockDataReset';
 import { normalizePhone } from '../utils/phone';
@@ -69,13 +34,14 @@ import {
 import {
   appointmentStatusLabel,
   methodMeta,
-  navItems,
   technicianShiftMeta,
   technicianStatusMeta
 } from '../features/reception/constants';
 import { productCatalog, stationsFor } from '../features/reception/mockSeed';
 import { readStorage } from '../features/reception/storage';
 import { describeInvoiceLine } from '../features/reception/adapters';
+import ReceptionSidebar from '../features/reception/shell/ReceptionSidebar';
+import ReceptionTopbar from '../features/reception/shell/ReceptionTopbar';
 import {
   SALON_CLOSE_MINUTES,
   SALON_LAST_BOOKING_MINUTES,
@@ -2117,181 +2083,34 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
 
   return (
     <div className="role-shell role-shell--reception reception-workspace min-h-screen bg-brand-bg text-brand-text">
-      <aside className={`role-sidebar reception-sidebar fixed inset-y-0 left-0 z-[var(--z-sidebar)] flex w-[260px] flex-col bg-[#111625] text-white shadow-2xl transition-[width,transform] duration-300 lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-[260px]'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className={`flex h-[var(--size-topbar)] shrink-0 items-center gap-3 border-b border-white/10 ${sidebarCollapsed ? 'lg:justify-center lg:px-2' : 'px-4'}`}>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-secondary text-white font-black shadow-md shadow-brand-secondary/20"><Store className="h-5 w-5" /></span>
-          <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-            <p className="truncate text-body font-bold text-white">{tenantName}</p>
-            <p className="mt-0.5 text-caption font-semibold uppercase tracking-wider text-slate-400">Không gian lễ tân</p>
-          </div>
-        </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Điều hướng Receptionist">
-          <p className={`mb-2 px-3 text-caption font-bold uppercase tracking-[0.16em] text-slate-500 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>Vận hành tại quầy</p>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = page === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => navigate(item.id)}
-                aria-current={active ? 'page' : undefined}
-                title={sidebarCollapsed ? item.label : undefined}
-                className={`group flex h-10 w-full items-center gap-3 rounded-xl transition-all cursor-pointer ${
-                  sidebarCollapsed ? 'lg:justify-center lg:px-0' : 'px-3'
-                } ${
-                  active
-                    ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 shadow-xs'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium'
-                }`}
-              >
-                <Icon
-                  className={`h-4 w-4 shrink-0 transition-transform ${
-                    active ? 'text-emerald-400 scale-105' : 'text-slate-400 group-hover:text-slate-200'
-                  }`}
-                  strokeWidth={active ? 2.4 : 2}
-                />
-                <span className={`text-xs truncate ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                  {item.label}
-                </span>
-                {active && !sidebarCollapsed && (
-                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className="shrink-0 border-t border-white/10 p-2.5 space-y-2">
-          <div className={`flex items-center gap-2.5 rounded-xl bg-white/5 p-2 ${sidebarCollapsed ? 'lg:justify-center lg:p-1.5' : ''}`}>
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-300 font-black text-xs border border-emerald-500/30">
-              {account.displayName.split(' ').slice(-2).map((part) => part[0]).join('')}
-            </span>
-            <div className={`min-w-0 flex-1 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-              <p className="truncate text-xs font-bold text-white">{account.displayName}</p>
-              <p className="truncate text-[10px] text-slate-400 font-medium">Lễ tân · {branchLabel}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              title="Đăng xuất"
-              aria-label="Đăng xuất"
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer ${sidebarCollapsed ? 'lg:hidden' : ''}`}
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          {sidebarCollapsed ? (
-            <button
-              type="button"
-              onClick={onLogout}
-              title="Đăng xuất"
-              aria-label="Đăng xuất"
-              className="hidden lg:flex h-8 w-full items-center justify-center rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          ) : null}
-
-          <div className="hidden lg:block">
-            <button
-              type="button"
-              onClick={toggleSidebarCollapsed}
-              title={sidebarCollapsed ? 'Mở rộng thanh bên (Ctrl+B)' : 'Thu hẹp thanh bên (Ctrl+B)'}
-              aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu hẹp thanh bên'}
-              className={`flex h-8 w-full items-center rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer ${
-                sidebarCollapsed ? 'justify-center p-0' : 'justify-between px-2.5'
-              }`}
-            >
-              <span className={sidebarCollapsed ? 'hidden' : 'truncate flex items-center gap-1.5'}>
-                <PanelLeftClose className="h-3.5 w-3.5 shrink-0" />
-                <span>Thu hẹp</span>
-              </span>
-              {sidebarCollapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-mono text-slate-400">Ctrl+B</kbd>
-              )}
-            </button>
-          </div>
-        </div>
-      </aside>
-      {/* Lớp phủ khi mở menu trên mobile */}
-      {sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs lg:hidden cursor-pointer"
-        />
-      )}
+      <ReceptionSidebar
+        tenantName={tenantName}
+        account={account}
+        branchLabel={branchLabel}
+        page={page}
+        navigate={navigate}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        toggleSidebarCollapsed={toggleSidebarCollapsed}
+        onLogout={onLogout}
+      />
 
       <div className={`min-h-screen transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[260px]'}`}>
-        <header className="role-topbar sticky top-0 z-[var(--z-sticky)] flex h-[var(--size-topbar)] items-center gap-3 border-b border-brand-outline bg-brand-surface px-4 sm:px-6">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Mở menu"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-outline bg-brand-surface p-0 text-brand-text shadow-xs hover:bg-brand-surface-high transition lg:hidden cursor-pointer"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <div className="hidden min-w-0 sm:block"><p className="text-caption font-bold uppercase tracking-wider text-brand-text-muted">{new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</p><p className="mt-0.5 text-body font-bold text-brand-text">{navItems.find((item) => item.id === page)?.label}</p></div>
-          <div className="relative ml-auto hidden w-full max-w-sm md:block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-muted" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={page === 'products' ? 'Tìm tên, SKU, lô sản phẩm...' : page === 'stations' ? 'Tìm mã ghế, khách, kỹ thuật viên...' : 'Tìm tên, số điện thoại, dịch vụ...'} className="h-[var(--size-control)] w-full rounded-control border border-brand-outline bg-brand-surface-lowest pl-10 pr-4 text-body outline-none focus:border-brand-secondary" /></div>
-          <span className="hidden sm:flex" title="Tài khoản chỉ được điều phối chi nhánh này"><StatusBadge status="ACTIVE" label={branchLabel} /></span>
-          <button
-            type="button"
-            onClick={() => onThemeChange(nextThemeMode)}
-            className="ui-btn ui-btn--secondary ui-btn--small"
-            aria-label={themeMode === 'dark' ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
-            aria-pressed={themeMode === 'dark'}
-            title={themeMode === 'dark' ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
-          >
-            {themeMode === 'dark' ? <Sun className="h-4 w-4 text-brand-tertiary" /> : <Moon className="h-4 w-4 text-brand-text-muted" />}
-            <span className="hidden sm:inline">{themeMode === 'dark' ? 'Sáng' : 'Tối'}</span>
-          </button>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowNotifications((current) => !current)}
-              className="relative rounded-xl border border-brand-outline p-2.5 text-brand-text-muted hover:bg-brand-surface-high"
-              aria-label={`Thông báo tại quầy, ${deskAlerts.length} mục cần chú ý`}
-              aria-expanded={showNotifications}
-            >
-              <Bell className="h-4 w-4" />
-              {deskAlerts.length > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-brand-error ring-2 ring-brand-surface" />}
-            </button>
-            {showNotifications && (
-              <div className="absolute right-0 top-12 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-brand-outline bg-brand-surface p-3 shadow-2xl">
-                <div className="flex items-center justify-between px-2 py-2">
-                  <p className="text-xs font-black">Thông báo tại quầy</p>
-                  <span className="text-caption font-bold text-brand-error">{deskAlerts.length} cần chú ý</span>
-                </div>
-                <div className="max-h-80 space-y-1 overflow-y-auto">
-                  {deskAlerts.map((alert) => (
-                    <button
-                      key={alert.id}
-                      type="button"
-                      onClick={() => { setShowNotifications(false); setPage('desk'); }}
-                      className={`w-full rounded-xl p-3 text-left ${alert.tone === 'cyan' ? 'bg-brand-secondary/10 text-brand-secondary' : alert.tone === 'amber' ? 'bg-brand-tertiary/10 text-brand-tertiary' : 'bg-brand-primary/10 text-brand-primary'}`}
-                    >
-                      <p className="text-body font-black">{alert.title}</p>
-                      <p className="mt-1 text-caption opacity-75">{alert.detail}</p>
-                    </button>
-                  ))}
-                  {deskAlerts.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-brand-outline p-6 text-center">
-                      <CheckCircle2 className="mx-auto h-6 w-6 text-brand-secondary" />
-                      <p className="mt-2 text-body font-black text-brand-text">Quầy đang vận hành ổn định</p>
-                      <p className="mt-1 text-caption text-brand-text-muted">Không có mục cần xử lý ngay.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </header>
+        <ReceptionTopbar
+          page={page}
+          setPage={setPage}
+          setSidebarOpen={setSidebarOpen}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          branchLabel={branchLabel}
+          themeMode={themeMode}
+          nextThemeMode={nextThemeMode}
+          onThemeChange={onThemeChange}
+          showNotifications={showNotifications}
+          setShowNotifications={setShowNotifications}
+          deskAlerts={deskAlerts}
+        />
         <main className="role-main mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8"><Suspense fallback={<div className="py-24 text-center text-xs font-bold text-brand-text-muted">Đang tải không gian lễ tân...</div>}>{MOCK_DATA_REASONS[page] && <MockDataNotice reason={MOCK_DATA_REASONS[page]} className="mb-5" />}{renderDataState()}{renderPage()}</Suspense></main>
       </div>
 

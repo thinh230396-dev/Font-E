@@ -197,6 +197,20 @@ export interface AppointmentEditForm {
   designSurcharge?: number;
 }
 
+/**
+ * Một dòng trong chuông "việc cần làm" của thanh trên.
+ *
+ * `tone` để rộng thành `string` đúng như cổng đang dựng nó ra — ba nhánh `cyan` / `amber` /
+ * `violet` được ghép thẳng vào tên lớp CSS, và đóng kín kiểu ở đây chỉ khiến chỗ dựng phải thêm
+ * một phép ép kiểu mà không chặn thêm được lỗi nào.
+ */
+export interface DeskAlert {
+  id: string;
+  tone: string;
+  title: string;
+  detail: string;
+}
+
 export interface ReceptionistPortalProps {
   account: DemoAccount;
   themeMode: 'light' | 'dark';
