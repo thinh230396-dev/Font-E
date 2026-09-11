@@ -253,3 +253,38 @@ export interface QuickWalkInForm {
 export interface InvoiceDraftSummary {
   lines: InvoiceLineDraft[];
 }
+
+/**
+ * Biểu mẫu tùy chỉnh một dòng dịch vụ trên hóa đơn: mẫu vẽ, độ khó, màu sơn và sản phẩm đi kèm.
+ *
+ * Mọi ô tiền đều là **chuỗi** chứ không phải số, và đó là cố ý: người ở quầy gõ dở chừng thì ô
+ * đang rỗng hoặc đang là "12" trên đường tới "120000" — ép sang số ngay lúc gõ sẽ nhảy con trỏ
+ * và chặn cả việc xóa hết để nhập lại. Phép đổi sang số nằm ở lúc lưu.
+ */
+export interface ArtCustomizerForm {
+  basePrice: string;
+  designName: string;
+  designLevel: number;
+  difficultyLabel: string;
+  designSurcharge: string;
+  attachedColorCode: string;
+  attachedColorName: string;
+  attachedColorHex: string;
+  attachedProductName: string;
+  attachedProductPrice: number;
+  staff: string;
+  customArtNote: string;
+}
+
+/**
+ * Biểu mẫu thu tiền ở quầy: phương thức, giảm giá, tiền tip, mã tham chiếu và ghi chú.
+ *
+ * Ba ô tiền là chuỗi vì cùng lý do đã ghi ở `ArtCustomizerForm` — người ta gõ dở chừng.
+ */
+export interface PaymentForm {
+  method: PaymentMethod;
+  discount: string;
+  tip: string;
+  reference: string;
+  note: string;
+}
