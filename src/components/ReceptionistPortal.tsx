@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import type { DemoAccount } from '../auth/demoAccounts';
 import { resetTenantMockStorage } from '../utils/mockDataReset';
+import { normalizePhone } from '../utils/phone';
 import { validateAndCalculatePromotion, type LoyaltyProgram } from '../utils/promotionUtils';
 import { serviceSeed, type SalonService } from './TenantAdminServices';
 import { designSeed, colorSeed, type NailDesign, type PolishColor } from './TenantAdminNailGallery';
@@ -448,7 +449,12 @@ export default function ReceptionistPortal({ account, themeMode, onThemeChange, 
    */
   const ensureCustomerId = async (phone: string, fullName: string): Promise<string | null> => {
     const trimmedPhone = phone.trim();
-    const existing = customerDirectory.customers.find((item) => item.phone === trimmedPhone);
+
+    // So theo dạng đã chuẩn hóa, giống hệt máy chủ — xem `utils/phone.ts`. So chuỗi thô ở đây
+    // là chỗ đã làm mọi khách vãng lai ẩn danh thứ hai trở đi không tiếp nhận được.
+    const existing = customerDirectory.customers.find(
+      (item) => normalizePhone(item.phone) === normalizePhone(trimmedPhone)
+    );
 
     if (existing) return existing.id;
 

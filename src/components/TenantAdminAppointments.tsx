@@ -50,6 +50,7 @@ import { formatMoney as formatCurrency } from '../utils/money';
 import { Button, DataTable, Field, Modal, StatusBadge, getStatusDefinition, PageHeader } from './ui';
 import type { DataTableColumn } from './ui';
 import { getTenantCustomers, type TenantCustomer, tierMeta } from '../utils/tenantCustomers';
+import { normalizePhone } from '../utils/phone';
 import { tenantStorageKey } from '../utils/tenantStorage';
 
 type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_SERVICE' | 'REFUNDED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
@@ -1736,9 +1737,11 @@ export default function TenantAdminAppointments({
    * mất khỏi mọi con số về sau. BR-CUS-002 làm số điện thoại thành khóa tra cứu.
    */
   const ensureCustomerId = async (phone: string, fullName: string): Promise<string | null> => {
-    const digits = phone.replace(/[\s.-]/g, '');
+    // Chuẩn hóa theo đúng luật máy chủ — xem `utils/phone.ts`. Bản viết tay trước đây ở đây bỏ
+    // sót dấu ngoặc, nên một số nhập dạng `(028) 123...` vẫn tra trượt rồi tạo trùng.
+    const wanted = normalizePhone(phone);
     const existing = customerDirectoryLive.customers.find(
-      (customer) => customer.phone.replace(/[\s.-]/g, '') === digits
+      (customer) => normalizePhone(customer.phone) === wanted
     );
 
     if (existing) return existing.id;
